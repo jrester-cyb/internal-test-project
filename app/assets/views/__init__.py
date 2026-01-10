@@ -1,9 +1,9 @@
 from .asset_type_view import AssetTypeViewSet
-from .asset_attribute_definition_view import AssetAttributeDefinitionViewSet
+from .asset_type_attribute_view import AssetTypeAttributeViewSet
 from .asset_view import AssetViewSet
 
 __all__ = [
     "AssetTypeViewSet",
-    "AssetAttributeDefinitionViewSet",
+    "AssetTypeAttributeViewSet",
     "AssetViewSet",
 ]

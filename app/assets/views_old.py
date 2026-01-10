@@ -6,11 +6,11 @@ from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample
-from .models import AssetType, AssetAttributeDefinition, Asset
+from .models import AssetType, AssetTypeAttribute, Asset
 from .serializers import (
     AssetTypeSerializer,
     AssetTypeSummarySerializer,
-    AssetAttributeDefinitionSerializer,
+    AssetTypeAttributeSerializer,
     AssetSerializer,
 )
 
@@ -51,21 +51,21 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Asset Field Definitions"]),
     destroy=extend_schema(tags=["Asset Field Definitions"]),
 )
-class AssetAttributeDefinitionViewSet(viewsets.ModelViewSet):
+class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for AssetAttributeDefinition model.
+    ViewSet for AssetTypeAttribute model.
 
     Define custom fields for asset types.
     """
 
-    serializer_class = AssetAttributeDefinitionSerializer
+    serializer_class = AssetTypeAttributeSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["asset_type", "field_type", "is_required"]
     ordering_fields = ["order", "field_name", "created_at"]
 
     def get_queryset(self):
         """Filter field definitions by parent asset type"""
-        return AssetAttributeDefinition.objects.filter(
+        return AssetTypeAttribute.objects.filter(
             asset_type_id=self.kwargs["assettype_pk"]
         )
 

@@ -92,3 +92,23 @@ export async function interpretSearch(query: string) {
   if (!response.ok) throw new Error('Failed to interpret search')
   return response.json()
 }
+
+export async function fetchAssetTypes() {
+  const response = await fetch(`${API_BASE}/asset-types/`)
+  if (!response.ok) throw new Error('Failed to fetch asset types')
+  return response.json()
+}
+
+export async function fetchAssetAttributeDefinitions(assetTypeId: string) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/`)
+  if (!response.ok) throw new Error('Failed to fetch attribute definitions')
+  return response.json()
+}
+
+export async function fetchAttributeValues(assetTypeId: string, attributeDefinitionId: string) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/?page_size=1000`)
+  if (!response.ok) throw new Error('Failed to fetch attribute values')
+  const data = await response.json()
+  // Return the values array directly (no longer wrapped in {value, type} objects)
+  return data.results || []
+}

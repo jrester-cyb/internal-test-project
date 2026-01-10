@@ -22,7 +22,7 @@ class AssetType(models.Model):
         return self.name
 
 
-class AssetAttributeDefinition(models.Model):
+class AssetTypeAttribute(models.Model):
     """Defines a custom field for an asset type"""
 
     FIELD_TYPES = [
@@ -36,7 +36,7 @@ class AssetAttributeDefinition(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset_type = models.ForeignKey(
-        AssetType, on_delete=models.CASCADE, related_name="field_definitions"
+        AssetType, on_delete=models.CASCADE, related_name="attributes"
     )
     name = models.CharField(max_length=100)
     api_key = models.CharField(
@@ -157,11 +157,11 @@ class Asset(models.Model):
         """Validate attributes against asset type definitions"""
         errors = {}
         existing_values = {
-            fv.field_definition.api_key: fv
-            for fv in self.attributes.select_related("field_definition").all()
+            fv.attribute_type_attribute.api_key: fv
+            for fv in self.attributes.select_related("attribute_type_attribute").all()
         }
 
-        for field_def in self.asset_type.field_definitions.all():
+        for field_def in self.asset_type.attributes.all():
             field_value = existing_values.get(field_def.api_key)
             value = field_value.value if field_value else None
 
@@ -179,23 +179,23 @@ class BaseAttributeValue(PolymorphicModel):
     asset = models.ForeignKey(
         Asset, on_delete=models.CASCADE, related_name="attributes"
     )
-    field_definition = models.ForeignKey(
-        AssetAttributeDefinition, on_delete=models.CASCADE, related_name="values"
+    attribute_type_attribute = models.ForeignKey(
+        AssetTypeAttribute, on_delete=models.CASCADE, related_name="values"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["asset", "field_definition__order"]
+        ordering = ["asset", "attribute_type_attribute__order"]
         constraints = [
             models.UniqueConstraint(
-                fields=["asset", "field_definition"],
-                name="unique_asset_field_definition",
+                fields=["asset", "attribute_type_attribute"],
+                name="unique_asset_attribute_type_attribute",
             ),
         ]
 
     def __str__(self):
-        return f"{self.asset.name}.{self.field_definition}"
+        return f"{self.asset.name}.{self.attribute_type_attribute}"
 
 
 class TextAttributeValue(BaseAttributeValue):

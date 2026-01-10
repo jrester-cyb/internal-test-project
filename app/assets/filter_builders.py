@@ -96,7 +96,7 @@ def build_attribute_filter(filter_item):
     operator = filter_item.get("operator", "equals")
     if not attribute or value is None:
         return Q()
-    base_q = Q(attributes__field_definition__api_key=attribute)
+    base_q = Q(attributes__attribute_type_attribute__api_key=attribute)
     q = Q()
     if operator == "equals":
         q |= Q(attributes__textattributevalue__value=value)

@@ -3,7 +3,7 @@ from django.contrib.gis.admin import GISModelAdmin
 from polymorphic.admin import PolymorphicParentModelAdmin, PolymorphicChildModelAdmin
 from .models import (
     AssetType,
-    AssetAttributeDefinition,
+    AssetTypeAttribute,
     Asset,
     BaseAttributeValue,
     TextAttributeValue,
@@ -15,8 +15,8 @@ from .models import (
 )
 
 
-class AssetAttributeDefinitionInline(admin.TabularInline):
-    model = AssetAttributeDefinition
+class AssetTypeAttributeInline(admin.TabularInline):
+    model = AssetTypeAttribute
     extra = 1
     fields = [
         "name",
@@ -31,8 +31,8 @@ class AssetAttributeDefinitionInline(admin.TabularInline):
 class AssetAttributeInline(admin.TabularInline):
     model = BaseAttributeValue
     extra = 0
-    fields = ["field_definition", "polymorphic_ctype"]
-    readonly_fields = ["field_definition", "polymorphic_ctype"]
+    fields = ["attribute_type_attribute", "polymorphic_ctype"]
+    readonly_fields = ["attribute_type_attribute", "polymorphic_ctype"]
     can_delete = True
 
 
@@ -41,7 +41,7 @@ class AssetTypeAdmin(admin.ModelAdmin):
     list_display = ["name", "created_at", "asset_count"]
     search_fields = ["name", "description"]
     readonly_fields = ["created_at", "updated_at"]
-    inlines = [AssetAttributeDefinitionInline]
+    inlines = [AssetTypeAttributeInline]
 
     def asset_count(self, obj):
         return obj.assets.count()
@@ -49,8 +49,8 @@ class AssetTypeAdmin(admin.ModelAdmin):
     asset_count.short_description = "Number of Assets"
 
 
-@admin.register(AssetAttributeDefinition)
-class AssetAttributeDefinitionAdmin(admin.ModelAdmin):
+@admin.register(AssetTypeAttribute)
+class AssetTypeAttributeAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "asset_type",
@@ -82,37 +82,37 @@ class BaseAttributeValueChildAdmin(PolymorphicChildModelAdmin):
 @admin.register(TextAttributeValue)
 class TextAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = TextAttributeValue
-    list_display = ["asset", "field_definition", "value"]
+    list_display = ["asset", "attribute_type_attribute", "value"]
 
 
 @admin.register(NumberAttributeValue)
 class NumberAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = NumberAttributeValue
-    list_display = ["asset", "field_definition", "value"]
+    list_display = ["asset", "attribute_type_attribute", "value"]
 
 
 @admin.register(BooleanAttributeValue)
 class BooleanAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = BooleanAttributeValue
-    list_display = ["asset", "field_definition", "value"]
+    list_display = ["asset", "attribute_type_attribute", "value"]
 
 
 @admin.register(DateAttributeValue)
 class DateAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = DateAttributeValue
-    list_display = ["asset", "field_definition", "value"]
+    list_display = ["asset", "attribute_type_attribute", "value"]
 
 
 @admin.register(DateTimeAttributeValue)
 class DateTimeAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = DateTimeAttributeValue
-    list_display = ["asset", "field_definition", "value"]
+    list_display = ["asset", "attribute_type_attribute", "value"]
 
 
 @admin.register(JSONAttributeValue)
 class JSONAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = JSONAttributeValue
-    list_display = ["asset", "field_definition", "value"]
+    list_display = ["asset", "attribute_type_attribute", "value"]
 
 
 @admin.register(BaseAttributeValue)
@@ -126,6 +126,11 @@ class BaseAttributeValueAdmin(PolymorphicParentModelAdmin):
         DateTimeAttributeValue,
         JSONAttributeValue,
     )
-    list_display = ["asset", "field_definition", "polymorphic_ctype", "updated_at"]
-    list_filter = ["field_definition__asset_type", "polymorphic_ctype"]
-    search_fields = ["asset__name", "field_definition__field_name"]
+    list_display = [
+        "asset",
+        "attribute_type_attribute",
+        "polymorphic_ctype",
+        "updated_at",
+    ]
+    list_filter = ["attribute_type_attribute__asset_type", "polymorphic_ctype"]
+    search_fields = ["asset__name", "attribute_type_attribute__name"]

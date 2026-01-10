@@ -73,8 +73,8 @@ class AssetViewSet(viewsets.ModelViewSet):
             "attributes__datetimeattributevalue",
             "attributes__jsonattributevalue",
         ).select_related()
-        # Also select_related for field_definition on attributes
-        queryset = queryset.prefetch_related("attributes__field_definition")
+        # Also select_related for attribute_type_attribute on attributes
+        queryset = queryset.prefetch_related("attributes__attribute_type_attribute")
 
         # Special case: filter by attributes using query parameters like ?attr_hostname=server01
         from django.db.models import Q
@@ -84,11 +84,11 @@ class AssetViewSet(viewsets.ModelViewSet):
                 api_key = param[5:]
                 q = (
                     Q(
-                        attributes__field_definition__api_key=api_key,
+                        attributes__attribute_type_attribute__api_key=api_key,
                         attributes__textattributevalue__value=value,
                     )
                     | Q(
-                        attributes__field_definition__api_key=api_key,
+                        attributes__attribute_type_attribute__api_key=api_key,
                         attributes__numberattributevalue__value=(
                             float(value)
                             if value.replace(".", "", 1).isdigit()
@@ -96,7 +96,7 @@ class AssetViewSet(viewsets.ModelViewSet):
                         ),
                     )
                     | Q(
-                        attributes__field_definition__api_key=api_key,
+                        attributes__attribute_type_attribute__api_key=api_key,
                         attributes__booleanattributevalue__value=value.lower()
                         in ["true", "1", "yes"],
                     )
@@ -274,7 +274,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         else:
             queryset = Asset.objects.all()
 
-        # Prefetch all attribute value types and select_related for field_definition
+        # Prefetch all attribute value types and select_related for attribute_type_attribute
         queryset = queryset.prefetch_related(
             "attributes",
             "attributes__textattributevalue",
@@ -284,7 +284,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             "attributes__datetimeattributevalue",
             "attributes__jsonattributevalue",
         ).select_related()
-        queryset = queryset.prefetch_related("attributes__field_definition")
+        queryset = queryset.prefetch_related("attributes__attribute_type_attribute")
 
         if filter_config:
             q_filter = FilterSerializer(data=filter_config).build_query()
@@ -554,7 +554,7 @@ Format the output as follows:
         # Apply search filters if provided (POST request)
         if request.method == "POST" and request.data:
             filter_config = request.data
-            q_filter = self._build_filter_group(filter_config)
+            q_filter = FilterSerializer(data=filter_config).build_query()
             if q_filter:
                 queryset = queryset.filter(q_filter)
                 queryset = queryset.distinct()

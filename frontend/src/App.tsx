@@ -11,6 +11,8 @@ import ClusterMarkers from './components/ClusterMarkers'
 import { fetchClusters, fetchTiles, searchAssets, interpretSearch } from './api/assets'
 import type { Asset, Cluster } from './types'
 import AssetList from './components/AssetList'
+import FilterBuilder from './components/FilterBuilder'
+import type { AttributeFilter } from './components/FilterBuilder'
 
 // Fix for default marker icon in Leaflet with React
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -21,7 +23,12 @@ L.Icon.Default.mergeOptions({
 })
 
 // Component to handle map events - outside App to prevent recreation
-function MapEvents({ onLoadData, filters }: { onLoadData: (bounds: number[], zoom: number, filters?: any) => void, filters?: any }) {
+function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters }: {
+  onLoadData: (bounds: number[], zoom: number, filters?: any) => void,
+  filters?: any,
+  selectedAssetTypes: string[],
+  attributeFilters: any[]
+}) {
   const map = useMap()
   const initialLoadDone = useRef(false)
 
@@ -63,6 +70,22 @@ function MapEvents({ onLoadData, filters }: { onLoadData: (bounds: number[], zoo
       initialLoadDone.current = true
     }
   }, [map, onLoadData, filters])
+
+  // Reload data when selected asset types or attribute filters change
+  useEffect(() => {
+    if (initialLoadDone.current) {
+      const bounds = map.getBounds()
+      const bbox = [
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth()
+      ]
+      const currentZoom = map.getZoom()
+      onLoadData(bbox, currentZoom, filters)
+    }
+  }, [selectedAssetTypes, attributeFilters, map, onLoadData, filters])
+
   return null
 }
 
@@ -98,13 +121,54 @@ function App() {
   const [totalCount, setTotalCount] = useState(0)
   const [activeFilters, setActiveFilters] = useState<any>(null)
   const [interpretation, setInterpretation] = useState<string>('')
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
+  const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     setLoading(true)
     try {
+      // Merge asset type and attribute filters with other filters
+      let mergedFilters = filters ? { ...filters } : null
+      const filtersList: any[] = []
+
+      // Add asset type filters
+      if (selectedAssetTypes.length > 0) {
+        const assetTypeFilters = selectedAssetTypes.map(typeId => ({
+          field: 'assetTypeId',
+          value: typeId,
+          operator: 'exact'
+        }))
+        filtersList.push(...assetTypeFilters)
+      }
+
+      // Add attribute filters
+      if (attributeFilters.length > 0) {
+        const attrFilters = attributeFilters.map(af => ({
+          field: `attributes.${af.attributeKey}`,
+          value: af.value,
+          operator: af.operator
+        }))
+        filtersList.push(...attrFilters)
+      }
+
+      if (filtersList.length > 0) {
+        if (mergedFilters && mergedFilters.filters) {
+          mergedFilters = {
+            ...mergedFilters,
+            filters: [...mergedFilters.filters, ...filtersList],
+            logic: 'AND'
+          }
+        } else {
+          mergedFilters = {
+            filters: filtersList,
+            logic: selectedAssetTypes.length > 1 ? 'OR' : 'AND'
+          }
+        }
+      }
+
       if (zoom < 12) {
         // Show clusters at high zoom out
-        const clusterData = await fetchClusters(zoom, bounds, filters)
+        const clusterData = await fetchClusters(zoom, bounds, mergedFilters)
         // Separate GeoJSON features (single-asset clusters) from true clusters
         const geojsonAssets: Asset[] = []
         const realClusters: Cluster[] = []
@@ -125,7 +189,7 @@ function App() {
         setAssets(geojsonAssets)
       } else {
         // Show individual assets when zoomed in
-        const tileData = await fetchTiles(bounds, 5000, filters)
+        const tileData = await fetchTiles(bounds, 5000, mergedFilters)
         setAssets(tileData.features.map((f: any) => ({
           id: f.id,
           name: f.properties.name,
@@ -140,7 +204,7 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedAssetTypes, attributeFilters])
 
   const handleClusterClick = async (cluster: Cluster) => {
     setSelectedCluster(cluster)
@@ -234,6 +298,10 @@ function App() {
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Asset Visualizer
           </Typography>
+          <FilterBuilder
+            selectedAssetTypes={selectedAssetTypes}
+            onAssetTypesChange={setSelectedAssetTypes} attributeFilters={attributeFilters}
+            onAttributeFiltersChange={setAttributeFilters} />
         </Toolbar>
       </AppBar>
 
@@ -248,7 +316,7 @@ function App() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <MapEvents onLoadData={loadMapData} filters={activeFilters} />
+            <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} />
 
             <ClusterMarkers
               clusters={clusters}

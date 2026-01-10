@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from assets.models import Asset, AssetType, AssetAttributeDefinition, JSONAttributeValue
+from assets.models import Asset, AssetType, AssetTypeAttribute, JSONAttributeValue
 from django.contrib.gis.geos import Point, LineString, Polygon, MultiPolygon
 import requests
 
@@ -86,7 +86,7 @@ class OSMImporter:
             ("tags", "tags", "json", "All OSM tags"),
         ]
         for order, (name, api_key, attr_type, description) in enumerate(attributes):
-            AssetAttributeDefinition.objects.get_or_create(
+            AssetTypeAttribute.objects.get_or_create(
                 asset_type=asset_type,
                 name=name,
                 defaults={
@@ -183,7 +183,7 @@ class OSMImporter:
             DateAttributeValue,
             DateTimeAttributeValue,
             JSONAttributeValue,
-            AssetAttributeDefinition,
+            AssetTypeAttribute,
         )
 
         attribute_defs = {
@@ -218,7 +218,7 @@ class OSMImporter:
             if tag_key in ("osm_id", "osm_type"):
                 continue
             # Try to get or create the attribute definition for this tag
-            attr_def, created = AssetAttributeDefinition.objects.get_or_create(
+            attr_def, created = AssetTypeAttribute.objects.get_or_create(
                 asset_type=asset.asset_type,
                 api_key=tag_key,
                 defaults={

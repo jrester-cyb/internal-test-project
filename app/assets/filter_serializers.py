@@ -103,7 +103,7 @@ class FilterGroupSerializer(serializers.Serializer):
 
                     q = Q(
                         **{
-                            "attributes__field_definition__api_key": api_key,
+                            "attributes__attribute_type_attribute__api_key": api_key,
                             f"attributes__{model_type}__value__{operator}": value,
                         }
                     )
@@ -112,7 +112,7 @@ class FilterGroupSerializer(serializers.Serializer):
                     json_path = "__".join(value_path)
                     q = Q(
                         **{
-                            "attributes__field_definition__api_key": api_key,
+                            "attributes__attribute_type_attribute__api_key": api_key,
                             f"attributes__jsonattributevalue__value__{json_path}__{operator}": value,
                         }
                     )
@@ -131,7 +131,7 @@ class FilterGroupSerializer(serializers.Serializer):
 
                 q = Q(
                     **{
-                        "attributes__field_definition__api_key": api_key,
+                        "attributes__attribute_type_attribute__api_key": api_key,
                         f"attributes__{model_type}__value__{operator}": value,
                     }
                 )

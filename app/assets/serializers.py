@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework_gis.serializers import GeometryField
 from .models import (
     AssetType,
-    AssetAttributeDefinition,
+    AssetTypeAttribute,
     Asset,
     BaseAttributeValue,
     TextAttributeValue,
@@ -14,9 +14,9 @@ from .models import (
 )
 
 
-class AssetAttributeDefinitionSerializer(serializers.ModelSerializer):
+class AssetTypeAttributeSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AssetAttributeDefinition
+        model = AssetTypeAttribute
         fields = [
             "id",
             "asset_type",
@@ -34,10 +34,12 @@ class AssetAttributeDefinitionSerializer(serializers.ModelSerializer):
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source="field_definition.name", read_only=True)
-    api_key = serializers.CharField(source="field_definition.api_key", read_only=True)
+    name = serializers.CharField(source="attribute_type_attribute.name", read_only=True)
+    api_key = serializers.CharField(
+        source="attribute_type_attribute.api_key", read_only=True
+    )
     attribute_type = serializers.CharField(
-        source="field_definition.attribute_type", read_only=True
+        source="attribute_type_attribute.attribute_type", read_only=True
     )
     value = serializers.SerializerMethodField()
     polymorphic_ctype = serializers.SerializerMethodField()
@@ -46,7 +48,7 @@ class AssetAttributeSerializer(serializers.ModelSerializer):
         model = BaseAttributeValue
         fields = [
             "id",
-            "field_definition",
+            "attribute_type_attribute",
             "name",
             "api_key",
             "attribute_type",
@@ -67,7 +69,7 @@ class AssetAttributeSerializer(serializers.ModelSerializer):
 
 
 class AssetTypeSerializer(serializers.ModelSerializer):
-    field_definitions = AssetAttributeDefinitionSerializer(many=True, read_only=True)
+    attributes = AssetTypeAttributeSerializer(many=True, read_only=True)
     asset_count = serializers.IntegerField(source="assets.count", read_only=True)
 
     class Meta:
@@ -76,7 +78,7 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
-            "field_definitions",
+            "attributes",
             "asset_count",
             "created_at",
             "updated_at",
@@ -131,8 +133,8 @@ class AssetSerializer(serializers.ModelSerializer):
         attributes = getattr(obj, "attributes", None)
         values = {}
         for field_value in attributes.all():
-            # field_definition should be prefetched
-            api_key = getattr(field_value.field_definition, "api_key", None)
+            # attribute_type_attribute should be prefetched
+            api_key = getattr(field_value.attribute_type_attribute, "api_key", None)
             if api_key:
                 values[api_key] = field_value.value
         return values
@@ -148,7 +150,7 @@ class AssetSerializer(serializers.ModelSerializer):
             attributes = self.initial_data["attributes"]
             for api_key, value in attributes.items():
                 try:
-                    field_def = asset.asset_type.field_definitions.get(api_key=api_key)
+                    field_def = asset.asset_type.attributes.get(api_key=api_key)
 
                     # Get the correct model class for this field type
                     model_class = {
@@ -161,9 +163,9 @@ class AssetSerializer(serializers.ModelSerializer):
                     }.get(field_def.attribute_type, TextAttributeValue)
 
                     model_class.objects.create(
-                        asset=asset, field_definition=field_def, value=value
+                        asset=asset, attribute_type_attribute=field_def, value=value
                     )
-                except AssetAttributeDefinition.DoesNotExist:
+                except AssetTypeAttribute.DoesNotExist:
                     pass  # Skip unknown fields
 
         return asset
@@ -193,7 +195,7 @@ class AssetSerializer(serializers.ModelSerializer):
             attributes = self.initial_data["attributes"]
         if attributes and "asset_type" in data:
             # Validate required fields
-            field_defs = AssetAttributeDefinition.objects.filter(
+            field_defs = AssetTypeAttribute.objects.filter(
                 asset_type=data["asset_type"]
             )
             errors = {}

@@ -1,7 +1,25 @@
+export interface AssetType {
+  id: string
+  name: string
+  description?: string
+}
+
+export interface AssetTypeAttribute {
+  id: string
+  name: string
+  api_key: string
+  attribute_type: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json'
+  is_required: boolean
+  default_value?: any
+  description?: string
+  order: number
+}
+
 export interface Asset {
   id: string
   name: string
   assetTypeId: string
+  h3Index?: string
   geometry: {
     type: string
     coordinates: number[]

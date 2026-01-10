@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 django.setup()
 
-from assets.models import Asset, AssetType, AssetAttributeDefinition, JSONAttributeValue
+from assets.models import Asset, AssetType, AssetTypeAttribute, JSONAttributeValue
 
 
 class OSMImporter:
@@ -154,7 +154,7 @@ class OSMImporter:
         ]
 
         for order, (name, api_key, attr_type, description) in enumerate(attributes):
-            AssetAttributeDefinition.objects.get_or_create(
+            AssetTypeAttribute.objects.get_or_create(
                 asset_type=asset_type,
                 name=name,
                 defaults={
@@ -300,7 +300,7 @@ class OSMImporter:
             DateAttributeValue,
             DateTimeAttributeValue,
             JSONAttributeValue,
-            AssetAttributeDefinition,
+            AssetTypeAttribute,
         )
 
         attribute_defs = {
@@ -356,7 +356,7 @@ class OSMImporter:
                 next_order = 0
                 while next_order in used_orders:
                     next_order += 1
-                field_def = AssetAttributeDefinition.objects.create(
+                field_def = AssetTypeAttribute.objects.create(
                     asset_type=asset.asset_type,
                     name=key,
                     api_key=key,
