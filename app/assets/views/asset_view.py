@@ -630,10 +630,7 @@ Format the output as follows:
 
             if count == 1:
                 # Serialize as a tile feature (GeoJSON)
-                asset = (
-                    Asset.objects.filter(h3_index__startswith=hash_prefix)
-                    .first()
-                )
+                asset = Asset.objects.filter(h3_index__startswith=hash_prefix).first()
                 if asset and asset.geometry:
                     cluster_data.append(
                         {
