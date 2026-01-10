@@ -742,6 +742,35 @@ Now convert the query: "{query_text}"
             hash_prefix = cluster["geohash_prefix"]
             count = cluster["count"]
 
+            if count == 1:
+                # Serialize as a tile feature (GeoJSON)
+                asset = (
+                    Asset.objects.filter(geohash__startswith=hash_prefix)
+                    .only("id", "name", "geometry", "asset_type_id", "geohash")
+                    .first()
+                )
+                if asset and asset.geometry:
+                    cluster_data.append(
+                        {
+                            "type": "Feature",
+                            "id": str(asset.id),
+                            "geometry": {
+                                "type": asset.geometry.geom_type,
+                                "coordinates": (
+                                    list(asset.geometry.coords)
+                                    if hasattr(asset.geometry, "coords")
+                                    else None
+                                ),
+                            },
+                            "properties": {
+                                "name": asset.name,
+                                "assetTypeId": str(asset.asset_type_id),
+                                "geohash": asset.geohash,
+                            },
+                        }
+                    )
+                continue
+
             # Calculate centroid for this cluster
             with connection.cursor() as cursor:
                 cursor.execute(

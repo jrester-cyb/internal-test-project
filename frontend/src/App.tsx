@@ -104,8 +104,24 @@ function App() {
       if (zoom < 12) {
         // Show clusters at high zoom out
         const clusterData = await fetchClusters(zoom, bounds, filters)
-        setClusters(clusterData.clusters)
-        setAssets([])
+        // Separate GeoJSON features (single-asset clusters) from true clusters
+        const geojsonAssets: Asset[] = []
+        const realClusters: Cluster[] = []
+        for (const c of clusterData.clusters) {
+          if (c.type === 'Feature' && c.geometry && c.properties) {
+            geojsonAssets.push({
+              id: c.id,
+              name: c.properties.name,
+              assetTypeId: c.properties.assetTypeId,
+              geohash: c.properties.geohash,
+              geometry: c.geometry
+            })
+          } else {
+            realClusters.push(c)
+          }
+        }
+        setClusters(realClusters)
+        setAssets(geojsonAssets)
       } else {
         // Show individual assets when zoomed in
         const tileData = await fetchTiles(bounds, 5000, filters)

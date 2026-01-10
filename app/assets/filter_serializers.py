@@ -19,7 +19,7 @@ class FilterGroupSerializer(serializers.Serializer):
             "istartswith",
             "iendswith",
         ],
-        "number": ["exact", "lt", "lte", "gt", "gte", "range"],
+        "number": ["exact", "lt", "lte", "gt", "gte", "range", "ne"],
         "boolean": ["exact"],
         "date": ["exact", "lt", "lte", "gt", "gte", "range"],
         "datetime": ["exact", "lt", "lte", "gt", "gte", "range"],
@@ -37,6 +37,8 @@ class FilterGroupSerializer(serializers.Serializer):
 
         if isinstance(value, GEOSGeometry):
             return self.ALLOWED_OPERATORS["geometry"]
+        elif isinstance(value, int) or isinstance(value, float):
+            return self.ALLOWED_OPERATORS["number"]
 
         return self.ALLOWED_OPERATORS.get(type(value).__name__, None)
 
