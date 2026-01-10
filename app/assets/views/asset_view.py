@@ -346,7 +346,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             # Fallback to simple keyword matching if Bedrock fails
             print(f"Bedrock interpretation failed: {e}")
-            filters, logic, interpretation = self._interpret_with_keywords(query_text)
+            raise ValueError("Bedrock interpretation failed") from e
 
         return Response(
             {
@@ -373,67 +373,29 @@ class AssetViewSet(viewsets.ModelViewSet):
 
 Query: "{query_text}"
 
-Available filter types:
-1. text: General text search across name and attributes (use for location names, neighborhoods, or general terms)
-   Example: {{"type": "text", "value": "French Quarter"}}
-   Example: {{"type": "text", "value": "waterfront"}}
+Examples of filter configurations:
+1. Search for assets of a specific type:
+Prompt: "Find all restaurants"
+Filters: {{"filters": [{{"field": "assetType.name", "value": "restaurant", "operator": "icontains"}}], "logic": "AND"}}
 
-2. name: Search by asset name (supports partial matching, case-insensitive)
-   Example: {{"type": "name", "value": "Ph"}} - finds names starting with or containing "Ph"
-   Example: {{"type": "name", "value": "Starbucks"}}
+2. Search for assets by name:
+Prompt: "Assets named Central Park"
+Filters: {{"filters": [{{"field": "name", "value": "Central Park", "operator": "icontains"}}], "logic": "AND"}}
 
-3. assetTypeName: Filter by asset type (restaurant, hotel, building, park, school, hospital, shop, bar, cafe, etc.)
-   Example: {{"type": "assetTypeName", "assetTypeName": "restaurant"}}
+3. Search for assets with specific attribute values:
+Prompt: "Hotels with more than 100 rooms"
+Filters: {{"filters": [{{"field": "attributes.number_of_rooms", "value": 100, "operator": "gt"}}], "logic": "AND"}}
 
-4. assetTypeId: Filter by specific asset type ID
-   Example: {{"type": "assetTypeId", "assetTypeId": "123"}}
+4. Search for assets within a geographic area:
+Prompt: "Assets of type Park or Garden in downtown area"
+Filters: {{"filters": [{{"field": "geometry", "value": "POLYGON((...))", "operator": "within"}}, {{"logic": "OR", "filters": [{{"field": "assetType.name", "value": "park", "operator": "icontains"}}, {{"field": "assetType.name", "value": "garden", "operator": "icontains"}}]}}], "logic": "AND"}}
 
-5. attribute: Filter by specific attribute key/value (for properties like cuisine, parking, amenities, etc.)
-   Example: {{"type": "attribute", "key": "cuisine", "value": "italian"}}
-   Example: {{"type": "attribute", "key": "parking", "value": "yes"}}
-
-6. h3: Filter by H3 region
-    Example: {"type": "h3", "hash": "8a2a1072b59ffff"}
-
-7. bbox: Filter by bounding box [minLon, minLat, maxLon, maxLat]
-   Example: {{"type": "bbox", "bbox": [-90.1, 29.9, -90.0, 30.0]}}
-
-8. radius: Filter by radius from a point
-   Example: {{"type": "radius", "lat": 29.95, "lon": -90.07, "radius_km": 2}}
-
-Logic operators: "AND" or "OR" (determines how multiple filters are combined)
-
-IMPORTANT GUIDELINES:
-- Use "name" filter for specific business/asset names or name prefixes
-- Use "text" filter for locations, neighborhoods, and general descriptive terms
-- For partial name matches like "Ph", use name filter
-- For location names like "New Orleans", "French Quarter", use text filter
-- Combine filters logically - names with locations should use AND logic
-
-Respond with ONLY a JSON object in this exact format:
+Format the output as follows:
 {{
-  "filters": [...array of filter objects...],
-  "logic": "AND" or "OR",
-  "interpretation": "human readable description of what filters will find"
+    "interpretation": "<brief description of how the query was interpreted>",
+    "filters": [<array of filter objects>],
+    "logic": "AND" or "OR"
 }}
-
-Examples:
-Query: "restaurants in French Quarter"
-Response: {{"filters": [{{"type": "assetTypeName", "assetTypeName": "restaurant"}}, {{"type": "text", "value": "French Quarter"}}], "logic": "AND", "interpretation": "restaurants in French Quarter"}}
-
-Query: "hotels with parking near downtown"
-Response: {{"filters": [{{"type": "assetTypeName", "assetTypeName": "hotel"}}, {{"type": "attribute", "key": "parking", "value": "yes"}}, {{"type": "text", "value": "downtown"}}], "logic": "AND", "interpretation": "hotels with parking near downtown"}}
-
-Query: "name starts with Ph in New Orleans"
-Response: {{"filters": [{{"type": "name", "value": "Ph"}}, {{"type": "text", "value": "New Orleans"}}], "logic": "AND", "interpretation": "assets with names starting with 'Ph' in New Orleans"}}
-
-Query: "Starbucks locations"
-Response: {{"filters": [{{"type": "name", "value": "Starbucks"}}], "logic": "AND", "interpretation": "Starbucks locations"}}
-
-Query: "italian or french restaurants"
-Response: {{"filters": [{{"type": "assetTypeName", "assetTypeName": "restaurant"}}, {{"type": "attribute", "key": "cuisine", "value": "italian"}}, {{"type": "attribute", "key": "cuisine", "value": "french"}}], "logic": "OR", "interpretation": "restaurants serving italian or french cuisine"}}
-
-Now convert the query: "{query_text}"
 """
 
         # Call Bedrock Claude
@@ -463,79 +425,6 @@ Now convert the query: "{query_text}"
         except Exception as e:
             print(f"Error calling Bedrock: {e}")
             raise
-
-    def _interpret_with_keywords(self, query_text):
-        """Fallback keyword-based interpretation"""
-        filters = []
-        logic = "AND"
-        query_lower = query_text.lower()
-
-        # Check for asset type keywords
-        type_keywords = {
-            "restaurant": [
-                "restaurant",
-                "restaurants",
-                "dining",
-                "eatery",
-                "cafe",
-                "cafes",
-            ],
-            "hotel": ["hotel", "hotels", "motel", "inn", "lodging"],
-            "building": ["building", "buildings", "structure"],
-            "park": ["park", "parks", "garden"],
-            "school": ["school", "schools", "university", "college"],
-            "hospital": ["hospital", "hospitals", "clinic", "medical"],
-            "shop": ["shop", "shops", "store", "stores", "retail"],
-            "bar": ["bar", "bars", "pub", "pubs", "tavern"],
-        }
-
-        for asset_type, keywords in type_keywords.items():
-            if any(keyword in query_lower for keyword in keywords):
-                filters.append({"type": "assetTypeName", "assetTypeName": asset_type})
-                break
-
-        # Check for location references
-        location_patterns = [
-            (r"in\s+([a-z\s]+?)(?:\s+area|\s+neighborhood|$)", "in"),
-            (r"near\s+([a-z\s]+?)(?:\s+area|\s+neighborhood|$)", "near"),
-            (r"around\s+([a-z\s]+?)(?:\s+area|\s+neighborhood|$)", "around"),
-        ]
-
-        for pattern, keyword in location_patterns:
-            match = re.search(pattern, query_lower)
-            if match:
-                location = match.group(1).strip()
-                filters.append({"type": "text", "value": location})
-                break
-
-        # If no specific filters were detected, do a general text search
-        if not filters:
-            filters.append({"type": "text", "value": query_text})
-
-        interpretation = self._describe_filters(filters, logic)
-        return filters, logic, interpretation
-
-    def _describe_filters(self, filters, logic):
-        """Generate human-readable description of filters"""
-        if not filters:
-            return "No filters applied"
-
-        descriptions = []
-        for f in filters:
-            if f.get("type") == "text":
-                descriptions.append(f"searching for '{f['value']}'")
-            elif f.get("type") == "name":
-                descriptions.append(f"name contains '{f['value']}'")
-            elif f.get("type") == "assetTypeName":
-                descriptions.append(f"type is {f['assetTypeName']}")
-            elif f.get("type") == "attribute":
-                descriptions.append(f"{f['key']} is {f['value']}")
-            elif f.get("type") == "bbox":
-                descriptions.append("within map bounds")
-            elif f.get("type") == "radius":
-                descriptions.append(f"within {f['radius_km']}km of location")
-
-        return f" {logic} ".join(descriptions) if descriptions else "General search"
 
     @extend_schema(
         tags=["Assets"],
@@ -700,7 +589,7 @@ Now convert the query: "{query_text}"
             try:
                 zoom = int(zoom)
                 zoom_to_h3len = {
-                    range(0, 3): 3,  # World/continent
+                    range(0, 3): 2,  # World/continent
                     range(3, 5): 4,  # Country
                     range(5, 7): 5,  # State/region
                     range(7, 10): 6,  # City
