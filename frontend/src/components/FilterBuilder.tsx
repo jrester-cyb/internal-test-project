@@ -82,9 +82,10 @@ export default function FilterBuilder({
   async function loadAttributeDefinitions(assetTypeId: string) {
     try {
       const defs = await fetchAssetAttributeDefinitions(assetTypeId)
+      const attributes = Array.isArray(defs) ? defs : defs.results || []
       setAttributeDefinitions(prev => ({
         ...prev,
-        [assetTypeId]: Array.isArray(defs) ? defs : defs.results || []
+        [assetTypeId]: attributes
       }))
     } catch (error) {
       console.error('Failed to load attribute definitions:', error)
@@ -114,7 +115,7 @@ export default function FilterBuilder({
   const handleValueClick = (value: any) => {
     if (selectedAttribute && selectedTypeForAttributes) {
       const currentFilter = attributeFilters.find(
-        f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.api_key
+        f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
       )
 
       let newValue: any
@@ -148,7 +149,7 @@ export default function FilterBuilder({
 
       handleAttributeFilterChange(
         selectedTypeForAttributes,
-        selectedAttribute.api_key,
+        selectedAttribute.apiKey,
         selectedAttribute.name,
         selectedAttribute.attribute_type,
         operator,
@@ -161,7 +162,7 @@ export default function FilterBuilder({
     if (!selectedAttribute || !selectedTypeForAttributes) return false
 
     const currentFilter = attributeFilters.find(
-      f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.api_key
+      f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
     )
 
     if (!currentFilter) return false
@@ -263,13 +264,13 @@ export default function FilterBuilder({
     assetTypeId: string,
     attr: AssetTypeAttribute
   ) => {
-    const value = getAttributeFilterValue(assetTypeId, attr.api_key)
-    const operator = getAttributeFilterOperator(assetTypeId, attr.api_key)
+    const value = getAttributeFilterValue(assetTypeId, attr.apiKey)
+    const operator = getAttributeFilterOperator(assetTypeId, attr.apiKey)
 
     const handleValueChange = (newValue: any) => {
       handleAttributeFilterChange(
         assetTypeId,
-        attr.api_key,
+        attr.apiKey,
         attr.name,
         attr.attribute_type,
         operator,
@@ -280,7 +281,7 @@ export default function FilterBuilder({
     const handleOperatorChange = (newOperator: string) => {
       handleAttributeFilterChange(
         assetTypeId,
-        attr.api_key,
+        attr.apiKey,
         attr.name,
         attr.attribute_type,
         newOperator,
@@ -524,7 +525,7 @@ export default function FilterBuilder({
                 </Box>
               </Box>
 
-              {/* Middle: Attribute selection and existing values */}
+              {/* Middle: Attribute selection */}
               {selectedTypeForAttributes && selectedAssetTypes.indexOf(selectedTypeForAttributes) > -1 && (
                 <>
                   <Divider orientation="vertical" flexItem />
@@ -532,7 +533,7 @@ export default function FilterBuilder({
                     <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
                       Attributes
                     </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       {(attributeDefinitions[selectedTypeForAttributes] || []).map(attr => (
                         <Box
                           key={attr.id}
@@ -563,89 +564,79 @@ export default function FilterBuilder({
                         </Box>
                       ))}
                     </Box>
-
-                    {selectedAttribute && (
-                      <>
-                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                          Existing Values
-                        </Typography>
-                        {loadingValues ? (
-                          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                            <CircularProgress size={20} />
-                          </Box>
-                        ) : (
-                          <Box sx={{
-                            maxHeight: 300,
-                            overflowY: 'auto',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 0.5
-                          }}>
-                            {attributeValues.length === 0 ? (
-                              <Typography variant="caption" color="text.secondary">
-                                No values found
-                              </Typography>
-                            ) : (
-                              attributeValues.map((value, idx) => {
-                                const isSelected = isValueSelected(value)
-                                return (
-                                  <Box
-                                    key={idx}
-                                    onClick={() => handleValueClick(value)}
-                                    sx={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 1,
-                                      px: 1.5,
-                                      py: 0.75,
-                                      borderRadius: 0.5,
-                                      border: 1,
-                                      borderColor: isSelected ? 'primary.main' : 'grey.300',
-                                      bgcolor: isSelected ? 'primary.50' : 'transparent',
-                                      cursor: 'pointer',
-                                      fontSize: '0.875rem',
-                                      transition: 'all 0.2s',
-                                      '&:hover': {
-                                        borderColor: 'primary.main',
-                                        bgcolor: 'primary.50'
-                                      }
-                                    }}
-                                  >
-                                    <Checkbox
-                                      checked={isSelected}
-                                      size="small"
-                                      sx={{ p: 0 }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <Typography variant="body2">{String(value)}</Typography>
-                                  </Box>
-                                )
-                              })
-                            )}
-                          </Box>
-                        )}
-                      </>
-                    )}
                   </Box>
                 </>
               )}
 
-              {/* Right side: Filter for selected attribute */}
+              {/* Right side: Existing values for selected attribute */}
               {selectedAttribute && selectedTypeForAttributes && selectedAssetTypes.indexOf(selectedTypeForAttributes) > -1 && (
                 <>
                   <Divider orientation="vertical" flexItem />
                   <Box sx={{ flex: 1, minWidth: 350 }}>
                     <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Filter: {selectedAttribute.name}
+                      Values: {selectedAttribute.name}
                     </Typography>
-                    <Box>
-                      {selectedAttribute.description && (
-                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                          {selectedAttribute.description}
-                        </Typography>
-                      )}
-                      {renderAttributeInput(selectedTypeForAttributes, selectedAttribute)}
-                    </Box>
+                    {selectedAttribute.description && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                        {selectedAttribute.description}
+                      </Typography>
+                    )}
+                    {loadingValues ? (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                        <CircularProgress size={20} />
+                      </Box>
+                    ) : (
+                      <Box sx={{
+                        maxHeight: 400,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.5
+                      }}>
+                        {attributeValues.length === 0 ? (
+                          <Typography variant="caption" color="text.secondary">
+                            No values found
+                          </Typography>
+                        ) : (
+                          attributeValues.map((value, idx) => {
+                            const isSelected = isValueSelected(value)
+                            return (
+                              <Box
+                                key={idx}
+                                onClick={() => handleValueClick(value)}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                  px: 1.5,
+                                  py: 0.75,
+                                  borderRadius: 0.5,
+                                  border: 1,
+                                  borderColor: isSelected ? 'primary.main' : 'grey.300',
+                                  bgcolor: isSelected ? 'primary.50' : 'transparent',
+                                  cursor: 'pointer',
+                                  fontSize: '0.875rem',
+                                  transition: 'all 0.2s',
+                                  '&:hover': {
+                                    borderColor: 'primary.main',
+                                    bgcolor: 'primary.50'
+                                  }
+                                }}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  size="small"
+                                  sx={{ p: 0 }}
+                                  onChange={() => handleValueClick(value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <Typography variant="body2">{String(value)}</Typography>
+                              </Box>
+                            )
+                          })
+                        )}
+                      </Box>
+                    )}
                   </Box>
                 </>
               )}

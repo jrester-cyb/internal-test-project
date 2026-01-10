@@ -481,9 +481,6 @@ Format the output as follows:
             except (ValueError, TypeError):
                 pass
 
-        # Only fetch necessary fields for performance
-        queryset = queryset.only("id", "name", "geometry", "asset_type_id", "h3_index")
-
         # Build GeoJSON-like response
         features = []
         for asset in queryset:
@@ -635,7 +632,6 @@ Format the output as follows:
                 # Serialize as a tile feature (GeoJSON)
                 asset = (
                     Asset.objects.filter(h3_index__startswith=hash_prefix)
-                    .only("id", "name", "geometry", "asset_type_id", "h3_index")
                     .first()
                 )
                 if asset and asset.geometry:

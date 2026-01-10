@@ -129,38 +129,60 @@ function App() {
     try {
       // Merge asset type and attribute filters with other filters
       let mergedFilters = filters ? { ...filters } : null
-      const filtersList: any[] = []
+      const filterGroups: any[] = []
 
-      // Add asset type filters
-      if (selectedAssetTypes.length > 0) {
-        const assetTypeFilters = selectedAssetTypes.map(typeId => ({
-          field: 'assetTypeId',
-          value: typeId,
-          operator: 'exact'
-        }))
-        filtersList.push(...assetTypeFilters)
-      }
-
-      // Add attribute filters
-      if (attributeFilters.length > 0) {
-        const attrFilters = attributeFilters.map(af => ({
+      // Group attribute filters by asset type
+      const attributesByType: Record<string, any[]> = {}
+      attributeFilters.forEach(af => {
+        if (!attributesByType[af.assetTypeId]) {
+          attributesByType[af.assetTypeId] = []
+        }
+        attributesByType[af.assetTypeId].push({
           field: `attributes.${af.attributeKey}`,
           value: af.value,
           operator: af.operator
-        }))
-        filtersList.push(...attrFilters)
+        })
+      })
+
+      // Create filter groups: each asset type with its attribute filters in an AND clause
+      if (selectedAssetTypes.length > 0) {
+        selectedAssetTypes.forEach(typeId => {
+          const typeFilters: any[] = [
+            {
+              field: 'assetTypeId',
+              value: typeId,
+              operator: 'exact'
+            }
+          ]
+
+          // Add attribute filters for this asset type
+          if (attributesByType[typeId]) {
+            typeFilters.push(...attributesByType[typeId])
+          }
+
+          // If only one filter (just the asset type), add it directly
+          // Otherwise, wrap in an AND clause
+          if (typeFilters.length === 1) {
+            filterGroups.push(typeFilters[0])
+          } else {
+            filterGroups.push({
+              logic: 'AND',
+              filters: typeFilters
+            })
+          }
+        })
       }
 
-      if (filtersList.length > 0) {
+      if (filterGroups.length > 0) {
         if (mergedFilters && mergedFilters.filters) {
           mergedFilters = {
             ...mergedFilters,
-            filters: [...mergedFilters.filters, ...filtersList],
+            filters: [...mergedFilters.filters, ...filterGroups],
             logic: 'AND'
           }
         } else {
           mergedFilters = {
-            filters: filtersList,
+            filters: filterGroups,
             logic: selectedAssetTypes.length > 1 ? 'OR' : 'AND'
           }
         }

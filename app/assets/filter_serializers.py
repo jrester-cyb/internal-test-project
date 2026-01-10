@@ -6,10 +6,12 @@ from django.contrib.gis.geos import GEOSGeometry
 import json
 from datetime import date, datetime
 
+from assets.models import AssetTypeAttribute
+
 
 class FilterGroupSerializer(serializers.Serializer):
     ALLOWED_OPERATORS = {
-        "str": [
+        "text": [
             "exact",
             "contains",
             "startswith",
@@ -27,20 +29,19 @@ class FilterGroupSerializer(serializers.Serializer):
         "geometry": ["within", "intersects", "contains", "exact"],
         "h3_index": ["exact", "startswith"],
     }
+    LOOKUP_MAP = {
+        "text": "textattributevalue__value",
+        "number": "numberattributevalue__value",
+        "boolean": "booleanattributevalue__value",
+        "date": "dateattributevalue__value",
+        "datetime": "datetimeattributevalue__value",
+        "json": "jsonattributevalue__value",
+    }
 
     inverse = serializers.BooleanField(default=False)
     field = serializers.CharField(required=True)
     value = serializers.JSONField(required=True)
     operator = serializers.CharField(required=True)
-
-    def get_allowed_operators(self, value):
-
-        if isinstance(value, GEOSGeometry):
-            return self.ALLOWED_OPERATORS["geometry"]
-        elif isinstance(value, int) or isinstance(value, float):
-            return self.ALLOWED_OPERATORS["number"]
-
-        return self.ALLOWED_OPERATORS.get(type(value).__name__, None)
 
     def validate_field(self, value: str) -> str:
         # Only allow non-alphanumeric characters ".", "_", no spaces
@@ -82,85 +83,47 @@ class FilterGroupSerializer(serializers.Serializer):
         if field.startswith("attributes.") or field.startswith("attributes__"):
             attr_prefix = field.replace(".", "__")
             parts = attr_prefix.split("__")
-            if len(parts) >= 3:
+            if len(parts) == 2:
                 api_key = parts[1]
-                value_path = parts[2:]
-                # If the path is just 'value' filter by the specific type of the value
-                if value_path == ["value"]:
-                    # Filter by type
-                    if isinstance(value, str):
-                        model_type = "textattributevalue"
-                    elif isinstance(value, (int, float)):
-                        model_type = "numberattributevalue"
-                    elif isinstance(value, bool):
-                        model_type = "booleanattributevalue"
-                    elif isinstance(value, dict) or isinstance(value, list):
-                        model_type = "jsonattributevalue"
-                    elif isinstance(value, date):
-                        model_type = "dateattributevalue"
-                    elif isinstance(value, datetime):
-                        model_type = "datetimeattributevalue"
+                # Get the model type based on the api_key
+                asset_attribute_type_qs = AssetTypeAttribute.objects.filter(
+                    api_key=api_key
+                ).only("attribute_type")
+                q = None
+                for attr in asset_attribute_type_qs:
+                    attr_type = attr.attribute_type
 
-                    q = Q(
+                    new_q = Q(
                         **{
                             "attributes__attribute_type_attribute__api_key": api_key,
-                            f"attributes__{model_type}__value__{operator}": value,
+                            f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": value,
                         }
                     )
-                else:
-                    # For deeper paths, only JSONField supports nested lookups
-                    json_path = "__".join(value_path)
-                    q = Q(
-                        **{
-                            "attributes__attribute_type_attribute__api_key": api_key,
-                            f"attributes__jsonattributevalue__value__{json_path}__{operator}": value,
-                        }
-                    )
+                    if q is None:
+                        q = new_q
+                    else:
+                        q |= new_q
+
                 if self.validated_data.get("inverse", False):
                     q = ~q
                 return q
-            elif len(parts) == 2:
+            else:
+                # For deeper paths, only JSONField supports nested lookups
                 api_key = parts[1]
-                # Filter by type
-                if isinstance(value, str):
-                    model_type = "textattributevalue"
-                elif isinstance(value, (int, float)):
-                    model_type = "numberattributevalue"
-                elif isinstance(value, bool):
-                    model_type = "booleanattributevalue"
-
+                json_path = "__".join(parts[2:])
                 q = Q(
                     **{
                         "attributes__attribute_type_attribute__api_key": api_key,
-                        f"attributes__{model_type}__value__{operator}": value,
+                        f"attributes__{self.LOOKUP_MAP['json']}__{json_path}__{operator}": value,
                     }
                 )
-
-                if self.validated_data.get("inverse", False):
-                    q = ~q
-                return q
+            if self.validated_data.get("inverse", False):
+                q = ~q
 
         query_obj = Q(**{f"{field}__{operator}": value})
         if self.validated_data.get("inverse", False):
             query_obj = ~query_obj
         return query_obj
-
-    def validate(self, attrs):
-        value = self.validate_value(attrs.get("value"))
-        operator = attrs.get("operator")
-
-        allowed_operators = self.get_allowed_operators(value)
-        if allowed_operators is None:
-            raise serializers.ValidationError(
-                f"Unsupported value type: {type(value).__name__}"
-            )
-
-        if operator not in allowed_operators:
-            raise serializers.ValidationError(
-                f"Operator '{operator}' not allowed for value type '{type(value).__name__}'. Allowed operators: {allowed_operators}"
-            )
-
-        return attrs
 
 
 class FilterSerializer(serializers.Serializer):
