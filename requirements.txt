@@ -1,0 +1,15 @@
+Django>=6.0,<7.0
+djangorestframework
+djangorestframework-camel-case
+djangorestframework-gis
+drf-spectacular
+drf-nested-routers
+django-filter
+django-polymorphic
+geohash2
+gunicorn
+psycopg2-binary
+requests
+boto3
+pytest
+pytest-django

@@ -1,0 +1,104 @@
+import { useEffect, useState } from 'react'
+import { Box, Typography, IconButton, CircularProgress, Drawer, Divider, Chip, Paper } from '@mui/material'
+import { Close as CloseIcon } from '@mui/icons-material'
+import type { Asset } from '../types'
+import { getAsset } from '../api/assets'
+
+interface AssetDetailsProps {
+  asset: Asset
+  onClose: () => void
+}
+
+export default function AssetDetails({ asset, onClose }: AssetDetailsProps) {
+  const [fullAsset, setFullAsset] = useState<Asset | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    async function loadFullAsset() {
+      setLoading(true)
+      try {
+        const data = await getAsset(asset.id)
+        setFullAsset(data)
+      } catch (error) {
+        console.error('Error loading asset details:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadFullAsset()
+  }, [asset.id])
+
+  const displayAsset = fullAsset || asset
+
+  return (
+    <Drawer
+      anchor="right"
+      open={true}
+      onClose={onClose}
+      sx={{ zIndex: 1400 }}
+      PaperProps={{ sx: { width: 400 } }}
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Typography variant="h6" component="h2">Asset Details</Typography>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Name</Typography>
+              <Typography variant="h6">{displayAsset.name}</Typography>
+            </Box>
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>ID</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{displayAsset.id}</Typography>
+            </Box>
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Geohash</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{displayAsset.geohash}</Typography>
+            </Box>
+
+            {displayAsset.geometry && (
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Location</Typography>
+                <Typography variant="body2">
+                  Lat: {displayAsset.geometry.coordinates[1].toFixed(6)}<br />
+                  Lon: {displayAsset.geometry.coordinates[0].toFixed(6)}
+                </Typography>
+              </Box>
+            )}
+
+            {displayAsset.attributes && Object.keys(displayAsset.attributes).length > 0 && (
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mb: 1, display: 'block' }}>
+                  Attributes
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {Object.entries(displayAsset.attributes).map(([key, value]) => (
+                    <Paper key={key} variant="outlined" sx={{ p: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        {key}:
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </Typography>
+                    </Paper>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </>
+        )}
+      </Box>
+    </Drawer>
+  )
+}

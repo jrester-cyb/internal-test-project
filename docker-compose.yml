@@ -1,0 +1,59 @@
+version: '3.8'
+services:
+  db:
+    image: 151885604979.dkr.ecr.us-east-1.amazonaws.com/cybiricalubuntu_postgres:17.7
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: 151885604979.dkr.ecr.us-east-1.amazonaws.com/cybiricalubuntu_redis:7.4.7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+  web:
+    build: .
+    command: gunicorn app.wsgi:application --bind 0.0.0.0:80
+    volumes:
+      - .:/app
+    expose:
+      - "80"
+    depends_on:
+      - db
+    environment:
+      - DJANGO_DB_HOST=db
+      - DJANGO_DB_NAME=mydb
+      - DJANGO_DB_USER=myuser
+      - DJANGO_DB_PASSWORD=mypassword
+      - REDIS_HOST=redis
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    expose:
+      - "5173"
+    environment:
+      - VITE_API_URL=http://localhost/api
+    depends_on:
+      - web
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - frontend
+
+volumes:
+  postgres_data:
+  redis_data:
