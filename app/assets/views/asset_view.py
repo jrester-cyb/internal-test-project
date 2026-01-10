@@ -18,8 +18,9 @@ import re
 import json
 import boto3
 import os
-from ..models import Asset
+from ..models import Asset, BaseAttributeValue
 from ..serializers import AssetSerializer
+from django.db.models import Q
 
 
 class AssetPagination(PageNumberPagination):
@@ -72,12 +73,9 @@ class AssetViewSet(viewsets.ModelViewSet):
             "attributes__dateattributevalue",
             "attributes__datetimeattributevalue",
             "attributes__jsonattributevalue",
-        ).select_related()
-        # Also select_related for attribute_type_attribute on attributes
-        queryset = queryset.prefetch_related("attributes__attribute_type_attribute")
+        )
 
         # Special case: filter by attributes using query parameters like ?attr_hostname=server01
-        from django.db.models import Q
 
         for param, value in self.request.query_params.items():
             if param.startswith("attr_"):
@@ -266,29 +264,28 @@ class AssetViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"])
     def search(self, request, assettype_pk=None):
         """Search assets by multiple attribute and geographic conditions with AND/OR logic"""
+        from django.db.models import Prefetch
+
         filter_config = request.data
 
         # If accessed via nested route, filter by asset type
-        if "assettype_pk" in self.kwargs:
-            queryset = Asset.objects.filter(asset_type_id=self.kwargs["assettype_pk"])
+        if assettype_pk:
+            queryset = Asset.objects.filter(asset_type_id=assettype_pk)
         else:
             queryset = Asset.objects.all()
 
-        # Prefetch all attribute value types and select_related for attribute_type_attribute
-        queryset = queryset.prefetch_related(
-            "attributes",
-            "attributes__textattributevalue",
-            "attributes__numberattributevalue",
-            "attributes__booleanattributevalue",
-            "attributes__dateattributevalue",
-            "attributes__datetimeattributevalue",
-            "attributes__jsonattributevalue",
-        ).select_related()
-        queryset = queryset.prefetch_related("attributes__attribute_type_attribute")
+        # Optimize prefetch with select_related to reduce queries
+        queryset = queryset.select_related("asset_type").prefetch_related(
+            Prefetch(
+                "attributes",
+                queryset=BaseAttributeValue.objects.select_related(
+                    "attribute_type_attribute"
+                ),
+            ),
+        )
 
         if filter_config:
             q_filter = FilterSerializer(data=filter_config).build_query()
-            print(q_filter)
             if q_filter:
                 queryset = queryset.filter(q_filter)
 
@@ -481,6 +478,9 @@ Format the output as follows:
             except (ValueError, TypeError):
                 pass
 
+        # Optimize query - we only need basic fields for tiles
+        queryset = queryset.select_related("asset_type")
+
         # Build GeoJSON-like response
         features = []
         for asset in queryset:
@@ -630,7 +630,11 @@ Format the output as follows:
 
             if count == 1:
                 # Serialize as a tile feature (GeoJSON)
-                asset = Asset.objects.filter(h3_index__startswith=hash_prefix).first()
+                asset = (
+                    Asset.objects.filter(h3_index__startswith=hash_prefix)
+                    .only("id", "name", "geometry", "asset_type_id", "h3_index")
+                    .first()
+                )
                 if asset and asset.geometry:
                     cluster_data.append(
                         {
