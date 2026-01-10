@@ -121,6 +121,22 @@ class AssetViewSet(viewsets.ModelViewSet):
         tags=["Assets"],
         summary="Filter assets by attributes and geography",
         description="Filter assets by asset type, attribute values, and geography with AND/OR logic. Supports equals, contains, gt, lt, gte, lte operators for attributes, and geohash, bbox, distance, within, contains, intersects for geographic filters.",
+        parameters=[
+            OpenApiParameter(
+                name="page",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Page number for paginated results",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Number of results per page",
+                required=False,
+            ),
+        ],
         examples=[
             OpenApiExample(
                 "Geometry Location Filter (GeoJSON)",
