@@ -76,6 +76,110 @@ class FilterGroupSerializer(serializers.Serializer):
         operator = self.validated_data["operator"]
         value = self.validated_data["value"]
 
+        # Special case: dynamic attribute filtering for all value types
+        if field.startswith("attributes.") or field.startswith("attributes__"):
+            attr_prefix = field.replace(".", "__")
+            parts = attr_prefix.split("__")
+            if len(parts) >= 3:
+                api_key = parts[1]
+                value_path = parts[2:]
+                # If the path is just 'value', OR across all types' value fields
+                if value_path == ["value"]:
+                    q = (
+                        Q(
+                            **{
+                                f"attributes__field_definition__api_key": api_key,
+                                f"attributes__value__{operator}": value,
+                            }
+                        )
+                        | Q(
+                            **{
+                                f"attributes__field_definition__api_key": api_key,
+                                f"attributes__value__{operator}": value,
+                            }
+                        )
+                        | Q(
+                            **{
+                                f"attributes__field_definition__api_key": api_key,
+                                f"attributes__value__{operator}": value,
+                            }
+                        )
+                        | Q(
+                            **{
+                                f"attributes__field_definition__api_key": api_key,
+                                f"attributes__value__{operator}": value,
+                            }
+                        )
+                        | Q(
+                            **{
+                                f"attributes__field_definition__api_key": api_key,
+                                f"attributes__value__{operator}": value,
+                            }
+                        )
+                        | Q(
+                            **{
+                                f"attributes__field_definition__api_key": api_key,
+                                f"attributes__value__{operator}": value,
+                            }
+                        )
+                    )
+                else:
+                    # For deeper paths, only JSONField supports nested lookups
+                    json_path = "__".join(value_path)
+                    q = Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__jsonattributevalue__value__{json_path}__{operator}": value,
+                        }
+                    )
+                if self.validated_data.get("inverse", False):
+                    q = ~q
+                return q
+            elif len(parts) == 2:
+                api_key = parts[1]
+                # OR across all attribute value types, AND with api_key
+                q = (
+                    Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__textattributevalue__{operator}": value,
+                        }
+                    )
+                    | Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__numberattributevalue__{operator}": value,
+                        }
+                    )
+                    | Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__booleanattributevalue__{operator}": value,
+                        }
+                    )
+                    | Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__dateattributevalue__{operator}": value,
+                        }
+                    )
+                    | Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__datetimeattributevalue__{operator}": value,
+                        }
+                    )
+                    | Q(
+                        **{
+                            "attributes__field_definition__api_key": api_key,
+                            f"attributes__jsonattributevalue__{operator}": value,
+                        }
+                    )
+                )
+                if self.validated_data.get("inverse", False):
+                    q = ~q
+                return q
+
         query_obj = Q(**{f"{field}__{operator}": value})
         if self.validated_data.get("inverse", False):
             query_obj = ~query_obj

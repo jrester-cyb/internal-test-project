@@ -252,7 +252,15 @@ class OSMImporter:
         self, asset: Asset, osm_id: int, osm_type: str, tags: Dict
     ):
         """Store OSM-specific attributes for an asset"""
-        from assets.models import TextAttributeValue
+        from assets.models import (
+            TextAttributeValue,
+            NumberAttributeValue,
+            BooleanAttributeValue,
+            DateAttributeValue,
+            DateTimeAttributeValue,
+            JSONAttributeValue,
+            AssetAttributeDefinition,
+        )
 
         attribute_defs = {
             ad.api_key: ad for ad in asset.asset_type.field_definitions.all()
@@ -282,6 +290,72 @@ class OSMImporter:
                 field_definition=attribute_defs["tags"],
                 defaults={"value": sanitized_tags},
             )
+
+        # For each tag, create a field definition if missing and store value
+        order_start = len(attribute_defs)
+        for i, (key, raw_value) in enumerate(tags.items()):
+            # Determine attribute type
+            if isinstance(raw_value, bool):
+                attr_type = "boolean"
+            elif isinstance(raw_value, int) or (
+                isinstance(raw_value, str) and raw_value.isdigit()
+            ):
+                attr_type = "number"
+            elif isinstance(raw_value, str):
+                attr_type = "text"
+            else:
+                attr_type = "json"
+
+            # Create field definition if missing
+            if key not in attribute_defs:
+                # Find used orders for this asset type
+                used_orders = set(
+                    ad.order for ad in asset.asset_type.field_definitions.all()
+                )
+                next_order = 0
+                while next_order in used_orders:
+                    next_order += 1
+                field_def = AssetAttributeDefinition.objects.create(
+                    asset_type=asset.asset_type,
+                    name=key,
+                    api_key=key,
+                    attribute_type=attr_type,
+                    description=f"OSM tag: {key}",
+                    order=next_order,
+                )
+                attribute_defs[key] = field_def
+            else:
+                field_def = attribute_defs[key]
+
+            # Store value in correct attribute value model
+            if attr_type == "boolean":
+                BooleanAttributeValue.objects.update_or_create(
+                    asset=asset,
+                    field_definition=field_def,
+                    defaults={"value": bool(raw_value)},
+                )
+            elif attr_type == "number":
+                try:
+                    num_value = float(raw_value)
+                except Exception:
+                    num_value = None
+                NumberAttributeValue.objects.update_or_create(
+                    asset=asset,
+                    field_definition=field_def,
+                    defaults={"value": num_value},
+                )
+            elif attr_type == "text":
+                TextAttributeValue.objects.update_or_create(
+                    asset=asset,
+                    field_definition=field_def,
+                    defaults={"value": str(raw_value)},
+                )
+            else:
+                JSONAttributeValue.objects.update_or_create(
+                    asset=asset,
+                    field_definition=field_def,
+                    defaults={"value": raw_value},
+                )
 
 
 def main():

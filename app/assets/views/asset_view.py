@@ -64,16 +64,18 @@ class AssetViewSet(viewsets.ModelViewSet):
             # Top-level access: return all assets
             queryset = Asset.objects.all()
 
-        # Filter by attributes using query parameters like ?attr_hostname=server01
+        # Special case: filter by attributes using query parameters like ?attr_hostname=server01
+        from django.db.models import Q
+
         for param, value in self.request.query_params.items():
             if param.startswith("attr_"):
-                api_key = param[5:]  # Remove 'attr_' prefix
-                queryset = (
-                    queryset.filter(
+                api_key = param[5:]
+                q = (
+                    Q(
                         attributes__field_definition__api_key=api_key,
                         attributes__textattributevalue__value=value,
                     )
-                    | queryset.filter(
+                    | Q(
                         attributes__field_definition__api_key=api_key,
                         attributes__numberattributevalue__value=(
                             float(value)
@@ -81,12 +83,20 @@ class AssetViewSet(viewsets.ModelViewSet):
                             else None
                         ),
                     )
-                    | queryset.filter(
+                    | Q(
                         attributes__field_definition__api_key=api_key,
                         attributes__booleanattributevalue__value=value.lower()
                         in ["true", "1", "yes"],
                     )
                 )
+                queryset = queryset.filter(q)
+
+        # Special case: filter by any field starting with 'attributes.' or 'attributes__'
+        for param, value in self.request.query_params.items():
+            if param.startswith("attributes.") or param.startswith("attributes__"):
+                # Normalize to double underscore
+                field = param.replace(".", "__", 1)
+                queryset = queryset.filter(**{field: value})
 
         return queryset.distinct()
 
@@ -254,8 +264,8 @@ class AssetViewSet(viewsets.ModelViewSet):
         if filter_config:
             q_filter = FilterSerializer(data=filter_config).build_query()
             print(q_filter)
-            # if q_filter:
-            #     queryset = queryset.filter(q_filter)
+            if q_filter:
+                queryset = queryset.filter(q_filter)
 
         queryset = queryset.distinct()
 
