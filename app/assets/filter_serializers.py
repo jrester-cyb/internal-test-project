@@ -12,8 +12,8 @@ class FilterGroupSerializer(serializers.Serializer):
         "str": [
             "exact",
             "contains",
-            "startsWith",
-            "endsWith",
+            "startswith",
+            "endswith",
             "iexact",
             "icontains",
             "istartswith",

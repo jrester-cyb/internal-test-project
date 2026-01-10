@@ -105,7 +105,6 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
 class AssetSerializer(serializers.ModelSerializer):
     asset_type_name = serializers.CharField(source="asset_type.name", read_only=True)
     attributes = serializers.SerializerMethodField()
-    validation_errors = serializers.SerializerMethodField()
     geometry = GeometryField(required=False, allow_null=True)
 
     class Meta:
@@ -119,19 +118,25 @@ class AssetSerializer(serializers.ModelSerializer):
             "geometry",
             "geohash",
             "attributes",
-            "validation_errors",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "geohash", "created_at", "updated_at"]
 
     def get_attributes(self, obj):
-        """Get attributes as a dictionary"""
+        """Get attributes as a dictionary using prefetched data"""
+        # Use prefetched attributes if available
+        attributes = getattr(obj, "attributes", None)
+        if attributes is not None and hasattr(attributes, "all"):
+            values = {}
+            for field_value in attributes.all():
+                # field_definition should be prefetched
+                api_key = getattr(field_value.field_definition, "api_key", None)
+                if api_key:
+                    values[api_key] = field_value.value
+            return values
+        # Fallback to method (should rarely happen)
         return obj.get_all_attributes()
-
-    def get_validation_errors(self, obj):
-        """Return validation errors for the asset's attributes"""
-        return obj.validate_fields()
 
     def create(self, validated_data):
         """Create asset and its attributes"""
@@ -156,7 +161,7 @@ class AssetSerializer(serializers.ModelSerializer):
                         "json": JSONAttributeValue,
                     }.get(field_def.attribute_type, TextAttributeValue)
 
-                    field_value = model_class.objects.create(
+                    model_class.objects.create(
                         asset=asset, field_definition=field_def, value=value
                     )
                 except AssetAttributeDefinition.DoesNotExist:

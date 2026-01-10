@@ -13,3 +13,4 @@ requests
 boto3
 pytest
 pytest-django
+django-silk

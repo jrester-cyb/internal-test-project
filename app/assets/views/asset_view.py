@@ -64,6 +64,19 @@ class AssetViewSet(viewsets.ModelViewSet):
             # Top-level access: return all assets
             queryset = Asset.objects.all()
 
+        # Prefetch all attribute value types and select_related for field_definition
+        queryset = queryset.prefetch_related(
+            "attributes",
+            "attributes__textattributevalue",
+            "attributes__numberattributevalue",
+            "attributes__booleanattributevalue",
+            "attributes__dateattributevalue",
+            "attributes__datetimeattributevalue",
+            "attributes__jsonattributevalue",
+        ).select_related()
+        # Also select_related for field_definition on attributes
+        queryset = queryset.prefetch_related("attributes__field_definition")
+
         # Special case: filter by attributes using query parameters like ?attr_hostname=server01
         from django.db.models import Q
 
@@ -261,6 +274,18 @@ class AssetViewSet(viewsets.ModelViewSet):
             queryset = Asset.objects.filter(asset_type_id=self.kwargs["assettype_pk"])
         else:
             queryset = Asset.objects.all()
+
+        # Prefetch all attribute value types and select_related for field_definition
+        queryset = queryset.prefetch_related(
+            "attributes",
+            "attributes__textattributevalue",
+            "attributes__numberattributevalue",
+            "attributes__booleanattributevalue",
+            "attributes__dateattributevalue",
+            "attributes__datetimeattributevalue",
+            "attributes__jsonattributevalue",
+        ).select_related()
+        queryset = queryset.prefetch_related("attributes__field_definition")
 
         if filter_config:
             q_filter = FilterSerializer(data=filter_config).build_query()

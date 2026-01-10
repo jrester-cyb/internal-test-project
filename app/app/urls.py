@@ -27,6 +27,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("todos.urls")),
     path("api/", include("assets.urls")),
+    # Silk profiling dashboard
+    path("silk/", include("silk.urls", namespace="silk")),
     # OpenAPI schema
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Swagger UI
