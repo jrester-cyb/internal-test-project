@@ -53,20 +53,23 @@ export async function fetchTiles(bbox: number[], limit: number = 5000, filters?:
 }
 
 export async function searchAssets(request: SearchRequest) {
-  const { page = 1, limit = 50, ...restRequest } = request
+  const { page = 1, limit = 50, filters = [], ...restRequest } = request
   const params = new URLSearchParams({
     page: page.toString(),
     limit: limit.toString()
   })
-  
+
+  // Ensure filters are sent as expected
+  const payload = { ...restRequest, filters }
+
   const response = await fetch(`${API_BASE}/assets/search/?${params}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(restRequest)
+    body: JSON.stringify(payload)
   })
-  
+
   if (!response.ok) throw new Error('Failed to search assets')
   return response.json()
 }

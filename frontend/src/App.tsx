@@ -128,8 +128,9 @@ function App() {
     try {
       const results = await searchAssets({
         filters: [{
-          type: 'geohash',
-          hash: cluster.geohash
+          field: 'geohash',
+          value: cluster.geohash,
+          operator: 'startswith'
         }]
       })
       setClusterAssets(results.results)

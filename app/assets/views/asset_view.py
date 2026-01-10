@@ -723,33 +723,45 @@ Now convert the query: "{query_text}"
         # Filter assets with geometry
         queryset = queryset.exclude(geometry__isnull=True)
 
-        # TODO: Implement spatial binning (e.g., grid clustering) based on bbox/zoom/precision
-        # For now, treat all assets as one cluster and calculate centroid
-        from django.db import connection
+        # Group by geohash prefix and count
+        from django.db.models.functions import Substr
+        from django.db.models import Count
 
-        cluster_data = []
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT ST_Y(ST_Centroid(ST_Collect(geometry))) as lat, ST_X(ST_Centroid(ST_Collect(geometry))) as lon, COUNT(*) as count
-                FROM assets_asset
-                WHERE geometry IS NOT NULL
-                """
-            )
-            result = cursor.fetchone()
-            if result and result[0] is not None and result[1] is not None:
-                lat, lon, count = result
-                cluster_data.append(
-                    {
-                        "count": int(count),
-                        "center": {"lat": float(lat), "lon": float(lon)},
-                    }
-                )
-
-        return Response(
-            {
-                "clusters": cluster_data,
-                "precision": precision,
-                "totalClusters": len(cluster_data),
-            }
+        clusters = (
+            queryset.annotate(geohash_prefix=Substr("geohash", 1, precision))
+            .values("geohash_prefix")
+            .annotate(count=Count("id"))
+            .order_by("-count")
         )
+
+        # Build cluster response with centroids
+        from django.db import connection
+        cluster_data = []
+        for cluster in clusters:
+            hash_prefix = cluster["geohash_prefix"]
+            count = cluster["count"]
+
+            # Calculate centroid for this cluster
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT ST_Y(ST_Centroid(ST_Collect(geometry))) as lat, ST_X(ST_Centroid(ST_Collect(geometry))) as lon
+                    FROM assets_asset
+                    WHERE geohash LIKE %s || '%%' AND geometry IS NOT NULL
+                    """,
+                    [hash_prefix]
+                )
+                result = cursor.fetchone()
+                if result and result[0] is not None and result[1] is not None:
+                    lat, lon = result
+                    cluster_data.append({
+                        "geohash": hash_prefix,
+                        "count": int(count),
+                        "center": {"lat": float(lat), "lon": float(lon)}
+                    })
+
+        return Response({
+            "clusters": cluster_data,
+            "precision": precision,
+            "totalClusters": len(cluster_data),
+        })
