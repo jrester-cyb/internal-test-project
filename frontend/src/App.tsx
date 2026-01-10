@@ -1,18 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet'
-import { Polygon, Polyline } from 'react-leaflet'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { AppBar, Toolbar, Button, TextField, Box, CircularProgress, Typography, IconButton } from '@mui/material'
-import { Search as SearchIcon, Clear as ClearIcon } from '@mui/icons-material'
-import AssetDetails from './components/AssetDetails'
+import { AppBar, Toolbar, Box, Typography, IconButton } from '@mui/material'
+import { Brightness4 as DarkModeIcon, Brightness7 as LightModeIcon } from '@mui/icons-material'
+import { useTheme } from './contexts/ThemeContext'
 import { getAsset } from './api/assets'
-import ClusterMarkers from './components/ClusterMarkers'
 import { fetchClusters, fetchTiles, searchAssets, interpretSearch } from './api/assets'
 import type { Asset, Cluster } from './types'
 import AssetList from './components/AssetList'
-import FilterBuilder from './components/FilterBuilder'
 import type { AttributeFilter } from './components/FilterBuilder'
+import Sidebar from './components/Sidebar'
+import MapView from './components/MapView'
 
 // Fix for default marker icon in Leaflet with React
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -21,6 +21,17 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 })
+
+// Theme toggle component
+function ThemeToggle() {
+  const { isDarkMode, toggleTheme } = useTheme()
+
+  return (
+    <IconButton onClick={toggleTheme} color="inherit">
+      {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
+    </IconButton>
+  )
+}
 
 // Component to handle map events - outside App to prevent recreation
 function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters }: {
@@ -315,170 +326,61 @@ function App() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
-      <AppBar position="fixed" sx={{ zIndex: 1300 }}>
+      <Sidebar />
+      <AppBar position="fixed" sx={{ zIndex: 1301, boxShadow: 'none' }}>
         <Toolbar>
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Asset Visualizer
           </Typography>
-          <FilterBuilder
-            selectedAssetTypes={selectedAssetTypes}
-            onAssetTypesChange={setSelectedAssetTypes} attributeFilters={attributeFilters}
-            onAttributeFiltersChange={setAttributeFilters} />
+          <ThemeToggle />
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden', width: '100%', mt: 8 }}>
-        <Box sx={{ flexGrow: 1, position: 'relative' }}>
-          <MapContainer
-            center={center}
-            zoom={zoom}
-            style={{ height: '100%', width: '100%' }}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} />
-
-            <ClusterMarkers
+      <Box sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden', width: 'calc(100% - 240px)', ml: '240px', mt: 8 }}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/map" replace />} />
+          <Route path="/map" element={
+            <MapView
+              center={center}
+              zoom={zoom}
               clusters={clusters}
-              onClusterClick={handleClusterClick}
+              assets={assets}
+              selectedAsset={selectedAsset}
+              loadingAsset={loadingAsset}
+              selectedCluster={selectedCluster}
+              loading={loading}
+              clusterAssets={clusterAssets}
+              activeFilters={activeFilters}
+              selectedAssetTypes={selectedAssetTypes}
+              attributeFilters={attributeFilters}
+              setSelectedAssetTypes={setSelectedAssetTypes}
+              setAttributeFilters={setAttributeFilters}
+              loadMapData={loadMapData}
+              handleClusterClick={handleClusterClick}
+              handleAssetClick={handleAssetClick}
+              setSelectedAsset={setSelectedAsset}
+              setSelectedCluster={setSelectedCluster}
+              setClusterAssets={setClusterAssets}
+              MapEvents={MapEvents}
             />
-
-            {assets.map(asset => (
-              asset.geometry && asset.geometry.type === "Point" && Array.isArray(asset.geometry.coordinates) && asset.geometry.coordinates.length === 2 ? (
-                <Marker
-                  key={asset.id}
-                  position={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
-                  eventHandlers={{
-                    click: () => handleAssetClick(asset)
-                  }}
-                />
-              ) : asset.geometry && asset.geometry.type === "Polygon" && Array.isArray(asset.geometry.coordinates) && Array.isArray(asset.geometry.coordinates[0]) ? (
-                <Polygon
-                  key={asset.id}
-                  positions={asset.geometry.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])}
-                  eventHandlers={{
-                    click: () => handleAssetClick(asset)
-                  }}
-                  pathOptions={{ color: 'blue', weight: 2, fillOpacity: 0.2 }}
-                />
-              ) : asset.geometry && asset.geometry.type === "LineString" && Array.isArray(asset.geometry.coordinates) ? (
-                <Polyline
-                  key={asset.id}
-                  positions={asset.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng])}
-                  eventHandlers={{
-                    click: () => handleAssetClick(asset)
-                  }}
-                  pathOptions={{ color: 'red', weight: 3 }}
-                />
-              ) : null
-            ))}
-          </MapContainer>
-
-          {loading && (
-            <Box sx={{ position: 'absolute', top: 16, right: 16, bgcolor: 'white', p: 2, borderRadius: 1, boxShadow: 2, zIndex: 1000, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircularProgress size={20} />
-              <Typography>Loading...</Typography>
-            </Box>
-          )}
-        </Box>
-
-        {selectedAsset && (
-          <AssetDetails
-            asset={selectedAsset}
-            onClose={() => setSelectedAsset(null)}
-          />
-        )}
-        {loadingAsset && (
-          <Box sx={{ position: 'absolute', top: 80, right: 16, bgcolor: 'white', p: 2, borderRadius: 1, boxShadow: 2, zIndex: 2000, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={20} />
-            <Typography>Loading asset details...</Typography>
-          </Box>
-        )}
-
-        {selectedCluster && (
-          <Box sx={{ position: 'fixed', top: 64, bottom: 0, right: 0, width: '66%', bgcolor: 'background.paper', boxShadow: 24, zIndex: 1301, overflowY: 'auto' }}>
-            <Box sx={{ p: 3, height: '100%' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h5" component="h2">
-                  Cluster Assets ({clusterAssets?.length ?? 0})
-                </Typography>
-                <IconButton
-                  onClick={() => {
-                    setSelectedCluster(null)
-                    setClusterAssets([])
-                  }}
-                >
-                  <ClearIcon />
-                </IconButton>
-              </Box>
-
+          } />
+          <Route path="/assets" element={
+            <Box sx={{ flexGrow: 1, p: 3 }}>
+              <Typography variant="h4" gutterBottom>
+                Assets
+              </Typography>
               <AssetList
-                assets={clusterAssets}
-                onAssetClick={(asset) => {
-                  setSelectedAsset(asset);
-                  setSelectedCluster(null);
-                }}
+                assets={assets}
+                onAssetClick={setSelectedAsset}
                 loading={loading}
-                currentPage={1}
-                totalPages={1}
-                totalCount={clusterAssets?.length ?? 0}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                onPageChange={handlePageChange}
               />
             </Box>
-          </Box>
-        )}
-      </Box>
-
-      {/* Query Overlay at Bottom */}
-      <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, bgcolor: 'rgba(33, 33, 33, 0.95)', backdropFilter: 'blur(8px)', p: 2, zIndex: 1300 }}>
-        <Box sx={{ maxWidth: '1200px', mx: 'auto' }}>
-          {interpretation && (
-            <Box sx={{ mb: 1, px: 1 }}>
-              <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                Searching: {interpretation}
-              </Typography>
-            </Box>
-          )}
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <TextField
-              fullWidth
-              size="small"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search assets (e.g., 'restaurants in French Quarter', 'hotels near downtown')..."
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  color: 'white',
-                  backgroundColor: 'rgba(255, 255, 255, 0.09)',
-                  '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.23)' },
-                  '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.4)' },
-                  '&.Mui-focused fieldset': { borderColor: 'primary.main' }
-                },
-                '& .MuiInputBase-input::placeholder': { color: 'rgba(255, 255, 255, 0.5)' }
-              }}
-            />
-            <Button
-              variant="contained"
-              startIcon={<SearchIcon />}
-              onClick={() => handleSearch()}
-              disabled={!query.trim() || loading}
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </Button>
-            {query && (
-              <Button
-                variant="outlined"
-                color="inherit"
-                sx={{ color: 'white', borderColor: 'rgba(255, 255, 255, 0.23)' }}
-                onClick={handleClearSearch}
-              >
-                Clear
-              </Button>
-            )}
-          </Box>
-        </Box>
+          } />
+        </Routes>
       </Box>
     </Box>
   )

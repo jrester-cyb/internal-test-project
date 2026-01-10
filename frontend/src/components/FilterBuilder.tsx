@@ -37,22 +37,31 @@ interface FilterBuilderProps {
   onAssetTypesChange: (assetTypeIds: string[]) => void
   attributeFilters: AttributeFilter[]
   onAttributeFiltersChange: (filters: AttributeFilter[]) => void
+  open?: boolean
+  onClose?: () => void
+  onToggle?: () => void
 }
 
 export default function FilterBuilder({
   selectedAssetTypes,
   onAssetTypesChange,
   attributeFilters,
-  onAttributeFiltersChange
+  onAttributeFiltersChange,
+  open: externalOpen,
+  onClose: externalOnClose,
+  onToggle
 }: FilterBuilderProps) {
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
   const [attributeDefinitions, setAttributeDefinitions] = useState<Record<string, AssetTypeAttribute[]>>({})
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [selectedTypeForAttributes, setSelectedTypeForAttributes] = useState<string | null>(null)
   const [selectedAttribute, setSelectedAttribute] = useState<AssetTypeAttribute | null>(null)
   const [attributeValues, setAttributeValues] = useState<any[]>([])
   const [loadingValues, setLoadingValues] = useState(false)
+
+  const open = externalOpen !== undefined ? externalOpen : internalOpen
+  const handleClose = externalOnClose || (() => setInternalOpen(false))
 
   useEffect(() => {
     loadAssetTypes()
@@ -397,253 +406,265 @@ export default function FilterBuilder({
   const totalFilters = selectedAssetTypes.length + attributeFilters.length
 
   return (
-    <>
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1002,
+        transition: 'transform 0.3s ease-in-out',
+        transform: open ? 'translateY(0)' : 'translateY(calc(-100% + 32px))',
+        bgcolor: 'rgba(0, 0, 0, 0.6)',
+        color: '#ffffff',
+        borderBottomLeftRadius: '4px',
+        borderBottomRightRadius: '4px',
+        boxShadow: 3,
+        maxHeight: '50vh',
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      <Box sx={{ px: 3, pt: 2, pb: 3, mb: 2, overflowY: 'auto', flexGrow: 1 }}>
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="h6">Filters</Typography>
+        </Box>
+
+        <Divider sx={{ mb: 2 }} />
+
+        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <Button
+            size="small"
+            onClick={handleSelectAll}
+            disabled={loading}
+          >
+            Select All Types
+          </Button>
+          <Button
+            size="small"
+            onClick={handleClearAll}
+            disabled={loading}
+          >
+            Clear All
+          </Button>
+        </Box>
+
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', gap: 3 }}>
+            {/* Left side: Asset Types */}
+            <Box sx={{ flex: '0 0 300px', minWidth: 250 }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                Asset Types
+              </Typography>
+              <Box sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1
+              }}>
+                {assetTypes.map((assetType) => {
+                  const isSelected = selectedAssetTypes.indexOf(assetType.id) > -1
+                  const isActive = selectedTypeForAttributes === assetType.id
+
+                  return (
+                    <Box
+                      key={assetType.id}
+                      onClick={() => {
+                        if (!isSelected) {
+                          handleToggle(assetType.id)
+                        } else {
+                          handleTypeClick(assetType.id)
+                        }
+                      }}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        px: 2,
+                        py: 1,
+                        borderRadius: 1,
+                        border: 2,
+                        borderColor: isActive ? 'primary.main' : isSelected ? 'primary.light' : 'grey.300',
+                        bgcolor: isActive ? 'primary.light' : isSelected ? 'primary.50' : 'transparent',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          bgcolor: isActive ? 'primary.light' : 'primary.50'
+                        }
+                      }}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation()
+                          handleToggle(assetType.id)
+                        }}
+                        size="small"
+                        sx={{ p: 0 }}
+                      />
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
+                          {assetType.name}
+                        </Typography>
+                        {assetType.description && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            {assetType.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )
+                })}
+              </Box>
+            </Box>
+
+            {/* Middle: Attribute selection */}
+            {selectedTypeForAttributes && selectedAssetTypes.indexOf(selectedTypeForAttributes) > -1 && (
+              <>
+                <Divider orientation="vertical" flexItem />
+                <Box sx={{ flex: '0 0 300px', minWidth: 250 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    Attributes
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {(attributeDefinitions[selectedTypeForAttributes] || []).map(attr => (
+                      <Box
+                        key={attr.id}
+                        onClick={() => handleAttributeSelect(attr)}
+                        sx={{
+                          px: 2,
+                          py: 1,
+                          borderRadius: 1,
+                          border: 1,
+                          borderColor: selectedAttribute?.id === attr.id ? 'primary.main' : 'grey.300',
+                          bgcolor: selectedAttribute?.id === attr.id ? 'primary.50' : 'transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            bgcolor: 'primary.50'
+                          }
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: selectedAttribute?.id === attr.id ? 'bold' : 'normal' }}>
+                          {attr.name}
+                        </Typography>
+                        {attr.description && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            {attr.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </>
+            )}
+
+            {/* Right side: Existing values for selected attribute */}
+            {selectedAttribute && selectedTypeForAttributes && selectedAssetTypes.indexOf(selectedTypeForAttributes) > -1 && (
+              <>
+                <Divider orientation="vertical" flexItem />
+                <Box sx={{ flex: 1, minWidth: 350 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    Values: {selectedAttribute.name}
+                  </Typography>
+                  {selectedAttribute.description && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                      {selectedAttribute.description}
+                    </Typography>
+                  )}
+                  {loadingValues ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                      <CircularProgress size={20} />
+                    </Box>
+                  ) : (
+                    <Box sx={{
+                      maxHeight: 400,
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 0.5
+                    }}>
+                      {attributeValues.length === 0 ? (
+                        <Typography variant="caption" color="text.secondary">
+                          No values found
+                        </Typography>
+                      ) : (
+                        attributeValues.map((value, idx) => {
+                          const isSelected = isValueSelected(value)
+                          return (
+                            <Box
+                              key={idx}
+                              onClick={() => handleValueClick(value)}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                px: 1.5,
+                                py: 0.75,
+                                borderRadius: 0.5,
+                                border: 1,
+                                borderColor: isSelected ? 'primary.main' : 'grey.300',
+                                bgcolor: isSelected ? 'primary.50' : 'transparent',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                transition: 'all 0.2s',
+                                '&:hover': {
+                                  borderColor: 'primary.main',
+                                  bgcolor: 'primary.50'
+                                }
+                              }}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                size="small"
+                                sx={{ p: 0 }}
+                                onChange={() => handleValueClick(value)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Typography variant="body2">{String(value)}</Typography>
+                            </Box>
+                          )
+                        })
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
+
       <Button
-        variant="outlined"
-        startIcon={<FilterListIcon />}
-        onClick={() => setOpen(true)}
+        onClick={onToggle || (() => setInternalOpen(!internalOpen))}
+        variant="contained"
+        startIcon={
+          <FilterListIcon
+            sx={{
+              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}
+          />
+        }
+        fullWidth
         sx={{
-          color: 'white',
-          borderColor: 'rgba(255, 255, 255, 0.5)',
+          borderRadius: 0,
+          py: 0.5,
+          boxShadow: 'none',
+          backgroundColor: '#666464',
+          color: '#ffffff',
           '&:hover': {
-            borderColor: 'white',
-            bgcolor: 'rgba(255, 255, 255, 0.1)'
+            backgroundColor: '#898989',
           }
         }}
       >
         Filters {totalFilters > 0 && `(${totalFilters})`}
       </Button>
-
-      <Drawer
-        anchor="top"
-        open={open}
-        onClose={() => setOpen(false)}
-        PaperProps={{
-          sx: {
-            maxHeight: '70vh',
-            overflow: 'auto'
-          }
-        }}
-      >
-        <Box sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Filters</Typography>
-            <IconButton onClick={() => setOpen(false)} size="small">
-              <CloseIcon />
-            </IconButton>
-          </Box>
-
-          <Divider sx={{ mb: 2 }} />
-
-          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-            <Button
-              size="small"
-              onClick={handleSelectAll}
-              disabled={loading}
-            >
-              Select All Types
-            </Button>
-            <Button
-              size="small"
-              onClick={handleClearAll}
-              disabled={loading}
-            >
-              Clear All
-            </Button>
-          </Box>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', gap: 3 }}>
-              {/* Left side: Asset Types */}
-              <Box sx={{ flex: '0 0 300px', minWidth: 250 }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  Asset Types
-                </Typography>
-                <Box sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 1
-                }}>
-                  {assetTypes.map((assetType) => {
-                    const isSelected = selectedAssetTypes.indexOf(assetType.id) > -1
-                    const isActive = selectedTypeForAttributes === assetType.id
-
-                    return (
-                      <Box
-                        key={assetType.id}
-                        onClick={() => {
-                          if (!isSelected) {
-                            handleToggle(assetType.id)
-                          } else {
-                            handleTypeClick(assetType.id)
-                          }
-                        }}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                          px: 2,
-                          py: 1,
-                          borderRadius: 1,
-                          border: 2,
-                          borderColor: isActive ? 'primary.main' : isSelected ? 'primary.light' : 'grey.300',
-                          bgcolor: isActive ? 'primary.light' : isSelected ? 'primary.50' : 'transparent',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          '&:hover': {
-                            borderColor: 'primary.main',
-                            bgcolor: isActive ? 'primary.light' : 'primary.50'
-                          }
-                        }}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onChange={(e) => {
-                            e.stopPropagation()
-                            handleToggle(assetType.id)
-                          }}
-                          size="small"
-                          sx={{ p: 0 }}
-                        />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
-                            {assetType.name}
-                          </Typography>
-                          {assetType.description && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              {assetType.description}
-                            </Typography>
-                          )}
-                        </Box>
-                      </Box>
-                    )
-                  })}
-                </Box>
-              </Box>
-
-              {/* Middle: Attribute selection */}
-              {selectedTypeForAttributes && selectedAssetTypes.indexOf(selectedTypeForAttributes) > -1 && (
-                <>
-                  <Divider orientation="vertical" flexItem />
-                  <Box sx={{ flex: '0 0 300px', minWidth: 250 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Attributes
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {(attributeDefinitions[selectedTypeForAttributes] || []).map(attr => (
-                        <Box
-                          key={attr.id}
-                          onClick={() => handleAttributeSelect(attr)}
-                          sx={{
-                            px: 2,
-                            py: 1,
-                            borderRadius: 1,
-                            border: 1,
-                            borderColor: selectedAttribute?.id === attr.id ? 'primary.main' : 'grey.300',
-                            bgcolor: selectedAttribute?.id === attr.id ? 'primary.50' : 'transparent',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              borderColor: 'primary.main',
-                              bgcolor: 'primary.50'
-                            }
-                          }}
-                        >
-                          <Typography variant="body2" sx={{ fontWeight: selectedAttribute?.id === attr.id ? 'bold' : 'normal' }}>
-                            {attr.name}
-                          </Typography>
-                          {attr.description && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              {attr.description}
-                            </Typography>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-                </>
-              )}
-
-              {/* Right side: Existing values for selected attribute */}
-              {selectedAttribute && selectedTypeForAttributes && selectedAssetTypes.indexOf(selectedTypeForAttributes) > -1 && (
-                <>
-                  <Divider orientation="vertical" flexItem />
-                  <Box sx={{ flex: 1, minWidth: 350 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Values: {selectedAttribute.name}
-                    </Typography>
-                    {selectedAttribute.description && (
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                        {selectedAttribute.description}
-                      </Typography>
-                    )}
-                    {loadingValues ? (
-                      <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                        <CircularProgress size={20} />
-                      </Box>
-                    ) : (
-                      <Box sx={{
-                        maxHeight: 400,
-                        overflowY: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 0.5
-                      }}>
-                        {attributeValues.length === 0 ? (
-                          <Typography variant="caption" color="text.secondary">
-                            No values found
-                          </Typography>
-                        ) : (
-                          attributeValues.map((value, idx) => {
-                            const isSelected = isValueSelected(value)
-                            return (
-                              <Box
-                                key={idx}
-                                onClick={() => handleValueClick(value)}
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  px: 1.5,
-                                  py: 0.75,
-                                  borderRadius: 0.5,
-                                  border: 1,
-                                  borderColor: isSelected ? 'primary.main' : 'grey.300',
-                                  bgcolor: isSelected ? 'primary.50' : 'transparent',
-                                  cursor: 'pointer',
-                                  fontSize: '0.875rem',
-                                  transition: 'all 0.2s',
-                                  '&:hover': {
-                                    borderColor: 'primary.main',
-                                    bgcolor: 'primary.50'
-                                  }
-                                }}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  size="small"
-                                  sx={{ p: 0 }}
-                                  onChange={() => handleValueClick(value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <Typography variant="body2">{String(value)}</Typography>
-                              </Box>
-                            )
-                          })
-                        )}
-                      </Box>
-                    )}
-                  </Box>
-                </>
-              )}
-            </Box>
-          )}
-        </Box>
-      </Drawer>
-    </>
+    </Box>
   )
 }

@@ -451,7 +451,7 @@ Format the output as follows:
         # Apply search filters if provided (POST request)
         if request.method == "POST" and request.data:
             filter_config = request.data
-            q_filter = FilterSerializer(data=filter_config).build_filter_group()
+            q_filter = FilterSerializer(data=filter_config).build_query()
             if q_filter:
                 queryset = queryset.filter(q_filter)
                 queryset = queryset.distinct()
