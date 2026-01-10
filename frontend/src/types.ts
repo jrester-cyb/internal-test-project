@@ -10,7 +10,7 @@ export interface Asset {
 }
 
 export interface Cluster {
-  geohash: string
+  h3Index: string
   count: number
   center: {
     lat: number

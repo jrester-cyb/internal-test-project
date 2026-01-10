@@ -1,8 +1,8 @@
+import math
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 from polymorphic.models import PolymorphicModel
 import uuid
-import geohash2
 import pgtrigger
 
 
@@ -84,11 +84,11 @@ class Asset(models.Model):
     location = gis_models.PointField(
         null=True, blank=True, srid=4326, help_text="Centroid of geometry"
     )
-    geohash = models.CharField(
-        max_length=12,
+    h3_index = models.CharField(
+        max_length=20,  # H3 indexes can be up to 16 chars, 20 for safety
         blank=True,
         db_index=True,
-        help_text="Geohash of the geometry centroid",
+        help_text="H3 index of the geometry centroid",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -97,46 +97,28 @@ class Asset(models.Model):
         ordering = ["-created_at"]
         triggers = [
             pgtrigger.Trigger(
-                name="update_location_on_geometry_change",
+                name="001_update_location_on_geometry_change",
                 operation=pgtrigger.Update | pgtrigger.Insert,
                 when=pgtrigger.Before,
                 func="NEW.location = ST_Centroid(NEW.geometry); RETURN NEW;",
-            )
+            ),
+            pgtrigger.Trigger(
+                name="002_update_h3_index_on_location_change",
+                operation=pgtrigger.Update | pgtrigger.Insert,
+                when=pgtrigger.Before,
+                func="""
+                IF NEW.location IS NOT NULL THEN
+                        NEW.h3_index = h3_latlng_to_cell(point(ST_Y(NEW.location), ST_X(NEW.location)), 15);
+                ELSE
+                    NEW.h3_index = '';
+                END IF;
+                RETURN NEW;
+                """,
+            ),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.asset_type.name})"
-
-    def save(self, *args, **kwargs):
-        """Auto-generate geohash from geometry"""
-        if self.geometry:
-            # Get centroid for geohash calculation
-            centroid = self.geometry.centroid
-            if centroid:
-                self.geohash = geohash2.encode(centroid.y, centroid.x, precision=9)
-                self.location = centroid
-            else:
-                self.geohash = ""
-                self.location = None
-        else:
-            self.geohash = ""
-            self.location = None
-        super().save(*args, **kwargs)
-
-    def get_attribute(self, api_key):
-        """Get a specific attribute value by api_key"""
-        try:
-            field_value = self.attributes.get(field_definition__api_key=api_key)
-            return field_value.value
-        except BaseAttributeValue.DoesNotExist:
-            return None
-
-    def get_all_attributes(self):
-        """Get all attributes as a dictionary using api_key"""
-        values = {}
-        for field_value in self.attributes.select_related("field_definition").all():
-            values[field_value.field_definition.api_key] = field_value.value
-        return values
 
     def set_attribute(self, api_key, value):
         """Set a specific attribute value by api_key"""

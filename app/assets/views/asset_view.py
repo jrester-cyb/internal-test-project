@@ -14,7 +14,6 @@ from drf_spectacular.utils import (
     OpenApiParameter,
 )
 from ..filter_serializers import FilterSerializer
-import geohash2
 import re
 import json
 import boto3
@@ -133,7 +132,7 @@ class AssetViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Assets"],
         summary="Filter assets by attributes and geography",
-        description="Filter assets by asset type, attribute values, and geography with AND/OR logic. Supports equals, contains, gt, lt, gte, lte operators for attributes, and geohash, bbox, distance, within, contains, intersects for geographic filters.",
+        description="Filter assets by asset type, attribute values, and geography with AND/OR logic. Supports equals, contains, gt, lt, gte, lte operators for attributes, and h3, bbox, distance, within, contains, intersects for geographic filters.",
         parameters=[
             OpenApiParameter(
                 name="page",
@@ -393,8 +392,8 @@ Available filter types:
    Example: {{"type": "attribute", "key": "cuisine", "value": "italian"}}
    Example: {{"type": "attribute", "key": "parking", "value": "yes"}}
 
-6. geohash: Filter by geohash region
-   Example: {{"type": "geohash", "hash": "9q8yy"}}
+6. h3: Filter by H3 region
+    Example: {"type": "h3", "hash": "8a2a1072b59ffff"}
 
 7. bbox: Filter by bounding box [minLon, minLat, maxLon, maxLat]
    Example: {{"type": "bbox", "bbox": [-90.1, 29.9, -90.0, 30.0]}}
@@ -594,7 +593,7 @@ Now convert the query: "{query_text}"
                 pass
 
         # Only fetch necessary fields for performance
-        queryset = queryset.only("id", "name", "geometry", "asset_type_id", "geohash")
+        queryset = queryset.only("id", "name", "geometry", "asset_type_id", "h3_index")
 
         # Build GeoJSON-like response
         features = []
@@ -615,7 +614,7 @@ Now convert the query: "{query_text}"
                         "properties": {
                             "name": asset.name,
                             "assetTypeId": str(asset.asset_type_id),
-                            "geohash": asset.geohash,
+                            "h3_index": asset.h3_index,
                         },
                     }
                 )
@@ -627,11 +626,11 @@ Now convert the query: "{query_text}"
     @extend_schema(
         tags=["Assets"],
         summary="Get clustered assets for map overview",
-        description="Returns asset clusters grouped by geohash for efficient map rendering at high zoom levels.",
+        description="Returns asset clusters grouped by H3 index for efficient map rendering at high zoom levels.",
         parameters=[
             OpenApiParameter(
                 name="precision",
-                description="Geohash precision (1-9, default based on zoom)",
+                description="H3 prefix length (1-15, default based on zoom)",
                 required=False,
                 type=int,
             ),
@@ -659,7 +658,7 @@ Now convert the query: "{query_text}"
     )
     @action(detail=False, methods=["get", "post"])
     def clusters(self, request):
-        """Get asset clusters grouped by geohash prefix for map overview"""
+        """Get asset clusters grouped by H3 prefix for map overview"""
         # Start with base queryset
         queryset = Asset.objects.all()
 
@@ -685,51 +684,52 @@ Now convert the query: "{query_text}"
             except (ValueError, TypeError):
                 pass
 
-        # Determine geohash precision based on zoom level or use provided precision
+        # Determine H3 prefix length based on zoom level or use provided value
         zoom = request.query_params.get("zoom")
         precision = request.query_params.get("precision")
 
+        max_h3_length = 15  # H3 string length for resolution 15
         if precision:
             try:
                 precision = int(precision)
-                precision = max(1, min(9, precision))  # Clamp between 1-9
+                precision = max(1, min(max_h3_length, precision))  # Clamp 1-15
             except (ValueError, TypeError):
-                precision = 4
+                precision = 7
         elif zoom:
-            # Map zoom levels to geohash precision
+            # Map zoom levels to H3 prefix length
             try:
                 zoom = int(zoom)
-                zoom_to_precision = {
-                    range(0, 3): 1,  # World/continent
-                    range(3, 5): 2,  # Country
-                    range(5, 7): 3,  # State/region
-                    range(7, 10): 4,  # City
-                    range(10, 12): 5,  # District
-                    range(12, 14): 6,  # Neighborhood
-                    range(14, 16): 7,  # Street
-                    range(16, 18): 8,  # Building
-                    range(18, 21): 9,  # Sub-building
+                zoom_to_h3len = {
+                    range(0, 3): 3,  # World/continent
+                    range(3, 5): 4,  # Country
+                    range(5, 7): 5,  # State/region
+                    range(7, 10): 6,  # City
+                    range(10, 12): 10,  # District
+                    range(12, 14): 11,  # Neighborhood
+                    range(14, 16): 13,  # Street
+                    range(16, 18): 14,  # Building
+                    range(18, 21): 15,  # Sub-building
                 }
-                precision = 4  # Default
-                for zoom_range, prec in zoom_to_precision.items():
+                precision = 7  # Default
+                for zoom_range, h3len in zoom_to_h3len.items():
                     if zoom in zoom_range:
-                        precision = prec
+                        precision = h3len
                         break
             except (ValueError, TypeError):
-                precision = 4
+                precision = 7
         else:
-            precision = 4  # Default to city level
+            precision = 7  # Default to mid-level granularity
 
         # Filter assets with geometry
         queryset = queryset.exclude(geometry__isnull=True)
 
-        # Group by geohash prefix and count
+        # Group by h3_index prefix and count
         from django.db.models.functions import Substr
         from django.db.models import Count
 
         clusters = (
-            queryset.annotate(geohash_prefix=Substr("geohash", 1, precision))
-            .values("geohash_prefix")
+            queryset.annotate(h3_index_prefix=Substr("h3_index", 1, precision))
+            .values("h3_index_prefix")
             .annotate(count=Count("id"))
             .order_by("-count")
         )
@@ -739,14 +739,14 @@ Now convert the query: "{query_text}"
 
         cluster_data = []
         for cluster in clusters:
-            hash_prefix = cluster["geohash_prefix"]
+            hash_prefix = cluster["h3_index_prefix"]
             count = cluster["count"]
 
             if count == 1:
                 # Serialize as a tile feature (GeoJSON)
                 asset = (
-                    Asset.objects.filter(geohash__startswith=hash_prefix)
-                    .only("id", "name", "geometry", "asset_type_id", "geohash")
+                    Asset.objects.filter(h3_index__startswith=hash_prefix)
+                    .only("id", "name", "geometry", "asset_type_id", "h3_index")
                     .first()
                 )
                 if asset and asset.geometry:
@@ -765,7 +765,7 @@ Now convert the query: "{query_text}"
                             "properties": {
                                 "name": asset.name,
                                 "assetTypeId": str(asset.asset_type_id),
-                                "geohash": asset.geohash,
+                                "h3_index": asset.h3_index,
                             },
                         }
                     )
@@ -777,7 +777,7 @@ Now convert the query: "{query_text}"
                     """
                     SELECT ST_Y(ST_Centroid(ST_Collect(geometry))) as lat, ST_X(ST_Centroid(ST_Collect(geometry))) as lon
                     FROM assets_asset
-                    WHERE geohash LIKE %s || '%%' AND geometry IS NOT NULL
+                    WHERE h3_index LIKE %s || '%%' AND geometry IS NOT NULL
                     """,
                     [hash_prefix],
                 )
@@ -786,7 +786,7 @@ Now convert the query: "{query_text}"
                     lat, lon = result
                     cluster_data.append(
                         {
-                            "geohash": hash_prefix,
+                            "h3_index": hash_prefix,
                             "count": int(count),
                             "center": {"lat": float(lat), "lon": float(lon)},
                         }

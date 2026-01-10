@@ -63,8 +63,8 @@ export default function AssetDetails({ asset, onClose }: AssetDetailsProps) {
             </Box>
 
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Geohash</Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{displayAsset.geohash}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>H3 Index</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{displayAsset.h3Index}</Typography>
             </Box>
 
             {displayAsset.geometry && (

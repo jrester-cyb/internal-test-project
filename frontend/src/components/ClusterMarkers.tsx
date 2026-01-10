@@ -37,7 +37,7 @@ export default function ClusterMarkers({ clusters, onClusterClick }: ClusterMark
         if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
           return (
             <Marker
-              key={cluster.geohash}
+              key={cluster.h3Index}
               position={[lat, lon]}
               icon={icon}
               eventHandlers={{

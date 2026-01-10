@@ -118,27 +118,24 @@ class AssetSerializer(serializers.ModelSerializer):
             "description",
             "geometry",
             "location",
-            "geohash",
+            "h3_index",
             "attributes",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "geohash", "created_at", "updated_at", "location"]
+        read_only_fields = ["id", "h3_index", "created_at", "updated_at", "location"]
 
     def get_attributes(self, obj):
         """Get attributes as a dictionary using prefetched data"""
         # Use prefetched attributes if available
         attributes = getattr(obj, "attributes", None)
-        if attributes is not None and hasattr(attributes, "all"):
-            values = {}
-            for field_value in attributes.all():
-                # field_definition should be prefetched
-                api_key = getattr(field_value.field_definition, "api_key", None)
-                if api_key:
-                    values[api_key] = field_value.value
-            return values
-        # Fallback to method (should rarely happen)
-        return obj.get_all_attributes()
+        values = {}
+        for field_value in attributes.all():
+            # field_definition should be prefetched
+            api_key = getattr(field_value.field_definition, "api_key", None)
+            if api_key:
+                values[api_key] = field_value.value
+        return values
 
     def create(self, validated_data):
         """Create asset and its attributes"""

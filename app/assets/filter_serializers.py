@@ -25,7 +25,7 @@ class FilterGroupSerializer(serializers.Serializer):
         "datetime": ["exact", "lt", "lte", "gt", "gte", "range"],
         "json": ["exact", "contains"],
         "geometry": ["within", "intersects", "contains", "exact"],
-        "geohash": ["exact", "startswith"],
+        "h3_index": ["exact", "startswith"],
     }
 
     inverse = serializers.BooleanField(default=False)

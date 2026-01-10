@@ -10,6 +10,7 @@ import { getAsset } from './api/assets'
 import ClusterMarkers from './components/ClusterMarkers'
 import { fetchClusters, fetchTiles, searchAssets, interpretSearch } from './api/assets'
 import type { Asset, Cluster } from './types'
+import AssetList from './components/AssetList'
 
 // Fix for default marker icon in Leaflet with React
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -113,7 +114,7 @@ function App() {
               id: c.id,
               name: c.properties.name,
               assetTypeId: c.properties.assetTypeId,
-              geohash: c.properties.geohash,
+              h3Index: c.properties.h3Index,
               geometry: c.geometry
             })
           } else {
@@ -129,7 +130,7 @@ function App() {
           id: f.id,
           name: f.properties.name,
           assetTypeId: f.properties.assetTypeId,
-          geohash: f.properties.geohash,
+          h3Index: f.properties.h3Index,
           geometry: f.geometry
         })))
         setClusters([])
@@ -147,8 +148,8 @@ function App() {
     try {
       const results = await searchAssets({
         filters: [{
-          field: 'geohash',
-          value: cluster.geohash,
+          field: 'h3_index',
+          value: cluster.h3Index,
           operator: 'startswith'
         }]
       })
@@ -323,69 +324,17 @@ function App() {
                 </IconButton>
               </Box>
 
-              {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <Box sx={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ backgroundColor: '#f5f5f5' }}>
-                      <tr>
-                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
-                          Name
-                        </th>
-                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
-                          Type
-                        </th>
-                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
-                          Attributes
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody style={{ backgroundColor: 'white' }}>
-                      {clusterAssets?.map(asset => (
-                        <tr
-                          key={asset.id}
-                          style={{ cursor: 'pointer', borderBottom: '1px solid #e0e0e0' }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                          onClick={() => {
-                            setSelectedAsset(asset)
-                            setSelectedCluster(null)
-                          }}
-                        >
-                          <td style={{ padding: '16px', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: 500 }}>
-                            {asset.name}
-                          </td>
-                          <td style={{ padding: '16px', whiteSpace: 'nowrap', fontSize: '14px', color: '#666' }}>
-                            {asset.assetTypeId}
-                          </td>
-                          <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>
-                            {asset.attributes && Object.keys(asset.attributes).length > 0 ? (
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                {Object.entries(asset.attributes).slice(0, 3).map(([key, value]) => (
-                                  <Box key={key} sx={{ display: 'flex', gap: 1 }}>
-                                    <Typography component="span" sx={{ fontWeight: 600 }}>{key}:</Typography>
-                                    <Typography component="span">{String(value)}</Typography>
-                                  </Box>
-                                ))}
-                                {Object.keys(asset.attributes).length > 3 && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    +{Object.keys(asset.attributes).length - 3} more
-                                  </Typography>
-                                )}
-                              </Box>
-                            ) : (
-                              <Typography color="text.secondary">No attributes</Typography>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </Box>
-              )}
+              <AssetList
+                assets={clusterAssets}
+                onAssetClick={(asset) => {
+                  setSelectedAsset(asset);
+                  setSelectedCluster(null);
+                }}
+                loading={loading}
+                currentPage={1}
+                totalPages={1}
+                totalCount={clusterAssets?.length ?? 0}
+              />
             </Box>
           </Box>
         )}
