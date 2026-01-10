@@ -71,8 +71,19 @@ export default function AssetDetails({ asset, onClose }: AssetDetailsProps) {
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Location</Typography>
                 <Typography variant="body2">
-                  Lat: {displayAsset.geometry.coordinates[1].toFixed(6)}<br />
-                  Lon: {displayAsset.geometry.coordinates[0].toFixed(6)}
+                  {displayAsset.location && Array.isArray(displayAsset.location.coordinates) && displayAsset.location.coordinates.length >= 2 ? (
+                    <>
+                      Lat: {displayAsset.location.coordinates[1]?.toFixed(6)}<br />
+                      Lon: {displayAsset.location.coordinates[0]?.toFixed(6)}
+                    </>
+                  ) : displayAsset.geometry && Array.isArray(displayAsset.geometry.coordinates) && displayAsset.geometry.coordinates.length >= 2 ? (
+                    <>
+                      Lat: {displayAsset.geometry.coordinates[1]?.toFixed(6)}<br />
+                      Lon: {displayAsset.geometry.coordinates[0]?.toFixed(6)}
+                    </>
+                  ) : (
+                    <span>Location unavailable</span>
+                  )}
                 </Typography>
               </Box>
             )}

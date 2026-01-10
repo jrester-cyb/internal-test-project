@@ -106,6 +106,7 @@ class AssetSerializer(serializers.ModelSerializer):
     asset_type_name = serializers.CharField(source="asset_type.name", read_only=True)
     attributes = serializers.SerializerMethodField()
     geometry = GeometryField(required=False, allow_null=True)
+    location = GeometryField(read_only=True)
 
     class Meta:
         model = Asset
@@ -116,12 +117,13 @@ class AssetSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "geometry",
+            "location",
             "geohash",
             "attributes",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "geohash", "created_at", "updated_at"]
+        read_only_fields = ["id", "geohash", "created_at", "updated_at", "location"]
 
     def get_attributes(self, obj):
         """Get attributes as a dictionary using prefetched data"""

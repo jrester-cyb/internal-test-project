@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet'
+import { Polygon, Polyline } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { AppBar, Toolbar, Button, TextField, Box, CircularProgress, Typography, IconButton } from '@mui/material'
 import { Search as SearchIcon, Clear as ClearIcon } from '@mui/icons-material'
 import AssetDetails from './components/AssetDetails'
+import { getAsset } from './api/assets'
 import ClusterMarkers from './components/ClusterMarkers'
 import { fetchClusters, fetchTiles, searchAssets, interpretSearch } from './api/assets'
 import type { Asset, Cluster } from './types'
@@ -85,6 +87,7 @@ function App() {
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
+  const [loadingAsset, setLoadingAsset] = useState(false)
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null)
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
@@ -141,8 +144,17 @@ function App() {
     }
   }
 
-  const handleAssetClick = (asset: Asset) => {
-    setSelectedAsset(asset)
+  const handleAssetClick = async (asset: Asset) => {
+    setLoadingAsset(true)
+    try {
+      const fullAsset = await getAsset(asset.id)
+      setSelectedAsset(fullAsset)
+    } catch (error) {
+      setSelectedAsset(asset)
+      console.error('Error fetching asset details:', error)
+    } finally {
+      setLoadingAsset(false)
+    }
   }
   const handleSearch = async (page: number = 1) => {
     if (!query.trim()) {
@@ -227,7 +239,7 @@ function App() {
             />
 
             {assets.map(asset => (
-              asset.geometry && asset.geometry.type === "Point" && Array.isArray(asset.geometry.coordinates) && asset.geometry.coordinates.length === 2 && (
+              asset.geometry && asset.geometry.type === "Point" && Array.isArray(asset.geometry.coordinates) && asset.geometry.coordinates.length === 2 ? (
                 <Marker
                   key={asset.id}
                   position={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
@@ -235,7 +247,25 @@ function App() {
                     click: () => handleAssetClick(asset)
                   }}
                 />
-              )
+              ) : asset.geometry && asset.geometry.type === "Polygon" && Array.isArray(asset.geometry.coordinates) && Array.isArray(asset.geometry.coordinates[0]) ? (
+                <Polygon
+                  key={asset.id}
+                  positions={asset.geometry.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])}
+                  eventHandlers={{
+                    click: () => handleAssetClick(asset)
+                  }}
+                  pathOptions={{ color: 'blue', weight: 2, fillOpacity: 0.2 }}
+                />
+              ) : asset.geometry && asset.geometry.type === "LineString" && Array.isArray(asset.geometry.coordinates) ? (
+                <Polyline
+                  key={asset.id}
+                  positions={asset.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng])}
+                  eventHandlers={{
+                    click: () => handleAssetClick(asset)
+                  }}
+                  pathOptions={{ color: 'red', weight: 3 }}
+                />
+              ) : null
             ))}
           </MapContainer>
 
@@ -252,6 +282,12 @@ function App() {
             asset={selectedAsset}
             onClose={() => setSelectedAsset(null)}
           />
+        )}
+        {loadingAsset && (
+          <Box sx={{ position: 'absolute', top: 80, right: 16, bgcolor: 'white', p: 2, borderRadius: 1, boxShadow: 2, zIndex: 2000, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={20} />
+            <Typography>Loading asset details...</Typography>
+          </Box>
         )}
 
         {selectedCluster && (

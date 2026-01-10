@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "silk",
     "todos",
     "assets",
+    "pgtrigger",
 ]
 
 MIDDLEWARE = [

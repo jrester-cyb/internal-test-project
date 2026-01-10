@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.gis.db import models as gis_models
-from django.contrib.gis.geos import Point
 from polymorphic.models import PolymorphicModel
 import uuid
 import geohash2
+import pgtrigger
 
 
 class AssetType(models.Model):
@@ -81,6 +81,9 @@ class Asset(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     geometry = gis_models.GeometryField(null=True, blank=True, srid=4326)
+    location = gis_models.PointField(
+        null=True, blank=True, srid=4326, help_text="Centroid of geometry"
+    )
     geohash = models.CharField(
         max_length=12,
         blank=True,
@@ -92,6 +95,14 @@ class Asset(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        triggers = [
+            pgtrigger.Trigger(
+                name="update_location_on_geometry_change",
+                operation=pgtrigger.Update | pgtrigger.Insert,
+                when=pgtrigger.Before,
+                func="NEW.location = ST_Centroid(NEW.geometry); RETURN NEW;",
+            )
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.asset_type.name})"
@@ -103,8 +114,13 @@ class Asset(models.Model):
             centroid = self.geometry.centroid
             if centroid:
                 self.geohash = geohash2.encode(centroid.y, centroid.x, precision=9)
+                self.location = centroid
+            else:
+                self.geohash = ""
+                self.location = None
         else:
             self.geohash = ""
+            self.location = None
         super().save(*args, **kwargs)
 
     def get_attribute(self, api_key):
@@ -148,7 +164,7 @@ class Asset(models.Model):
             else:
                 field_value.value = value
                 field_value.save()
-        except BaseFieldValue.DoesNotExist:
+        except BaseAttributeValue.DoesNotExist:
             field_value = model_class.objects.create(
                 asset=self, field_definition=field_def, value=value
             )

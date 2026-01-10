@@ -21,6 +21,29 @@ from assets.models import Asset, AssetType, AssetAttributeDefinition, JSONAttrib
 
 
 class OSMImporter:
+        def geocode_location(self, location_name: str) -> tuple:
+            """
+            Geocode a location name using Nominatim and return bounding box (south, west, north, east)
+            """
+            url = f"https://nominatim.openstreetmap.org/search"
+            params = {
+                "q": location_name,
+                "format": "json",
+                "limit": 1,
+            }
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
+                resp.raise_for_status()
+                results = resp.json()
+                if not results:
+                    raise Exception(f"No results found for location: {location_name}")
+                bbox = results[0]["boundingbox"]
+                # bbox: [south, north, west, east] as strings
+                south, north, west, east = map(float, bbox)
+                return (south, west, north, east)
+            except Exception as e:
+                print(f"Error geocoding location '{location_name}': {e}")
+                raise
     """Import OSM data into Asset database"""
 
     OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -29,25 +52,43 @@ class OSMImporter:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "AssetVisualizer/1.0 (Django App)"})
 
-    def query_overpass(self, query: str) -> Dict[str, Any]:
+    def query_overpass(self, query: str, max_retries: int = 3, retry_delay: int = 10) -> Dict[str, Any]:
         """
-        Execute an Overpass API query
+        Execute an Overpass API query with retry on 504 Gateway Timeout
 
         Args:
             query: Overpass QL query string
+            max_retries: Number of times to retry on 504
+            retry_delay: Seconds to wait between retries
 
         Returns:
             JSON response from Overpass API
         """
-        try:
-            response = self.session.post(
-                self.OVERPASS_URL, data={"data": query}, timeout=60
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Error querying Overpass API: {e}")
-            raise
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                response = self.session.post(
+                    self.OVERPASS_URL, data={"data": query}, timeout=60
+                )
+                if response.status_code == 504:
+                    attempt += 1
+                    print(f"504 Gateway Timeout from Overpass API (attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
+                    import time
+                    time.sleep(retry_delay)
+                    continue
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                print(f"Error querying Overpass API: {e}")
+                if hasattr(e, 'response') and getattr(e.response, 'status_code', None) == 504:
+                    attempt += 1
+                    print(f"504 Gateway Timeout from Overpass API (attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
+                    import time
+                    time.sleep(retry_delay)
+                    continue
+                raise
+        print(f"Failed after {max_retries} attempts due to repeated 504 Gateway Timeout errors.")
+        raise Exception("Overpass API 504 Gateway Timeout after retries")
 
     def build_geometry(self, element: Dict[str, Any]) -> Any:
         """
@@ -362,31 +403,35 @@ def main():
     """Main entry point"""
     importer = OSMImporter()
 
-    # Example: Import restaurants in New Orleans French Quarter
-    # Bounding box: (south, west, north, east)
-    new_orleans_bbox = (29.945, -90.08, 29.965, -90.06)
+    import argparse
+    parser = argparse.ArgumentParser(description="Import OSM data for a location")
+    parser.add_argument("location", type=str, help="Location name (city, address, etc)")
+    parser.add_argument("--limit", type=int, default=50, help="Max features per type")
+    args = parser.parse_args()
 
-    print("=== Importing OSM Data ===\n")
+    print(f"=== Importing OSM Data for {args.location} ===\n")
+    bbox = importer.geocode_location(args.location)
+    print(f"Using bounding box: {bbox}")
 
     # Import restaurants
     print("\n--- Importing Restaurants ---")
     importer.import_osm_features(
-        bbox=new_orleans_bbox,
+        bbox=bbox,
         feature_type="amenity",
         feature_value="restaurant",
-        limit=50,
+        limit=args.limit,
     )
 
     # Import bars
     print("\n--- Importing Bars ---")
     importer.import_osm_features(
-        bbox=new_orleans_bbox, feature_type="amenity", feature_value="bar", limit=50
+        bbox=bbox, feature_type="amenity", feature_value="bar", limit=args.limit
     )
 
     # Import buildings
     print("\n--- Importing Buildings ---")
     importer.import_osm_features(
-        bbox=new_orleans_bbox, feature_type="building", limit=100
+        bbox=bbox, feature_type="building", limit=args.limit * 2
     )
 
     print("\n=== Import Complete ===")
