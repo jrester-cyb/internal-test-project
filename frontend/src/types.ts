@@ -2,7 +2,6 @@ export interface Asset {
   id: string
   name: string
   assetTypeId: string
-  geohash: string
   geometry: {
     type: string
     coordinates: number[]

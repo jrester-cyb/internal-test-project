@@ -47,14 +47,15 @@ export default function AssetList({ assets, onAssetClick, loading, currentPage =
                 <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
                   {asset.name}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Geohash: {asset.geohash}
-                </Typography>
-                {asset.geometry && (
+                {asset.geometry && asset.geometry.type === "Point" && Array.isArray(asset.geometry.coordinates) && asset.geometry.coordinates.length === 2 ? (
                   <Typography variant="body2" color="text.secondary">
                     {asset.geometry.coordinates[1].toFixed(6)}, {asset.geometry.coordinates[0].toFixed(6)}
                   </Typography>
-                )}
+                ) : asset.geometry && asset.geometry.type === "Polygon" && Array.isArray(asset.geometry.coordinates) ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Polygon ({Array.isArray(asset.geometry.coordinates[0]) ? asset.geometry.coordinates[0].length : 0} points)
+                  </Typography>
+                ) : null}
               </CardActionArea>
             </Card>
           ))}

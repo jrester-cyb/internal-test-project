@@ -32,16 +32,21 @@ export default function ClusterMarkers({ clusters, onClusterClick }: ClusterMark
           iconSize: [size, size]
         })
 
-        return (
-          <Marker
-            key={cluster.geohash}
-            position={[cluster.center.lat, cluster.center.lon]}
-            icon={icon}
-            eventHandlers={{
-              click: () => onClusterClick(cluster)
-            }}
-          />
-        )
+        // Only render marker if lat/lon are valid numbers
+        const { lat, lon } = cluster.center || {}
+        if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+          return (
+            <Marker
+              key={cluster.geohash}
+              position={[lat, lon]}
+              icon={icon}
+              eventHandlers={{
+                click: () => onClusterClick(cluster)
+              }}
+            />
+          )
+        }
+        return null
       })}
     </>
   )

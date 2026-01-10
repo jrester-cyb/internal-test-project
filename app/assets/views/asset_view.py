@@ -720,76 +720,31 @@ Now convert the query: "{query_text}"
         else:
             precision = 4  # Default to city level
 
-        # Filter assets with geometry and geohash
-        queryset = queryset.exclude(geometry__isnull=True).exclude(geohash="")
+        # Filter assets with geometry
+        queryset = queryset.exclude(geometry__isnull=True)
 
-        # Group by geohash prefix and count
-        from django.db.models.functions import Substr
-
-        clusters = (
-            queryset.annotate(geohash_prefix=Substr("geohash", 1, precision))
-            .values("geohash_prefix")
-            .annotate(count=Count("id"))
-            .order_by("-count")
-        )
-
-        # Build cluster response with centroids
-        from django.db.models import Avg
-        from django.db.models.functions import Cast
-        from django.db.models import FloatField
+        # TODO: Implement spatial binning (e.g., grid clustering) based on bbox/zoom/precision
+        # For now, treat all assets as one cluster and calculate centroid
+        from django.db import connection
 
         cluster_data = []
-        for cluster in clusters:
-            hash_prefix = cluster["geohash_prefix"]
-            count = cluster["count"]
-
-            # Calculate average lat/lon from assets in this cluster (much faster than Union)
-            try:
-                # Get average coordinates using raw SQL for efficiency
-                from django.db import connection
-
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        """
-                        SELECT AVG(ST_Y(geometry)) as lat, AVG(ST_X(geometry)) as lon
-                        FROM assets_asset
-                        WHERE id IN (
-                            SELECT id FROM assets_asset 
-                            WHERE geohash LIKE %s || '%%'
-                            AND geometry IS NOT NULL
-                            LIMIT 1000
-                        )
-                    """,
-                        [hash_prefix],
-                    )
-                    result = cursor.fetchone()
-
-                if result and result[0] and result[1]:
-                    lat, lon = result[0], result[1]
-                else:
-                    # Fallback to geohash decode
-                    lat, lon = geohash2.decode(hash_prefix)
-
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT ST_Y(ST_Centroid(ST_Collect(geometry))) as lat, ST_X(ST_Centroid(ST_Collect(geometry))) as lon, COUNT(*) as count
+                FROM assets_asset
+                WHERE geometry IS NOT NULL
+                """
+            )
+            result = cursor.fetchone()
+            if result and result[0] is not None and result[1] is not None:
+                lat, lon, count = result
                 cluster_data.append(
                     {
-                        "geohash": hash_prefix,
-                        "count": count,
+                        "count": int(count),
                         "center": {"lat": float(lat), "lon": float(lon)},
                     }
                 )
-            except Exception:
-                # Fallback to geohash decode on any error
-                try:
-                    lat, lon = geohash2.decode(hash_prefix)
-                    cluster_data.append(
-                        {
-                            "geohash": hash_prefix,
-                            "count": count,
-                            "center": {"lat": float(lat), "lon": float(lon)},
-                        }
-                    )
-                except Exception:
-                    pass
 
         return Response(
             {

@@ -226,7 +226,7 @@ function App() {
             />
 
             {assets.map(asset => (
-              asset.geometry && (
+              asset.geometry && asset.geometry.type === "Point" && Array.isArray(asset.geometry.coordinates) && asset.geometry.coordinates.length === 2 && (
                 <Marker
                   key={asset.id}
                   position={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
