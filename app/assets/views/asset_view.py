@@ -736,6 +736,7 @@ Now convert the query: "{query_text}"
 
         # Build cluster response with centroids
         from django.db import connection
+
         cluster_data = []
         for cluster in clusters:
             hash_prefix = cluster["geohash_prefix"]
@@ -749,19 +750,23 @@ Now convert the query: "{query_text}"
                     FROM assets_asset
                     WHERE geohash LIKE %s || '%%' AND geometry IS NOT NULL
                     """,
-                    [hash_prefix]
+                    [hash_prefix],
                 )
                 result = cursor.fetchone()
                 if result and result[0] is not None and result[1] is not None:
                     lat, lon = result
-                    cluster_data.append({
-                        "geohash": hash_prefix,
-                        "count": int(count),
-                        "center": {"lat": float(lat), "lon": float(lon)}
-                    })
+                    cluster_data.append(
+                        {
+                            "geohash": hash_prefix,
+                            "count": int(count),
+                            "center": {"lat": float(lat), "lon": float(lon)},
+                        }
+                    )
 
-        return Response({
-            "clusters": cluster_data,
-            "precision": precision,
-            "totalClusters": len(cluster_data),
-        })
+        return Response(
+            {
+                "clusters": cluster_data,
+                "precision": precision,
+                "totalClusters": len(cluster_data),
+            }
+        )
