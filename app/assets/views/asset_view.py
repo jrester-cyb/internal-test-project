@@ -149,21 +149,6 @@ class AssetViewSet(viewsets.ModelViewSet):
                 request_only=True,
             ),
             OpenApiExample(
-                "Bounding Box Filter (Lat/Long Array)",
-                description="Filter assets within a bounding box covering New Orleans using a lat/long array [minLon, minLat, maxLon, maxLat]",
-                value={
-                    "logic": "AND",
-                    "filters": [
-                        {
-                            "field": "geometry",
-                            "operator": "intersects",
-                            "value": [-90.1401, 29.9096, -89.8826, 30.0707],
-                        }
-                    ],
-                },
-                request_only=True,
-            ),
-            OpenApiExample(
                 "Datetime Filtering",
                 description="Filter assets created after a specific datetime (UTC)",
                 value={
