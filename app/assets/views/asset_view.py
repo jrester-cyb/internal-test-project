@@ -14,6 +14,7 @@ from drf_spectacular.utils import (
     OpenApiParameter,
 )
 from ..filter_serializers import FilterSerializer
+from ..renderers import AssetCamelCaseJSONRenderer, AssetCamelCaseBrowsableAPIRenderer
 import re
 import json
 import boto3
@@ -45,6 +46,7 @@ class AssetViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = AssetSerializer
+    renderer_classes = [AssetCamelCaseJSONRenderer, AssetCamelCaseBrowsableAPIRenderer]
     pagination_class = AssetPagination
     filter_backends = [
         DjangoFilterBackend,
