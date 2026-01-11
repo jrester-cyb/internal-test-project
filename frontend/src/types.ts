@@ -18,7 +18,7 @@ export interface AssetTypeAttribute {
 export interface Asset {
   id: string
   name: string
-  assetTypeId: string
+  assetType: string
   h3Index?: string
   geometry: {
     type: string

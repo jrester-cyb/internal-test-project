@@ -2,6 +2,12 @@ import type { SearchRequest } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
 
+export async function fetchAsset(assetId: string) {
+  const response = await fetch(`${API_BASE}/assets/${assetId}/`)
+  if (!response.ok) throw new Error('Failed to fetch asset')
+  return response.json()
+}
+
 export async function fetchClusters(zoom: number, bbox?: number[], filters?: any) {
   const params = new URLSearchParams({ zoom: zoom.toString() })
   if (bbox) {

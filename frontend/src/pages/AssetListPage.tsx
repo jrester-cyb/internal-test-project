@@ -1,11 +1,13 @@
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip } from '@mui/material'
 import type { Asset } from '../types'
-import { useLoaderData } from 'react-router-dom'
-
+import { useLoaderData, useNavigate, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom';
 
 export default function AssetListPage() {
-  const data = useLoaderData() as { assets: Asset[], assetType?: any };
-  const assets = data || data as Asset[]; // Handle both old and new format
+  const data = useLoaderData() as Asset[] | { assets: Asset[], assetType?: any };
+  const assets = Array.isArray(data) ? data : data.assets;
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const formatCoordinates = (location: any) => {
     if (!location || !location.coordinates) {
@@ -49,11 +51,22 @@ export default function AssetListPage() {
                 <TableRow
                   key={asset.id}
                   hover
+                  sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell sx={{ color: '#000 !important', fontWeight: 600 }}>{asset.name}</TableCell>
+                  <TableCell sx={{ color: '#000 !important', fontWeight: 600 }}>
+                    <Link
+                      to={asset.id}
+                      state={{
+                        ...location.state,
+                        assetName: asset.name
+                      }}
+                    >
+                      {asset.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <Chip
-                      label={asset.assetTypeId}
+                      label={asset.assetType}
                       size="small"
                       variant="outlined"
                       sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
@@ -87,6 +100,6 @@ export default function AssetListPage() {
           </Box>
         )}
       </Box>
-    </Box>
+    </Box >
   );
 }

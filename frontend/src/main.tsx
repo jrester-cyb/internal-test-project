@@ -8,6 +8,8 @@ import App from './App.tsx'
 const AssetTypesPage = lazy(() => import('./pages/AssetTypesPage.tsx'))
 const MapPage = lazy(() => import('./pages/MapPage.tsx'))
 const AssetListPage = lazy(() => import('./pages/AssetListPage.tsx'))
+const AssetDetailPage = lazy(() => import('./pages/AssetDetailPage.tsx'))
+const AssetTypeLayout = lazy(() => import('./pages/AssetTypeLayout.tsx'))
 
 // Generic lazy loader wrapper
 function createLazyLoader(
@@ -62,31 +64,57 @@ const router = createBrowserRouter([
           },
           {
             path: ":assetTypeId",
-            element: <AssetListPage />,
             handle: {
               crumb: async ({ crumb, params }) => {
-                // If a breadcrumb was provided in state, use it
-                // Otherwise we wil fetch the asset type to get its name
+                // If assetTypeName was provided in state, use it
+                // Otherwise we will fetch the asset type to get its name
 
-                return crumb ?? await import('./api/assets').then(async (module) => {
+                return crumb?.assetTypeName ?? await import('./api/assets').then(async (module) => {
                   const assetTypes = await module.fetchAssetTypes()
                   const assetsArray = Array.isArray(assetTypes) ? assetTypes : assetTypes.results || []
-                  const assetType = assetsArray.find((at: any) => at.id === params.assetTypeId)
+                  const assetType = assetsArray.find((at: any) => at.id == params.assetTypeId)
                   return assetType ? assetType.name : 'Assets'
                 })
               }
             },
-            loader: createLazyLoader(
-              './api/assets',
-              'fetchAssetsByType',
+            children: [
               {
-                paramExtractor: (params) => params.assetTypeId,
-                transformer: async (data) => {
-                  const assets = Array.isArray(data) ? data : data.results || []
-                  return assets;
-                }
+                index: true,
+                element: <AssetListPage />,
+                loader: createLazyLoader(
+                  './api/assets',
+                  'fetchAssetsByType',
+                  {
+                    paramExtractor: (params) => params.assetTypeId,
+                    transformer: async (data) => {
+                      const assets = Array.isArray(data) ? data : data.results || []
+                      return { assets };
+                    }
+                  }
+                ),
+              },
+              {
+                path: ":assetId",
+                element: <AssetDetailPage />,
+                handle: {
+                  crumb: async ({ crumb, params }) => {
+                    // If assetName was provided in state, use it
+                    // Otherwise we will fetch the asset to get its name
+                    return crumb?.assetName ?? await import('./api/assets').then(async (module) => {
+                      const asset = await module.fetchAsset(params.assetId)
+                      return asset ? asset.name : 'Asset Detail'
+                    })
+                  }
+                },
+                loader: createLazyLoader(
+                  './api/assets',
+                  'fetchAsset',
+                  {
+                    paramExtractor: (params) => params.assetId,
+                  }
+                ),
               }
-            ),
+            ]
           }
         ]
       },

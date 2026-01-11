@@ -17,7 +17,7 @@ export default function AppBreadcrumbs() {
       let label: string | Promise<string>
 
       if (typeof crumbValue === 'function') {
-        const result = crumbValue({ crumb: location.state?.breadcrumb, params: match.params })
+        const result = crumbValue({ crumb: location.state, params: match.params })
         label = result
       } else {
         label = crumbValue
