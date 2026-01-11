@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Box, List, Drawer, IconButton } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings } from '@mui/icons-material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, Home as HomeIcon } from '@mui/icons-material'
+import { useParams } from 'react-router-dom'
 import SidebarNavItem from './SidebarNavItem'
 
 interface SidebarProps {
@@ -9,7 +9,11 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+  const { workspaceId } = useParams()
   const drawerWidth = isOpen ? 240 : 64
+
+  // Build workspace-scoped paths
+  const basePath = workspaceId ? `/workspaces/${workspaceId}` : ''
 
   return (
     <>
@@ -40,23 +44,33 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </Box>
           <List>
             <SidebarNavItem
-              to="/map"
-              icon={<MapIcon />}
-              label="Map"
+              to="/"
+              icon={<HomeIcon />}
+              label="Workspaces"
               isOpen={isOpen}
             />
-            <SidebarNavItem
-              to="/asset-types"
-              icon={<AssetsIcon />}
-              label="Assets"
-              isOpen={isOpen}
-            />
-            <SidebarNavItem
-              to="/reports"
-              icon={<Settings />}
-              label="Project Workspace Settings"
-              isOpen={isOpen}
-            />
+            {workspaceId && (
+              <>
+                <SidebarNavItem
+                  to={`${basePath}/map`}
+                  icon={<MapIcon />}
+                  label="Map"
+                  isOpen={isOpen}
+                />
+                <SidebarNavItem
+                  to={`${basePath}/asset-types`}
+                  icon={<AssetsIcon />}
+                  label="Assets"
+                  isOpen={isOpen}
+                />
+                <SidebarNavItem
+                  to={`${basePath}/settings`}
+                  icon={<Settings />}
+                  label="Settings"
+                  isOpen={isOpen}
+                />
+              </>
+            )}
           </List>
         </Box>
       </Drawer>

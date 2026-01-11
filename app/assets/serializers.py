@@ -32,7 +32,15 @@ class AssetTypeAttributeChoiceSerializer(serializers.ModelSerializer):
 
     def get_value(self, obj):
         """Get the value from the polymorphic choice model"""
-        return obj.value
+        # Handle case where base class is returned instead of subclass
+        if hasattr(obj, "value"):
+            return obj.value
+        # Try to get the real instance if polymorphic didn't resolve
+        try:
+            real_obj = AssetTypeAttributeChoice.objects.get_real_instances([obj])[0]
+            return real_obj.value if hasattr(real_obj, "value") else None
+        except (IndexError, AttributeError):
+            return None
 
 
 class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
@@ -90,7 +98,7 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
 
 
 class AssetTypeAttributeSerializer(serializers.ModelSerializer):
-    choices = AssetTypeAttributeChoiceSerializer(many=True, read_only=True)
+    asset_count = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetTypeAttribute
@@ -104,11 +112,15 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "default_value",
             "description",
             "order",
-            "choices",
+            "asset_count",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+
+    def get_asset_count(self, obj):
+        """Count distinct assets that have a value for this attribute"""
+        return obj.values.values("asset").distinct().count()
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):

@@ -13,7 +13,6 @@ class WorkspaceSerializer(serializers.ModelSerializer):
             "organization",
             "name",
             "description",
-            "slug",
             "created_at",
             "updated_at",
         ]
@@ -41,5 +40,5 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         filters.OrderingFilter,
     ]
     filterset_fields = ["organization"]
-    search_fields = ["name", "slug", "description"]
+    search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]

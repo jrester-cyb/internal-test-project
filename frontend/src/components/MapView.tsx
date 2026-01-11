@@ -10,6 +10,7 @@ import type { AttributeFilter } from './FilterBuilder'
 import type { Asset, Cluster } from '../types'
 
 interface MapViewProps {
+  workspaceId: string
   center: [number, number]
   zoom: number
   clusters: Cluster[]
@@ -34,6 +35,7 @@ interface MapViewProps {
 }
 
 export default function MapView({
+  workspaceId,
   center,
   zoom,
   clusters,
@@ -63,6 +65,7 @@ export default function MapView({
     <>
       <Box sx={{ flexGrow: 1, position: 'relative' }}>
         <FilterBuilder
+          workspaceId={workspaceId}
           selectedAssetTypes={selectedAssetTypes}
           onAssetTypesChange={setSelectedAssetTypes}
           attributeFilters={attributeFilters}
@@ -126,6 +129,7 @@ export default function MapView({
       {selectedAsset && (
         <AssetDetails
           asset={selectedAsset}
+          workspaceId={workspaceId}
           onClose={() => setSelectedAsset(null)}
         />
       )}

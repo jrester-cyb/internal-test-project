@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useParams } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { getAsset } from '../api/assets'
@@ -17,6 +18,8 @@ L.Icon.Default.mergeOptions({
 })
 
 function MapPage() {
+  const { workspaceId } = useParams()
+
   // Load saved position from localStorage or use default
   const getSavedPosition = () => {
     try {
@@ -52,6 +55,8 @@ function MapPage() {
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
+    if (!workspaceId) return
+
     setLoading(true)
     try {
       // Merge asset type and attribute filters with other filters
@@ -117,7 +122,7 @@ function MapPage() {
 
       if (zoom < 12) {
         // Show clusters at high zoom out
-        const clusterData = await fetchClusters(zoom, bounds, mergedFilters)
+        const clusterData = await fetchClusters(workspaceId, zoom, bounds, mergedFilters)
         // Separate GeoJSON features (single-asset clusters) from true clusters
         const geojsonAssets: Asset[] = []
         const realClusters: Cluster[] = []
@@ -138,7 +143,7 @@ function MapPage() {
         setAssets(geojsonAssets)
       } else {
         // Show individual assets when zoomed in
-        const tileData = await fetchTiles(bounds, 5000, mergedFilters)
+        const tileData = await fetchTiles(workspaceId, bounds, 5000, mergedFilters)
         setAssets(tileData.features.map((f: any) => ({
           id: f.id,
           name: f.properties.name,
@@ -153,13 +158,14 @@ function MapPage() {
     } finally {
       setLoading(false)
     }
-  }, [selectedAssetTypes, attributeFilters])
+  }, [workspaceId, selectedAssetTypes, attributeFilters])
 
   const handleClusterClick = async (cluster: Cluster) => {
+    if (!workspaceId) return
     setSelectedCluster(cluster)
     setLoading(true)
     try {
-      const results = await searchAssets({
+      const results = await searchAssets(workspaceId, {
         filters: [{
           field: 'h3_index',
           value: cluster.h3Index,
@@ -175,9 +181,10 @@ function MapPage() {
   }
 
   const handleAssetClick = async (asset: Asset) => {
+    if (!workspaceId) return
     setLoadingAsset(true)
     try {
-      const fullAsset = await getAsset(asset.id)
+      const fullAsset = await getAsset(workspaceId, asset.id)
       setSelectedAsset(fullAsset)
     } catch (error) {
       setSelectedAsset(asset)
@@ -188,7 +195,7 @@ function MapPage() {
   }
 
   const handleSearch = async (page: number = 1) => {
-    if (!query.trim()) {
+    if (!workspaceId || !query.trim()) {
       // Clear filters
       setActiveFilters(null)
       setInterpretation('')
@@ -198,7 +205,7 @@ function MapPage() {
     setLoading(true)
     try {
       // First, interpret the natural language query
-      const interpreted = await interpretSearch(query)
+      const interpreted = await interpretSearch(workspaceId, query)
       setInterpretation(interpreted.interpretation || '')
 
       const filters = {
@@ -206,7 +213,7 @@ function MapPage() {
         logic: interpreted.logic || 'AND'
       }
 
-      const results = await searchAssets({
+      const results = await searchAssets(workspaceId, {
         ...filters,
         page,
         limit: 50
@@ -242,6 +249,7 @@ function MapPage() {
 
   return (
     <MapView
+      workspaceId={workspaceId || ''}
       center={center}
       zoom={zoom}
       clusters={clusters}

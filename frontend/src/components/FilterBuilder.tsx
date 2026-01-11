@@ -33,6 +33,7 @@ export interface AttributeFilter {
 }
 
 interface FilterBuilderProps {
+  workspaceId: string
   selectedAssetTypes: string[]
   onAssetTypesChange: (assetTypeIds: string[]) => void
   attributeFilters: AttributeFilter[]
@@ -43,6 +44,7 @@ interface FilterBuilderProps {
 }
 
 export default function FilterBuilder({
+  workspaceId,
   selectedAssetTypes,
   onAssetTypesChange,
   attributeFilters,
@@ -64,8 +66,10 @@ export default function FilterBuilder({
   const handleClose = externalOnClose || (() => setInternalOpen(false))
 
   useEffect(() => {
-    loadAssetTypes()
-  }, [])
+    if (workspaceId) {
+      loadAssetTypes()
+    }
+  }, [workspaceId])
 
   useEffect(() => {
     // Load attribute definitions for selected asset types
@@ -77,8 +81,9 @@ export default function FilterBuilder({
   }, [selectedAssetTypes])
 
   async function loadAssetTypes() {
+    if (!workspaceId) return
     try {
-      const types = await fetchAssetTypes()
+      const types = await fetchAssetTypes(workspaceId)
       setAssetTypes(Array.isArray(types) ? types : types.results || [])
     } catch (error) {
       console.error('Failed to load asset types:', error)
@@ -89,8 +94,9 @@ export default function FilterBuilder({
   }
 
   async function loadAttributeDefinitions(assetTypeId: string) {
+    if (!workspaceId) return
     try {
-      const defs = await fetchAssetAttributeDefinitions(assetTypeId)
+      const defs = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId)
       const attributes = Array.isArray(defs) ? defs : defs.results || []
       setAttributeDefinitions(prev => ({
         ...prev,
@@ -102,9 +108,10 @@ export default function FilterBuilder({
   }
 
   async function loadAttributeValues(assetTypeId: string, attributeDefinitionId: string) {
+    if (!workspaceId) return
     setLoadingValues(true)
     try {
-      const values = await fetchAttributeValues(assetTypeId, attributeDefinitionId)
+      const values = await fetchAttributeValues(workspaceId, assetTypeId, attributeDefinitionId)
       setAttributeValues(values)
     } catch (error) {
       console.error('Failed to load attribute values:', error)

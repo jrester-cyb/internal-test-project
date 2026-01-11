@@ -4,9 +4,9 @@ from .models import Workspace, WorkspaceMembership
 
 @admin.register(Workspace)
 class WorkspaceAdmin(admin.ModelAdmin):
-    list_display = ["name", "organization", "slug", "created_at"]
+    list_display = ["name", "organization", "created_at"]
     list_filter = ["organization"]
-    search_fields = ["name", "slug", "organization__name"]
+    search_fields = ["name", "organization__name"]
     readonly_fields = ["id", "created_at", "updated_at"]
 
 

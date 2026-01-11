@@ -26,6 +26,7 @@ from drf_spectacular.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("todos.urls")),
+    path("api/", include("organizations.urls")),
     path("api/", include("workspaces.urls")),
     # Silk profiling dashboard
     path("silk/", include("silk.urls", namespace="silk")),

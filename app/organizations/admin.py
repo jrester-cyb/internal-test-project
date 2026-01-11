@@ -4,9 +4,8 @@ from .models import Organization, OrganizationMembership
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "created_at"]
-    search_fields = ["name", "slug"]
-    prepopulated_fields = {"slug": ("name",)}
+    list_display = ["name", "created_at"]
+    search_fields = ["name"]
     readonly_fields = ["id", "created_at", "updated_at"]
 
 

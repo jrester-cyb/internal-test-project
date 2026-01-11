@@ -4,7 +4,11 @@ import { createBrowserRouter, Navigate, RouterProvider, type Params } from 'reac
 import { ThemeProvider } from './contexts/ThemeContext'
 import './index.css'
 import App from './App.tsx'
+
 // Lazy load route components
+const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage.tsx'))
+const WorkspaceLayout = lazy(() => import('./pages/WorkspaceLayout.tsx'))
+const WorkspaceSettingsPage = lazy(() => import('./pages/WorkspaceSettingsPage.tsx'))
 const AssetTypesPage = lazy(() => import('./pages/AssetTypesPage.tsx'))
 const MapPage = lazy(() => import('./pages/MapPage.tsx'))
 const AssetListPage = lazy(() => import('./pages/AssetListPage.tsx'))
@@ -38,132 +42,160 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/map" replace />,
-      },
-      {
-        path: "map",
-        element: <MapPage />,
+        element: <WorkspacesPage />,
+        loader: async () => {
+          const { fetchWorkspaces } = await import('./api/assets')
+          const response = await fetchWorkspaces()
+          return Array.isArray(response) ? response : response.results || []
+        },
         handle: {
-          crumb: "Map"
+          crumb: "Workspaces"
         },
       },
       {
-        path: "asset-types",
+        path: "workspaces/:workspaceId",
+        element: <WorkspaceLayout />,
         handle: {
-          crumb: "Asset Types"
+          crumb: async ({ params }) => {
+            const { fetchWorkspace } = await import('./api/assets')
+            try {
+              const workspace = await fetchWorkspace(params.workspaceId!)
+              return workspace?.name || 'Workspace'
+            } catch {
+              return 'Workspace'
+            }
+          }
         },
         children: [
           {
             index: true,
-            element: < AssetTypesPage />,
-            loader: createLazyLoader(
-              './api/assets',
-              'fetchAssetTypes',
-              {
-                transformer: (data) => Array.isArray(data) ? data : data.results || []
-              }
-            ),
+            element: <Navigate to="map" replace />,
           },
           {
-            path: ":assetTypeId",
+            path: "map",
+            element: <MapPage />,
             handle: {
-              crumb: async ({ crumb, params }) => {
-                // If assetTypeName was provided in state, use it
-                // Otherwise we will fetch the asset type to get its name
-
-                return crumb?.assetTypeName ?? await import('./api/assets').then(async (module) => {
-                  const assetTypes = await module.fetchAssetTypes()
-                  const assetsArray = Array.isArray(assetTypes) ? assetTypes : assetTypes.results || []
-                  const assetType = assetsArray.find((at: any) => at.id == params.assetTypeId)
-                  return assetType ? assetType.name : 'Assets'
-                })
-              }
+              crumb: "Map"
             },
-            element: <AssetTypeLayout />,
+          },
+          {
+            path: "asset-types",
+            handle: {
+              crumb: "Asset Types"
+            },
             children: [
               {
                 index: true,
-                element: <Navigate to="about" />,
-              },
-              {
-                path: "about",
-                element: <AssetTypeAboutPage />,
-                handle: {
-                  crumb: "About"
-                }
-              },
-              {
-                path: "attributes",
-                element: <AssetTypeAttributesPage />,
-                handle: {
-                  crumb: "Attributes"
-                },
-                loader: async ({ params, request }) => {
-                  const url = new URL(request.url)
-                  const search = url.searchParams.get('search') || undefined
-
-                  const { fetchAssetAttributeDefinitions } = await import('./api/assets')
-                  const response = await fetchAssetAttributeDefinitions(params.assetTypeId!, 1, 25, search)
-                  const attributes = response.results || []
-                  const count = response.count || 0
-
-                  return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId };
+                element: <AssetTypesPage />,
+                loader: async ({ params }) => {
+                  const { fetchAssetTypes } = await import('./api/assets')
+                  const data = await fetchAssetTypes(params.workspaceId!)
+                  return Array.isArray(data) ? data : data.results || []
                 },
               },
               {
-                path: 'assets',
+                path: ":assetTypeId",
                 handle: {
-                  crumb: "Assets"
+                  crumb: async ({ params }) => {
+                    const { fetchAssetTypes } = await import('./api/assets')
+                    const assetTypes = await fetchAssetTypes(params.workspaceId!)
+                    const assetsArray = Array.isArray(assetTypes) ? assetTypes : assetTypes.results || []
+                    const assetType = assetsArray.find((at: any) => at.id == params.assetTypeId)
+                    return assetType ? assetType.name : 'Asset Type'
+                  }
                 },
+                element: <AssetTypeLayout />,
                 children: [
                   {
                     index: true,
-                    element: <AssetListPage />,
+                    element: <Navigate to="about" />,
+                  },
+                  {
+                    path: "about",
+                    element: <AssetTypeAboutPage />,
+                    handle: {
+                      crumb: "About"
+                    }
+                  },
+                  {
+                    path: "attributes",
+                    element: <AssetTypeAttributesPage />,
+                    handle: {
+                      crumb: "Attributes"
+                    },
                     loader: async ({ params, request }) => {
                       const url = new URL(request.url)
-                      const page = parseInt(url.searchParams.get('page') || '1')
-                      const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
+                      const search = url.searchParams.get('search') || undefined
 
-                      const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
-
-                      // Fetch paginated assets
-                      const response = await fetchAssetsByType(params.assetTypeId!, page, pageSize)
-                      const assets = response.results || []
+                      const { fetchAssetAttributeDefinitions } = await import('./api/assets')
+                      const response = await fetchAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!, 1, 25, search)
+                      const attributes = response.results || []
                       const count = response.count || 0
 
-                      // Fetch ALL asset type attributes (not paginated) to show all columns
-                      const attributes = await fetchAllAssetAttributeDefinitions(params.assetTypeId!)
-
-                      return { assets, attributes, count, page, pageSize };
+                      return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId, workspaceId: params.workspaceId };
                     },
                   },
                   {
-                    path: ":assetId",
-                    element: <AssetDetailPage />,
+                    path: 'assets',
                     handle: {
-                      crumb: async ({ crumb, params }) => {
-                        // If assetName was provided in state, use it
-                        // Otherwise we will fetch the asset to get its name
-                        return crumb?.assetName ?? await import('./api/assets').then(async (module) => {
-                          const asset = await module.fetchAsset(params.assetId)
-                          return asset ? asset.name : 'Asset Detail'
-                        })
-                      },
-                      hideNavbar: true,
+                      crumb: "Assets"
                     },
-                    loader: createLazyLoader(
-                      './api/assets',
-                      'fetchAsset',
+                    children: [
                       {
-                        paramExtractor: (params) => params.assetId,
+                        index: true,
+                        element: <AssetListPage />,
+                        loader: async ({ params, request }) => {
+                          const url = new URL(request.url)
+                          const page = parseInt(url.searchParams.get('page') || '1')
+                          const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
+
+                          const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
+
+                          // Fetch paginated assets
+                          const response = await fetchAssetsByType(params.workspaceId!, params.assetTypeId!, page, pageSize)
+                          const assets = response.results || []
+                          const count = response.count || 0
+
+                          // Fetch ALL asset type attributes (not paginated) to show all columns
+                          const attributes = await fetchAllAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!)
+
+                          return { assets, attributes, count, page, pageSize, workspaceId: params.workspaceId };
+                        },
+                      },
+                      {
+                        path: ":assetId",
+                        element: <AssetDetailPage />,
+                        handle: {
+                          crumb: async ({ params }) => {
+                            const { fetchAsset } = await import('./api/assets')
+                            try {
+                              const asset = await fetchAsset(params.workspaceId!, params.assetId!)
+                              return asset ? asset.name : 'Asset Detail'
+                            } catch {
+                              return 'Asset Detail'
+                            }
+                          },
+                          hideNavbar: true,
+                        },
+                        loader: async ({ params }) => {
+                          const { fetchAsset } = await import('./api/assets')
+                          return fetchAsset(params.workspaceId!, params.assetId!)
+                        },
                       }
-                    ),
-                  }
+                    ]
+                  },
                 ]
-              },
+              }
             ]
-          }
-        ]
+          },
+          {
+            path: "settings",
+            element: <WorkspaceSettingsPage />,
+            handle: {
+              crumb: "Settings"
+            },
+          },
+        ],
       },
     ],
   },

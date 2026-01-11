@@ -2,19 +2,36 @@ import type { SearchRequest } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
 
-export async function fetchAsset(assetId: string) {
-  const response = await fetch(`${API_BASE}/assets/${assetId}/`)
+// Helper to build workspace-scoped URLs
+function workspaceUrl(workspaceId: string, path: string) {
+  return `${API_BASE}/workspaces/${workspaceId}/${path}`
+}
+
+export async function fetchWorkspaces() {
+  const response = await fetch(`${API_BASE}/workspaces/`)
+  if (!response.ok) throw new Error('Failed to fetch workspaces')
+  return response.json()
+}
+
+export async function fetchWorkspace(workspaceId: string) {
+  const response = await fetch(`${API_BASE}/workspaces/${workspaceId}/`)
+  if (!response.ok) throw new Error('Failed to fetch workspace')
+  return response.json()
+}
+
+export async function fetchAsset(workspaceId: string, assetId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `assets/${assetId}/`))
   if (!response.ok) throw new Error('Failed to fetch asset')
   return response.json()
 }
 
-export async function fetchClusters(zoom: number, bbox?: number[], filters?: any) {
+export async function fetchClusters(workspaceId: string, zoom: number, bbox?: number[], filters?: any) {
   const params = new URLSearchParams({ zoom: zoom.toString() })
   if (bbox) {
     params.append('bbox', bbox.join(','))
   }
   
-  const url = `${API_BASE}/assets/clusters/?${params}`
+  const url = workspaceUrl(workspaceId, `assets/clusters/?${params}`)
   
   if (filters) {
     const response = await fetch(url, {
@@ -33,13 +50,13 @@ export async function fetchClusters(zoom: number, bbox?: number[], filters?: any
   }
 }
 
-export async function fetchTiles(bbox: number[], limit: number = 5000, filters?: any) {
+export async function fetchTiles(workspaceId: string, bbox: number[], limit: number = 5000, filters?: any) {
   const params = new URLSearchParams({
     bbox: bbox.join(','),
     limit: limit.toString()
   })
   
-  const url = `${API_BASE}/assets/tiles/?${params}`
+  const url = workspaceUrl(workspaceId, `assets/tiles/?${params}`)
   
   if (filters) {
     const response = await fetch(url, {
@@ -58,7 +75,7 @@ export async function fetchTiles(bbox: number[], limit: number = 5000, filters?:
   }
 }
 
-export async function searchAssets(request: SearchRequest) {
+export async function searchAssets(workspaceId: string, request: SearchRequest) {
   const { page = 1, limit = 50, filters = [], ...restRequest } = request
   const params = new URLSearchParams({
     page: page.toString(),
@@ -68,7 +85,7 @@ export async function searchAssets(request: SearchRequest) {
   // Ensure filters are sent as expected
   const payload = { ...restRequest, filters }
 
-  const response = await fetch(`${API_BASE}/assets/search/?${params}`, {
+  const response = await fetch(workspaceUrl(workspaceId, `assets/search/?${params}`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -80,14 +97,14 @@ export async function searchAssets(request: SearchRequest) {
   return response.json()
 }
 
-export async function getAsset(id: string) {
-  const response = await fetch(`${API_BASE}/assets/${id}/`)
+export async function getAsset(workspaceId: string, id: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `assets/${id}/`))
   if (!response.ok) throw new Error('Failed to fetch asset')
   return response.json()
 }
 
-export async function interpretSearch(query: string) {
-  const response = await fetch(`${API_BASE}/assets/interpret_search/`, {
+export async function interpretSearch(workspaceId: string, query: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `assets/interpret_search/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -99,23 +116,23 @@ export async function interpretSearch(query: string) {
   return response.json()
 }
 
-export async function fetchAssetTypes() {
-  const response = await fetch(`${API_BASE}/asset-types/`)
+export async function fetchAssetTypes(workspaceId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/`))
   if (!response.ok) throw new Error('Failed to fetch asset types')
   return response.json()
 }
 
-export async function fetchAssetsByType(assetTypeId: string, page: number = 1, pageSize: number = 25) {
+export async function fetchAssetsByType(workspaceId: string, assetTypeId: string, page: number = 1, pageSize: number = 25) {
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString()
   })
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/assets/?${params}`)
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/assets/?${params}`))
   if (!response.ok) throw new Error('Failed to fetch assets by type')
   return response.json()
 }
 
-export async function fetchAssetAttributeDefinitions(assetTypeId: string, page: number = 1, pageSize: number = 25, search?: string) {
+export async function fetchAssetAttributeDefinitions(workspaceId: string, assetTypeId: string, page: number = 1, pageSize: number = 25, search?: string) {
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString()
@@ -125,7 +142,7 @@ export async function fetchAssetAttributeDefinitions(assetTypeId: string, page: 
     params.append('search', search)
   }
 
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/?${params}`)
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   return response.json()
 }
@@ -136,26 +153,26 @@ export async function fetchAssetAttributeDefinitionsFromUrl(url: string) {
   return response.json()
 }
 
-export async function fetchAllAssetAttributeDefinitions(assetTypeId: string) {
+export async function fetchAllAssetAttributeDefinitions(workspaceId: string, assetTypeId: string) {
   const params = new URLSearchParams({
     page_size: '1000' // Fetch all attributes
   })
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/?${params}`)
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   const data = await response.json()
   return data.results || []
 }
 
-export async function fetchAttributeValues(assetTypeId: string, attributeDefinitionId: string) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/?page_size=1000`)
+export async function fetchAttributeValues(workspaceId: string, assetTypeId: string, attributeDefinitionId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/?page_size=1000`))
   if (!response.ok) throw new Error('Failed to fetch attribute values')
   const data = await response.json()
   // Return the values array directly (no longer wrapped in {value, type} objects)
   return data.results || []
 }
 
-export async function updateAssetTypeAttribute(assetTypeId: string, attributeId: string, data: any) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/${attributeId}/`, {
+export async function updateAssetTypeAttribute(workspaceId: string, assetTypeId: string, attributeId: string, data: any) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json'
@@ -166,16 +183,16 @@ export async function updateAssetTypeAttribute(assetTypeId: string, attributeId:
   return response.json()
 }
 
-export async function deleteAssetTypeAttribute(assetTypeId: string, attributeId: string) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/${attributeId}/`, {
+export async function deleteAssetTypeAttribute(workspaceId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
     method: 'DELETE'
   })
   if (!response.ok) throw new Error('Failed to delete attribute')
   return response.ok
 }
 
-export async function createAssetTypeAttribute(assetTypeId: string, data: any) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/`, {
+export async function createAssetTypeAttribute(workspaceId: string, assetTypeId: string, data: any) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -186,8 +203,8 @@ export async function createAssetTypeAttribute(assetTypeId: string, data: any) {
   return response.json()
 }
 
-export async function reorderAssetTypeAttributes(assetTypeId: string, updates: Array<{id: string, order: number}>) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/reorder/`, {
+export async function reorderAssetTypeAttributes(workspaceId: string, assetTypeId: string, updates: Array<{id: string, order: number}>) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/reorder/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -196,4 +213,31 @@ export async function reorderAssetTypeAttributes(assetTypeId: string, updates: A
   })
   if (!response.ok) throw new Error('Failed to reorder attributes')
   return response.json()
+}
+
+export async function createAssetTypeAttributeChoice(workspaceId: string, assetTypeId: string, attributeId: string, data: { value: any, label: string, icon?: string, color?: string, order?: number }) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) throw new Error('Failed to create choice')
+  return response.json()
+}
+
+export async function fetchAssetTypeAttributeChoices(workspaceId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/?page_size=1000`))
+  if (!response.ok) throw new Error('Failed to fetch choices')
+  const data = await response.json()
+  return data.results || []
+}
+
+export async function deleteAssetTypeAttributeChoice(workspaceId: string, assetTypeId: string, attributeId: string, choiceId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/${choiceId}/`), {
+    method: 'DELETE'
+  })
+  if (!response.ok) throw new Error('Failed to delete choice')
+  return response.ok
 }

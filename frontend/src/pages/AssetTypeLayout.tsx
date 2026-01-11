@@ -40,9 +40,9 @@ export default function AssetTypeLayout() {
           textColor="inherit"
           sx={{ px: 2 }}
         >
-          <Tab label="About" component={Link} to={`/asset-types/${params.assetTypeId}/about`} value={0} />
-          <Tab label="Assets" component={Link} to={`/asset-types/${params.assetTypeId}/assets`} value={1} />
-          <Tab label="Attributes" component={Link} to={`/asset-types/${params.assetTypeId}/attributes`} value={2} />
+          <Tab label="About" component={Link} to="about" value={0} />
+          <Tab label="Assets" component={Link} to="assets" value={1} />
+          <Tab label="Attributes" component={Link} to="attributes" value={2} />
         </Tabs>
       </Box>
 

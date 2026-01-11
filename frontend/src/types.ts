@@ -4,6 +4,15 @@ export interface AssetType {
   description?: string
 }
 
+export interface AssetTypeAttributeChoice {
+  id: string
+  value: any
+  label: string
+  icon?: string
+  color?: string
+  order: number
+}
+
 export interface AssetTypeAttribute {
   id: string
   name: string
@@ -13,6 +22,8 @@ export interface AssetTypeAttribute {
   default_value?: any
   description?: string
   order: number
+  assetCount?: number
+  choices?: AssetTypeAttributeChoice[]
 }
 
 export interface Asset {

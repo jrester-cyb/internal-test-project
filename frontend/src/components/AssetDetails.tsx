@@ -6,18 +6,20 @@ import { getAsset } from '../api/assets'
 
 interface AssetDetailsProps {
   asset: Asset
+  workspaceId: string
   onClose: () => void
 }
 
-export default function AssetDetails({ asset, onClose }: AssetDetailsProps) {
+export default function AssetDetails({ asset, workspaceId, onClose }: AssetDetailsProps) {
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     async function loadFullAsset() {
+      if (!workspaceId) return
       setLoading(true)
       try {
-        const data = await getAsset(asset.id)
+        const data = await getAsset(workspaceId, asset.id)
         setFullAsset(data)
       } catch (error) {
         console.error('Error loading asset details:', error)
@@ -26,7 +28,7 @@ export default function AssetDetails({ asset, onClose }: AssetDetailsProps) {
       }
     }
     loadFullAsset()
-  }, [asset.id])
+  }, [asset.id, workspaceId])
 
   const displayAsset = fullAsset || asset
 

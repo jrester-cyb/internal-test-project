@@ -1,4 +1,4 @@
-import { useLoaderData, useNavigate } from 'react-router-dom'
+import { useLoaderData, useNavigate, useParams } from 'react-router-dom'
 import { Box, Typography } from '@mui/material'
 import AssetTypeList from '../components/AssetTypeList'
 import type { AssetType } from '../types'
@@ -6,9 +6,15 @@ import type { AssetType } from '../types'
 export default function AssetTypesPage() {
   const assetTypes = useLoaderData() as AssetType[]
   const navigate = useNavigate()
+  const { workspaceId } = useParams()
 
   const handleAssetTypeClick = (assetType: AssetType) => {
-    navigate(`/assets/${assetType.id}`, {
+    if (!workspaceId) {
+      navigate('/')
+      return
+    }
+
+    navigate(`/workspaces/${workspaceId}/asset-types/${assetType.id}`, {
       state: { assetTypeName: assetType.name }
     })
   }

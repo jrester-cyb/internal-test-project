@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse, Divider } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, fetchAssetAttributeDefinitions } from '../api/assets'
@@ -8,6 +8,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import AttributeChoicesSection from '../components/AttributeChoicesSection'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -17,11 +18,12 @@ export default function AssetTypeAttributesPage() {
     initialNextUrl: string | null
     count: number
     assetTypeId: string
+    workspaceId: string
   }
 
   const { initialData, initialNextUrl, count } = loaderData
 
-  const { assetTypeId } = useParams()
+  const { assetTypeId, workspaceId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const listRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -37,6 +39,14 @@ export default function AssetTypeAttributesPage() {
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    info: true,
+    configuration: false
+  })
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
+  }
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingAttribute, setEditingAttribute] = useState<AssetTypeAttribute | null>(null)
@@ -218,7 +228,7 @@ export default function AssetTypeAttributesPage() {
           id: attr.id,
           order: attr.order
         }))
-        await reorderAssetTypeAttributes(assetTypeId!, updates)
+        await reorderAssetTypeAttributes(workspaceId!, assetTypeId!, updates)
       } catch (error) {
         console.error('Failed to update attribute order:', error)
         alert('Failed to update attribute order')
@@ -252,22 +262,36 @@ export default function AssetTypeAttributesPage() {
     setEditDialogOpen(true)
   }
 
+  const generateApiKey = (name: string) => {
+    return name
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(Boolean)
+      .map((word, index) =>
+        index === 0
+          ? word.toLowerCase()
+          : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      )
+      .join('')
+  }
+
   const handleSave = async () => {
     try {
       const dataToSave = editingAttribute
         ? formData
-        : { ...formData, order: count }
+        : { ...formData, order: count, apiKey: generateApiKey(formData.name) }
 
       if (editingAttribute) {
-        const updatedAttr = await updateAssetTypeAttribute(assetTypeId!, editingAttribute.id, dataToSave)
+        const updatedAttr = await updateAssetTypeAttribute(workspaceId!, assetTypeId!, editingAttribute.id, dataToSave)
         // Update existing attribute in local state
         setAllAttributes(prev => prev.map(attr =>
           attr.id === editingAttribute.id ? { ...attr, ...updatedAttr } : attr
         ))
       } else {
-        const newAttr = await createAssetTypeAttribute(assetTypeId!, dataToSave)
+        const newAttr = await createAssetTypeAttribute(workspaceId!, assetTypeId!, dataToSave)
         // Add new attribute to local state
         setAllAttributes(prev => [...prev, newAttr])
+        // Select the newly created attribute
+        setSelectedAttribute(newAttr)
       }
       setEditDialogOpen(false)
     } catch (error) {
@@ -282,13 +306,23 @@ export default function AssetTypeAttributesPage() {
     }
 
     try {
-      await deleteAssetTypeAttribute(assetTypeId!, attr.id)
+      await deleteAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
       // Remove from local state
       setAllAttributes(prev => prev.filter(a => a.id !== attr.id))
+      if (selectedAttribute?.id === attr.id) {
+        setSelectedAttribute(null)
+      }
     } catch (error) {
       console.error('Failed to delete attribute:', error)
       alert('Failed to delete attribute')
     }
+  }
+
+  const handleAttributeChoicesUpdate = (updatedAttr: AssetTypeAttribute) => {
+    setSelectedAttribute(updatedAttr)
+    setAllAttributes(prev => prev.map(attr =>
+      attr.id === updatedAttr.id ? updatedAttr : attr
+    ))
   }
 
   const getTypeColor = (type: string) => {
@@ -461,10 +495,10 @@ export default function AssetTypeAttributesPage() {
         </Box>
 
         {/* Right Column - Details Panel */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
           {selectedAttribute ? (
-            <Box>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} sx={{ flexShrink: 0, p: 2, pb: 0 }}>
                 <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   Details
                 </Typography>
@@ -522,49 +556,93 @@ export default function AssetTypeAttributesPage() {
                 </Stack>
               </Stack>
 
-              <Stack spacing={3}>
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Name</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAttribute.name}</Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">API Key</Typography>
-                  <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                    {selectedAttribute.apiKey}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Type</Typography>
-                  <Chip
-                    label={selectedAttribute.attributeType}
-                    color={getTypeColor(selectedAttribute.attributeType) as any}
-                    size="small"
-                  />
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Required</Typography>
-                  {selectedAttribute.isRequired ? (
-                    <Chip label="Required" color="error" size="small" />
-                  ) : (
-                    <Chip label="Optional" variant="outlined" size="small" />
-                  )}
-                </Box>
-
-                {selectedAttribute.description && (
+              <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2 }}>
+                <Stack spacing={1}>
+                  {/* Info Section */}
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary">Description</Typography>
-                    <Typography variant="body1">{selectedAttribute.description}</Typography>
+                    <Box
+                      onClick={() => toggleSection('info')}
+                      sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1, mx: -1, px: 1 }}
+                    >
+                      {expandedSections.info ? <ExpandLessIcon fontSize="small" color="action" /> : <ExpandMoreIcon fontSize="small" color="action" />}
+                      <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5 }}>
+                        Info
+                      </Typography>
+                    </Box>
+                    <Collapse in={expandedSections.info}>
+                      <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Box>
+                          <Typography variant="subtitle2" color="text.secondary">Name</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAttribute.name}</Typography>
+                        </Box>
+                        {selectedAttribute.description && (
+                          <Box>
+                            <Typography variant="subtitle2" color="text.secondary">Description</Typography>
+                            <Typography variant="body1">{selectedAttribute.description}</Typography>
+                          </Box>
+                        )}
+                        <Box>
+                          <Typography variant="subtitle2" color="text.secondary">Usage</Typography>
+                          <Typography variant="body1">
+                            {selectedAttribute.assetCount ?? 0} {(selectedAttribute.assetCount ?? 0) === 1 ? 'asset' : 'assets'}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Collapse>
                   </Box>
-                )}
 
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Order</Typography>
-                  <Typography variant="body1">{selectedAttribute.order}</Typography>
-                </Box>
-              </Stack>
+                  <Divider />
+
+                  {/* Configuration Section */}
+                  <Box>
+                    <Box
+                      onClick={() => toggleSection('configuration')}
+                      sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1, mx: -1, px: 1 }}
+                    >
+                      {expandedSections.configuration ? <ExpandLessIcon fontSize="small" color="action" /> : <ExpandMoreIcon fontSize="small" color="action" />}
+                      <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5 }}>
+                        Configuration
+                      </Typography>
+                    </Box>
+                    <Collapse in={expandedSections.configuration}>
+                      <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Box>
+                          <Typography variant="subtitle2" color="text.secondary">Type</Typography>
+                          <Chip
+                            label={selectedAttribute.attributeType}
+                            color={getTypeColor(selectedAttribute.attributeType) as any}
+                            size="small"
+                          />
+                        </Box>
+                        <Box>
+                          <Typography variant="subtitle2" color="text.secondary">Required</Typography>
+                          {selectedAttribute.isRequired ? (
+                            <Chip label="Required" color="error" size="small" />
+                          ) : (
+                            <Chip label="Optional" variant="outlined" size="small" />
+                          )}
+                        </Box>
+                        <Box>
+                          <Typography variant="subtitle2" color="text.secondary">API Key</Typography>
+                          <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                            {selectedAttribute.apiKey}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Collapse>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Choices Section */}
+                  <AttributeChoicesSection
+                    attribute={selectedAttribute}
+                    workspaceId={workspaceId!}
+                    assetTypeId={assetTypeId!}
+                    onAttributeUpdate={handleAttributeChoicesUpdate}
+                  />
+                </Stack>
+              </Box>
             </Box>
           ) : (
             <Box sx={{ textAlign: 'center', py: 8 }}>
@@ -589,13 +667,15 @@ export default function AssetTypeAttributesPage() {
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
-            <TextField
-              label="API Key"
-              fullWidth
-              value={formData.apiKey}
-              onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-              helperText="Used in API requests (e.g., street_name, streetName)"
-            />
+            {editingAttribute && (
+              <TextField
+                label="API Key"
+                fullWidth
+                value={formData.apiKey}
+                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                helperText="Used in API requests (e.g., street_name, streetName)"
+              />
+            )}
             <FormControl fullWidth>
               <InputLabel>Type</InputLabel>
               <Select

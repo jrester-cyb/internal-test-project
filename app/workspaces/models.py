@@ -18,15 +18,14 @@ class Workspace(SoftDeleteMixin):
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    slug = models.SlugField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta(SoftDeleteMixin.Meta):
         constraints = [
             models.UniqueConstraint(
-                fields=["organization", "slug"],
-                name="unique_organization_workspace_slug",
+                fields=["organization", "name"],
+                name="unique_organization_workspace_name",
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
