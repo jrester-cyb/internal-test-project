@@ -99,6 +99,12 @@ export async function fetchAssetTypes() {
   return response.json()
 }
 
+export async function fetchAssetsByType(assetTypeId: string) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/assets/`)
+  if (!response.ok) throw new Error('Failed to fetch assets by type')
+  return response.json()
+}
+
 export async function fetchAssetAttributeDefinitions(assetTypeId: string) {
   const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/`)
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')

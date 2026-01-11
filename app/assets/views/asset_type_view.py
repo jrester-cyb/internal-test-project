@@ -19,11 +19,20 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
     Asset types define the schema for assets with custom fields.
     """
 
-    queryset = AssetType.objects.all()
     serializer_class = AssetTypeSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+
+    def get_queryset(self):
+        """Optimize queryset based on action"""
+        queryset = AssetType.objects.all()
+        
+        # For detail view, prefetch attributes
+        if self.action == 'retrieve':
+            queryset = queryset.prefetch_related('attributes')
+        
+        return queryset
 
     def get_serializer_class(self):
         """Use summary serializer for list view"""

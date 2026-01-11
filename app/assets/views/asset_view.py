@@ -64,9 +64,12 @@ class AssetViewSet(viewsets.ModelViewSet):
             # Top-level access: return all assets
             queryset = Asset.objects.all()
 
-        # Prefetch all attribute value types and select_related for field_definition
+        # Select related for asset_type to avoid N+1 on asset_type_name
+        queryset = queryset.select_related("asset_type")
+
+        # Prefetch all attribute value types with their attribute definitions
         queryset = queryset.prefetch_related(
-            "attributes",
+            "attributes__attribute_type_attribute",  # Critical: prefetch the attribute definition
             "attributes__textattributevalue",
             "attributes__numberattributevalue",
             "attributes__booleanattributevalue",

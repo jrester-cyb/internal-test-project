@@ -70,7 +70,7 @@ class AssetAttributeSerializer(serializers.ModelSerializer):
 
 class AssetTypeSerializer(serializers.ModelSerializer):
     attributes = AssetTypeAttributeSerializer(many=True, read_only=True)
-    asset_count = serializers.IntegerField(source="assets.count", read_only=True)
+    # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
 
     class Meta:
         model = AssetType
@@ -79,7 +79,6 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "attributes",
-            "asset_count",
             "created_at",
             "updated_at",
         ]
@@ -88,8 +87,7 @@ class AssetTypeSerializer(serializers.ModelSerializer):
 
 class AssetTypeSummarySerializer(serializers.ModelSerializer):
     """Lightweight serializer without nested field definitions"""
-
-    asset_count = serializers.IntegerField(source="assets.count", read_only=True)
+    # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
 
     class Meta:
         model = AssetType
@@ -97,7 +95,6 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
-            "asset_count",
             "created_at",
             "updated_at",
         ]
