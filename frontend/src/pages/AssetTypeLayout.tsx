@@ -1,10 +1,14 @@
-import { Box, Tabs, Tab } from "@mui/material";
-import { Outlet, useLocation, useParams, Link } from "react-router-dom";
+import { Box, Tabs, Tab, Container } from "@mui/material";
+import { Outlet, useLocation, useParams, Link, useMatches } from "react-router-dom";
 
 export default function AssetTypeLayout() {
   const location = useLocation()
   const params = useParams()
+  const matches = useMatches();
+  console.log(matches);
 
+  const hideNavbar = matches.some(match => match.handle?.hideNavbar);
+  console.log("Hide Navbar:", hideNavbar);
   // Determine which tab is active based on the current path
   const currentPath = location.pathname
   let currentTab = 0
@@ -16,7 +20,7 @@ export default function AssetTypeLayout() {
   }
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+    <Container sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{
         bgcolor: 'primary.main',
         color: 'primary.contrastText',
@@ -28,7 +32,8 @@ export default function AssetTypeLayout() {
           '&.Mui-selected': {
             color: '#ffffff'
           }
-        }
+        },
+        display: hideNavbar ? 'none' : 'inherit'
       }}>
         <Tabs
           value={currentTab}
@@ -36,13 +41,13 @@ export default function AssetTypeLayout() {
           sx={{ px: 2 }}
         >
           <Tab label="About" component={Link} to={`/asset-types/${params.assetTypeId}/about`} value={0} />
-          <Tab label="List" component={Link} to={`/asset-types/${params.assetTypeId}/assets`} value={1} />
+          <Tab label="Assets" component={Link} to={`/asset-types/${params.assetTypeId}/assets`} value={1} />
         </Tabs>
       </Box>
 
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
         <Outlet />
       </Box>
-    </Box>
+    </Container >
   );
 }
