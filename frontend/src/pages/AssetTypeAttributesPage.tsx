@@ -45,13 +45,6 @@ export default function AssetTypeAttributesPage() {
     setSearchParams(params)
   }
 
-  const handlePageSizeChange = (event: any) => {
-    const params = new URLSearchParams(searchParams)
-    params.set('pageSize', event.target.value.toString())
-    params.set('page', '1') // Reset to first page when changing page size
-    setSearchParams(params)
-  }
-
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
@@ -219,18 +212,6 @@ export default function AssetTypeAttributesPage() {
             >
               Add Attribute
             </Button>
-            <FormControl size="small">
-              <Select
-                value={pageSize}
-                onChange={handlePageSizeChange}
-                sx={{ minWidth: 80 }}
-              >
-                <MenuItem value={10}>10</MenuItem>
-                <MenuItem value={25}>25</MenuItem>
-                <MenuItem value={50}>50</MenuItem>
-                <MenuItem value={100}>100</MenuItem>
-              </Select>
-            </FormControl>
             <Typography color="text.secondary">
               Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, count)} of {count}
             </Typography>
