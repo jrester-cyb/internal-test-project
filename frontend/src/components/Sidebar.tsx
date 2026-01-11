@@ -1,60 +1,64 @@
-import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon } from '@mui/icons-material'
-import { NavLink } from 'react-router-dom'
+import { useState } from 'react'
+import { Box, List, Drawer, IconButton } from '@mui/material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon } from '@mui/icons-material'
+import SidebarNavItem from './SidebarNavItem'
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean
+  onToggle: (open: boolean) => void
+}
+
+export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+  const drawerWidth = isOpen ? 240 : 64
+
   return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: 240,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: 240,
-          boxSizing: 'border-box',
-          backgroundColor: '#003162',
-          color: '#ffffff',
-          '& .MuiListItemButton-root': {
-            color: 'inherit',
-            '&:hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            },
-            '&.active': {
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-            },
+    <>
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: drawerWidth,
+          flexShrink: 0,
+          transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+            backgroundColor: '#003162',
+            color: '#ffffff',
+            transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
+            overflowX: 'hidden',
           },
-          '& .MuiListItemIcon-root': {
-            color: 'inherit',
-          },
-        },
-      }}
-    >
-      <Box sx={{ overflow: 'auto', mt: 8 }}>
-        <List>
-          <ListItem disablePadding>
-            <ListItemButton
-              component={NavLink}
+        }}
+      >
+        <Box sx={{ overflow: 'auto', mt: 8 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+            <IconButton
+              onClick={() => onToggle(!isOpen)}
+              sx={{ color: 'white' }}
+            >
+              {isOpen ? <ChevronLeftIcon /> : <MenuIcon />}
+            </IconButton>
+          </Box>
+          <List>
+            <SidebarNavItem
               to="/map"
-            >
-              <ListItemIcon>
-                <MapIcon />
-              </ListItemIcon>
-              <ListItemText primary="Map" />
-            </ListItemButton>
-          </ListItem>
-          <ListItem disablePadding>
-            <ListItemButton
-              component={NavLink}
+              icon={<MapIcon />}
+              label="Map"
+              isOpen={isOpen}
+            />
+            <SidebarNavItem
               to="/asset-types"
-            >
-              <ListItemIcon>
-                <AssetsIcon />
-              </ListItemIcon>
-              <ListItemText primary="Assets" />
-            </ListItemButton>
-          </ListItem>
-        </List>
-      </Box>
-    </Drawer>
+              icon={<AssetsIcon />}
+              label="Assets"
+              isOpen={isOpen}
+            />
+          </List>
+        </Box>
+      </Drawer>
+    </>
   )
+}
+
+export function useSidebarWidth() {
+  // This is a workaround - ideally use context
+  return 240 // Will be updated dynamically in App.tsx
 }
