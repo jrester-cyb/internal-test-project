@@ -31,7 +31,11 @@ export default function AssetTypeList({ assetTypes, onAssetTypeClick }: AssetTyp
                   hover
                   style={{ cursor: onAssetTypeClick ? 'pointer' : 'default' }}
                 >
-                  <TableCell sx={{ color: '#000 !important', fontWeight: 600 }}><Link to={`/assets/${assetType.id}`}>{assetType.name}</Link></TableCell>
+                  <TableCell sx={{ color: '#000 !important', fontWeight: 600 }}>
+                    <Link to={`/assets/${assetType.id}`}
+                      state={{
+                        breadcrumb: assetType.name
+                      }}>{assetType.name}</Link></TableCell>
                   <TableCell>{assetType.description || ''}</TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetType.id}</TableCell>
                 </TableRow>

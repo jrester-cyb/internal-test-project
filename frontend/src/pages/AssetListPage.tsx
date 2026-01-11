@@ -5,7 +5,7 @@ import { useLoaderData } from 'react-router-dom'
 
 export default function AssetListPage() {
   const data = useLoaderData() as { assets: Asset[], assetType?: any };
-  const assets = data.assets || data as Asset[]; // Handle both old and new format
+  const assets = data || data as Asset[]; // Handle both old and new format
 
   const formatCoordinates = (location: any) => {
     if (!location || !location.coordinates) {

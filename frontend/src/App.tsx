@@ -7,7 +7,7 @@ import AppBreadcrumbs from './components/AppBreadcrumbs'
 
 function App() {
   const navigation = useNavigation()
-  const isLoading = navigation.state === 'loading'
+  const isNavigating = Boolean(navigation.location);
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
@@ -19,7 +19,7 @@ function App() {
           </Typography>
           <ThemeToggle />
         </Toolbar>
-        {isLoading && <LinearProgress />}
+        {isNavigating && <LinearProgress />}
       </AppBar>
 
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: 'calc(100% - 240px)', ml: '240px', mt: 8 }}>

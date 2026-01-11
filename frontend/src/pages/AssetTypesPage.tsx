@@ -8,7 +8,9 @@ export default function AssetTypesPage() {
   const navigate = useNavigate()
 
   const handleAssetTypeClick = (assetType: AssetType) => {
-    navigate(`/assets/${assetType.id}`)
+    navigate(`/assets/${assetType.id}`, {
+      state: { assetTypeName: assetType.name }
+    })
   }
 
   return (

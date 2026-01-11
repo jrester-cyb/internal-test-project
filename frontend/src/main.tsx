@@ -15,12 +15,11 @@ function createLazyLoader(
   functionName: string,
   config?: {
     paramExtractor?: (params: Params<string>) => Params<string> | string | undefined,
-    transformer?: (data: any, extractedParams?: any) => any,
+    transformer?: (data: any, extractedParams?: any, request?: any) => any,
   }
 ) {
-  return async ({ params }: { params: any }) => {
-    const module = await import(importPath)
-
+  return async ({ params }: { params: any; request: any }) => {
+    const module = await import(importPath);
     // Extract the parameters using the provided extractor function, or pass all params
     const extractedParams = config?.paramExtractor ? config.paramExtractor(params) : params
     const data = await module[functionName](extractedParams)
@@ -32,9 +31,6 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
-    handle: {
-      crumb: () => "Home"
-    },
     children: [
       {
         index: true,
@@ -44,13 +40,13 @@ const router = createBrowserRouter([
         path: "map",
         element: <MapPage />,
         handle: {
-          crumb: () => "Map"
+          crumb: "Map"
         },
       },
       {
         path: "assets",
         handle: {
-          crumb: () => "Asset Types"
+          crumb: "Asset Types"
         },
         children: [
           {
@@ -68,12 +64,16 @@ const router = createBrowserRouter([
             path: ":assetTypeId",
             element: <AssetListPage />,
             handle: {
-              crumb: (data: any) => {
-                // If we have asset type info in data, use the name, otherwise use ID
-                if (data?.assetType?.name) {
-                  return data.assetType.name
-                }
-                return data?.assetTypeId || "Asset Type"
+              crumb: async ({ crumb, params }) => {
+                // If a breadcrumb was provided in state, use it
+                // Otherwise we wil fetch the asset type to get its name
+
+                return crumb ?? await import('./api/assets').then(async (module) => {
+                  const assetTypes = await module.fetchAssetTypes()
+                  const assetsArray = Array.isArray(assetTypes) ? assetTypes : assetTypes.results || []
+                  const assetType = assetsArray.find((at: any) => at.id === params.assetTypeId)
+                  return assetType ? assetType.name : 'Assets'
+                })
               }
             },
             loader: createLazyLoader(
@@ -81,8 +81,9 @@ const router = createBrowserRouter([
               'fetchAssetsByType',
               {
                 paramExtractor: (params) => params.assetTypeId,
-                transformer: (data) => {
-                  return Array.isArray(data) ? data : data.results || []
+                transformer: async (data) => {
+                  const assets = Array.isArray(data) ? data : data.results || []
+                  return assets;
                 }
               }
             ),
