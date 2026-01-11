@@ -115,13 +115,16 @@ export async function fetchAssetsByType(assetTypeId: string, page: number = 1, p
   return response.json()
 }
 
-export async function fetchAssetAttributeDefinitions(assetTypeId: string, page: number = 1, pageSize: number = 25) {
+export async function fetchAssetAttributeDefinitions(assetTypeId: string, page: number = 1, pageSize: number = 25, search?: string) {
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString()
   })
 
-  console.log(params);
+  if (search) {
+    params.append('search', search)
+  }
+
   const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/?${params}`)
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   return response.json()

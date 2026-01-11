@@ -1,6 +1,6 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link } from '@mui/material'
 import type { AssetType } from '../types'
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 
 interface AssetTypeListProps {
   assetTypes: AssetType[]
@@ -9,7 +9,7 @@ interface AssetTypeListProps {
 
 export default function AssetTypeList({ assetTypes, onAssetTypeClick }: AssetTypeListProps) {
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'grey.50' }}>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h5" component="h2">Asset Types</Typography>
@@ -31,11 +31,18 @@ export default function AssetTypeList({ assetTypes, onAssetTypeClick }: AssetTyp
                   hover
                   style={{ cursor: onAssetTypeClick ? 'pointer' : 'default' }}
                 >
-                  <TableCell sx={{ color: '#000 !important', fontWeight: 600 }}>
-                    <Link to={`${assetType.id}`}
+                  <TableCell>
+                    <Link
+                      component={RouterLink}
+                      to={`${assetType.id}`}
+                      underline="hover"
                       state={{
                         breadcrumb: assetType.name
-                      }}>{assetType.name}</Link></TableCell>
+                      }}
+                    >
+                      {assetType.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{assetType.description || ''}</TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetType.id}</TableCell>
                 </TableRow>

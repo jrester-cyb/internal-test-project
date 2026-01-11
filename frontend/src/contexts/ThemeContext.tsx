@@ -2,7 +2,7 @@ import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
-import { lightTheme } from '../theme'
+import { lightTheme, darkTheme } from '../theme'
 
 interface ThemeContextType {
   isDarkMode: boolean
@@ -40,7 +40,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
-      <MuiThemeProvider theme={lightTheme}>
+      <MuiThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
         <CssBaseline />
         {children}
       </MuiThemeProvider>

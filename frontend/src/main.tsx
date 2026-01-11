@@ -100,9 +100,10 @@ const router = createBrowserRouter([
                 },
                 loader: async ({ params, request }) => {
                   const url = new URL(request.url)
+                  const search = url.searchParams.get('search') || undefined
 
                   const { fetchAssetAttributeDefinitions } = await import('./api/assets')
-                  const response = await fetchAssetAttributeDefinitions(params.assetTypeId!)
+                  const response = await fetchAssetAttributeDefinitions(params.assetTypeId!, 1, 25, search)
                   const attributes = response.results || []
                   const count = response.count || 0
 

@@ -1,7 +1,7 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Pagination, Stack, Select, MenuItem, FormControl } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Pagination, Stack, Select, MenuItem, FormControl, Link } from '@mui/material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 
 export default function AssetListPage() {
   const data = useLoaderData() as { assets: Asset[], attributes?: AssetTypeAttribute[], count: number, page: number, pageSize: number };
@@ -57,7 +57,7 @@ export default function AssetListPage() {
   }
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'grey.50' }}>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h5" component="h2">Assets</Typography>
@@ -104,10 +104,10 @@ export default function AssetListPage() {
                   hover
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell sx={{ color: '#000 !important', fontWeight: 600, minWidth: '150px' }}>
+                  <TableCell sx={{ minWidth: '150px' }}>
                     <Link
-                      to={asset.id}
-                      state={{
+                      component={RouterLink}
+                      to={asset.id} underline="hover" state={{
                         ...location.state,
                         assetName: asset.name
                       }}

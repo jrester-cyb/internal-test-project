@@ -22,7 +22,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            backgroundColor: '#003162',
+            backgroundColor: 'primary.main',
             color: '#ffffff',
             transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
             overflowX: 'hidden',

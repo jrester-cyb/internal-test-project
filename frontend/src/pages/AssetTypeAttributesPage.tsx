@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
-import { useLoaderData, useParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl } from '../api/assets'
+import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, fetchAssetAttributeDefinitions } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -22,6 +22,7 @@ export default function AssetTypeAttributesPage() {
   const { initialData, initialNextUrl, count } = loaderData
 
   const { assetTypeId } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const listRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const fetchInProgressRef = useRef(false)
@@ -35,6 +36,7 @@ export default function AssetTypeAttributesPage() {
   const [leftColumnWidth, setLeftColumnWidth] = useState(50) // percentage
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingAttribute, setEditingAttribute] = useState<AssetTypeAttribute | null>(null)
@@ -46,12 +48,36 @@ export default function AssetTypeAttributesPage() {
     description: ''
   })
 
-  // Reset when loader data changes (e.g., after revalidation)
+  // Debounced search effect - just update URL, let loader handle data fetching
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      // Update URL params
+      const newSearchParams = new URLSearchParams(searchParams)
+      if (searchTerm) {
+        newSearchParams.set('search', searchTerm)
+      } else {
+        newSearchParams.delete('search')
+      }
+      setSearchParams(newSearchParams, { replace: true })
+    }, 300) // 300ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [searchTerm, assetTypeId])
+
+  // Reset to loader data when it changes
   useEffect(() => {
     setAllAttributes(initialData || [])
     setNextUrl(initialNextUrl)
     setHasMore(!!initialNextUrl)
   }, [initialData, initialNextUrl])
+
+  // Initialize search term from URL on mount only
+  useEffect(() => {
+    const initialSearch = searchParams.get('search')
+    if (initialSearch && searchTerm !== initialSearch) {
+      setSearchTerm(initialSearch)
+    }
+  }, []) // Only run on mount
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -135,6 +161,10 @@ export default function AssetTypeAttributesPage() {
   const handleDividerMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     setIsDraggingDivider(true)
+  }
+
+  const handleDividerDoubleClick = () => {
+    setLeftColumnWidth(50) // Center the divider
   }
 
   useEffect(() => {
@@ -319,10 +349,23 @@ export default function AssetTypeAttributesPage() {
   }
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'grey.50', p: 2 }}>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default', p: 2 }}>
       <Box data-resize-container sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden', mb: 2, position: 'relative' }}>
         {/* Left Column - Table */}
         <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2, width: `${leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
+          {/* Search Bar */}
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              size="small"
+              placeholder="Search attributes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ width: '100%' }}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />,
+              }}
+            />
+          </Box>
           <Box ref={containerRef} sx={{ position: 'relative', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
             <Box component={Paper} sx={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
               {/* Table Header */}
@@ -345,27 +388,40 @@ export default function AssetTypeAttributesPage() {
               </Table>
 
               {/* Virtual Scrolling List */}
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-                modifiers={[restrictToVerticalAxis]}
-              >
-                <SortableContext items={allAttributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
-                  <List
-                    ref={listRef}
-                    height={listHeight}
-                    itemCount={allAttributes.length}
-                    itemSize={53}
-                    width="100%"
-                  >
-                    {({ index, style }) => {
-                      const attr = allAttributes[index]
-                      return <SortableRow key={attr.id} attr={attr} style={style} index={index} />
-                    }}
-                  </List>
-                </SortableContext>
-              </DndContext>
+              {allAttributes.length === 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 2, p: 4 }}>
+                  <Typography variant="h6" color="text.secondary">
+                    {searchTerm ? 'No attributes found' : 'No attributes yet'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {searchTerm
+                      ? `No attributes match "${searchTerm}". Try a different search term.`
+                      : 'Click the + button to create your first attribute.'}
+                  </Typography>
+                </Box>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                  modifiers={[restrictToVerticalAxis]}
+                >
+                  <SortableContext items={allAttributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
+                    <List
+                      ref={listRef}
+                      height={listHeight}
+                      itemCount={allAttributes.length}
+                      itemSize={53}
+                      width="100%"
+                    >
+                      {({ index, style }) => {
+                        const attr = allAttributes[index]
+                        return <SortableRow key={attr.id} attr={attr} style={style} index={index} />
+                      }}
+                    </List>
+                  </SortableContext>
+                </DndContext>
+              )}
             </Box>
 
             {isLoadingMore && (
@@ -379,6 +435,7 @@ export default function AssetTypeAttributesPage() {
         {/* Resizable Divider */}
         <Box
           onMouseDown={handleDividerMouseDown}
+          onDoubleClick={handleDividerDoubleClick}
           sx={{
             width: '8px',
             cursor: 'col-resize',

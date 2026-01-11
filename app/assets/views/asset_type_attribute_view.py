@@ -25,8 +25,13 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = AssetTypeAttributeSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
     filterset_fields = ["asset_type", "attribute_type", "is_required"]
+    search_fields = ["^name", "^api_key", "description"]
     ordering_fields = ["order", "name", "created_at"]
 
     LOOKUP_MAP = {

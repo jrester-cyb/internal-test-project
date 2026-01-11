@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { Outlet, useNavigation } from 'react-router-dom'
 import { AppBar, Toolbar, Box, Typography, CircularProgress, LinearProgress } from '@mui/material'
 import Sidebar from './components/Sidebar'
@@ -8,13 +8,24 @@ import AppBreadcrumbs from './components/AppBreadcrumbs'
 function App() {
   const navigation = useNavigation()
   const isNavigating = Boolean(navigation.location);
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // Initialize sidebar state from localStorage or default to true
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const stored = localStorage.getItem('sidebarOpen')
+    return stored !== null ? JSON.parse(stored) : true
+  })
+
   const sidebarWidth = sidebarOpen ? 240 : 64
+
+  // Save sidebar state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
+  }, [sidebarOpen])
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
       <Sidebar isOpen={sidebarOpen} onToggle={setSidebarOpen} />
-      <AppBar position="fixed" sx={{ zIndex: 1301, boxShadow: 'none' }}>
+      <AppBar position="fixed" color="primary" elevation={0} sx={{ zIndex: 1301 }}>
         <Toolbar>
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Asset Visualizer
