@@ -20,7 +20,7 @@ export default function AssetTypeLayout() {
   }
 
   return (
-    <Container sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+    <Container maxWidth={false} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box sx={{
         bgcolor: 'primary.main',
         color: 'primary.contrastText',
@@ -46,7 +46,7 @@ export default function AssetTypeLayout() {
         </Tabs>
       </Box>
 
-      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Outlet />
       </Box>
     </Container >

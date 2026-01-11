@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
-import { useLoaderData, useParams, useRevalidator } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitions, fetchAssetAttributeDefinitionsFromUrl } from '../api/assets'
+import { useLoaderData, useParams } from 'react-router-dom'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import { FixedSizeList as List } from 'react-window'
 
 export default function AssetTypeAttributesPage() {
   const loaderData = useLoaderData() as {
@@ -21,14 +22,19 @@ export default function AssetTypeAttributesPage() {
   const { initialData, initialNextUrl, count } = loaderData
 
   const { assetTypeId } = useParams()
-  const revalidator = useRevalidator()
-  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<any>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const fetchInProgressRef = useRef(false)
 
   const [allAttributes, setAllAttributes] = useState(initialData || [])
   const [nextUrl, setNextUrl] = useState<string | null>(initialNextUrl)
+  const [listHeight, setListHeight] = useState(600)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(!!initialNextUrl)
+  const [selectedAttribute, setSelectedAttribute] = useState<AssetTypeAttribute | null>(null)
+  const [leftColumnWidth, setLeftColumnWidth] = useState(50) // percentage
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false)
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingAttribute, setEditingAttribute] = useState<AssetTypeAttribute | null>(null)
@@ -56,8 +62,8 @@ export default function AssetTypeAttributesPage() {
 
   // Infinite scroll handler
   useEffect(() => {
-    const handleScroll = async () => {
-      const container = tableContainerRef.current
+    const handleScroll = async (e: Event) => {
+      const container = e.target as HTMLDivElement
       if (!container || fetchInProgressRef.current || !hasMore || !nextUrl || allAttributes.length >= count) return
 
       const { scrollTop, scrollHeight, clientHeight } = container
@@ -96,12 +102,68 @@ export default function AssetTypeAttributesPage() {
       }
     }
 
-    const container = tableContainerRef.current
-    if (container) {
-      container.addEventListener('scroll', handleScroll)
-      return () => container.removeEventListener('scroll', handleScroll)
+    const list = listRef.current
+    if (list) {
+      const container = list._outerRef
+      if (container) {
+        container.addEventListener('scroll', handleScroll)
+        return () => container.removeEventListener('scroll', handleScroll)
+      }
     }
   }, [assetTypeId, nextUrl, isLoadingMore, hasMore, allAttributes.length, count])
+
+  // Update list height when container size changes
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const updateHeight = () => {
+      const rect = container.getBoundingClientRect()
+      if (rect.height > 0) {
+        setListHeight(rect.height)
+      }
+    }
+
+    updateHeight()
+
+    const resizeObserver = new ResizeObserver(updateHeight)
+    resizeObserver.observe(container)
+
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  const handleDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDraggingDivider(true)
+  }
+
+  useEffect(() => {
+    if (!isDraggingDivider) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = document.querySelector('[data-resize-container]') as HTMLElement
+      if (!container) return
+
+      const rect = container.getBoundingClientRect()
+      const newWidth = ((e.clientX - rect.left) / rect.width) * 100
+
+      // Constrain between 20% and 80%
+      const constrainedWidth = Math.min(Math.max(newWidth, 20), 80)
+      setLeftColumnWidth(constrainedWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsDraggingDivider(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDraggingDivider])
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
@@ -211,7 +273,7 @@ export default function AssetTypeAttributesPage() {
     return colors[type] || 'default'
   }
 
-  function SortableRow({ attr }: { attr: AssetTypeAttribute }) {
+  function SortableRow({ attr, style: virtualStyle, index }: { attr: AssetTypeAttribute, style: React.CSSProperties, index: number }) {
     const {
       attributes: dndAttributes,
       listeners,
@@ -221,126 +283,243 @@ export default function AssetTypeAttributesPage() {
       isDragging,
     } = useSortable({ id: attr.id })
 
-    const style = {
+    const combinedStyle: React.CSSProperties = {
+      ...virtualStyle,
       transform: CSS.Transform.toString(transform),
       transition,
       opacity: isDragging ? 0.5 : 1,
     }
 
+    const isSelected = selectedAttribute?.id === attr.id
+
     return (
-      <TableRow ref={setNodeRef} style={style} hover>
-        <TableCell sx={{ minWidth: '40px', padding: '8px' }}>
-          <IconButton size="small" {...dndAttributes} {...listeners} sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' } }}>
-            <DragIndicatorIcon fontSize="small" />
-          </IconButton>
-        </TableCell>
-        <TableCell sx={{ fontWeight: 600, minWidth: '150px' }}>{attr.name}</TableCell>
-        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem', minWidth: '150px' }}>{attr.apiKey}</TableCell>
-        <TableCell sx={{ minWidth: '100px' }}>
-          <Chip
-            label={attr.attributeType}
-            color={getTypeColor(attr.attributeType) as any}
-            size="small"
-          />
-        </TableCell>
-        <TableCell sx={{ minWidth: '100px' }}>
-          {attr.isRequired ? (
-            <Chip label="Required" color="error" size="small" />
-          ) : (
-            <Chip label="Optional" variant="outlined" size="small" />
-          )}
-        </TableCell>
-        <TableCell sx={{ maxWidth: '300px', minWidth: '200px' }}>{attr.description || '-'}</TableCell>
-        <TableCell sx={{ minWidth: '100px' }}>
-          <Stack direction="row" spacing={1}>
-            <IconButton size="small" color="primary" onClick={() => handleEdit(attr)}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-            <IconButton size="small" color="error" onClick={() => handleDelete(attr)}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-        </TableCell>
-      </TableRow>
+      <Box
+        component={Table}
+        ref={setNodeRef}
+        style={combinedStyle}
+        sx={{ tableLayout: 'fixed', cursor: 'pointer' }}
+        onClick={() => setSelectedAttribute(attr)}
+      >
+        <TableBody>
+          <TableRow
+            hover
+            selected={isSelected}
+          >
+            <TableCell sx={{ minWidth: '40px', padding: '8px', width: '40px' }}>
+              <IconButton size="small" {...dndAttributes} {...listeners} sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' } }}>
+                <DragIndicatorIcon fontSize="small" />
+              </IconButton>
+            </TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>{attr.name}</TableCell>
+            <TableCell sx={{ width: '48px' }}></TableCell>
+          </TableRow>
+        </TableBody>
+      </Box>
     )
   }
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'grey.50' }}>
-      <Box
-        sx={{ flexGrow: 1, overflowY: 'hidden', p: 3 }}
-      >
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h5" component="h2">Attributes</Typography>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              color="primary"
-              onClick={handleAdd}
-            >
-              Add Attribute
-            </Button>
-            <Typography color="text.secondary">
-              Showing {allAttributes.length} of {count}
-            </Typography>
-          </Stack>
-        </Stack>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'grey.50', p: 2 }}>
+      <Box data-resize-container sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden', mb: 2, position: 'relative' }}>
+        {/* Left Column - Table */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2, width: `${leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
+          <Box ref={containerRef} sx={{ position: 'relative', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+            <Box component={Paper} sx={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
+              {/* Table Header */}
+              <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600, width: '40px' }}></TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600, width: '48px', textAlign: 'right', pr: 1 }}>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={handleAdd}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+              </Table>
 
-        <TableContainer ref={tableContainerRef} component={Paper} sx={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }}>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-            modifiers={[restrictToVerticalAxis]}
-          >
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, width: '40px', minWidth: '40px' }}></TableCell>
-                  <TableCell sx={{ fontWeight: 600, minWidth: '150px' }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600, minWidth: '150px' }}>API Key</TableCell>
-                  <TableCell sx={{ fontWeight: 600, minWidth: '100px' }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600, minWidth: '100px' }}>Required</TableCell>
-                  <TableCell sx={{ fontWeight: 600, minWidth: '200px' }}>Description</TableCell>
-                  <TableCell sx={{ fontWeight: 600, width: '100px', minWidth: '100px' }}>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+              {/* Virtual Scrolling List */}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+                modifiers={[restrictToVerticalAxis]}
+              >
                 <SortableContext items={allAttributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
-                  {allAttributes.map(attr => (
-                    <SortableRow key={attr.id} attr={attr} />
-                  ))}
+                  <List
+                    ref={listRef}
+                    height={listHeight}
+                    itemCount={allAttributes.length}
+                    itemSize={53}
+                    width="100%"
+                  >
+                    {({ index, style }) => {
+                      const attr = allAttributes[index]
+                      return <SortableRow key={attr.id} attr={attr} style={style} index={index} />
+                    }}
+                  </List>
                 </SortableContext>
-              </TableBody>
-            </Table>
-          </DndContext>
-        </TableContainer>
+              </DndContext>
+            </Box>
 
-        {isLoadingMore && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={24} />
+            {isLoadingMore && (
+              <Box sx={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 1 }}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
           </Box>
-        )}
+        </Box>
 
-        {count === 0 && (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography color="text.secondary" gutterBottom>
-              No attributes configured
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Add attributes to define the fields for this asset type
-            </Typography>
-          </Box>
-        )}
+        {/* Resizable Divider */}
+        <Box
+          onMouseDown={handleDividerMouseDown}
+          sx={{
+            width: '8px',
+            cursor: 'col-resize',
+            bgcolor: isDraggingDivider ? 'primary.main' : 'transparent',
+            '&:hover': { bgcolor: 'primary.light' },
+            transition: 'background-color 0.2s',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Box
+            sx={{
+              width: '3px',
+              height: '40px',
+              borderLeft: '1px solid',
+              borderRight: '1px solid',
+              borderColor: 'grey.400',
+              opacity: isDraggingDivider ? 0 : 1,
+            }}
+          />
+        </Box>
 
-        {count > 0 && allAttributes.length === 0 && (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography color="text.secondary">
-              No attributes found
-            </Typography>
-          </Box>
-        )}
+        {/* Right Column - Details Panel */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+          {selectedAttribute ? (
+            <Box>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+                <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  Details
+                </Typography>
+                <Stack direction="row" sx={{ overflow: 'hidden', alignItems: 'center' }}>
+                  <Collapse in={leftColumnWidth <= 65} orientation="horizontal" timeout={250}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<EditIcon />}
+                      onClick={() => handleEdit(selectedAttribute)}
+                      sx={{ whiteSpace: 'nowrap', mr: 1 }}
+                    >
+                      Edit
+                    </Button>
+                  </Collapse>
+                  <Collapse in={leftColumnWidth <= 50} orientation="horizontal" timeout={250}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => handleDelete(selectedAttribute)}
+                      sx={{ whiteSpace: 'nowrap', mr: 1 }}
+                    >
+                      Delete
+                    </Button>
+                  </Collapse>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => setMenuAnchorEl(e.currentTarget)}
+                    sx={{
+                      opacity: leftColumnWidth > 50 ? 1 : 0,
+                      pointerEvents: leftColumnWidth > 50 ? 'auto' : 'none',
+                      transition: 'opacity 150ms',
+                      transitionDelay: leftColumnWidth > 50 ? '105ms' : '0ms',
+                    }}
+                  >
+                    <MoreVertIcon />
+                  </IconButton>
+                  <Menu
+                    anchorEl={menuAnchorEl}
+                    open={Boolean(menuAnchorEl)}
+                    onClose={() => setMenuAnchorEl(null)}
+                  >
+                    {leftColumnWidth > 65 && (
+                      <MenuItem onClick={() => { handleEdit(selectedAttribute); setMenuAnchorEl(null); }}>
+                        <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
+                      </MenuItem>
+                    )}
+                    <MenuItem onClick={() => { handleDelete(selectedAttribute); setMenuAnchorEl(null); }}>
+                      <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
+                    </MenuItem>
+                  </Menu>
+                </Stack>
+              </Stack>
+
+              <Stack spacing={3}>
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">Name</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAttribute.name}</Typography>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">API Key</Typography>
+                  <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                    {selectedAttribute.apiKey}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">Type</Typography>
+                  <Chip
+                    label={selectedAttribute.attributeType}
+                    color={getTypeColor(selectedAttribute.attributeType) as any}
+                    size="small"
+                  />
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">Required</Typography>
+                  {selectedAttribute.isRequired ? (
+                    <Chip label="Required" color="error" size="small" />
+                  ) : (
+                    <Chip label="Optional" variant="outlined" size="small" />
+                  )}
+                </Box>
+
+                {selectedAttribute.description && (
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">Description</Typography>
+                    <Typography variant="body1">{selectedAttribute.description}</Typography>
+                  </Box>
+                )}
+
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">Order</Typography>
+                  <Typography variant="body1">{selectedAttribute.order}</Typography>
+                </Box>
+              </Stack>
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Typography color="text.secondary" variant="h6" gutterBottom>
+                Select an attribute
+              </Typography>
+              <Typography color="text.secondary" variant="body2">
+                Click on an attribute in the table to view its details
+              </Typography>
+            </Box>
+          )}
+        </Box>
       </Box>
 
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
