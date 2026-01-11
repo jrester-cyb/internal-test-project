@@ -11,6 +11,7 @@ const AssetListPage = lazy(() => import('./pages/AssetListPage.tsx'))
 const AssetDetailPage = lazy(() => import('./pages/AssetDetailPage.tsx'))
 const AssetTypeLayout = lazy(() => import('./pages/AssetTypeLayout.tsx'))
 const AssetTypeAboutPage = lazy(() => import('./pages/AssetTypeAboutPage.tsx'))
+const AssetTypeAttributesPage = lazy(() => import('./pages/AssetTypeAttributesPage.tsx'))
 
 // Generic lazy loader wrapper
 function createLazyLoader(
@@ -92,6 +93,25 @@ const router = createBrowserRouter([
                 }
               },
               {
+                path: "attributes",
+                element: <AssetTypeAttributesPage />,
+                handle: {
+                  crumb: "Attributes"
+                },
+                loader: async ({ params, request }) => {
+                  const url = new URL(request.url)
+                  const page = parseInt(url.searchParams.get('page') || '1')
+                  const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
+
+                  const { fetchAssetAttributeDefinitions } = await import('./api/assets')
+                  const response = await fetchAssetAttributeDefinitions(params.assetTypeId!, page, pageSize)
+                  const attributes = response.results || []
+                  const count = response.count || 0
+
+                  return { attributes, count, page, pageSize }
+                },
+              },
+              {
                 path: 'assets',
                 handle: {
                   crumb: "Assets"
@@ -105,16 +125,15 @@ const router = createBrowserRouter([
                       const page = parseInt(url.searchParams.get('page') || '1')
                       const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
 
-                      const { fetchAssetsByType, fetchAssetAttributeDefinitions } = await import('./api/assets')
+                      const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
 
                       // Fetch paginated assets
                       const response = await fetchAssetsByType(params.assetTypeId!, page, pageSize)
                       const assets = response.results || []
                       const count = response.count || 0
 
-                      // Fetch asset type attributes
-                      const attributeDefs = await fetchAssetAttributeDefinitions(params.assetTypeId!)
-                      const attributes = Array.isArray(attributeDefs) ? attributeDefs : attributeDefs.results || []
+                      // Fetch ALL asset type attributes (not paginated) to show all columns
+                      const attributes = await fetchAllAssetAttributeDefinitions(params.assetTypeId!)
 
                       return { assets, attributes, count, page, pageSize };
                     },

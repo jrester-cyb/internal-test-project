@@ -17,6 +17,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # Resource limits matching AWS RDS t3.micro instance
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
   redis:
     image: 151885604979.dkr.ecr.us-east-1.amazonaws.com/cybiricalubuntu_redis:7.4.7
     ports:

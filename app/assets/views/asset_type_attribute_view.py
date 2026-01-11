@@ -1,17 +1,12 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from ..models import AssetTypeAttribute, Asset
+from ..models import (
+    AssetTypeAttribute,
+)
 from ..serializers import AssetTypeAttributeSerializer
-
-
-class AttributeValuesPagination(PageNumberPagination):
-    page_size = 100
-    page_size_query_param = "page_size"
-    max_page_size = 1000
 
 
 @extend_schema_view(
@@ -52,6 +47,116 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Automatically set the asset_type when creating"""
         serializer.save(asset_type_id=self.kwargs["assettype_pk"])
+
+    def perform_update(self, serializer):
+        """Ensure asset_type remains set when updating"""
+        serializer.save(asset_type_id=self.kwargs["assettype_pk"])
+
+    def perform_destroy(self, instance):
+        """Optimize deletion by using raw SQL and polymorphic_ctype to target specific tables"""
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            # Find which polymorphic types are actually used and get their table names
+            # Join with django_content_type to get the model name directly
+            cursor.execute(
+                """
+                SELECT DISTINCT ct.model, ct.id
+                FROM assets_baseattributevalue bav
+                JOIN django_content_type ct ON bav.polymorphic_ctype_id = ct.id
+                WHERE bav.attribute_type_attribute_id = %s
+                """,
+                [str(instance.id)],
+            )
+
+            # Delete from each child table that has data
+            for model_name, ctype_id in cursor.fetchall():
+                # Table name follows pattern: assets_{model_name}
+                table_name = f"assets_{model_name}"
+                cursor.execute(
+                    f"""
+                    DELETE FROM {table_name} 
+                    WHERE baseattributevalue_ptr_id IN (
+                        SELECT id FROM assets_baseattributevalue 
+                        WHERE attribute_type_attribute_id = %s AND polymorphic_ctype_id = %s
+                    )
+                    """,
+                    [str(instance.id), ctype_id],
+                )
+
+            # Now delete from the base table
+            cursor.execute(
+                "DELETE FROM assets_baseattributevalue WHERE attribute_type_attribute_id = %s",
+                [str(instance.id)],
+            )
+
+        # Finally, delete the attribute definition itself
+        instance.delete()
+
+    @extend_schema(
+        tags=["Asset Type Attributes"],
+        summary="Bulk update attribute order",
+        description="Updates the order field for multiple attributes at once",
+        request={
+            "application/json": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "order": {"type": "integer"},
+                    },
+                    "required": ["id", "order"],
+                },
+            }
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="reorder")
+    def reorder(self, request, assettype_pk=None):
+        """Bulk update attribute order"""
+        from django.db import connection, transaction
+
+        if not isinstance(request.data, list):
+            return Response(
+                {"error": "Expected a list of updates"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        updates = request.data
+        attribute_ids = [update["id"] for update in updates]
+
+        # Validate all updates belong to this asset type
+        attributes = AssetTypeAttribute.objects.filter(
+            id__in=attribute_ids, asset_type_id=assettype_pk
+        )
+
+        if attributes.count() != len(attribute_ids):
+            return Response(
+                {
+                    "error": "One or more attributes not found or don't belong to this asset type"
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Update all orders using bulk_update in two steps to avoid unique constraint violations
+        # Step 1: Set all to negative temporary values
+        # Step 2: Set to final values
+        with transaction.atomic():
+            # Step 1: Set to negative temporary values
+            objects_to_update = [
+                AssetTypeAttribute(id=update["id"], order=-i)
+                for i, update in enumerate(updates, 1)
+            ]
+            AssetTypeAttribute.objects.bulk_update(objects_to_update, ["order"])
+
+            # Step 2: Set to final order values
+            objects_to_update = [
+                AssetTypeAttribute(id=update["id"], order=update["order"])
+                for update in updates
+            ]
+            AssetTypeAttribute.objects.bulk_update(objects_to_update, ["order"])
+
+        return Response({"success": True}, status=status.HTTP_200_OK)
 
     @extend_schema(
         tags=["Asset Type Attributes"],

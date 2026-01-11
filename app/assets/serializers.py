@@ -30,7 +30,7 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):

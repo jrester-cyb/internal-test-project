@@ -115,10 +115,26 @@ export async function fetchAssetsByType(assetTypeId: string, page: number = 1, p
   return response.json()
 }
 
-export async function fetchAssetAttributeDefinitions(assetTypeId: string) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/`)
+export async function fetchAssetAttributeDefinitions(assetTypeId: string, page: number = 1, pageSize: number = 25) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString()
+  })
+
+  console.log(params);
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/?${params}`)
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   return response.json()
+}
+
+export async function fetchAllAssetAttributeDefinitions(assetTypeId: string) {
+  const params = new URLSearchParams({
+    page_size: '1000' // Fetch all attributes
+  })
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/?${params}`)
+  if (!response.ok) throw new Error('Failed to fetch attribute definitions')
+  const data = await response.json()
+  return data.results || []
 }
 
 export async function fetchAttributeValues(assetTypeId: string, attributeDefinitionId: string) {
@@ -127,4 +143,48 @@ export async function fetchAttributeValues(assetTypeId: string, attributeDefinit
   const data = await response.json()
   // Return the values array directly (no longer wrapped in {value, type} objects)
   return data.results || []
+}
+
+export async function updateAssetTypeAttribute(assetTypeId: string, attributeId: string, data: any) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/${attributeId}/`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) throw new Error('Failed to update attribute')
+  return response.json()
+}
+
+export async function deleteAssetTypeAttribute(assetTypeId: string, attributeId: string) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/${attributeId}/`, {
+    method: 'DELETE'
+  })
+  if (!response.ok) throw new Error('Failed to delete attribute')
+  return response.ok
+}
+
+export async function createAssetTypeAttribute(assetTypeId: string, data: any) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) throw new Error('Failed to create attribute')
+  return response.json()
+}
+
+export async function reorderAssetTypeAttributes(assetTypeId: string, updates: Array<{id: string, order: number}>) {
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/attributes/reorder/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  })
+  if (!response.ok) throw new Error('Failed to reorder attributes')
+  return response.json()
 }

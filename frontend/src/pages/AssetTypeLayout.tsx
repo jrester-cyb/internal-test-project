@@ -15,6 +15,8 @@ export default function AssetTypeLayout() {
     currentTab = 0
   } else if (currentPath.includes('/assets') || params.assetId) {
     currentTab = 1
+  } else if (currentPath.includes('/attributes')) {
+    currentTab = 2
   }
 
   return (
@@ -40,6 +42,7 @@ export default function AssetTypeLayout() {
         >
           <Tab label="About" component={Link} to={`/asset-types/${params.assetTypeId}/about`} value={0} />
           <Tab label="Assets" component={Link} to={`/asset-types/${params.assetTypeId}/assets`} value={1} />
+          <Tab label="Attributes" component={Link} to={`/asset-types/${params.assetTypeId}/attributes`} value={2} />
         </Tabs>
       </Box>
 
