@@ -25,8 +25,10 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
     ordering_fields = ["name", "created_at"]
 
     def get_queryset(self):
-        """Optimize queryset based on action"""
-        queryset = AssetType.objects.all()
+        """Filter by workspace and optimize queryset based on action"""
+        queryset = AssetType.objects.filter(
+            workspace_id=self.kwargs.get("workspace_pk")
+        )
 
         # For detail view, prefetch attributes
         if self.action == "retrieve":
@@ -39,3 +41,7 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             return AssetTypeSummarySerializer
         return AssetTypeSerializer
+
+    def perform_create(self, serializer):
+        """Automatically set the workspace when creating"""
+        serializer.save(workspace_id=self.kwargs["workspace_pk"])

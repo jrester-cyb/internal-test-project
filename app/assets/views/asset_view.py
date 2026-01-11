@@ -58,10 +58,19 @@ class AssetViewSet(viewsets.ModelViewSet):
     ordering_fields = ["name", "created_at"]
 
     def get_queryset(self):
-        """Filter assets by parent asset type (if nested) and optionally by attributes"""
-        # If accessed via nested route, filter by asset type
+        """Filter assets by workspace, parent asset type (if nested) and optionally by attributes"""
+        # Start with workspace filter
+        workspace_pk = self.kwargs.get("workspace_pk")
+
+        # If accessed via nested route under asset type, filter by asset type
         if "assettype_pk" in self.kwargs:
-            queryset = Asset.objects.filter(asset_type_id=self.kwargs["assettype_pk"])
+            queryset = Asset.objects.filter(
+                asset_type_id=self.kwargs["assettype_pk"],
+                asset_type__workspace_id=workspace_pk,
+            )
+        elif workspace_pk:
+            # Filter by workspace
+            queryset = Asset.objects.filter(asset_type__workspace_id=workspace_pk)
         else:
             # Top-level access: return all assets
             queryset = Asset.objects.all()
@@ -71,7 +80,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
         # Prefetch all attribute value types with their attribute definitions
         queryset = queryset.prefetch_related(
-            "attributes__attribute_type_attribute",  # Critical: prefetch the attribute definition
+            "attributes__asset_type_attribute",  # Critical: prefetch the attribute definition
             "attributes__textattributevalue",
             "attributes__numberattributevalue",
             "attributes__booleanattributevalue",
