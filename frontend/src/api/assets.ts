@@ -241,3 +241,15 @@ export async function deleteAssetTypeAttributeChoice(workspaceId: string, assetT
   if (!response.ok) throw new Error('Failed to delete choice')
   return response.ok
 }
+
+export async function reorderAssetTypeAttributeChoices(workspaceId: string, assetTypeId: string, attributeId: string, updates: Array<{id: string, order: number}>) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/reorder/`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  })
+  if (!response.ok) throw new Error('Failed to reorder choices')
+  return response.json()
+}

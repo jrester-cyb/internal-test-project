@@ -556,8 +556,8 @@ export default function AssetTypeAttributesPage() {
                 </Stack>
               </Stack>
 
-              <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2 }}>
-                <Stack spacing={1}>
+              <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <Stack spacing={1} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                   {/* Info Section */}
                   <Box>
                     <Box

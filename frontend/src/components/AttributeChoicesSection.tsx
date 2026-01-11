@@ -10,16 +10,18 @@ import {
   DialogActions,
   TextField,
   Button,
-  IconButton
+  IconButton,
+  CircularProgress
 } from '@mui/material'
 import {
   Add as AddIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material'
 import type { AssetTypeAttribute, AssetTypeAttributeChoice } from '../types'
-import { createAssetTypeAttributeChoice, deleteAssetTypeAttributeChoice, fetchAssetTypeAttributeChoices } from '../api/assets'
-import SimpleTable, { type Column } from './SimpleTable'
+import { createAssetTypeAttributeChoice, deleteAssetTypeAttributeChoice, fetchAssetTypeAttributeChoices, reorderAssetTypeAttributeChoices } from '../api/assets'
+import SimpleTable, { type ColumnDef } from './SimpleTable'
 
 interface AttributeChoicesSectionProps {
   attribute: AssetTypeAttribute
@@ -103,11 +105,30 @@ export default function AttributeChoicesSection({
     }
   }
 
-  const columns: Column<AssetTypeAttributeChoice>[] = useMemo(() => [
+  const handleReorder = async (reorderedChoices: AssetTypeAttributeChoice[]) => {
+    // Optimistically update UI
+    setChoices(reorderedChoices)
+
+    // Build updates array with new order values
+    const updates = reorderedChoices.map((choice, index) => ({
+      id: choice.id,
+      order: index
+    }))
+
+    try {
+      await reorderAssetTypeAttributeChoices(workspaceId, assetTypeId, attribute.id, updates)
+    } catch (error) {
+      console.error('Failed to reorder choices:', error)
+      // Reload choices on error
+      loadChoices()
+    }
+  }
+
+  const columns: ColumnDef<AssetTypeAttributeChoice>[] = useMemo(() => [
     {
       key: 'label',
       header: 'Label',
-      render: (choice) => (
+      render: (choice: AssetTypeAttributeChoice) => (
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
           {choice.label}
         </Typography>
@@ -116,17 +137,33 @@ export default function AttributeChoicesSection({
     {
       key: 'value',
       header: 'Value',
-      render: (choice) => (
+      render: (choice: AssetTypeAttributeChoice) => (
         <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
           {String(choice.value)}
         </Typography>
       )
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: 48,
+      render: (choice: AssetTypeAttributeChoice) => (
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDeleteChoice(choice)
+          }}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      )
     }
-  ], [])
+  ], [handleDeleteChoice])
 
   return (
     <>
-      <Box>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <Box
           onClick={() => setExpanded(!expanded)}
           sx={{
@@ -159,15 +196,19 @@ export default function AttributeChoicesSection({
           </IconButton>
         </Box>
         <Collapse in={expanded}>
-          <Box sx={{ mt: 1 }}>
-            <SimpleTable
-              items={choices}
-              columns={columns}
-              loading={loading}
-              emptyMessage="No choices defined"
-              onDelete={handleDeleteChoice}
-              maxHeight={200}
-            />
+          <Box sx={{ mt: 1, height: 300 }}>
+            {loading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <SimpleTable
+                items={choices}
+                columns={columns}
+                emptyMessage="No choices defined"
+                onReorder={handleReorder}
+              />
+            )}
           </Box>
         </Collapse>
       </Box>
