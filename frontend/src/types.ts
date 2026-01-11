@@ -24,6 +24,10 @@ export interface Asset {
     type: string
     coordinates: number[]
   }
+  location?: {
+    type: string
+    coordinates: number[]
+  }
   attributes?: Record<string, any>
 }
 

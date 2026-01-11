@@ -7,10 +7,17 @@ export default function AssetListPage() {
   const data = useLoaderData() as { assets: Asset[], assetType?: any };
   const assets = data.assets || data as Asset[]; // Handle both old and new format
 
-  const formatCoordinates = (coordinates: number[]) => {
-    if (coordinates.length >= 2) {
-      return `${coordinates[1].toFixed(6)}, ${coordinates[0].toFixed(6)}`
+  const formatCoordinates = (location: any) => {
+    if (!location || !location.coordinates) {
+      return 'N/A'
     }
+
+    const coords = location.coordinates
+    // Location is always a Point: [lng, lat]
+    if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
+      return `${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}`
+    }
+
     return 'N/A'
   }
 
@@ -61,7 +68,7 @@ export default function AssetListPage() {
                     />
                   </TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                    {formatCoordinates(asset.geometry?.coordinates || [])}
+                    {formatCoordinates(asset.location)}
                   </TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                     {asset.h3Index || 'N/A'}
