@@ -100,17 +100,24 @@ const router = createBrowserRouter([
                   {
                     index: true,
                     element: <AssetListPage />,
-                    loader: createLazyLoader(
-                      './api/assets',
-                      'fetchAssetsByType',
-                      {
-                        paramExtractor: (params) => params.assetTypeId,
-                        transformer: async (data) => {
-                          const assets = Array.isArray(data) ? data : data.results || []
-                          return { assets };
-                        }
-                      }
-                    ),
+                    loader: async ({ params, request }) => {
+                      const url = new URL(request.url)
+                      const page = parseInt(url.searchParams.get('page') || '1')
+                      const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
+
+                      const { fetchAssetsByType, fetchAssetAttributeDefinitions } = await import('./api/assets')
+
+                      // Fetch paginated assets
+                      const response = await fetchAssetsByType(params.assetTypeId!, page, pageSize)
+                      const assets = response.results || []
+                      const count = response.count || 0
+
+                      // Fetch asset type attributes
+                      const attributeDefs = await fetchAssetAttributeDefinitions(params.assetTypeId!)
+                      const attributes = Array.isArray(attributeDefs) ? attributeDefs : attributeDefs.results || []
+
+                      return { assets, attributes, count, page, pageSize };
+                    },
                   },
                   {
                     path: ":assetId",

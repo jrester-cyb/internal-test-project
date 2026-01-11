@@ -105,8 +105,12 @@ export async function fetchAssetTypes() {
   return response.json()
 }
 
-export async function fetchAssetsByType(assetTypeId: string) {
-  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/assets/`)
+export async function fetchAssetsByType(assetTypeId: string, page: number = 1, pageSize: number = 25) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString()
+  })
+  const response = await fetch(`${API_BASE}/asset-types/${assetTypeId}/assets/?${params}`)
   if (!response.ok) throw new Error('Failed to fetch assets by type')
   return response.json()
 }

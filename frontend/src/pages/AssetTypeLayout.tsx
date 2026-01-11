@@ -5,10 +5,8 @@ export default function AssetTypeLayout() {
   const location = useLocation()
   const params = useParams()
   const matches = useMatches();
-  console.log(matches);
 
   const hideNavbar = matches.some(match => match.handle?.hideNavbar);
-  console.log("Hide Navbar:", hideNavbar);
   // Determine which tab is active based on the current path
   const currentPath = location.pathname
   let currentTab = 0
