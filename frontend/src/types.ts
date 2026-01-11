@@ -17,9 +17,9 @@ export interface AssetTypeAttribute {
   id: string
   name: string
   apiKey: string
-  attribute_type: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json'
-  is_required: boolean
-  default_value?: any
+  attributeType: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json'
+  isRequired: boolean
+  defaultValue?: any
   description?: string
   order: number
   assetCount?: number

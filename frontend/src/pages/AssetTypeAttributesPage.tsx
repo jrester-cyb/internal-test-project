@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse, Divider } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, fetchAssetAttributeDefinitions } from '../api/assets'
@@ -92,8 +92,13 @@ export default function AssetTypeAttributesPage() {
     apiKey: '',
     attributeType: 'text',
     isRequired: false,
-    description: ''
+    description: '',
+    defaultValue: undefined as any
   })
+  const [isApiKeyUnlocked, setIsApiKeyUnlocked] = useState(false)
+  const [isApiKeyManuallyEdited, setIsApiKeyManuallyEdited] = useState(false)
+  const [typeChangeDialogOpen, setTypeChangeDialogOpen] = useState(false)
+  const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
 
   // Debounced search effect - just update URL, let loader handle data fetching
   useEffect(() => {
@@ -282,8 +287,10 @@ export default function AssetTypeAttributesPage() {
       apiKey: attr.apiKey,
       attributeType: attr.attributeType,
       isRequired: attr.isRequired,
-      description: attr.description || ''
+      description: attr.description || '',
+      defaultValue: attr.defaultValue
     })
+    setIsApiKeyUnlocked(false)
     setEditDialogOpen(true)
   }
 
@@ -294,8 +301,11 @@ export default function AssetTypeAttributesPage() {
       apiKey: '',
       attributeType: 'text',
       isRequired: false,
-      description: ''
+      description: '',
+      defaultValue: undefined
     })
+    setIsApiKeyUnlocked(false)
+    setIsApiKeyManuallyEdited(false)
     setEditDialogOpen(true)
   }
 
@@ -315,7 +325,7 @@ export default function AssetTypeAttributesPage() {
     try {
       const dataToSave = editingAttribute
         ? formData
-        : { ...formData, order: count, apiKey: generateApiKey(formData.name) }
+        : { ...formData, order: count }
 
       if (editingAttribute) {
         const updatedAttr = await updateAssetTypeAttribute(workspaceId!, assetTypeId!, editingAttribute.id, dataToSave)
@@ -323,6 +333,10 @@ export default function AssetTypeAttributesPage() {
         setAllAttributes(prev => prev.map(attr =>
           attr.id === editingAttribute.id ? { ...attr, ...updatedAttr } : attr
         ))
+        // If this is the currently selected attribute, reload its details
+        if (selectedAttribute?.id === editingAttribute.id) {
+          setSelectedAttribute({ ...selectedAttribute, ...updatedAttr })
+        }
       } else {
         const newAttr = await createAssetTypeAttribute(workspaceId!, assetTypeId!, dataToSave)
         // Add new attribute to local state
@@ -486,24 +500,26 @@ export default function AssetTypeAttributesPage() {
             expanded={expandedSections.info}
             onToggle={() => toggleSection('info')}
           >
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Name</Typography>
-                <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAttribute!.name}</Typography>
-              </Box>
-              {selectedAttribute!.description && (
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Description</Typography>
-                  <Typography variant="body1">{selectedAttribute!.description}</Typography>
-                </Box>
-              )}
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Usage</Typography>
-                <Typography variant="body1">
-                  {selectedAttribute!.assetCount ?? 0} {(selectedAttribute!.assetCount ?? 0) === 1 ? 'asset' : 'assets'}
-                </Typography>
-              </Box>
-            </Stack>
+            <Table size="small" sx={{ mt: 1 }}>
+              <TableBody>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'top' }}>Name</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5, fontWeight: 600 }}>{selectedAttribute!.name}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Description</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5, color: selectedAttribute!.description ? 'text.primary' : 'text.disabled', fontStyle: selectedAttribute!.description ? 'normal' : 'italic' }}>
+                    {selectedAttribute!.description || 'No description'}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Usage</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    {selectedAttribute!.assetCount ?? 0} {(selectedAttribute!.assetCount ?? 0) === 1 ? 'asset' : 'assets'}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </DraggableSection>
         )
       case 'configuration':
@@ -515,30 +531,42 @@ export default function AssetTypeAttributesPage() {
             expanded={expandedSections.configuration}
             onToggle={() => toggleSection('configuration')}
           >
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Type</Typography>
-                <Chip
-                  label={selectedAttribute!.attributeType}
-                  color={getTypeColor(selectedAttribute!.attributeType) as any}
-                  size="small"
-                />
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Required</Typography>
-                {selectedAttribute!.isRequired ? (
-                  <Chip label="Required" color="error" size="small" />
-                ) : (
-                  <Chip label="Optional" variant="outlined" size="small" />
-                )}
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">API Key</Typography>
-                <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                  {selectedAttribute!.apiKey}
-                </Typography>
-              </Box>
-            </Stack>
+            <Table size="small" sx={{ mt: 1 }}>
+              <TableBody>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>Type</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    {selectedAttribute!.attributeType.charAt(0).toUpperCase() + selectedAttribute!.attributeType.slice(1)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Required</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    {selectedAttribute!.isRequired ? (
+                      <Chip label="Required" color="error" size="small" />
+                    ) : (
+                      <Chip label="Optional" variant="outlined" size="small" />
+                    )}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>API Key</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                    {selectedAttribute!.apiKey}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Default</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5, color: selectedAttribute!.defaultValue !== undefined && selectedAttribute!.defaultValue !== null ? 'text.primary' : 'text.disabled', fontStyle: selectedAttribute!.defaultValue !== undefined && selectedAttribute!.defaultValue !== null ? 'normal' : 'italic' }}>
+                    {selectedAttribute!.defaultValue !== undefined && selectedAttribute!.defaultValue !== null
+                      ? (typeof selectedAttribute!.defaultValue === 'object'
+                        ? JSON.stringify(selectedAttribute!.defaultValue, null, 2)
+                        : String(selectedAttribute!.defaultValue))
+                      : 'No default value'}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </DraggableSection>
         )
       case 'choices':
@@ -776,32 +804,16 @@ export default function AssetTypeAttributesPage() {
               label="Name"
               fullWidth
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => {
+                const newName = e.target.value
+                setFormData(prev => ({
+                  ...prev,
+                  name: newName,
+                  // Auto-sync API key only if creating and user hasn't manually edited it
+                  apiKey: !editingAttribute && !isApiKeyManuallyEdited ? generateApiKey(newName) : prev.apiKey
+                }))
+              }}
             />
-            {editingAttribute && (
-              <TextField
-                label="API Key"
-                fullWidth
-                value={formData.apiKey}
-                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                helperText="Used in API requests (e.g., street_name, streetName)"
-              />
-            )}
-            <FormControl fullWidth>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={formData.attributeType}
-                label="Type"
-                onChange={(e) => setFormData({ ...formData, attributeType: e.target.value })}
-              >
-                <MenuItem value="text">Text</MenuItem>
-                <MenuItem value="number">Number</MenuItem>
-                <MenuItem value="boolean">Boolean</MenuItem>
-                <MenuItem value="date">Date</MenuItem>
-                <MenuItem value="datetime">DateTime</MenuItem>
-                <MenuItem value="json">JSON</MenuItem>
-              </Select>
-            </FormControl>
             <TextField
               label="Description"
               fullWidth
@@ -810,6 +822,146 @@ export default function AssetTypeAttributesPage() {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
+            <TextField
+              label="API Key"
+              fullWidth
+              value={formData.apiKey}
+              onChange={(e) => {
+                setFormData({ ...formData, apiKey: e.target.value })
+                // Mark as manually edited when creating
+                if (!editingAttribute) {
+                  setIsApiKeyManuallyEdited(true)
+                }
+              }}
+              disabled={editingAttribute && !isApiKeyUnlocked}
+              helperText={editingAttribute 
+                ? (isApiKeyUnlocked 
+                  ? "⚠️ Warning: Changing this may break integrations that depend on this attribute" 
+                  : "Click the lock icon to edit (used in API requests)")
+                : "Auto-generated from name, but can be manually edited"}
+              InputProps={editingAttribute ? {
+                endAdornment: (
+                  <IconButton
+                    onClick={() => setIsApiKeyUnlocked(!isApiKeyUnlocked)}
+                    edge="end"
+                    size="small"
+                    color={isApiKeyUnlocked ? "warning" : "default"}
+                  >
+                    {isApiKeyUnlocked ? <LockOpenIcon /> : <LockIcon />}
+                  </IconButton>
+                )
+              } : undefined}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={formData.attributeType}
+                label="Type"
+                disabled={editingAttribute ? true : false}
+                onChange={(e) => {
+                  if (editingAttribute) {
+                    setPendingTypeChange(e.target.value)
+                    setTypeChangeDialogOpen(true)
+                  } else {
+                    setFormData({ ...formData, attributeType: e.target.value })
+                  }
+                }}
+              >
+                <MenuItem value="text">Text</MenuItem>
+                <MenuItem value="number">Number</MenuItem>
+                <MenuItem value="boolean">Boolean</MenuItem>
+                <MenuItem value="date">Date</MenuItem>
+                <MenuItem value="datetime">DateTime</MenuItem>
+                <MenuItem value="json">JSON</MenuItem>
+              </Select>
+              {editingAttribute && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Type cannot be changed after creation to maintain data integrity
+                </Typography>
+              )}
+            </FormControl>
+            {formData.attributeType === 'text' && (
+              <TextField
+                label="Default Value"
+                fullWidth
+                value={formData.defaultValue || ''}
+                onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value || undefined })}
+                helperText="Optional default value for this attribute"
+              />
+            )}
+            {formData.attributeType === 'number' && (
+              <TextField
+                label="Default Value"
+                fullWidth
+                type="number"
+                value={formData.defaultValue ?? ''}
+                onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value ? Number(e.target.value) : undefined })}
+                helperText="Optional default value for this attribute"
+              />
+            )}
+            {formData.attributeType === 'boolean' && (
+              <FormControl fullWidth>
+                <InputLabel>Default Value</InputLabel>
+                <Select
+                  value={formData.defaultValue === undefined ? '' : String(formData.defaultValue)}
+                  label="Default Value"
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setFormData({ ...formData, defaultValue: val === '' ? undefined : val === 'true' })
+                  }}
+                >
+                  <MenuItem value=""><em>None</em></MenuItem>
+                  <MenuItem value="true">True</MenuItem>
+                  <MenuItem value="false">False</MenuItem>
+                </Select>
+              </FormControl>
+            )}
+            {formData.attributeType === 'date' && (
+              <TextField
+                label="Default Value"
+                fullWidth
+                type="date"
+                value={formData.defaultValue || ''}
+                onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value || undefined })}
+                InputLabelProps={{ shrink: true }}
+                helperText="Optional default value for this attribute"
+              />
+            )}
+            {formData.attributeType === 'datetime' && (
+              <TextField
+                label="Default Value"
+                fullWidth
+                type="datetime-local"
+                value={formData.defaultValue ? formData.defaultValue.slice(0, 16) : ''}
+                onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value ? e.target.value + ':00Z' : undefined })}
+                InputLabelProps={{ shrink: true }}
+                helperText="Optional default value for this attribute"
+              />
+            )}
+            {formData.attributeType === 'json' && (
+              <TextField
+                label="Default Value"
+                fullWidth
+                multiline
+                rows={4}
+                value={formData.defaultValue ? (typeof formData.defaultValue === 'string' ? formData.defaultValue : JSON.stringify(formData.defaultValue, null, 2)) : ''}
+                onChange={(e) => {
+                  try {
+                    const val = e.target.value
+                    if (!val) {
+                      setFormData({ ...formData, defaultValue: undefined })
+                    } else {
+                      const parsed = JSON.parse(val)
+                      setFormData({ ...formData, defaultValue: parsed })
+                    }
+                  } catch {
+                    setFormData({ ...formData, defaultValue: e.target.value })
+                  }
+                }}
+                helperText="Optional default value in JSON format"
+                error={formData.defaultValue && typeof formData.defaultValue === 'string'}
+              />
+            )}
             <FormControlLabel
               control={
                 <Checkbox
@@ -825,6 +977,46 @@ export default function AssetTypeAttributesPage() {
           <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSave} variant="contained" color="primary">
             {editingAttribute ? 'Save' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={typeChangeDialogOpen} onClose={() => setTypeChangeDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>⚠️ Change Attribute Type?</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Changing the attribute type is a <strong>critical operation</strong> that can:
+          </Typography>
+          <ul>
+            <li>Break existing data stored in this attribute</li>
+            <li>Cause data loss or corruption</li>
+            <li>Break integrations and API consumers</li>
+            <li>Require data migration</li>
+          </ul>
+          <Typography color="error" sx={{ mt: 2, fontWeight: 'bold' }}>
+            This action should only be performed with extreme caution and proper planning.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to change the type from <strong>{formData.attributeType}</strong> to <strong>{pendingTypeChange}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setTypeChangeDialogOpen(false)
+            setPendingTypeChange(null)
+          }}>Cancel</Button>
+          <Button
+            onClick={() => {
+              if (pendingTypeChange) {
+                setFormData({ ...formData, attributeType: pendingTypeChange })
+              }
+              setTypeChangeDialogOpen(false)
+              setPendingTypeChange(null)
+            }}
+            variant="contained"
+            color="error"
+          >
+            Yes, Change Type
           </Button>
         </DialogActions>
       </Dialog>
