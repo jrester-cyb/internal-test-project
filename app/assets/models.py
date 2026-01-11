@@ -24,6 +24,7 @@ class AssetType(SoftDeleteMixin):
             models.UniqueConstraint(
                 fields=["workspace", "name"],
                 name="unique_workspace_asset_type_name",
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
         ordering = ["workspace", "name"]
@@ -66,14 +67,17 @@ class AssetTypeAttribute(SoftDeleteMixin):
             models.UniqueConstraint(
                 fields=["asset_type", "name"],
                 name="unique_asset_type_name",
+                condition=models.Q(deleted_at__isnull=True),
             ),
             models.UniqueConstraint(
                 fields=["asset_type", "api_key"],
                 name="unique_asset_type_api_key",
+                condition=models.Q(deleted_at__isnull=True),
             ),
             models.UniqueConstraint(
                 fields=["asset_type", "order"],
                 name="unique_asset_type_order",
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
         triggers = (

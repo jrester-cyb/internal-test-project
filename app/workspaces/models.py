@@ -27,6 +27,7 @@ class Workspace(SoftDeleteMixin):
             models.UniqueConstraint(
                 fields=["organization", "slug"],
                 name="unique_organization_workspace_slug",
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
         ordering = ["organization", "name"]
@@ -70,6 +71,7 @@ class WorkspaceMembership(SoftDeleteMixin):
             models.UniqueConstraint(
                 fields=["workspace", "user"],
                 name="unique_workspace_user",
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
         ordering = ["workspace", "-granted_at"]

@@ -50,6 +50,7 @@ class OrganizationMembership(SoftDeleteMixin):
             models.UniqueConstraint(
                 fields=["organization", "user"],
                 name="unique_organization_user",
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
         ordering = ["organization", "-joined_at"]
