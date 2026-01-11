@@ -100,15 +100,13 @@ const router = createBrowserRouter([
                 },
                 loader: async ({ params, request }) => {
                   const url = new URL(request.url)
-                  const page = parseInt(url.searchParams.get('page') || '1')
-                  const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
 
                   const { fetchAssetAttributeDefinitions } = await import('./api/assets')
-                  const response = await fetchAssetAttributeDefinitions(params.assetTypeId!, page, pageSize)
+                  const response = await fetchAssetAttributeDefinitions(params.assetTypeId!)
                   const attributes = response.results || []
                   const count = response.count || 0
 
-                  return { attributes, count, page, pageSize }
+                  return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId };
                 },
               },
               {

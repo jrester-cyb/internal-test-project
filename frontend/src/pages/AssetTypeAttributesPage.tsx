@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, Pagination } from '@mui/material'
+import { useState, useEffect, useRef } from 'react'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
-import { useLoaderData, useParams, useRevalidator, useSearchParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes } from '../api/assets'
+import { useLoaderData, useParams, useRevalidator } from 'react-router-dom'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitions, fetchAssetAttributeDefinitionsFromUrl } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -11,16 +11,24 @@ import { CSS } from '@dnd-kit/utilities'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 
 export default function AssetTypeAttributesPage() {
-  const data = useLoaderData() as { attributes: AssetTypeAttribute[], count: number, page: number, pageSize: number }
-  const attributes = data.attributes || []
-  const count = data.count || 0
-  const page = data.page || 1
-  const pageSize = data.pageSize || 25
-  const totalPages = Math.ceil(count / pageSize)
+  const loaderData = useLoaderData() as {
+    initialData: AssetTypeAttribute[]
+    initialNextUrl: string | null
+    count: number
+    assetTypeId: string
+  }
+
+  const { initialData, initialNextUrl, count } = loaderData
 
   const { assetTypeId } = useParams()
   const revalidator = useRevalidator()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const fetchInProgressRef = useRef(false)
+
+  const [allAttributes, setAllAttributes] = useState(initialData || [])
+  const [nextUrl, setNextUrl] = useState<string | null>(initialNextUrl)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(!!initialNextUrl)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingAttribute, setEditingAttribute] = useState<AssetTypeAttribute | null>(null)
@@ -32,6 +40,13 @@ export default function AssetTypeAttributesPage() {
     description: ''
   })
 
+  // Reset when loader data changes (e.g., after revalidation)
+  useEffect(() => {
+    setAllAttributes(initialData || [])
+    setNextUrl(initialNextUrl)
+    setHasMore(!!initialNextUrl)
+  }, [initialData, initialNextUrl])
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -39,26 +54,71 @@ export default function AssetTypeAttributesPage() {
     })
   )
 
-  const handlePageChange = (_event: React.ChangeEvent<unknown>, newPage: number) => {
-    const params = new URLSearchParams(searchParams)
-    params.set('page', newPage.toString())
-    setSearchParams(params)
-  }
+  // Infinite scroll handler
+  useEffect(() => {
+    const handleScroll = async () => {
+      const container = tableContainerRef.current
+      if (!container || fetchInProgressRef.current || !hasMore || !nextUrl || allAttributes.length >= count) return
+
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight
+
+      // Load more when scrolled to 80%
+      if (scrollPercentage > 0.8) {
+        fetchInProgressRef.current = true
+        setIsLoadingMore(true)
+        try {
+          const response = await fetchAssetAttributeDefinitionsFromUrl(nextUrl)
+          const newAttributes = response.results || []
+
+          if (newAttributes.length > 0) {
+            setAllAttributes(prev => {
+              // Filter out duplicates by checking existing IDs
+              const existingIds = new Set(prev.map(attr => attr.id))
+              const uniqueNewAttributes = newAttributes.filter(attr => !existingIds.has(attr.id))
+              const updatedAttributes = [...prev, ...uniqueNewAttributes]
+              return updatedAttributes
+            })
+            setNextUrl(response.next || null)
+            setHasMore(!!response.next)
+          } else {
+            setHasMore(false)
+            setNextUrl(null)
+          }
+        } catch (error) {
+          console.error('Failed to load more attributes:', error)
+          setHasMore(false) // Stop trying on error
+          setNextUrl(null)
+        } finally {
+          fetchInProgressRef.current = false
+          setIsLoadingMore(false)
+        }
+      }
+    }
+
+    const container = tableContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [assetTypeId, nextUrl, isLoadingMore, hasMore, allAttributes.length, count])
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = attributes.findIndex((attr) => attr.id === active.id)
-      const newIndex = attributes.findIndex((attr) => attr.id === over.id)
+      const oldIndex = allAttributes.findIndex((attr) => attr.id === active.id)
+      const newIndex = allAttributes.findIndex((attr) => attr.id === over.id)
 
-      const newAttributes = arrayMove(attributes, oldIndex, newIndex)
+      const newAttributes = arrayMove(allAttributes, oldIndex, newIndex)
 
       // Update the order field for all affected attributes
       const updatedAttributes = newAttributes.map((attr, index) => ({
         ...attr,
-        order: ((page - 1) * pageSize) + index
+        order: index
       }))
+
+      setAllAttributes(updatedAttributes)
 
       // Update orders in the backend with bulk API
       try {
@@ -67,10 +127,11 @@ export default function AssetTypeAttributesPage() {
           order: attr.order
         }))
         await reorderAssetTypeAttributes(assetTypeId!, updates)
-        revalidator.revalidate()
       } catch (error) {
         console.error('Failed to update attribute order:', error)
         alert('Failed to update attribute order')
+        // Revert local state on error
+        setAllAttributes(allAttributes)
       }
     }
   }
@@ -106,12 +167,17 @@ export default function AssetTypeAttributesPage() {
         : { ...formData, order: count }
 
       if (editingAttribute) {
-        await updateAssetTypeAttribute(assetTypeId!, editingAttribute.id, dataToSave)
+        const updatedAttr = await updateAssetTypeAttribute(assetTypeId!, editingAttribute.id, dataToSave)
+        // Update existing attribute in local state
+        setAllAttributes(prev => prev.map(attr =>
+          attr.id === editingAttribute.id ? { ...attr, ...updatedAttr } : attr
+        ))
       } else {
-        await createAssetTypeAttribute(assetTypeId!, dataToSave)
+        const newAttr = await createAssetTypeAttribute(assetTypeId!, dataToSave)
+        // Add new attribute to local state
+        setAllAttributes(prev => [...prev, newAttr])
       }
       setEditDialogOpen(false)
-      revalidator.revalidate()
     } catch (error) {
       console.error('Failed to save attribute:', error)
       alert('Failed to save attribute')
@@ -125,7 +191,8 @@ export default function AssetTypeAttributesPage() {
 
     try {
       await deleteAssetTypeAttribute(assetTypeId!, attr.id)
-      revalidator.revalidate()
+      // Remove from local state
+      setAllAttributes(prev => prev.filter(a => a.id !== attr.id))
     } catch (error) {
       console.error('Failed to delete attribute:', error)
       alert('Failed to delete attribute')
@@ -200,7 +267,9 @@ export default function AssetTypeAttributesPage() {
 
   return (
     <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'grey.50' }}>
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
+      <Box
+        sx={{ flexGrow: 1, overflowY: 'hidden', p: 3 }}
+      >
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h5" component="h2">Attributes</Typography>
           <Stack direction="row" spacing={2} alignItems="center">
@@ -213,19 +282,12 @@ export default function AssetTypeAttributesPage() {
               Add Attribute
             </Button>
             <Typography color="text.secondary">
-              Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, count)} of {count}
+              Showing {allAttributes.length} of {count}
             </Typography>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size="small"
-            />
           </Stack>
         </Stack>
 
-        <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }}>
+        <TableContainer ref={tableContainerRef} component={Paper} sx={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -245,8 +307,8 @@ export default function AssetTypeAttributesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <SortableContext items={attributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
-                  {attributes.map(attr => (
+                <SortableContext items={allAttributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
+                  {allAttributes.map(attr => (
                     <SortableRow key={attr.id} attr={attr} />
                   ))}
                 </SortableContext>
@@ -254,6 +316,12 @@ export default function AssetTypeAttributesPage() {
             </Table>
           </DndContext>
         </TableContainer>
+
+        {isLoadingMore && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        )}
 
         {count === 0 && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -266,10 +334,10 @@ export default function AssetTypeAttributesPage() {
           </Box>
         )}
 
-        {count > 0 && attributes.length === 0 && (
+        {count > 0 && allAttributes.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography color="text.secondary">
-              No attributes on this page
+              No attributes found
             </Typography>
           </Box>
         )}

@@ -66,6 +66,28 @@ class AssetTypeAttribute(models.Model):
                 name="unique_asset_type_order",
             ),
         ]
+        triggers = [
+            pgtrigger.Trigger(
+                name="01_update_attribute_orders_after_delete",
+                operation=pgtrigger.Delete,
+                when=pgtrigger.After,
+                func="""
+                    -- Use negative temporary values to avoid unique constraint violations
+                    UPDATE assets_assettypeattribute 
+                    SET "order" = -("order" + 1000)
+                    WHERE asset_type_id = OLD.asset_type_id 
+                    AND "order" > OLD."order";
+                    
+                    -- Now update to final values (decrement by 1)
+                    UPDATE assets_assettypeattribute 
+                    SET "order" = -("order" + 1000) - 1
+                    WHERE asset_type_id = OLD.asset_type_id 
+                    AND "order" < -1000;
+                    
+                    RETURN OLD;
+                """,
+            ),
+        ]
 
     def __str__(self):
         return f"{self.asset_type.name}.{self.name}"

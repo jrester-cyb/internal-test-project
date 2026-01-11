@@ -127,6 +127,12 @@ export async function fetchAssetAttributeDefinitions(assetTypeId: string, page: 
   return response.json()
 }
 
+export async function fetchAssetAttributeDefinitionsFromUrl(url: string) {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Failed to fetch attribute definitions')
+  return response.json()
+}
+
 export async function fetchAllAssetAttributeDefinitions(assetTypeId: string) {
   const params = new URLSearchParams({
     page_size: '1000' // Fetch all attributes
