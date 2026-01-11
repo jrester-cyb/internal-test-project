@@ -834,9 +834,9 @@ export default function AssetTypeAttributesPage() {
                 }
               }}
               disabled={editingAttribute && !isApiKeyUnlocked}
-              helperText={editingAttribute 
-                ? (isApiKeyUnlocked 
-                  ? "⚠️ Warning: Changing this may break integrations that depend on this attribute" 
+              helperText={editingAttribute
+                ? (isApiKeyUnlocked
+                  ? "⚠️ Warning: Changing this may break integrations that depend on this attribute"
                   : "Click the lock icon to edit (used in API requests)")
                 : "Auto-generated from name, but can be manually edited"}
               InputProps={editingAttribute ? {
