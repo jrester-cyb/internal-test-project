@@ -31,8 +31,8 @@ class AssetTypeAttributeInline(admin.TabularInline):
 class AssetAttributeInline(admin.TabularInline):
     model = BaseAttributeValue
     extra = 0
-    fields = ["attribute_type_attribute", "polymorphic_ctype"]
-    readonly_fields = ["attribute_type_attribute", "polymorphic_ctype"]
+    fields = ["asset_type_attribute", "polymorphic_ctype"]
+    readonly_fields = ["asset_type_attribute", "polymorphic_ctype"]
     can_delete = True
 
 
@@ -82,37 +82,37 @@ class BaseAttributeValueChildAdmin(PolymorphicChildModelAdmin):
 @admin.register(TextAttributeValue)
 class TextAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = TextAttributeValue
-    list_display = ["asset", "attribute_type_attribute", "value"]
+    list_display = ["asset", "asset_type_attribute", "value"]
 
 
 @admin.register(NumberAttributeValue)
 class NumberAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = NumberAttributeValue
-    list_display = ["asset", "attribute_type_attribute", "value"]
+    list_display = ["asset", "asset_type_attribute", "value"]
 
 
 @admin.register(BooleanAttributeValue)
 class BooleanAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = BooleanAttributeValue
-    list_display = ["asset", "attribute_type_attribute", "value"]
+    list_display = ["asset", "asset_type_attribute", "value"]
 
 
 @admin.register(DateAttributeValue)
 class DateAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = DateAttributeValue
-    list_display = ["asset", "attribute_type_attribute", "value"]
+    list_display = ["asset", "asset_type_attribute", "value"]
 
 
 @admin.register(DateTimeAttributeValue)
 class DateTimeAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = DateTimeAttributeValue
-    list_display = ["asset", "attribute_type_attribute", "value"]
+    list_display = ["asset", "asset_type_attribute", "value"]
 
 
 @admin.register(JSONAttributeValue)
 class JSONAttributeValueAdmin(BaseAttributeValueChildAdmin):
     base_model = JSONAttributeValue
-    list_display = ["asset", "attribute_type_attribute", "value"]
+    list_display = ["asset", "asset_type_attribute", "value"]
 
 
 @admin.register(BaseAttributeValue)
@@ -128,9 +128,9 @@ class BaseAttributeValueAdmin(PolymorphicParentModelAdmin):
     )
     list_display = [
         "asset",
-        "attribute_type_attribute",
+        "asset_type_attribute",
         "polymorphic_ctype",
         "updated_at",
     ]
-    list_filter = ["attribute_type_attribute__asset_type", "polymorphic_ctype"]
-    search_fields = ["asset__name", "attribute_type_attribute__name"]
+    list_filter = ["asset_type_attribute__asset_type", "polymorphic_ctype"]
+    search_fields = ["asset__name", "asset_type_attribute__name"]

@@ -1,6 +1,5 @@
 import pgtrigger
 from django.db import models
-from django.utils import timezone
 from polymorphic.managers import PolymorphicManager
 
 
@@ -44,14 +43,54 @@ class SoftDeleteWithTimestamp(pgtrigger.SoftDelete):
         )
 
 
+def _add_soft_delete_trigger(sender, **kwargs):
+    """
+    Signal handler to automatically add soft delete trigger to models with deleted_at field.
+    """
+    # Only process concrete models (not abstract)
+    if sender._meta.abstract:
+        return
+
+    # Check if this model has deleted_at field
+    if not hasattr(sender, "deleted_at"):
+        return
+
+    # Get existing triggers
+    existing_triggers = list(getattr(sender._meta, "triggers", []))
+
+    # Check if soft delete trigger is already present
+    has_soft_delete = any(
+        isinstance(t, SoftDeleteWithTimestamp)
+        and getattr(t, "name", None) == "soft_delete"
+        for t in existing_triggers
+    )
+
+    # Add soft delete trigger if not present
+    if not has_soft_delete:
+        soft_delete_trigger = SoftDeleteWithTimestamp(
+            name="soft_delete", field="deleted_at"
+        )
+        existing_triggers.append(soft_delete_trigger)
+        sender._meta.triggers = existing_triggers
+
+
+# Connect the signal
+from django.apps import apps
+from django.db.models.signals import class_prepared
+
+class_prepared.connect(_add_soft_delete_trigger)
+
+
 def merge_triggers(*trigger_lists):
     """
     Helper function to merge trigger lists from parent and child classes.
     Usage in child Meta: triggers = merge_triggers([...child triggers...])
     """
     # Get the soft delete trigger from SoftDeleteMixin
-    soft_delete_trigger = SoftDeleteWithTimestamp(name="soft_delete", field="deleted_at")
-    
+    soft_delete_trigger = SoftDeleteWithTimestamp(
+        name="soft_delete", field="deleted_at"
+    )
+
     # Flatten all trigger lists
     all_triggers = []
     for trigger_list in trigger_lists:
@@ -60,16 +99,16 @@ def merge_triggers(*trigger_lists):
                 all_triggers.extend(trigger_list)
             else:
                 all_triggers.append(trigger_list)
-    
+
     # Add soft delete trigger if not already present
     has_soft_delete = any(
         isinstance(t, SoftDeleteWithTimestamp) and t.name == "soft_delete"
         for t in all_triggers
     )
-    
+
     if not has_soft_delete:
         all_triggers.append(soft_delete_trigger)
-    
+
     return all_triggers
 
 

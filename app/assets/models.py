@@ -7,7 +7,6 @@ import pgtrigger
 from core.models.soft_delete import (
     SoftDeleteMixin,
     PolymorphicSoftDeleteMixin,
-    merge_triggers,
 )
 
 
@@ -219,30 +218,30 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
     asset = models.ForeignKey(
         Asset, on_delete=models.CASCADE, related_name="attributes"
     )
-    attribute_type_attribute = models.ForeignKey(
+    asset_type_attribute = models.ForeignKey(
         AssetTypeAttribute, on_delete=models.CASCADE, related_name="values"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta(PolymorphicSoftDeleteMixin.Meta):
-        ordering = ["asset", "attribute_type_attribute__order"]
+        ordering = ["asset", "asset_type_attribute__order"]
         constraints = [
             models.UniqueConstraint(
-                fields=["asset", "attribute_type_attribute"],
-                name="unique_asset_attribute_type_attribute",
+                fields=["asset", "asset_type_attribute"],
+                name="unique_asset_asset_type_attribute",
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
 
     def __str__(self):
-        return f"{self.asset.name}.{self.attribute_type_attribute}"
+        return f"{self.asset.name}.{self.asset_type_attribute}"
 
 
 class TextAttributeValue(BaseAttributeValue):
     """Text attribute value"""
 
-    value = models.TextField(null=True, blank=True)
+    value = models.TextField(blank=True)
 
 
 class NumberAttributeValue(BaseAttributeValue):
