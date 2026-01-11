@@ -32,7 +32,7 @@ export default function AssetTypeList({ assetTypes, onAssetTypeClick }: AssetTyp
                   style={{ cursor: onAssetTypeClick ? 'pointer' : 'default' }}
                 >
                   <TableCell sx={{ color: '#000 !important', fontWeight: 600 }}>
-                    <Link to={`/assets/${assetType.id}`}
+                    <Link to={`${assetType.id}`}
                       state={{
                         breadcrumb: assetType.name
                       }}>{assetType.name}</Link></TableCell>

@@ -54,8 +54,8 @@ export default function AppBreadcrumbs() {
     resolveLabels()
   }, [location.pathname, location.state])
 
-  // Don't show breadcrumbs if there's only one or none
-  if (breadcrumbs.length <= 1) {
+  // Don't show breadcrumbs if there are none
+  if (breadcrumbs.length === 0) {
     return null
   }
 

@@ -45,7 +45,7 @@ export default function Sidebar() {
           <ListItem disablePadding>
             <ListItemButton
               component={NavLink}
-              to="/assets"
+              to="/asset-types"
             >
               <ListItemIcon>
                 <AssetsIcon />

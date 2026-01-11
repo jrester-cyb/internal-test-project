@@ -19,7 +19,7 @@ function App() {
           </Typography>
           <ThemeToggle />
         </Toolbar>
-        {isNavigating && <LinearProgress />}
+        {isNavigating && <LinearProgress color="secondary" />}
       </AppBar>
 
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: 'calc(100% - 240px)', ml: '240px', mt: 8 }}>

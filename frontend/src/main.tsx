@@ -10,6 +10,7 @@ const MapPage = lazy(() => import('./pages/MapPage.tsx'))
 const AssetListPage = lazy(() => import('./pages/AssetListPage.tsx'))
 const AssetDetailPage = lazy(() => import('./pages/AssetDetailPage.tsx'))
 const AssetTypeLayout = lazy(() => import('./pages/AssetTypeLayout.tsx'))
+const AssetTypeAboutPage = lazy(() => import('./pages/AssetTypeAboutPage.tsx'))
 
 // Generic lazy loader wrapper
 function createLazyLoader(
@@ -46,7 +47,7 @@ const router = createBrowserRouter([
         },
       },
       {
-        path: "assets",
+        path: "asset-types",
         handle: {
           crumb: "Asset Types"
         },
@@ -77,10 +78,25 @@ const router = createBrowserRouter([
                 })
               }
             },
+            element: <AssetTypeLayout />,
             children: [
               {
                 index: true,
+                element: <Navigate to="about" />,
+              },
+              {
+                path: "about",
+                element: <AssetTypeAboutPage />,
+                handle: {
+                  crumb: "About"
+                }
+              },
+              {
+                path: 'assets',
                 element: <AssetListPage />,
+                handle: {
+                  crumb: "Assets"
+                },
                 loader: createLazyLoader(
                   './api/assets',
                   'fetchAssetsByType',
