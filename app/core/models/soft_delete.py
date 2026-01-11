@@ -44,6 +44,35 @@ class SoftDeleteWithTimestamp(pgtrigger.SoftDelete):
         )
 
 
+def merge_triggers(*trigger_lists):
+    """
+    Helper function to merge trigger lists from parent and child classes.
+    Usage in child Meta: triggers = merge_triggers([...child triggers...])
+    """
+    # Get the soft delete trigger from SoftDeleteMixin
+    soft_delete_trigger = SoftDeleteWithTimestamp(name="soft_delete", field="deleted_at")
+    
+    # Flatten all trigger lists
+    all_triggers = []
+    for trigger_list in trigger_lists:
+        if trigger_list:
+            if isinstance(trigger_list, (list, tuple)):
+                all_triggers.extend(trigger_list)
+            else:
+                all_triggers.append(trigger_list)
+    
+    # Add soft delete trigger if not already present
+    has_soft_delete = any(
+        isinstance(t, SoftDeleteWithTimestamp) and t.name == "soft_delete"
+        for t in all_triggers
+    )
+    
+    if not has_soft_delete:
+        all_triggers.append(soft_delete_trigger)
+    
+    return all_triggers
+
+
 class SoftDeleteQuerySet(models.QuerySet):
     """QuerySet that returns proper counts for soft delete operations."""
 
