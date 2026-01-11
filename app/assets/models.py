@@ -76,12 +76,13 @@ class AssetTypeAttribute(SoftDeleteMixin):
                 name="unique_asset_type_order",
             ),
         ]
-        triggers = [
-            pgtrigger.Trigger(
-                name="01_update_attribute_orders_after_delete",
-                operation=pgtrigger.Delete,
-                when=pgtrigger.After,
-                func="""
+        triggers = (
+            [
+                pgtrigger.Trigger(
+                    name="01_update_attribute_orders_after_delete",
+                    operation=pgtrigger.Delete,
+                    when=pgtrigger.After,
+                    func="""
                     -- Use negative temporary values to avoid unique constraint violations
                     UPDATE assets_assettypeattribute 
                     SET "order" = -("order" + 1000)
@@ -96,8 +97,10 @@ class AssetTypeAttribute(SoftDeleteMixin):
                     
                     RETURN OLD;
                 """,
-            ),
-        ]
+                ),
+            ]
+            + SoftDeleteMixin.Meta.triggers
+        )
 
     def __str__(self):
         return f"{self.asset_type.name}.{self.name}"
@@ -127,18 +130,19 @@ class Asset(SoftDeleteMixin):
 
     class Meta(SoftDeleteMixin.Meta):
         ordering = ["-created_at"]
-        triggers = [
-            pgtrigger.Trigger(
-                name="001_update_location_on_geometry_change",
-                operation=pgtrigger.Update | pgtrigger.Insert,
-                when=pgtrigger.Before,
-                func="NEW.location = ST_Centroid(NEW.geometry); RETURN NEW;",
-            ),
-            pgtrigger.Trigger(
-                name="002_update_h3_index_on_location_change",
-                operation=pgtrigger.Update | pgtrigger.Insert,
-                when=pgtrigger.Before,
-                func="""
+        triggers = (
+            [
+                pgtrigger.Trigger(
+                    name="001_update_location_on_geometry_change",
+                    operation=pgtrigger.Update | pgtrigger.Insert,
+                    when=pgtrigger.Before,
+                    func="NEW.location = ST_Centroid(NEW.geometry); RETURN NEW;",
+                ),
+                pgtrigger.Trigger(
+                    name="002_update_h3_index_on_location_change",
+                    operation=pgtrigger.Update | pgtrigger.Insert,
+                    when=pgtrigger.Before,
+                    func="""
                 IF NEW.location IS NOT NULL THEN
                         NEW.h3_index = h3_latlng_to_cell(point(ST_Y(NEW.location), ST_X(NEW.location)), 15);
                 ELSE
@@ -146,8 +150,10 @@ class Asset(SoftDeleteMixin):
                 END IF;
                 RETURN NEW;
                 """,
-            ),
-        ]
+                ),
+            ]
+            + SoftDeleteMixin.Meta.triggers
+        )
 
     def __str__(self):
         return f"{self.name} ({self.asset_type.name})"
@@ -225,7 +231,6 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
                 name="unique_asset_attribute_type_attribute",
             ),
         ]
-        triggers = [pgtrigger.SoftDelete(name="soft_delete", field="deleted_at")]
 
     def __str__(self):
         return f"{self.asset.name}.{self.attribute_type_attribute}"

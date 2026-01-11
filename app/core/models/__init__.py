@@ -3,6 +3,7 @@ from .soft_delete import (
     SoftDeleteManager,
     AllObjectsManager,
     PolymorphicSoftDeleteMixin,
+    SoftDeleteWithTimestamp,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "SoftDeleteManager",
     "AllObjectsManager",
     "PolymorphicSoftDeleteMixin",
+    "SoftDeleteWithTimestamp",
 ]
