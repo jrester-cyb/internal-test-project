@@ -87,6 +87,7 @@ class AssetTypeSerializer(serializers.ModelSerializer):
 
 class AssetTypeSummarySerializer(serializers.ModelSerializer):
     """Lightweight serializer without nested field definitions"""
+
     # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
 
     class Meta:

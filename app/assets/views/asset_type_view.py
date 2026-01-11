@@ -27,11 +27,11 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Optimize queryset based on action"""
         queryset = AssetType.objects.all()
-        
+
         # For detail view, prefetch attributes
-        if self.action == 'retrieve':
-            queryset = queryset.prefetch_related('attributes')
-        
+        if self.action == "retrieve":
+            queryset = queryset.prefetch_related("attributes")
+
         return queryset
 
     def get_serializer_class(self):

@@ -8,10 +8,10 @@ export default function AppBreadcrumbs() {
   const breadcrumbs = matches
     .filter((match: any) => match.handle?.crumb) // Only routes with crumb handles
     .map((match: any) => {
-      const crumb = typeof match.handle.crumb === 'function' 
+      const crumb = typeof match.handle.crumb === 'function'
         ? match.handle.crumb(match.data)
         : match.handle.crumb
-      
+
       return {
         label: crumb,
         path: match.pathname,
@@ -27,7 +27,7 @@ export default function AppBreadcrumbs() {
     <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
       {breadcrumbs.map((breadcrumb, index) => {
         const isLast = index === breadcrumbs.length - 1
-        
+
         return isLast ? (
           <Typography key={breadcrumb.path} color="text.primary">
             {breadcrumb.label}
