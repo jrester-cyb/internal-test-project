@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Box, List, Drawer, IconButton } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon } from '@mui/icons-material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings } from '@mui/icons-material'
 import SidebarNavItem from './SidebarNavItem'
 
 interface SidebarProps {
@@ -49,6 +49,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
               to="/asset-types"
               icon={<AssetsIcon />}
               label="Assets"
+              isOpen={isOpen}
+            />
+            <SidebarNavItem
+              to="/reports"
+              icon={<Settings />}
+              label="Project Workspace Settings"
               isOpen={isOpen}
             />
           </List>

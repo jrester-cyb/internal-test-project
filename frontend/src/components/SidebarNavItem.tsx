@@ -18,16 +18,16 @@ export default function SidebarNavItem({ to, icon, label, isOpen }: SidebarNavIt
         sx={{
           color: 'inherit',
           minHeight: 48,
-          height: 48,
+          height: isOpen ? 48 : 'auto',
           display: 'flex',
           flexDirection: 'row',
           justifyContent: 'initial',
           alignItems: 'center',
           px: 2.5,
-          py: 1.5,
+          py: isOpen ? 1.5 : 0,
           position: 'relative',
           overflow: 'visible',
-          transition: 'color 225ms cubic-bezier(0.4, 0, 0.6, 1)',
+          transition: 'color 225ms cubic-bezier(0.4, 0, 0.6, 1), height 225ms cubic-bezier(0.4, 0, 0.6, 1), padding 225ms cubic-bezier(0.4, 0, 0.6, 1)',
           '&:hover': {
             color: 'secondary.light',
           },
@@ -51,7 +51,7 @@ export default function SidebarNavItem({ to, icon, label, isOpen }: SidebarNavIt
             minWidth: 0,
             mr: isOpen ? 3 : 0,
             justifyContent: 'center',
-            transform: isOpen ? 'translateY(0)' : 'translateY(-4px)',
+            transform: isOpen ? 'translateY(0)' : 'translateY(-8px)',
             transition: 'margin 225ms cubic-bezier(0.4, 0, 0.6, 1), color 225ms cubic-bezier(0.4, 0, 0.6, 1), transform 225ms cubic-bezier(0.4, 0, 0.6, 1)',
           }}
         >
@@ -60,15 +60,14 @@ export default function SidebarNavItem({ to, icon, label, isOpen }: SidebarNavIt
         <ListItemText
           primary={label}
           sx={{
-            opacity: isOpen ? 1 : 0.8,
             position: isOpen ? 'relative' : 'absolute',
             left: isOpen ? 'auto' : '50%',
             overflow: 'visible',
-            minWidth: 'max-content',
+            width: isOpen ? 'auto' : '56px',
             transform: isOpen ? 'none' : 'translateX(-50%)',
             transition: isOpen
-              ? 'opacity 225ms cubic-bezier(0.4, 0, 0.6, 1), position 225ms cubic-bezier(0.4, 0, 0.6, 1), left 225ms cubic-bezier(0.4, 0, 0.6, 1), transform 225ms cubic-bezier(0.4, 0, 0.6, 1), color 225ms cubic-bezier(0.4, 0, 0.6, 1)'
-              : 'opacity 225ms cubic-bezier(0.4, 0, 0.6, 1), left 225ms cubic-bezier(0.4, 0, 0.6, 1), transform 225ms cubic-bezier(0.4, 0, 0.6, 1), color 225ms cubic-bezier(0.4, 0, 0.6, 1)',
+              ? 'position 225ms cubic-bezier(0.4, 0, 0.6, 1), left 225ms cubic-bezier(0.4, 0, 0.6, 1), transform 225ms cubic-bezier(0.4, 0, 0.6, 1), color 225ms cubic-bezier(0.4, 0, 0.6, 1), width 225ms cubic-bezier(0.4, 0, 0.6, 1)'
+              : 'left 225ms cubic-bezier(0.4, 0, 0.6, 1), transform 225ms cubic-bezier(0.4, 0, 0.6, 1), color 225ms cubic-bezier(0.4, 0, 0.6, 1), width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
             animation: !isOpen ? 'slideToCenter 225ms cubic-bezier(0.4, 0, 0.6, 1) forwards' : 'none',
             '@keyframes slideToCenter': {
               '0%': {
@@ -87,14 +86,15 @@ export default function SidebarNavItem({ to, icon, label, isOpen }: SidebarNavIt
                 transform: 'translateX(-50%) translateY(8px) scale(0.95)',
               },
               '100%': {
-                transform: 'translateX(-50%) translateY(16px) scale(0.85)',
+                transform: 'translateX(-50%) translateY(16px) scale(0.75)',
               },
             },
             '& .MuiListItemText-primary': {
-              fontSize: isOpen ? '1rem' : '0.75rem',
               textAlign: isOpen ? 'left' : 'center',
               lineHeight: 1.2,
-              whiteSpace: 'nowrap',
+              whiteSpace: 'normal',
+              wordBreak: 'break-word',
+              maxWidth: isOpen ? 'none' : '56px',
             },
           }}
         />
