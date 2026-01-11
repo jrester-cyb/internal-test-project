@@ -44,7 +44,22 @@ export default function AssetTypeAttributesPage() {
     configuration: false,
     choices: false
   })
-  const [sectionOrder, setSectionOrder] = useState<string[]>(['info', 'configuration', 'choices'])
+  const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('attributeDetailsSectionOrder')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        // Validate that it contains all expected sections
+        if (Array.isArray(parsed) && parsed.length === 3 &&
+          parsed.includes('info') && parsed.includes('configuration') && parsed.includes('choices')) {
+          return parsed
+        }
+      } catch {
+        // Invalid JSON, use default
+      }
+    }
+    return ['info', 'configuration', 'choices']
+  })
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
@@ -63,7 +78,9 @@ export default function AssetTypeAttributesPage() {
       setSectionOrder(prev => {
         const oldIndex = prev.indexOf(active.id as string)
         const newIndex = prev.indexOf(over.id as string)
-        return arrayMove(prev, oldIndex, newIndex)
+        const newOrder = arrayMove(prev, oldIndex, newIndex)
+        localStorage.setItem('attributeDetailsSectionOrder', JSON.stringify(newOrder))
+        return newOrder
       })
     }
   }
@@ -414,7 +431,7 @@ export default function AssetTypeAttributesPage() {
 
     const style: React.CSSProperties = {
       transform: CSS.Transform.toString(transform),
-      transition,
+      transition: isDragging ? transition : undefined,
       opacity: isDragging ? 0.5 : 1,
     }
 
@@ -434,7 +451,7 @@ export default function AssetTypeAttributesPage() {
             </Box>
             <Box
               onClick={onToggle}
-              sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexGrow: 1, '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1 }}
+              sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexGrow: 1 }}
             >
               {expanded ? <ExpandLessIcon fontSize="small" color="action" /> : <ExpandMoreIcon fontSize="small" color="action" />}
               <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5 }}>

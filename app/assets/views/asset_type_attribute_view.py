@@ -117,7 +117,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         },
     )
     @action(detail=False, methods=["post"], url_path="reorder")
-    def reorder(self, request, assettype_pk=None):
+    def reorder(self, request, workspace_pk=None, assettype_pk=None):
         """Bulk update attribute order"""
         from django.db import connection, transaction
 

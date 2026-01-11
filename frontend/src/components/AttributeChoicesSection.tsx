@@ -203,8 +203,6 @@ export default function AttributeChoicesSection({
               alignItems: 'center',
               cursor: 'pointer',
               flexGrow: 1,
-              '&:hover': { bgcolor: 'action.hover' },
-              borderRadius: 1,
             }}
           >
             {expanded ? (
