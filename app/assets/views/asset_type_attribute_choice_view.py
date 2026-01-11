@@ -85,14 +85,26 @@ class AssetTypeAttributeChoiceViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        attribute_pk = self.kwargs["attribute_pk"]
+
         with transaction.atomic():
+            # First, set all orders to negative temporary values to avoid unique constraint violations
+            for i, update in enumerate(updates):
+                choice_id = update.get("id")
+                if choice_id is not None:
+                    AssetTypeAttributeChoice.objects.filter(
+                        pk=choice_id,
+                        asset_type_attribute_id=attribute_pk,
+                    ).update(order=-(i + 1))
+
+            # Then set the final order values
             for update in updates:
                 choice_id = update.get("id")
                 new_order = update.get("order")
                 if choice_id is not None and new_order is not None:
                     AssetTypeAttributeChoice.objects.filter(
                         pk=choice_id,
-                        asset_type_attribute_id=self.kwargs["attribute_pk"],
+                        asset_type_attribute_id=attribute_pk,
                     ).update(order=new_order)
 
         return Response({"status": "ok"})

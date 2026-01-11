@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Stack,
-  Collapse,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -11,13 +10,15 @@ import {
   TextField,
   Button,
   IconButton,
-  CircularProgress
+  CircularProgress,
+  Collapse
 } from '@mui/material'
 import {
   Add as AddIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  DragIndicator as DragIndicatorIcon
 } from '@mui/icons-material'
 import type { AssetTypeAttribute, AssetTypeAttributeChoice } from '../types'
 import { createAssetTypeAttributeChoice, deleteAssetTypeAttributeChoice, fetchAssetTypeAttributeChoices, reorderAssetTypeAttributeChoices } from '../api/assets'
@@ -27,14 +28,23 @@ interface AttributeChoicesSectionProps {
   attribute: AssetTypeAttribute
   workspaceId: string
   assetTypeId: string
+  expanded?: boolean
+  onToggleExpanded?: () => void
+  dragHandleProps?: Record<string, unknown>
 }
 
 export default function AttributeChoicesSection({
   attribute,
   workspaceId,
-  assetTypeId
+  assetTypeId,
+  expanded: controlledExpanded,
+  onToggleExpanded,
+  dragHandleProps
 }: Readonly<AttributeChoicesSectionProps>) {
-  const [expanded, setExpanded] = useState(false)
+  const [internalExpanded, setInternalExpanded] = useState(false)
+  const expanded = controlledExpanded ?? internalExpanded
+  const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded(prev => !prev))
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formData, setFormData] = useState({ value: '', label: '' })
   const [choices, setChoices] = useState<AssetTypeAttributeChoice[]>([])
@@ -115,6 +125,8 @@ export default function AttributeChoicesSection({
       order: index
     }))
 
+    console.log('Reordering choices:', { workspaceId, assetTypeId, attributeId: attribute.id, updates })
+
     try {
       await reorderAssetTypeAttributeChoices(workspaceId, assetTypeId, attribute.id, updates)
     } catch (error) {
@@ -163,27 +175,47 @@ export default function AttributeChoicesSection({
 
   return (
     <>
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Box>
         <Box
-          onClick={() => setExpanded(!expanded)}
           sx={{
             display: 'flex',
             alignItems: 'center',
-            cursor: 'pointer',
-            '&:hover': { bgcolor: 'action.hover' },
             borderRadius: 1,
             mx: -1,
             px: 1
           }}
         >
-          {expanded ? (
-            <ExpandLessIcon fontSize="small" color="action" />
-          ) : (
-            <ExpandMoreIcon fontSize="small" color="action" />
+          {dragHandleProps && (
+            <Box
+              {...dragHandleProps}
+              sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' }, display: 'flex', alignItems: 'center', mr: 0.5 }}
+            >
+              <DragIndicatorIcon fontSize="small" color="action" />
+            </Box>
           )}
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5, flexGrow: 1 }}>
-            Choices {loaded ? `(${choices.length})` : ''}
-          </Typography>
+          <Box
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleExpanded()
+            }}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              flexGrow: 1,
+              '&:hover': { bgcolor: 'action.hover' },
+              borderRadius: 1,
+            }}
+          >
+            {expanded ? (
+              <ExpandLessIcon fontSize="small" color="action" />
+            ) : (
+              <ExpandMoreIcon fontSize="small" color="action" />
+            )}
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5, flexGrow: 1 }}>
+              Choices {loaded ? `(${choices.length})` : ''}
+            </Typography>
+          </Box>
           <IconButton
             size="small"
             color="primary"
@@ -196,9 +228,9 @@ export default function AttributeChoicesSection({
           </IconButton>
         </Box>
         <Collapse in={expanded}>
-          <Box sx={{ mt: 1, height: 300 }}>
+          <Box sx={{ height: 300, mt: 1, display: 'flex', flexDirection: 'column' }}>
             {loading ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
                 <CircularProgress size={24} />
               </Box>
             ) : (

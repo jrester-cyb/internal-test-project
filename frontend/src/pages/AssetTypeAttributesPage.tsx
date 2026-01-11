@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse, Divider } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
@@ -41,11 +41,31 @@ export default function AssetTypeAttributesPage() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     info: true,
-    configuration: false
+    configuration: false,
+    choices: false
   })
+  const [sectionOrder, setSectionOrder] = useState<string[]>(['info', 'configuration', 'choices'])
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
+  }
+
+  const sectionSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleSectionDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      setSectionOrder(prev => {
+        const oldIndex = prev.indexOf(active.id as string)
+        const newIndex = prev.indexOf(over.id as string)
+        return arrayMove(prev, oldIndex, newIndex)
+      })
+    }
   }
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -318,13 +338,6 @@ export default function AssetTypeAttributesPage() {
     }
   }
 
-  const handleAttributeChoicesUpdate = (updatedAttr: AssetTypeAttribute) => {
-    setSelectedAttribute(updatedAttr)
-    setAllAttributes(prev => prev.map(attr =>
-      attr.id === updatedAttr.id ? updatedAttr : attr
-    ))
-  }
-
   const getTypeColor = (type: string) => {
     const colors: Record<string, string> = {
       text: 'default',
@@ -380,6 +393,155 @@ export default function AssetTypeAttributesPage() {
         </TableBody>
       </Box>
     )
+  }
+
+  function DraggableSection({ id, title, expanded, onToggle, children, flexGrow = false }: {
+    id: string
+    title?: string
+    expanded?: boolean
+    onToggle?: () => void
+    children: ReactNode | ((props: { dndAttributes: ReturnType<typeof useSortable>['attributes']; listeners: ReturnType<typeof useSortable>['listeners'] }) => ReactNode)
+    flexGrow?: boolean
+  }) {
+    const {
+      attributes: dndAttributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id })
+
+    const style: React.CSSProperties = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    }
+
+    // For sections with toggle (Info, Configuration)
+    if (onToggle !== undefined && expanded !== undefined && title) {
+      return (
+        <Box ref={setNodeRef} style={style} sx={{ flexGrow: flexGrow ? 1 : 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', borderRadius: 1, mx: -1, px: 1 }}
+          >
+            <Box
+              {...dndAttributes}
+              {...listeners}
+              sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' }, display: 'flex', alignItems: 'center', mr: 0.5 }}
+            >
+              <DragIndicatorIcon fontSize="small" color="action" />
+            </Box>
+            <Box
+              onClick={onToggle}
+              sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexGrow: 1, '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1 }}
+            >
+              {expanded ? <ExpandLessIcon fontSize="small" color="action" /> : <ExpandMoreIcon fontSize="small" color="action" />}
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5 }}>
+                {title}
+              </Typography>
+            </Box>
+          </Box>
+          <Collapse in={expanded}>
+            {children as ReactNode}
+          </Collapse>
+        </Box>
+      )
+    }
+
+    // For sections without toggle (Choices - has its own internal toggle)
+    // Pass drag props to children so they can render their own drag handle
+    return (
+      <Box ref={setNodeRef} style={style} sx={{ flexGrow: flexGrow ? 1 : 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {typeof children === 'function' ? children({ dndAttributes, listeners }) : children}
+      </Box>
+    )
+  }
+
+  const renderSection = (sectionId: string) => {
+    switch (sectionId) {
+      case 'info':
+        return (
+          <DraggableSection
+            key="info"
+            id="info"
+            title="Info"
+            expanded={expandedSections.info}
+            onToggle={() => toggleSection('info')}
+          >
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Name</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAttribute!.name}</Typography>
+              </Box>
+              {selectedAttribute!.description && (
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">Description</Typography>
+                  <Typography variant="body1">{selectedAttribute!.description}</Typography>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Usage</Typography>
+                <Typography variant="body1">
+                  {selectedAttribute!.assetCount ?? 0} {(selectedAttribute!.assetCount ?? 0) === 1 ? 'asset' : 'assets'}
+                </Typography>
+              </Box>
+            </Stack>
+          </DraggableSection>
+        )
+      case 'configuration':
+        return (
+          <DraggableSection
+            key="configuration"
+            id="configuration"
+            title="Configuration"
+            expanded={expandedSections.configuration}
+            onToggle={() => toggleSection('configuration')}
+          >
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Type</Typography>
+                <Chip
+                  label={selectedAttribute!.attributeType}
+                  color={getTypeColor(selectedAttribute!.attributeType) as any}
+                  size="small"
+                />
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Required</Typography>
+                {selectedAttribute!.isRequired ? (
+                  <Chip label="Required" color="error" size="small" />
+                ) : (
+                  <Chip label="Optional" variant="outlined" size="small" />
+                )}
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">API Key</Typography>
+                <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                  {selectedAttribute!.apiKey}
+                </Typography>
+              </Box>
+            </Stack>
+          </DraggableSection>
+        )
+      case 'choices':
+        return (
+          <DraggableSection key="choices" id="choices">
+            {({ dndAttributes, listeners }) => (
+              <AttributeChoicesSection
+                attribute={selectedAttribute!}
+                workspaceId={workspaceId!}
+                assetTypeId={assetTypeId!}
+                expanded={expandedSections.choices}
+                onToggleExpanded={() => toggleSection('choices')}
+                dragHandleProps={{ ...dndAttributes, ...listeners }}
+              />
+            )}
+          </DraggableSection>
+        )
+      default:
+        return null
+    }
   }
 
   return (
@@ -556,92 +718,24 @@ export default function AssetTypeAttributesPage() {
                 </Stack>
               </Stack>
 
-              <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <Stack spacing={1} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  {/* Info Section */}
-                  <Box>
-                    <Box
-                      onClick={() => toggleSection('info')}
-                      sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1, mx: -1, px: 1 }}
-                    >
-                      {expandedSections.info ? <ExpandLessIcon fontSize="small" color="action" /> : <ExpandMoreIcon fontSize="small" color="action" />}
-                      <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5 }}>
-                        Info
-                      </Typography>
-                    </Box>
-                    <Collapse in={expandedSections.info}>
-                      <Stack spacing={2} sx={{ mt: 1 }}>
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">Name</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAttribute.name}</Typography>
-                        </Box>
-                        {selectedAttribute.description && (
-                          <Box>
-                            <Typography variant="subtitle2" color="text.secondary">Description</Typography>
-                            <Typography variant="body1">{selectedAttribute.description}</Typography>
-                          </Box>
-                        )}
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">Usage</Typography>
-                          <Typography variant="body1">
-                            {selectedAttribute.assetCount ?? 0} {(selectedAttribute.assetCount ?? 0) === 1 ? 'asset' : 'assets'}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                    </Collapse>
-                  </Box>
-
-                  <Divider />
-
-                  {/* Configuration Section */}
-                  <Box>
-                    <Box
-                      onClick={() => toggleSection('configuration')}
-                      sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1, mx: -1, px: 1 }}
-                    >
-                      {expandedSections.configuration ? <ExpandLessIcon fontSize="small" color="action" /> : <ExpandMoreIcon fontSize="small" color="action" />}
-                      <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600, ml: 0.5 }}>
-                        Configuration
-                      </Typography>
-                    </Box>
-                    <Collapse in={expandedSections.configuration}>
-                      <Stack spacing={2} sx={{ mt: 1 }}>
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">Type</Typography>
-                          <Chip
-                            label={selectedAttribute.attributeType}
-                            color={getTypeColor(selectedAttribute.attributeType) as any}
-                            size="small"
-                          />
-                        </Box>
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">Required</Typography>
-                          {selectedAttribute.isRequired ? (
-                            <Chip label="Required" color="error" size="small" />
-                          ) : (
-                            <Chip label="Optional" variant="outlined" size="small" />
-                          )}
-                        </Box>
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">API Key</Typography>
-                          <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                            {selectedAttribute.apiKey}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                    </Collapse>
-                  </Box>
-
-                  <Divider />
-
-                  {/* Choices Section */}
-                  <AttributeChoicesSection
-                    attribute={selectedAttribute}
-                    workspaceId={workspaceId!}
-                    assetTypeId={assetTypeId!}
-                    onAttributeUpdate={handleAttributeChoicesUpdate}
-                  />
-                </Stack>
+              <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, minHeight: 0 }}>
+                <DndContext
+                  sensors={sectionSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleSectionDragEnd}
+                  modifiers={[restrictToVerticalAxis]}
+                >
+                  <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+                    <Stack spacing={1}>
+                      {sectionOrder.map((sectionId, index) => (
+                        <>
+                          {index > 0 && <Divider key={`divider-${sectionId}`} />}
+                          {renderSection(sectionId)}
+                        </>
+                      ))}
+                    </Stack>
+                  </SortableContext>
+                </DndContext>
               </Box>
             </Box>
           ) : (
