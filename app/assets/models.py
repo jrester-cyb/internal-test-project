@@ -4,25 +4,35 @@ from django.contrib.gis.db import models as gis_models
 from polymorphic.models import PolymorphicModel
 import uuid
 import pgtrigger
+from core.models import SoftDeleteMixin, PolymorphicSoftDeleteMixin
 
 
-class AssetType(models.Model):
+class AssetType(SoftDeleteMixin):
     """Defines a type of asset with its field schema"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "workspaces.Workspace", on_delete=models.CASCADE, related_name="asset_types"
+    )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        ordering = ["name"]
+    class Meta(SoftDeleteMixin.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "name"],
+                name="unique_workspace_asset_type_name",
+            ),
+        ]
+        ordering = ["workspace", "name"]
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.workspace.name})"
 
 
-class AssetTypeAttribute(models.Model):
+class AssetTypeAttribute(SoftDeleteMixin):
     """Defines a custom field for an asset type"""
 
     FIELD_TYPES = [
@@ -50,7 +60,7 @@ class AssetTypeAttribute(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(SoftDeleteMixin.Meta):
         ordering = ["asset_type", "order", "name"]
         constraints = [
             models.UniqueConstraint(
@@ -93,7 +103,7 @@ class AssetTypeAttribute(models.Model):
         return f"{self.asset_type.name}.{self.name}"
 
 
-class Asset(models.Model):
+class Asset(SoftDeleteMixin):
     """An asset instance with dynamic fields based on its type"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -115,7 +125,7 @@ class Asset(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(SoftDeleteMixin.Meta):
         ordering = ["-created_at"]
         triggers = [
             pgtrigger.Trigger(
@@ -194,7 +204,7 @@ class Asset(models.Model):
         return errors
 
 
-class BaseAttributeValue(PolymorphicModel):
+class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
     """Base polymorphic model for attribute values"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -207,7 +217,7 @@ class BaseAttributeValue(PolymorphicModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(PolymorphicSoftDeleteMixin.Meta):
         ordering = ["asset", "attribute_type_attribute__order"]
         constraints = [
             models.UniqueConstraint(
@@ -215,6 +225,7 @@ class BaseAttributeValue(PolymorphicModel):
                 name="unique_asset_attribute_type_attribute",
             ),
         ]
+        triggers = [pgtrigger.SoftDelete(name="soft_delete", field="deleted_at")]
 
     def __str__(self):
         return f"{self.asset.name}.{self.attribute_type_attribute}"

@@ -33,7 +33,11 @@ services:
     volumes:
       - redis_data:/data
   web:
-    build: .
+    build:
+      context: .
+      args:
+        USER_ID: 1000
+        GROUP_ID: 1000
     command: /bin/sh -c "python /app/manage.py migrate && python /app/manage.py runserver 0.0.0.0:80"
     volumes:
       - ./app:/app
@@ -43,6 +47,7 @@ services:
       db:
         condition: service_healthy
     environment:
+      - DJANGO_SETTINGS_MODULE=app.settings
       - DJANGO_DB_HOST=db
       - DJANGO_DB_NAME=mydb
       - DJANGO_DB_USER=myuser
