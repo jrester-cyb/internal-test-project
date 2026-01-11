@@ -229,6 +229,7 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
             models.UniqueConstraint(
                 fields=["asset", "attribute_type_attribute"],
                 name="unique_asset_attribute_type_attribute",
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
 

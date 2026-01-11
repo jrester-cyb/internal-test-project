@@ -44,11 +44,35 @@ class SoftDeleteWithTimestamp(pgtrigger.SoftDelete):
         )
 
 
+class SoftDeleteQuerySet(models.QuerySet):
+    """QuerySet that returns proper counts for soft delete operations."""
+
+    def delete(self):
+        """
+        Soft delete all objects in this queryset.
+        Returns proper count even though trigger prevents actual deletion.
+        """
+        # Collect all instances by model
+        collector = models.deletion.Collector(using=self.db)
+        collector.collect(self)
+
+        # Perform the delete (trigger will prevent but update deleted_at)
+        super().delete()
+
+        # Return the count that would have been deleted
+        return sum(len(instances) for instances in collector.data.values()), {
+            model._meta.label: len(instances)
+            for model, instances in collector.data.items()
+        }
+
+
 class SoftDeleteManager(models.Manager):
     """Manager that excludes soft-deleted objects by default."""
 
     def get_queryset(self):
-        return super().get_queryset().filter(deleted_at__isnull=True)
+        return SoftDeleteQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
 
     def restore(self):
         """Restore all objects in this queryset by clearing their deleted_at field."""
@@ -59,7 +83,7 @@ class AllObjectsManager(models.Manager):
     """Manager that includes soft-deleted objects."""
 
     def get_queryset(self):
-        return super().get_queryset()
+        return SoftDeleteQuerySet(self.model, using=self._db)
 
     def restore(self):
         """Restore all soft-deleted objects in this queryset by clearing their deleted_at field."""
@@ -68,11 +92,35 @@ class AllObjectsManager(models.Manager):
         )
 
 
+class PolymorphicSoftDeleteQuerySet(models.QuerySet):
+    """Polymorphic QuerySet that returns proper counts for soft delete operations."""
+
+    def delete(self):
+        """
+        Soft delete all polymorphic objects in this queryset.
+        Returns proper count even though trigger prevents actual deletion.
+        """
+        # Collect all instances by model
+        collector = models.deletion.Collector(using=self.db)
+        collector.collect(self)
+
+        # Perform the delete (trigger will prevent but update deleted_at)
+        super().delete()
+
+        # Return the count that would have been deleted
+        return sum(len(instances) for instances in collector.data.values()), {
+            model._meta.label: len(instances)
+            for model, instances in collector.data.items()
+        }
+
+
 class PolymorphicSoftDeleteManager(PolymorphicManager):
     """Polymorphic manager that excludes soft-deleted objects by default."""
 
     def get_queryset(self):
-        return super().get_queryset().filter(deleted_at__isnull=True)
+        return PolymorphicSoftDeleteQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
 
     def restore(self):
         """Restore all objects in this queryset by clearing their deleted_at field."""
@@ -83,7 +131,7 @@ class PolymorphicAllObjectsManager(PolymorphicManager):
     """Polymorphic manager that includes soft-deleted objects."""
 
     def get_queryset(self):
-        return super().get_queryset()
+        return PolymorphicSoftDeleteQuerySet(self.model, using=self._db)
 
     def restore(self):
         """Restore all soft-deleted objects in this queryset by clearing their deleted_at field."""
@@ -108,6 +156,36 @@ class SoftDeleteMixin(models.Model):
         abstract = True
         default_manager_name = "all_objects"
         triggers = [SoftDeleteWithTimestamp(name="soft_delete", field="deleted_at")]
+
+    def delete(self, using=None, keep_parents=False):
+        """
+        Soft delete: trigger updates deleted_at and prevents actual deletion.
+        Returns proper deletion count even though trigger returns NULL.
+        """
+        using = using or self._state.db
+        # Collect deletion info before the operation
+        collector = models.deletion.Collector(using=using, origin=self)
+        collector.collect([self], keep_parents=keep_parents)
+
+        # Execute DELETE on this table (trigger will intercept and soft delete)
+        from django.db import connections
+
+        connection = connections[using]
+
+        # Get the primary key column name for this table
+        pk_field = self._meta.pk
+        pk_column = pk_field.column
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"DELETE FROM {self._meta.db_table} WHERE {pk_column} = %s", [self.pk]
+            )
+
+        # Return the count that would have been deleted
+        return len(collector.data), {
+            model._meta.label: len(instances)
+            for model, instances in collector.data.items()
+        }
 
     def force_delete(self, *args, **kwargs):
         """Permanently delete the object, bypassing soft deletion."""
