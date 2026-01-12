@@ -478,6 +478,22 @@ export default function AssetTypeAttributesPage() {
         // If not showing hidden, remove from list and select next
         const currentIndex = allAttributes.findIndex(a => a.id === attr.id || a.apiKey === hiddenAttr.apiKey)
         const newList = allAttributes.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
+
+        // Proactively fetch more items if list is getting short and there are more pages
+        const MIN_ITEMS_THRESHOLD = 10
+        if (newList.length < MIN_ITEMS_THRESHOLD && nextUrl && !isLoadingMore) {
+          // Fetch in background without blocking
+          setIsLoadingMore(true)
+          fetchAssetAttributeDefinitionsFromUrl(nextUrl)
+            .then(response => {
+              setAllAttributes(prev => [...prev, ...response.results])
+              setNextUrl(response.next)
+              setHasMore(!!response.next)
+            })
+            .catch(err => console.error('Failed to fetch more attributes:', err))
+            .finally(() => setIsLoadingMore(false))
+        }
+
         setAllAttributes(newList)
 
         if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
