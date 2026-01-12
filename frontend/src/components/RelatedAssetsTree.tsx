@@ -18,6 +18,7 @@ import {
   ChevronRight as ChevronRightIcon,
   OpenInNew as OpenIcon,
   Circle as LeafIcon,
+  ContentCopy as CopyIcon,
 } from '@mui/icons-material'
 import type { RelatedAsset, RelatedAssetsResponse } from '../api/assets'
 
@@ -89,20 +90,37 @@ function TreeNode({
     <>
       <ListItem
         disablePadding
-        sx={{ pl: paddingLeft }}
+        sx={{
+          pl: paddingLeft,
+          '& .copy-button': { opacity: 0 },
+          '&:hover .copy-button': { opacity: 0.6 },
+        }}
         secondaryAction={
-          !isCurrentAsset ? (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
             <IconButton
-              component={RouterLink}
-              to={`/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              className="copy-button"
               size="small"
-              sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
+              onClick={(e) => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(asset.name)
+              }}
+              sx={{ '&:hover': { opacity: 1 } }}
             >
-              <OpenIcon fontSize="small" />
+              <CopyIcon fontSize="small" />
             </IconButton>
-          ) : undefined
+            {!isCurrentAsset && (
+              <IconButton
+                component={RouterLink}
+                to={`/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="small"
+                sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
+              >
+                <OpenIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
         }
       >
         <ListItemButton
