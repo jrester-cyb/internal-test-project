@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse, Divider } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, fetchAssetAttributeDefinitions } from '../api/assets'
@@ -535,8 +535,35 @@ export default function AssetTypeAttributesPage() {
               <TableBody>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>Type</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>
-                    {selectedAttribute!.attributeType.charAt(0).toUpperCase() + selectedAttribute!.attributeType.slice(1)}
+                  <TableCell sx={{ border: 0, py: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      {selectedAttribute!.attributeType.charAt(0).toUpperCase() + selectedAttribute!.attributeType.slice(1)}
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<CompareArrowsIcon />}
+                      onClick={() => {
+                        setEditingAttribute(selectedAttribute)
+                        setFormData({
+                          name: selectedAttribute!.name,
+                          apiKey: selectedAttribute!.apiKey,
+                          attributeType: selectedAttribute!.attributeType,
+                          isRequired: selectedAttribute!.isRequired,
+                          description: selectedAttribute!.description || '',
+                          defaultValue: selectedAttribute!.defaultValue
+                        })
+                        setPendingTypeChange(null)
+                        setTypeChangeDialogOpen(true)
+                      }}
+                      sx={{
+                        textTransform: 'none',
+                        minWidth: 'auto'
+                      }}
+                    >
+                      Convert Type
+                    </Button>
                   </TableCell>
                 </TableRow>
                 <TableRow>
@@ -859,12 +886,7 @@ export default function AssetTypeAttributesPage() {
                 label="Type"
                 disabled={editingAttribute ? true : false}
                 onChange={(e) => {
-                  if (editingAttribute) {
-                    setPendingTypeChange(e.target.value)
-                    setTypeChangeDialogOpen(true)
-                  } else {
-                    setFormData({ ...formData, attributeType: e.target.value })
-                  }
+                  setFormData({ ...formData, attributeType: e.target.value })
                 }}
               >
                 <MenuItem value="text">Text</MenuItem>
@@ -876,7 +898,7 @@ export default function AssetTypeAttributesPage() {
               </Select>
               {editingAttribute && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Type cannot be changed after creation to maintain data integrity
+                  Type cannot be changed here. Use "Convert Type" button in the details panel.
                 </Typography>
               )}
             </FormControl>
@@ -982,10 +1004,10 @@ export default function AssetTypeAttributesPage() {
       </Dialog>
 
       <Dialog open={typeChangeDialogOpen} onClose={() => setTypeChangeDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>⚠️ Change Attribute Type?</DialogTitle>
+        <DialogTitle>⚠️ Convert Attribute Type</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            Changing the attribute type is a <strong>critical operation</strong> that can:
+            Converting the attribute type is a <strong>critical operation</strong> that can:
           </Typography>
           <ul>
             <li>Break existing data stored in this attribute</li>
@@ -996,9 +1018,26 @@ export default function AssetTypeAttributesPage() {
           <Typography color="error" sx={{ mt: 2, fontWeight: 'bold' }}>
             This action should only be performed with extreme caution and proper planning.
           </Typography>
-          <Typography sx={{ mt: 2 }}>
-            Are you sure you want to change the type from <strong>{formData.attributeType}</strong> to <strong>{pendingTypeChange}</strong>?
-          </Typography>
+          <FormControl fullWidth sx={{ mt: 3 }}>
+            <InputLabel>New Type</InputLabel>
+            <Select
+              value={pendingTypeChange || formData.attributeType}
+              label="New Type"
+              onChange={(e) => setPendingTypeChange(e.target.value)}
+            >
+              <MenuItem value="text">Text</MenuItem>
+              <MenuItem value="number">Number</MenuItem>
+              <MenuItem value="boolean">Boolean</MenuItem>
+              <MenuItem value="date">Date</MenuItem>
+              <MenuItem value="datetime">DateTime</MenuItem>
+              <MenuItem value="json">JSON</MenuItem>
+            </Select>
+          </FormControl>
+          {pendingTypeChange && pendingTypeChange !== formData.attributeType && (
+            <Typography sx={{ mt: 2 }}>
+              Converting from <strong>{formData.attributeType}</strong> to <strong>{pendingTypeChange}</strong>
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => {
@@ -1007,7 +1046,7 @@ export default function AssetTypeAttributesPage() {
           }}>Cancel</Button>
           <Button
             onClick={() => {
-              if (pendingTypeChange) {
+              if (pendingTypeChange && pendingTypeChange !== formData.attributeType) {
                 setFormData({ ...formData, attributeType: pendingTypeChange })
               }
               setTypeChangeDialogOpen(false)
@@ -1015,8 +1054,9 @@ export default function AssetTypeAttributesPage() {
             }}
             variant="contained"
             color="error"
+            disabled={!pendingTypeChange || pendingTypeChange === formData.attributeType}
           >
-            Yes, Change Type
+            Convert Type
           </Button>
         </DialogActions>
       </Dialog>
