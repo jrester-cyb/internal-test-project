@@ -9,6 +9,12 @@ class Asset(SoftDeleteMixin):
     """An asset instance with dynamic fields based on its type"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="assets",
+        help_text="Organization that owns this asset",
+    )
     asset_type = models.ForeignKey(
         "assets.AssetType", on_delete=models.CASCADE, related_name="assets"
     )
@@ -127,7 +133,18 @@ class Asset(SoftDeleteMixin):
             BaseAttributeValue,
         )
 
-        field_def = self.asset_type.attributes.get(api_key=api_key)
+        # Use merged attribute logic: prefer workspace-specific, fallback to global
+        workspace = None
+        # Try to infer workspace from related WorkspaceAsset if available
+        wa = self.workspace_memberships.select_related("workspace").first()
+        if wa:
+            workspace = wa.workspace
+        field_defs = self.asset_type.get_attributes_for_workspace(workspace)
+        field_def = next((a for a in field_defs if a.api_key == api_key), None)
+        if not field_def:
+            raise ValueError(
+                f"No attribute with api_key '{api_key}' for this asset type in this workspace."
+            )
 
         # Check if this attribute has choices defined
         if field_def.choices.exists():
@@ -190,7 +207,12 @@ class Asset(SoftDeleteMixin):
             for fv in self.attributes.select_related("asset_type_attribute").all()
         }
 
-        for field_def in self.asset_type.attributes.all():
+        # Use merged attribute logic for validation
+        workspace = None
+        wa = self.workspace_memberships.select_related("workspace").first()
+        if wa:
+            workspace = wa.workspace
+        for field_def in self.asset_type.get_attributes_for_workspace(workspace):
             field_value = existing_values.get(field_def.api_key)
             value = field_value.value if field_value else None
 
@@ -199,3 +221,43 @@ class Asset(SoftDeleteMixin):
                 errors[field_def.api_key] = "This field is required"
 
         return errors
+
+
+class WorkspaceAsset(models.Model):
+    """
+    Join table connecting Assets to Workspaces.
+    Assets are owned by Organizations but can be visible in multiple Workspaces.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        on_delete=models.CASCADE,
+        related_name="workspace_assets",
+    )
+    asset = models.ForeignKey(
+        "assets.Asset",
+        on_delete=models.CASCADE,
+        related_name="workspace_memberships",
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+    added_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="added_workspace_assets",
+        help_text="User who added this asset to the workspace",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "asset"],
+                name="unique_workspace_asset",
+            ),
+        ]
+        ordering = ["-added_at"]
+
+    def __str__(self):
+        return f"{self.asset.name} in {self.workspace.name}"

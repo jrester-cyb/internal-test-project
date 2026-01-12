@@ -154,17 +154,19 @@ const router = createBrowserRouter([
                     loader: async ({ params, request }) => {
                       const url = new URL(request.url)
                       const search = url.searchParams.get('search') || undefined
+                      const includeHidden = url.searchParams.get('include_hidden') === 'true'
 
                       const { fetchAssetAttributeDefinitions } = await import('./api/assets')
-                      const response = await fetchAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!, 1, 25, search)
+                      const response = await fetchAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!, 1, 25, search, includeHidden)
                       const attributes = response.results || []
                       const count = response.count || 0
 
-                      return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId, workspaceId: params.workspaceId };
+                      return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId, workspaceId: params.workspaceId, includeHidden };
                     },
                     shouldRevalidate: ({ currentUrl, nextUrl }) => {
-                      // Only revalidate if search param changes
-                      return currentUrl.searchParams.get('search') !== nextUrl.searchParams.get('search')
+                      // Revalidate if search or include_hidden param changes
+                      return currentUrl.searchParams.get('search') !== nextUrl.searchParams.get('search') ||
+                        currentUrl.searchParams.get('include_hidden') !== nextUrl.searchParams.get('include_hidden')
                     },
                   },
                   {

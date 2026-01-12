@@ -57,25 +57,27 @@ class AssetViewSet(viewsets.ModelViewSet):
     ordering_fields = ["name", "created_at"]
 
     def get_queryset(self):
-        """Filter assets by workspace, parent asset type (if nested) and optionally by attributes"""
-        # Start with workspace filter
+        """Filter assets by workspace via WorkspaceAsset join table"""
         workspace_pk = self.kwargs.get("workspace_pk")
 
         # If accessed via nested route under asset type, filter by asset type
         if "assettype_pk" in self.kwargs:
+            # Filter by asset type AND workspace visibility
             queryset = Asset.objects.filter(
                 asset_type_id=self.kwargs["assettype_pk"],
-                asset_type__workspace_id=workspace_pk,
+                workspace_memberships__workspace_id=workspace_pk,
             )
         elif workspace_pk:
-            # Filter by workspace
-            queryset = Asset.objects.filter(asset_type__workspace_id=workspace_pk)
+            # Filter by workspace via WorkspaceAsset join table
+            queryset = Asset.objects.filter(
+                workspace_memberships__workspace_id=workspace_pk,
+            )
         else:
             # Top-level access: return all assets
             queryset = Asset.objects.all()
 
-        # Select related for asset_type to avoid N+1 on asset_type_name
-        queryset = queryset.select_related("asset_type")
+        # Select related for asset_type and organization to avoid N+1 queries
+        queryset = queryset.select_related("asset_type", "organization")
 
         # Prefetch polymorphic attributes - django-polymorphic will handle subclass queries
         # This will make one query per polymorphic type that exists in the results
@@ -88,14 +90,46 @@ class AssetViewSet(viewsets.ModelViewSet):
             )
         )
 
-        return queryset
+        return queryset.distinct()
+
+    def get_serializer_context(self):
+        """Add workspace to serializer context"""
+        context = super().get_serializer_context()
+        workspace_pk = self.kwargs.get("workspace_pk")
+        if workspace_pk:
+            from workspaces.models import Workspace
+
+            try:
+                context["workspace"] = Workspace.objects.get(pk=workspace_pk)
+            except Workspace.DoesNotExist:
+                pass
+        return context
 
     def perform_create(self, serializer):
-        """Automatically set the asset_type when creating via nested route"""
+        """Create asset owned by workspace's organization and link to workspace"""
+        from workspaces.models import Workspace
+        from ..models import WorkspaceAsset
+
+        workspace_pk = self.kwargs.get("workspace_pk")
+        workspace = Workspace.objects.select_related("organization").get(
+            pk=workspace_pk
+        )
+
+        # If nested under asset type, use that; otherwise require it in request
         if "assettype_pk" in self.kwargs:
-            serializer.save(asset_type_id=self.kwargs["assettype_pk"])
+            asset = serializer.save(
+                organization=workspace.organization,
+                asset_type_id=self.kwargs["assettype_pk"],
+            )
         else:
-            serializer.save()
+            asset = serializer.save(organization=workspace.organization)
+
+        # Create the workspace link
+        WorkspaceAsset.objects.create(
+            workspace=workspace,
+            asset=asset,
+            added_by=self.request.user if self.request.user.is_authenticated else None,
+        )
 
     @extend_schema(tags=["Assets"])
     @action(detail=True, methods=["post"])

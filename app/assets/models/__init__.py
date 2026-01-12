@@ -1,4 +1,4 @@
-from .asset_type import AssetType
+from .asset_type import AssetType, WorkspaceAssetType
 from .asset_type_attribute import AssetTypeAttribute
 from .asset_type_attribute_choice import (
     AssetTypeAttributeChoice,
@@ -9,7 +9,7 @@ from .asset_type_attribute_choice import (
     DateTimeAttributeChoice,
     JSONAttributeChoice,
 )
-from .asset import Asset
+from .asset import Asset, WorkspaceAsset
 from .attribute_value import (
     BaseAttributeValue,
     TextAttributeValue,
@@ -23,6 +23,7 @@ from .attribute_value import (
 
 __all__ = [
     "AssetType",
+    "WorkspaceAssetType",
     "AssetTypeAttribute",
     "AssetTypeAttributeChoice",
     "TextAttributeChoice",
@@ -32,6 +33,7 @@ __all__ = [
     "DateTimeAttributeChoice",
     "JSONAttributeChoice",
     "Asset",
+    "WorkspaceAsset",
     "BaseAttributeValue",
     "TextAttributeValue",
     "NumberAttributeValue",

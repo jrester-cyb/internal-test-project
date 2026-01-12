@@ -24,6 +24,13 @@ export interface AssetTypeAttribute {
   order: number
   assetCount?: number
   choices?: AssetTypeAttributeChoice[]
+  // Workspace extension fields
+  workspace?: string | null
+  workspaceName?: string | null
+  isExtension?: boolean
+  isOverride?: boolean
+  baseAttributeId?: string | null
+  isHidden?: boolean
 }
 
 export interface Asset {

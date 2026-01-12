@@ -159,7 +159,7 @@ export async function fetchAssetsByType(workspaceId: string, assetTypeId: string
   return response.json()
 }
 
-export async function fetchAssetAttributeDefinitions(workspaceId: string, assetTypeId: string, page: number = 1, pageSize: number = 25, search?: string) {
+export async function fetchAssetAttributeDefinitions(workspaceId: string, assetTypeId: string, page: number = 1, pageSize: number = 25, search?: string, includeHidden?: boolean) {
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString()
@@ -167,6 +167,10 @@ export async function fetchAssetAttributeDefinitions(workspaceId: string, assetT
 
   if (search) {
     params.append('search', search)
+  }
+
+  if (includeHidden) {
+    params.append('include_hidden', 'true')
   }
 
   const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
@@ -220,8 +224,27 @@ export async function deleteAssetTypeAttribute(workspaceId: string, assetTypeId:
   const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
     method: 'DELETE'
   })
-  if (!response.ok) throw new Error('Failed to delete attribute')
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.detail || 'Failed to delete attribute')
+  }
   return response.ok
+}
+
+export async function hideAssetTypeAttribute(workspaceId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/hide/`), {
+    method: 'POST'
+  })
+  if (!response.ok) throw new Error('Failed to hide attribute')
+  return response.json()
+}
+
+export async function unhideAssetTypeAttribute(workspaceId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/unhide/`), {
+    method: 'POST'
+  })
+  if (!response.ok) throw new Error('Failed to unhide attribute')
+  return response.json()
 }
 
 export async function createAssetTypeAttribute(workspaceId: string, assetTypeId: string, data: any) {

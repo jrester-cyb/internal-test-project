@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, fetchAssetAttributeDefinitions } from '../api/assets'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -20,9 +20,10 @@ export default function AssetTypeAttributesPage() {
     count: number
     assetTypeId: string
     workspaceId: string
+    includeHidden?: boolean
   }
 
-  const { initialData, initialNextUrl, count } = loaderData
+  const { initialData, initialNextUrl, count, includeHidden: initialIncludeHidden } = loaderData
 
   const { assetTypeId, workspaceId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -42,6 +43,7 @@ export default function AssetTypeAttributesPage() {
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     info: true,
     configuration: false,
@@ -113,11 +115,16 @@ export default function AssetTypeAttributesPage() {
       } else {
         newSearchParams.delete('search')
       }
+      if (includeHidden) {
+        newSearchParams.set('include_hidden', 'true')
+      } else {
+        newSearchParams.delete('include_hidden')
+      }
       setSearchParams(newSearchParams, { replace: true })
     }, 300) // 300ms debounce
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm])
+  }, [searchTerm, includeHidden])
 
   // Reset to loader data when it changes
   useEffect(() => {
@@ -356,13 +363,24 @@ export default function AssetTypeAttributesPage() {
 
       if (editingAttribute) {
         const updatedAttr = await updateAssetTypeAttribute(workspaceId!, assetTypeId!, editingAttribute.id, dataToSave)
-        // Update existing attribute in local state
-        setAllAttributes(prev => prev.map(attr =>
-          attr.id === editingAttribute.id ? { ...attr, ...updatedAttr } : attr
-        ))
-        // If this is the currently selected attribute, reload its details
-        if (selectedAttribute?.id === editingAttribute.id) {
-          setSelectedAttribute({ ...selectedAttribute, ...updatedAttr })
+
+        // When editing a base attribute, the backend may create a new override with a different ID
+        // Use apiKey to match and replace the correct row
+        if (updatedAttr.id !== editingAttribute.id) {
+          // New override was created - replace by apiKey
+          setAllAttributes(prev => prev.map(attr =>
+            attr.apiKey === updatedAttr.apiKey ? updatedAttr : attr
+          ))
+        } else {
+          // Same attribute updated
+          setAllAttributes(prev => prev.map(attr =>
+            attr.id === editingAttribute.id ? { ...attr, ...updatedAttr } : attr
+          ))
+        }
+
+        // Update selected attribute
+        if (selectedAttribute?.id === editingAttribute.id || selectedAttribute?.apiKey === updatedAttr.apiKey) {
+          setSelectedAttribute(updatedAttr)
         }
       } else {
         const newAttr = await createAssetTypeAttribute(workspaceId!, assetTypeId!, dataToSave)
@@ -379,6 +397,19 @@ export default function AssetTypeAttributesPage() {
   }
 
   const handleDelete = async (attr: AssetTypeAttribute) => {
+    // Check if this is a base attribute - if so, suggest hiding instead
+    const isBaseAttribute = !attr.workspace && !attr.isExtension
+    if (isBaseAttribute) {
+      const useHide = confirm(
+        `"${attr.name}" is a base attribute shared across workspaces. It cannot be deleted from this workspace.\n\n` +
+        `Would you like to hide it instead? (You can unhide it later)`
+      )
+      if (useHide) {
+        await handleHide(attr)
+      }
+      return
+    }
+
     if (!confirm(`Are you sure you want to delete the attribute "${attr.name}"?`)) {
       return
     }
@@ -390,9 +421,65 @@ export default function AssetTypeAttributesPage() {
       if (selectedAttribute?.id === attr.id) {
         setSelectedAttribute(null)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete attribute:', error)
-      alert('Failed to delete attribute')
+      // Check if it's a permission error suggesting to use hide
+      if (error.message?.includes('hide')) {
+        const useHide = confirm(error.message + '\n\nWould you like to hide it instead?')
+        if (useHide) {
+          await handleHide(attr)
+        }
+      } else {
+        alert('Failed to delete attribute: ' + error.message)
+      }
+    }
+  }
+
+  const handleHide = async (attr: AssetTypeAttribute) => {
+    try {
+      const hiddenAttr = await hideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
+
+      if (includeHidden) {
+        // If showing hidden, update the row in place
+        setAllAttributes(prev => prev.map(a =>
+          a.id === attr.id || a.apiKey === hiddenAttr.apiKey
+            ? { ...hiddenAttr, isHidden: true }
+            : a
+        ))
+        if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
+          setSelectedAttribute({ ...hiddenAttr, isHidden: true })
+        }
+      } else {
+        // If not showing hidden, remove from list
+        setAllAttributes(prev => prev.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey))
+        if (selectedAttribute?.id === attr.id) {
+          setSelectedAttribute(null)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to hide attribute:', error)
+      alert('Failed to hide attribute')
+    }
+  }
+
+  const handleUnhide = async (attr: AssetTypeAttribute) => {
+    try {
+      const updatedAttr = await unhideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
+
+      // Update the row in place - the returned attribute replaces the current one
+      // (may be base attribute if override was deleted, or same attribute if just unhidden)
+      setAllAttributes(prev => prev.map(a =>
+        a.id === attr.id || a.apiKey === updatedAttr.apiKey
+          ? { ...updatedAttr }
+          : a
+      ))
+
+      if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === updatedAttr.apiKey) {
+        setSelectedAttribute({ ...updatedAttr })
+      }
+    } catch (error) {
+      console.error('Failed to unhide attribute:', error)
+      alert('Failed to unhide attribute')
     }
   }
 
@@ -445,7 +532,43 @@ export default function AssetTypeAttributesPage() {
                 <DragIndicatorIcon fontSize="small" />
               </IconButton>
             </TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>{attr.name}</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <span>{attr.name}</span>
+                {attr.isHidden ? (
+                  <Chip
+                    icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
+                    label="Hidden"
+                    size="small"
+                    color="default"
+                    variant="outlined"
+                    sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }, opacity: 0.7 }}
+                  />
+                ) : (
+                  <>
+                    {attr.isOverride && (
+                      <Chip
+                        icon={<CompareArrowsIcon sx={{ fontSize: '14px !important' }} />}
+                        label="Override"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                      />
+                    )}
+                    {attr.workspace && !attr.isOverride && (
+                      <Chip
+                        label="Extension"
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                        sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                      />
+                    )}
+                  </>
+                )}
+              </Stack>
+            </TableCell>
             <TableCell sx={{ width: '48px' }}></TableCell>
           </TableRow>
         </TableBody>
@@ -552,6 +675,44 @@ export default function AssetTypeAttributesPage() {
                     )}
                   </TableCell>
                 </TableRow>
+                {(selectedAttribute!.isOverride || selectedAttribute!.workspace || selectedAttribute!.isHidden) && (
+                  <TableRow>
+                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Scope</TableCell>
+                    <TableCell sx={{ border: 0, py: 0.5 }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {selectedAttribute!.isHidden ? (
+                          <Chip
+                            icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
+                            label="Hidden"
+                            size="small"
+                            color="default"
+                            variant="outlined"
+                          />
+                        ) : selectedAttribute!.isOverride ? (
+                          <Chip
+                            icon={<CompareArrowsIcon sx={{ fontSize: '14px !important' }} />}
+                            label="Workspace Override"
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                        ) : selectedAttribute!.workspace ? (
+                          <Chip
+                            label="Workspace Extension"
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                          />
+                        ) : null}
+                        {selectedAttribute!.workspaceName && (
+                          <Typography variant="caption" color="text.secondary">
+                            ({selectedAttribute!.workspaceName})
+                          </Typography>
+                        )}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </DraggableSection>
@@ -655,19 +816,30 @@ export default function AssetTypeAttributesPage() {
       <Box data-resize-container sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden', mb: 2, position: 'relative' }}>
         {/* Left Column - Table */}
         <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2, width: `${leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
-          {/* Search Bar */}
-          <Box sx={{ mb: 2 }}>
+          {/* Search Bar and Filter */}
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
             <TextField
               size="small"
               placeholder="Search attributes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              sx={{ width: '100%' }}
+              sx={{ flexGrow: 1 }}
               InputProps={{
                 startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />,
               }}
             />
-          </Box>
+            <Tooltip title={includeHidden ? "Showing hidden attributes" : "Hidden attributes are filtered out"}>
+              <ToggleButton
+                value="includeHidden"
+                selected={includeHidden}
+                onChange={() => setIncludeHidden(!includeHidden)}
+                size="small"
+                sx={{ minWidth: 40 }}
+              >
+                {includeHidden ? <ShowIcon fontSize="small" /> : <HideIcon fontSize="small" />}
+              </ToggleButton>
+            </Tooltip>
+          </Stack>
           <Box ref={containerRef} sx={{ position: 'relative', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
             <Box component={Paper} sx={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
               {/* Table Header */}
@@ -781,14 +953,31 @@ export default function AssetTypeAttributesPage() {
                       variant: 'outlined',
                       collapseThreshold: 65
                     },
-                    {
+                    // Show Unhide for hidden attributes, Hide for all non-hidden attributes
+                    ...(selectedAttribute.isHidden ? [{
+                      label: 'Unhide',
+                      icon: <ShowIcon fontSize="small" />,
+                      onClick: () => handleUnhide(selectedAttribute),
+                      color: 'success' as const,
+                      variant: 'outlined' as const,
+                      collapseThreshold: 50
+                    }] : [{
+                      label: 'Hide',
+                      icon: <HideIcon fontSize="small" />,
+                      onClick: () => handleHide(selectedAttribute),
+                      color: 'warning' as const,
+                      variant: 'outlined' as const,
+                      collapseThreshold: 50
+                    }]),
+                    // Show Delete for workspace attributes (extensions and overrides)
+                    ...(selectedAttribute.workspace ? [{
                       label: 'Delete',
                       icon: <DeleteIcon fontSize="small" />,
                       onClick: () => handleDelete(selectedAttribute),
-                      color: 'error',
-                      variant: 'outlined',
+                      color: 'error' as const,
+                      variant: 'outlined' as const,
                       collapseThreshold: 50
-                    }
+                    }] : [])
                   ]}
                   menuAnchorEl={menuAnchorEl}
                   setMenuAnchorEl={setMenuAnchorEl}

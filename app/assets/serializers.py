@@ -2,9 +2,11 @@ from rest_framework import serializers
 from rest_framework_gis.serializers import GeometryField
 from .models import (
     AssetType,
+    WorkspaceAssetType,
     AssetTypeAttribute,
     AssetTypeAttributeChoice,
     Asset,
+    WorkspaceAsset,
     BaseAttributeValue,
     TextAttributeValue,
     NumberAttributeValue,
@@ -99,16 +101,28 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
 
 class AssetTypeAttributeSerializer(serializers.ModelSerializer):
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
+    is_extension = serializers.SerializerMethodField()
+    is_override = serializers.SerializerMethodField()
+    workspace_name = serializers.CharField(
+        source="workspace.name", read_only=True, allow_null=True
+    )
+    base_attribute_id = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetTypeAttribute
         fields = [
             "id",
             "asset_type",
+            "workspace",
+            "workspace_name",
+            "is_extension",
+            "is_override",
+            "base_attribute_id",
             "name",
             "api_key",
             "attribute_type",
             "is_required",
+            "is_hidden",
             "default_value",
             "description",
             "order",
@@ -117,6 +131,24 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+
+    def get_is_extension(self, obj):
+        """Return True if this is a workspace-specific extension attribute"""
+        return obj.workspace_id is not None
+
+    def get_is_override(self, obj):
+        """
+        Return True if this workspace attribute overrides a base attribute with the same api_key.
+        This is set by the view when merging attributes.
+        """
+        return getattr(obj, "_is_override", False)
+
+    def get_base_attribute_id(self, obj):
+        """
+        Return the ID of the base attribute this overrides, if applicable.
+        This is set by the view when merging attributes.
+        """
+        return getattr(obj, "_base_attribute_id", None)
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):
@@ -172,40 +204,87 @@ class AssetAttributeSerializer(serializers.ModelSerializer):
 
 class AssetTypeSerializer(serializers.ModelSerializer):
     attributes = AssetTypeAttributeSerializer(many=True, read_only=True)
+    organization_name = serializers.CharField(
+        source="organization.name", read_only=True
+    )
     # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
 
     class Meta:
         model = AssetType
         fields = [
             "id",
+            "organization",
+            "organization_name",
             "name",
             "description",
             "attributes",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "organization", "created_at", "updated_at"]
 
 
 class AssetTypeSummarySerializer(serializers.ModelSerializer):
     """Lightweight serializer without nested field definitions"""
 
+    organization_name = serializers.CharField(
+        source="organization.name", read_only=True
+    )
     # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
 
     class Meta:
         model = AssetType
         fields = [
             "id",
+            "organization",
+            "organization_name",
             "name",
             "description",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "organization", "created_at", "updated_at"]
+
+
+class WorkspaceAssetTypeSerializer(serializers.ModelSerializer):
+    """Serializer for WorkspaceAssetType join table"""
+
+    asset_type_detail = AssetTypeSummarySerializer(source="asset_type", read_only=True)
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+
+    class Meta:
+        model = WorkspaceAssetType
+        fields = [
+            "id",
+            "workspace",
+            "workspace_name",
+            "asset_type",
+            "asset_type_detail",
+            "is_owner",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class WorkspaceAssetTypeWriteSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating WorkspaceAssetType"""
+
+    class Meta:
+        model = WorkspaceAssetType
+        fields = [
+            "id",
+            "workspace",
+            "asset_type",
+            "is_owner",
+        ]
+        read_only_fields = ["id"]
 
 
 class AssetSerializer(serializers.ModelSerializer):
     asset_type_name = serializers.CharField(source="asset_type.name", read_only=True)
+    organization_name = serializers.CharField(
+        source="organization.name", read_only=True
+    )
     attributes = serializers.SerializerMethodField()
     geometry = GeometryField(required=False, allow_null=True)
     location = GeometryField(read_only=True)
@@ -221,6 +300,8 @@ class AssetSerializer(serializers.ModelSerializer):
         model = Asset
         fields = [
             "id",
+            "organization",
+            "organization_name",
             "asset_type",
             "asset_type_name",
             "parent",
@@ -234,7 +315,14 @@ class AssetSerializer(serializers.ModelSerializer):
             "updated_at",
             "api_url",
         ]
-        read_only_fields = ["id", "h3_index", "created_at", "updated_at", "location"]
+        read_only_fields = [
+            "id",
+            "organization",
+            "h3_index",
+            "created_at",
+            "updated_at",
+            "location",
+        ]
 
     def get_api_url(self, obj):
         """Return the API URL for this asset based on current request context"""
@@ -334,13 +422,20 @@ class AssetSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """Validate attributes on create/update"""
         # Check if attributes are in initial_data
+        attributes = None
         if "attributes" in self.initial_data and "asset_type" in data:
             attributes = self.initial_data["attributes"]
         if attributes and "asset_type" in data:
-            # Validate required fields
-            field_defs = AssetTypeAttribute.objects.filter(
-                asset_type=data["asset_type"]
-            )
+            # Get workspace from context if available
+            workspace = self.context.get("workspace")
+            # Validate required fields - use merged attributes for workspace
+            if workspace:
+                field_defs = data["asset_type"].get_attributes_for_workspace(workspace)
+            else:
+                field_defs = AssetTypeAttribute.objects.filter(
+                    asset_type=data["asset_type"],
+                    workspace__isnull=True,  # Only base attributes if no workspace context
+                )
             errors = {}
             for field_def in field_defs:
                 value = attributes.get(field_def.api_key)
@@ -349,3 +444,41 @@ class AssetSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError({"attributes": errors})
         return data
+
+
+class WorkspaceAssetSerializer(serializers.ModelSerializer):
+    """Serializer for WorkspaceAsset join table"""
+
+    asset_detail = AssetSerializer(source="asset", read_only=True)
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+    added_by_username = serializers.CharField(
+        source="added_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = WorkspaceAsset
+        fields = [
+            "id",
+            "workspace",
+            "workspace_name",
+            "asset",
+            "asset_detail",
+            "added_at",
+            "added_by",
+            "added_by_username",
+        ]
+        read_only_fields = ["id", "added_at"]
+
+
+class WorkspaceAssetWriteSerializer(serializers.ModelSerializer):
+    """Serializer for creating WorkspaceAsset links"""
+
+    class Meta:
+        model = WorkspaceAsset
+        fields = [
+            "id",
+            "workspace",
+            "asset",
+            "added_by",
+        ]
+        read_only_fields = ["id"]
