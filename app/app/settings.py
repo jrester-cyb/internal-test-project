@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     "workspaces",
     "todos",
     "assets",
-    "files",
+    "files_manager",
     "pgtrigger",
 ]
 

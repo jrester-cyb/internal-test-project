@@ -7,7 +7,7 @@ from assets.views import (
     AssetTypeAttributeChoiceViewSet,
     AssetViewSet,
 )
-from files.views import FileNodeViewSet
+from files_manager.views import FileNodeViewSet
 
 router = DefaultRouter()
 router.register(r"workspaces", WorkspaceViewSet, basename="workspace")

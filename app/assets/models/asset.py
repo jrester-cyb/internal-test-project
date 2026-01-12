@@ -33,7 +33,7 @@ class Asset(SoftDeleteMixin):
         help_text="H3 index of the geometry centroid",
     )
     default_folder = models.ForeignKey(
-        "files.Directory",
+        "files_manager.Directory",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

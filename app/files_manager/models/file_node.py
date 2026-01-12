@@ -28,7 +28,7 @@ class FileNode(PolymorphicSoftDeleteMixin, PolymorphicModel):
     # Tree structure - parent must be a Directory
     name = models.CharField(max_length=255, help_text="File or folder name")
     parent = models.ForeignKey(
-        "files.Directory",
+        "files_manager.Directory",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -78,7 +78,7 @@ class FileNode(PolymorphicSoftDeleteMixin, PolymorphicModel):
                         -- Get Directory content type ID
                         SELECT id INTO directory_ctype_id
                         FROM django_content_type
-                        WHERE app_label = 'files' AND model = 'directory';
+                        WHERE app_label = 'files_manager' AND model = 'directory';
                         
                         -- Only enforce for Directory types with no parent (root)
                         IF NEW.polymorphic_ctype_id = directory_ctype_id 
@@ -87,7 +87,7 @@ class FileNode(PolymorphicSoftDeleteMixin, PolymorphicModel):
                             
                             -- Check if another root exists for this workspace
                             SELECT COUNT(*) INTO existing_root_count
-                            FROM files_filenode
+                            FROM files_manager_filenode
                             WHERE workspace_id = NEW.workspace_id
                               AND parent_id IS NULL
                               AND deleted_at IS NULL
@@ -117,7 +117,7 @@ class FileNode(PolymorphicSoftDeleteMixin, PolymorphicModel):
                         -- Get Directory content type ID
                         SELECT id INTO directory_ctype_id
                         FROM django_content_type
-                        WHERE app_label = 'files' AND model = 'directory';
+                        WHERE app_label = 'files_manager' AND model = 'directory';
                         
                         -- If not a Directory and parent is null, reject
                         IF NEW.polymorphic_ctype_id != directory_ctype_id 
