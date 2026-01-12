@@ -77,50 +77,18 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Select related for asset_type to avoid N+1 on asset_type_name
         queryset = queryset.select_related("asset_type")
 
-        # Prefetch attributes with their definitions
+        # Prefetch polymorphic attributes - django-polymorphic will handle subclass queries
+        # This will make one query per polymorphic type that exists in the results
         queryset = queryset.prefetch_related(
             Prefetch(
                 "attributes",
                 queryset=BaseAttributeValue.objects.select_related(
                     "asset_type_attribute"
-                ),
+                ).prefetch_related("polymorphic_ctype"),
             )
         )
 
-        # Special case: filter by attributes using query parameters like ?attr_hostname=server01
-
-        for param, value in self.request.query_params.items():
-            if param.startswith("attr_"):
-                api_key = param[5:]
-                q = (
-                    Q(
-                        attributes__attribute_type_attribute__api_key=api_key,
-                        attributes__textattributevalue__value=value,
-                    )
-                    | Q(
-                        attributes__attribute_type_attribute__api_key=api_key,
-                        attributes__numberattributevalue__value=(
-                            float(value)
-                            if value.replace(".", "", 1).isdigit()
-                            else None
-                        ),
-                    )
-                    | Q(
-                        attributes__attribute_type_attribute__api_key=api_key,
-                        attributes__booleanattributevalue__value=value.lower()
-                        in ["true", "1", "yes"],
-                    )
-                )
-                queryset = queryset.filter(q)
-
-        # Special case: filter by any field starting with 'attributes.' or 'attributes__'
-        for param, value in self.request.query_params.items():
-            if param.startswith("attributes.") or param.startswith("attributes__"):
-                # Normalize to double underscore
-                field = param.replace(".", "__", 1)
-                queryset = queryset.filter(**{field: value})
-
-        return queryset.distinct()
+        return queryset
 
     def perform_create(self, serializer):
         """Automatically set the asset_type when creating via nested route"""
