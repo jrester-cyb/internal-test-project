@@ -30,9 +30,11 @@ export default function AssetTypeAttributesPage() {
   const listRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const fetchInProgressRef = useRef(false)
+  const nextUrlRef = useRef<string | null>(initialNextUrl)
 
   const [allAttributes, setAllAttributes] = useState(initialData || [])
   const [nextUrl, setNextUrl] = useState<string | null>(initialNextUrl)
+  const [totalCount, setTotalCount] = useState(count)
   const [listHeight, setListHeight] = useState(600)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(!!initialNextUrl)
@@ -148,30 +150,53 @@ export default function AssetTypeAttributesPage() {
     })
   )
 
-  // Infinite scroll handler
-  useEffect(() => {
-    const handleScroll = async (e: Event) => {
-      const container = e.target as HTMLDivElement
-      if (!container || fetchInProgressRef.current || !hasMore || !nextUrl || allAttributes.length >= count) return
+  // Keep nextUrlRef in sync with nextUrl state
+  nextUrlRef.current = nextUrl
 
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight
+  // Fetch more items when user scrolls near the end of the list
+  const handleItemsRendered = ({ visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
+    // Fetch more when we're within 5 items of the end
+    const THRESHOLD = 5
+    const shouldFetch = visibleStopIndex >= allAttributes.length - THRESHOLD
+    // Check if there are more items based on total count, not nextUrl
+    const hasMoreItems = allAttributes.length < totalCount
 
-      // Load more when scrolled to 80%
-      if (scrollPercentage > 0.8) {
-        fetchInProgressRef.current = true
-        setIsLoadingMore(true)
-        try {
-          const response = await fetchAssetAttributeDefinitionsFromUrl(nextUrl)
+    if (shouldFetch && hasMoreItems && !fetchInProgressRef.current && workspaceId && assetTypeId) {
+      // Set immediately and synchronously before any async work
+      fetchInProgressRef.current = true
+      setIsLoadingMore(true)
+
+      // Calculate offset based on current list length
+      const PAGE_SIZE = 25
+      const offset = allAttributes.length
+
+      // Build URL from scratch
+      const baseUrl = `/api/workspaces/${workspaceId}/asset-types/${assetTypeId}/attributes/`
+      const params = new URLSearchParams()
+      params.set('limit', PAGE_SIZE.toString())
+      params.set('offset', offset.toString())
+      if (includeHidden) {
+        params.set('include_hidden', 'true')
+      }
+      if (searchTerm) {
+        params.set('search', searchTerm)
+      }
+      const fetchUrl = `${baseUrl}?${params.toString()}`
+
+      fetchAssetAttributeDefinitionsFromUrl(fetchUrl)
+        .then(response => {
           const newAttributes = response.results || []
+
+          // Update total count from server response
+          if (response.count !== undefined) {
+            setTotalCount(response.count)
+          }
 
           if (newAttributes.length > 0) {
             setAllAttributes(prev => {
-              // Filter out duplicates by checking existing IDs
               const existingIds = new Set(prev.map(attr => attr.id))
               const uniqueNewAttributes = newAttributes.filter(attr => !existingIds.has(attr.id))
-              const updatedAttributes = [...prev, ...uniqueNewAttributes]
-              return updatedAttributes
+              return [...prev, ...uniqueNewAttributes]
             })
             setNextUrl(response.next || null)
             setHasMore(!!response.next)
@@ -179,55 +204,16 @@ export default function AssetTypeAttributesPage() {
             setHasMore(false)
             setNextUrl(null)
           }
-        } catch (error) {
+        })
+        .catch(error => {
           console.error('Failed to load more attributes:', error)
-          setHasMore(false) // Stop trying on error
-          setNextUrl(null)
-        } finally {
+        })
+        .finally(() => {
           fetchInProgressRef.current = false
           setIsLoadingMore(false)
-        }
-      }
+        })
     }
-
-    const list = listRef.current
-    if (list) {
-      const container = list._outerRef
-      if (container) {
-        container.addEventListener('scroll', handleScroll)
-        return () => container.removeEventListener('scroll', handleScroll)
-      }
-    }
-  }, [assetTypeId, nextUrl, isLoadingMore, hasMore, allAttributes.length, count])
-
-  // Proactively fetch more items when list is running low (e.g., after hiding)
-  useEffect(() => {
-    const MIN_ITEMS_THRESHOLD = 20
-
-    if (
-      !includeHidden &&
-      allAttributes.length < MIN_ITEMS_THRESHOLD &&
-      nextUrl &&
-      !fetchInProgressRef.current
-    ) {
-      const fetchMore = async () => {
-        fetchInProgressRef.current = true
-        setIsLoadingMore(true)
-        try {
-          const response = await fetchAssetAttributeDefinitionsFromUrl(nextUrl)
-          setAllAttributes(prev => [...prev, ...response.results])
-          setNextUrl(response.next)
-          setHasMore(!!response.next)
-        } catch (err) {
-          console.error('Failed to fetch more attributes:', err)
-        } finally {
-          setIsLoadingMore(false)
-          fetchInProgressRef.current = false
-        }
-      }
-      fetchMore()
-    }
-  }, [allAttributes.length, nextUrl, includeHidden])
+  }
 
   // Fetch asset count when attribute is selected
   useEffect(() => {
@@ -511,22 +497,7 @@ export default function AssetTypeAttributesPage() {
         setAllAttributes(newList)
 
         if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
-          if (newList.length === 0 && nextUrl) {
-            // No visible items left but more pages available - fetch next page
-            setSelectedAttribute(null)
-            try {
-              const response = await fetchAssetAttributeDefinitionsFromUrl(nextUrl)
-              if (response.results.length > 0) {
-                setAllAttributes(response.results)
-                setNextUrl(response.next)
-                setHasMore(!!response.next)
-                setSelectedAttribute(response.results[0])
-              }
-            } catch (fetchError) {
-              console.error('Failed to fetch more attributes:', fetchError)
-            }
-          } else if (newList.length === 0) {
-            // No items left and no more pages
+          if (newList.length === 0) {
             setSelectedAttribute(null)
           } else if (currentIndex < newList.length) {
             // Select the item that's now at the same index (next item)
@@ -968,6 +939,7 @@ export default function AssetTypeAttributesPage() {
                       itemCount={allAttributes.length}
                       itemSize={53}
                       width="100%"
+                      onItemsRendered={handleItemsRendered}
                     >
                       {({ index, style }) => {
                         const attr = allAttributes[index]
