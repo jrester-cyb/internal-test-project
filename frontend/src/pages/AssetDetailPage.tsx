@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon } from '@mui/icons-material'
+import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
+import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import ActionButtons from '../components/ActionButtons'
 import RelatedAssetsTree from '../components/RelatedAssetsTree'
+import CopyableText from '../components/CopyableText'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
@@ -16,6 +17,7 @@ export default function AssetDetailPage() {
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   // Fetch related assets
   useEffect(() => {
@@ -99,6 +101,25 @@ export default function AssetDetailPage() {
       collapseThreshold: 700 // Collapses first
     },
     {
+      label: 'System Details',
+      icon: <InfoIcon fontSize="small" />,
+      onClick: () => setDetailsOpen(true),
+      color: 'inherit' as const,
+      variant: 'outlined' as const,
+      collapseThreshold: Infinity // Always in menu
+    },
+    {
+      label: 'Clone',
+      icon: <CloneIcon fontSize="small" />,
+      onClick: () => {
+        // TODO: Implement clone functionality
+        console.log('Clone asset:', asset.id)
+      },
+      color: 'inherit' as const,
+      variant: 'outlined' as const,
+      collapseThreshold: Infinity // Always in menu
+    },
+    {
       label: 'Download',
       icon: <DownloadIcon fontSize="small" />,
       onClick: handleDownload,
@@ -116,9 +137,14 @@ export default function AssetDetailPage() {
           <CardContent>
             <Box ref={headerRef} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box>
-                <Typography variant="h5" component="h1" sx={{ color: 'primary.contrastText' }}>
+                <CopyableText
+                  variant="h5"
+                  component="h1"
+                  sx={{ color: 'primary.contrastText' }}
+                  iconColor="primary.contrastText"
+                >
                   {asset.name}
-                </Typography>
+                </CopyableText>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
                   <Chip
                     icon={<CategoryIcon />}
@@ -144,7 +170,7 @@ export default function AssetDetailPage() {
                   )}
                 </Box>
               </Box>
-              <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText' }}>
+              <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText', alignItems: 'center' }}>
                 <ActionButtons
                   actions={actions}
                   width={containerWidth}
@@ -164,12 +190,12 @@ export default function AssetDetailPage() {
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <Container maxWidth={false} sx={{ py: 3 }}>
           <Grid container spacing={3}>
-            {/* First Row: Attributes, Related Assets */}
-            {asset.attributes && Object.keys(asset.attributes).length > 0 && (
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Card sx={{ height: '100%' }}>
-                  <CardHeader title="Attributes" />
-                  <CardContent>
+            {/* First Row: Attributes, Asset Tree */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardHeader title="Attributes" />
+                <CardContent>
+                  {asset.attributes && Object.keys(asset.attributes).length > 0 ? (
                     <Table size="small">
                       <TableBody>
                         {Object.entries(asset.attributes).map(([key, value]) => (
@@ -188,15 +214,19 @@ export default function AssetDetailPage() {
                         ))}
                       </TableBody>
                     </Table>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
+                  ) : (
+                    <Typography color="text.secondary" variant="body2">
+                      No attributes
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Card sx={{ height: 400, display: 'flex', flexDirection: 'column' }}>
                 <CardHeader title="Asset Tree" />
-                <CardContent sx={{ flex: 1, overflow: 'auto', maxHeight: 400 }}>
+                <CardContent sx={{ flex: 1, overflow: 'auto' }}>
                   <RelatedAssetsTree
                     relatedAssets={relatedAssets!}
                     workspaceId={workspaceId!}
@@ -252,6 +282,88 @@ export default function AssetDetailPage() {
           </Grid>
         </Container>
       </Box>
+
+      {/* Details Drawer */}
+      <Drawer
+        anchor="right"
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      >
+        <Box sx={{ width: 400, p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">System Details</Typography>
+            <IconButton onClick={() => setDetailsOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+
+          <Table size="small">
+            <TableBody>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>ID</TableCell>
+                <TableCell sx={{ border: 0, pr: 0 }}>
+                  <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                    {asset.id}
+                  </CopyableText>
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Asset Type ID</TableCell>
+                <TableCell sx={{ border: 0, pr: 0 }}>
+                  <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                    {asset.assetType}
+                  </CopyableText>
+                </TableCell>
+              </TableRow>
+              {asset.h3Index && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>H3 Index</TableCell>
+                  <TableCell sx={{ border: 0, pr: 0 }}>
+                    <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                      {asset.h3Index}
+                    </CopyableText>
+                  </TableCell>
+                </TableRow>
+              )}
+              {asset.parent && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Parent ID</TableCell>
+                  <TableCell sx={{ border: 0, pr: 0 }}>
+                    <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                      {asset.parent}
+                    </CopyableText>
+                  </TableCell>
+                </TableRow>
+              )}
+              <TableRow>
+                <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Created</TableCell>
+                <TableCell sx={{ border: 0, pr: 0 }}>
+                  <Typography variant="body2">
+                    {new Date(asset.createdAt).toLocaleString()}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Updated</TableCell>
+                <TableCell sx={{ border: 0, pr: 0 }}>
+                  <Typography variant="body2">
+                    {new Date(asset.updatedAt).toLocaleString()}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>API URL</TableCell>
+                <TableCell sx={{ border: 0, pr: 0 }}>
+                  <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                    {asset.apiUrl || `${window.location.origin}/api/assets/${asset.id}/`}
+                  </CopyableText>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Box>
+      </Drawer>
     </Box>
   )
 }

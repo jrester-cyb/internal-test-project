@@ -42,6 +42,9 @@ export interface Asset {
     coordinates: number[]
   }
   attributes?: Record<string, any>
+  createdAt?: string
+  updatedAt?: string
+  apiUrl?: string
 }
 
 export interface Cluster {

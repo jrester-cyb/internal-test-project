@@ -12,15 +12,18 @@ import {
   CircularProgress,
   IconButton,
   Chip,
+  Button,
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
   OpenInNew as OpenIcon,
   Circle as LeafIcon,
-  ContentCopy as CopyIcon,
 } from '@mui/icons-material'
+import CopyableText from './CopyableText'
 import type { RelatedAsset, RelatedAssetsResponse } from '../api/assets'
+
+const PAGE_SIZE = 50
 
 interface TreeNodeProps {
   asset: RelatedAsset
@@ -54,6 +57,7 @@ function TreeNode({
   const [expanded, setExpanded] = useState(effectiveInitialExpanded)
   const [children, setChildren] = useState<RelatedAsset[] | null>(effectiveInitialChildren ?? null)
   const [loading, setLoading] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   const hasChildren = asset.hasChildren || (effectiveInitialChildren && effectiveInitialChildren.length > 0)
 
@@ -90,37 +94,20 @@ function TreeNode({
     <>
       <ListItem
         disablePadding
-        sx={{
-          pl: paddingLeft,
-          '& .copy-button': { opacity: 0 },
-          '&:hover .copy-button': { opacity: 0.6 },
-        }}
+        sx={{ pl: paddingLeft }}
         secondaryAction={
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
+          !isCurrentAsset ? (
             <IconButton
-              className="copy-button"
+              component={RouterLink}
+              to={`/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
               size="small"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigator.clipboard.writeText(asset.name)
-              }}
-              sx={{ '&:hover': { opacity: 1 } }}
+              sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
             >
-              <CopyIcon fontSize="small" />
+              <OpenIcon fontSize="small" />
             </IconButton>
-            {!isCurrentAsset && (
-              <IconButton
-                component={RouterLink}
-                to={`/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                size="small"
-                sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
-              >
-                <OpenIcon fontSize="small" />
-              </IconButton>
-            )}
-          </Box>
+          ) : undefined
         }
       >
         <ListItemButton
@@ -153,9 +140,9 @@ function TreeNode({
           <ListItemText
             primary={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: isCurrentAsset ? 600 : 400 }}>
+                <CopyableText variant="body2" sx={{ fontWeight: isCurrentAsset ? 600 : 400 }} iconSize="inherit">
                   {asset.name}
-                </Typography>
+                </CopyableText>
                 {isCurrentAsset && (
                   <Chip label="Current" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}
@@ -171,7 +158,7 @@ function TreeNode({
       {hasChildren && (
         <Collapse in={expanded} timeout="auto" unmountOnExit>
           <List disablePadding>
-            {children?.map((child) => (
+            {children?.slice(0, visibleCount).map((child) => (
               <TreeNode
                 key={child.id}
                 asset={child}
@@ -181,6 +168,17 @@ function TreeNode({
                 depth={depth + 1}
               />
             ))}
+            {children && children.length > visibleCount && (
+              <ListItem sx={{ pl: (depth + 1) * 2 }}>
+                <Button
+                  size="small"
+                  onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Show {Math.min(PAGE_SIZE, children.length - visibleCount)} more ({children.length - visibleCount} remaining)
+                </Button>
+              </ListItem>
+            )}
           </List>
         </Collapse>
       )}
@@ -189,7 +187,7 @@ function TreeNode({
 }
 
 interface RelatedAssetsTreeProps {
-  relatedAssets: RelatedAssetsResponse
+  relatedAssets: RelatedAssetsResponse | null
   currentAsset: RelatedAsset
   workspaceId: string
   loading?: boolean
@@ -216,6 +214,14 @@ export default function RelatedAssetsTree({
       <Typography color="error" variant="body2">
         {error}
       </Typography>
+    )
+  }
+
+  if (!relatedAssets) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+        <CircularProgress size={24} />
+      </Box>
     )
   }
 

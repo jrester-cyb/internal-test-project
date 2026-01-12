@@ -215,6 +215,7 @@ class AssetSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Parent asset ID for hierarchical relationships",
     )
+    api_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -231,8 +232,23 @@ class AssetSerializer(serializers.ModelSerializer):
             "attributes",
             "created_at",
             "updated_at",
+            "api_url",
         ]
         read_only_fields = ["id", "h3_index", "created_at", "updated_at", "location"]
+
+    def get_api_url(self, obj):
+        """Return the API URL for this asset based on current request context"""
+        request = self.context.get("request")
+        if request:
+            # Get workspace_pk from the view kwargs if available (nested route)
+            workspace_pk = self.context.get("view").kwargs.get("workspace_pk")
+            if workspace_pk:
+                return request.build_absolute_uri(
+                    f"/api/workspaces/{workspace_pk}/assets/{obj.id}/"
+                )
+            # Fallback to top-level route
+            return request.build_absolute_uri(f"/api/assets/{obj.id}/")
+        return None
 
     def get_attributes(self, obj):
         """Get attributes as a dictionary using prefetched data"""
