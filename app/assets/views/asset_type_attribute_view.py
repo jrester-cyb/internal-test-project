@@ -150,15 +150,37 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         Update an attribute. If updating a base attribute via workspace endpoint,
         create a workspace-specific override instead of modifying the base.
         """
+        from rest_framework.exceptions import ValidationError
+        from ..models import AssetTypeAttribute
+
         instance = self.get_object()
         workspace_pk = self.kwargs.get("workspace_pk")
+
+        # Check if attribute is hidden - reject edits to hidden attributes
+        if instance.is_hidden:
+            raise ValidationError(
+                {"detail": "Cannot edit a hidden attribute. Unhide it first."}
+            )
+
+        # Also check if there's a hidden override for this base attribute
+        if instance.workspace_id is None and workspace_pk:
+            hidden_override = AssetTypeAttribute.objects.filter(
+                asset_type_id=instance.asset_type_id,
+                workspace_id=workspace_pk,
+                api_key=instance.api_key,
+                is_hidden=True,
+                deleted_at__isnull=True,
+            ).first()
+            if hidden_override:
+                raise ValidationError(
+                    {"detail": "Cannot edit a hidden attribute. Unhide it first."}
+                )
 
         # If this is a base attribute (no workspace) and we're accessing via workspace endpoint,
         # create a workspace-specific override instead of modifying the base
         if instance.workspace_id is None and workspace_pk:
             # Create a new workspace-specific attribute as an override
             # Copy all fields from the base, apply the updates, set workspace
-            from ..models import AssetTypeAttribute
 
             # Get the validated data from the serializer
             validated_data = serializer.validated_data

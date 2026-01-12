@@ -475,10 +475,22 @@ export default function AssetTypeAttributesPage() {
           setSelectedAttribute({ ...hiddenAttr, isHidden: true })
         }
       } else {
-        // If not showing hidden, remove from list
-        setAllAttributes(prev => prev.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey))
-        if (selectedAttribute?.id === attr.id) {
-          setSelectedAttribute(null)
+        // If not showing hidden, remove from list and select next
+        const currentIndex = allAttributes.findIndex(a => a.id === attr.id || a.apiKey === hiddenAttr.apiKey)
+        const newList = allAttributes.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
+        setAllAttributes(newList)
+
+        if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
+          if (newList.length === 0) {
+            // No items left
+            setSelectedAttribute(null)
+          } else if (currentIndex < newList.length) {
+            // Select the item that's now at the same index (next item)
+            setSelectedAttribute(newList[currentIndex])
+          } else {
+            // Was at the end, go to top
+            setSelectedAttribute(newList[0])
+          }
         }
       }
     } catch (error) {
