@@ -96,6 +96,7 @@ const router = createBrowserRouter([
                   const { fetchAssetType } = await import('./api/assets')
                   return fetchAssetType(params.workspaceId!, params.assetTypeId!)
                 },
+                shouldRevalidate: () => false, // Only load once for breadcrumb, don't reload on navigation
                 handle: {
                   crumb: (data: any) => data?.loaderData?.name || 'Asset Type'
                 },
