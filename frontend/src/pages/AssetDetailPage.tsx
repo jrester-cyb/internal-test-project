@@ -1,15 +1,36 @@
 import { useState, useRef, useEffect } from 'react'
-import { useLoaderData } from 'react-router-dom'
+import { useLoaderData, useParams } from 'react-router-dom'
 import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import ActionButtons from '../components/ActionButtons'
+import RelatedAssetsTree from '../components/RelatedAssetsTree'
+import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
   const asset = useLoaderData() as Asset
+  const { workspaceId } = useParams<{ workspaceId: string }>()
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null)
   const [containerWidth, setContainerWidth] = useState(1000)
   const headerRef = useRef<HTMLDivElement>(null)
+  const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
+  const [relatedLoading, setRelatedLoading] = useState(true)
+  const [relatedError, setRelatedError] = useState<string | null>(null)
+
+  // Fetch related assets
+  useEffect(() => {
+    if (workspaceId && asset.id) {
+      setRelatedLoading(true)
+      setRelatedError(null)
+      fetchRelatedAssets(workspaceId, asset.id)
+        .then(setRelatedAssets)
+        .catch((err) => {
+          console.error('Failed to fetch related assets:', err)
+          setRelatedError(err.message || 'Failed to load related assets')
+        })
+        .finally(() => setRelatedLoading(false))
+    }
+  }, [workspaceId, asset.id])
 
   // Track container width for responsive buttons
   useEffect(() => {
@@ -173,12 +194,16 @@ export default function AssetDetailPage() {
             )}
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ height: '100%' }}>
+              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <CardHeader title="Related Assets" />
-                <CardContent>
-                  <Typography color="text.secondary" variant="body2">
-                    No related assets yet
-                  </Typography>
+                <CardContent sx={{ flex: 1, overflow: 'auto', maxHeight: 400 }}>
+                  <RelatedAssetsTree
+                    relatedAssets={relatedAssets!}
+                    workspaceId={workspaceId!}
+                    currentAssetId={asset.id}
+                    loading={relatedLoading}
+                    error={relatedError}
+                  />
                 </CardContent>
               </Card>
             </Grid>

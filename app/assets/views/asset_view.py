@@ -109,6 +109,59 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Assets"],
+        summary="Get related assets (parent and children)",
+        description="Returns the parent asset (if any) and all child assets for the specified asset. Each related asset includes a 'relatedUrl' to fetch its own relationships.",
+    )
+    @action(detail=True, methods=["get"])
+    def related(self, request, workspace_pk=None, assettype_pk=None, pk=None):
+        """Get related assets (parent and children) for an asset"""
+        asset = self.get_object()
+
+        def build_related_url(asset_id):
+            """Build the URL to fetch related assets for a given asset"""
+            return request.build_absolute_uri(
+                f"/api/workspaces/{workspace_pk}/assets/{asset_id}/related/"
+            )
+
+        # Get parent (simple serialization without nested attributes)
+        parent_data = None
+        if asset.parent:
+            parent_data = {
+                "id": str(asset.parent.id),
+                "name": asset.parent.name,
+                "asset_type": str(asset.parent.asset_type_id),
+                "asset_type_name": asset.parent.asset_type.name,
+                "related_url": build_related_url(asset.parent.id),
+                "has_children": asset.parent.children.exclude(id=asset.id).exists(),
+            }
+
+        # Get children with their own related URLs
+        children = (
+            asset.children.select_related("asset_type")
+            .prefetch_related("children")
+            .all()
+        )
+        children_data = [
+            {
+                "id": str(child.id),
+                "name": child.name,
+                "asset_type": str(child.asset_type_id),
+                "asset_type_name": child.asset_type.name,
+                "related_url": build_related_url(child.id),
+                "has_children": child.children.exists(),
+            }
+            for child in children
+        ]
+
+        return Response(
+            {
+                "parent": parent_data,
+                "children": children_data,
+            }
+        )
+
+    @extend_schema(
+        tags=["Assets"],
         summary="Filter assets by attributes and geography",
         description="Filter assets by asset type, attribute values, and geography with AND/OR logic. Supports equals, contains, gt, lt, gte, lte operators for attributes, and h3, bbox, distance, within, contains, intersects for geographic filters.",
         parameters=[

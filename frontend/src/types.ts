@@ -30,6 +30,8 @@ export interface Asset {
   id: string
   name: string
   assetType: string
+  assetTypeName?: string
+  parent?: string | null
   h3Index?: string
   geometry: {
     type: string

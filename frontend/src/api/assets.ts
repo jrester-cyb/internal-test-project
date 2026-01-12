@@ -25,6 +25,26 @@ export async function fetchAsset(workspaceId: string, assetId: string) {
   return response.json()
 }
 
+export interface RelatedAsset {
+  id: string
+  name: string
+  assetType: string
+  assetTypeName: string
+  relatedUrl: string
+  hasChildren: boolean
+}
+
+export interface RelatedAssetsResponse {
+  parent: RelatedAsset | null
+  children: RelatedAsset[]
+}
+
+export async function fetchRelatedAssets(workspaceId: string, assetId: string): Promise<RelatedAssetsResponse> {
+  const response = await fetch(workspaceUrl(workspaceId, `assets/${assetId}/related/`))
+  if (!response.ok) throw new Error('Failed to fetch related assets')
+  return response.json()
+}
+
 export async function fetchClusters(workspaceId: string, zoom: number, bbox?: number[], filters?: any) {
   const params = new URLSearchParams({ zoom: zoom.toString() })
   if (bbox) {

@@ -12,6 +12,14 @@ class Asset(SoftDeleteMixin):
     asset_type = models.ForeignKey(
         "assets.AssetType", on_delete=models.CASCADE, related_name="assets"
     )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text="Parent asset for hierarchical relationships",
+    )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     geometry = gis_models.GeometryField(null=True, blank=True, srid=4326)
@@ -47,6 +55,50 @@ class Asset(SoftDeleteMixin):
                     NEW.h3_index = '';
                 END IF;
                 RETURN NEW;
+                """,
+            ),
+            pgtrigger.Trigger(
+                name="003_prevent_circular_parent",
+                operation=pgtrigger.Update | pgtrigger.Insert,
+                when=pgtrigger.Before,
+                func="""
+                DECLARE
+                    current_parent_id UUID;
+                    max_depth INT := 100;
+                    depth INT := 0;
+                BEGIN
+                    -- Skip if no parent set
+                    IF NEW.parent_id IS NULL THEN
+                        RETURN NEW;
+                    END IF;
+
+                    -- Check self-reference
+                    IF NEW.parent_id = NEW.id THEN
+                        RAISE EXCEPTION 'An asset cannot be its own parent';
+                    END IF;
+
+                    -- Walk up the parent chain to detect cycles
+                    current_parent_id := NEW.parent_id;
+                    WHILE current_parent_id IS NOT NULL AND depth < max_depth LOOP
+                        -- Check if we've looped back to the asset being saved
+                        IF current_parent_id = NEW.id THEN
+                            RAISE EXCEPTION 'Circular parent relationship detected';
+                        END IF;
+
+                        -- Move to next parent
+                        SELECT parent_id INTO current_parent_id
+                        FROM assets_asset
+                        WHERE id = current_parent_id;
+
+                        depth := depth + 1;
+                    END LOOP;
+
+                    IF depth >= max_depth THEN
+                        RAISE EXCEPTION 'Parent hierarchy too deep (max % levels)', max_depth;
+                    END IF;
+
+                    RETURN NEW;
+                END;
                 """,
             ),
         ]

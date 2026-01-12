@@ -209,6 +209,12 @@ class AssetSerializer(serializers.ModelSerializer):
     attributes = serializers.SerializerMethodField()
     geometry = GeometryField(required=False, allow_null=True)
     location = GeometryField(read_only=True)
+    parent = serializers.PrimaryKeyRelatedField(
+        queryset=Asset.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="Parent asset ID for hierarchical relationships",
+    )
 
     class Meta:
         model = Asset
@@ -216,6 +222,7 @@ class AssetSerializer(serializers.ModelSerializer):
             "id",
             "asset_type",
             "asset_type_name",
+            "parent",
             "name",
             "description",
             "geometry",
