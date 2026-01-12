@@ -1,5 +1,5 @@
 import { Box, List, Drawer, IconButton } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, Home as HomeIcon } from '@mui/icons-material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, Home as HomeIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import { useParams } from 'react-router-dom'
 import SidebarNavItem from './SidebarNavItem'
 
@@ -61,6 +61,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   to={`${basePath}/asset-types`}
                   icon={<AssetsIcon />}
                   label="Assets"
+                  isOpen={isOpen}
+                />
+                <SidebarNavItem
+                  to={`${basePath}/library`}
+                  icon={<LibraryIcon />}
+                  label="Library"
                   isOpen={isOpen}
                 />
                 <SidebarNavItem

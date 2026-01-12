@@ -286,3 +286,90 @@ export async function reorderAssetTypeAttributeChoices(workspaceId: string, asse
   if (!response.ok) throw new Error('Failed to reorder choices')
   return response.json()
 }
+
+// File Manager API
+
+export interface FileNode {
+  id: string
+  name: string
+  isDirectory: boolean
+  resourceType: 'directory' | 'file' | 'image' | 'document' | 'video' | 'audio'
+  hasChildren: boolean
+  childrenUrl: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DirectoryResponse {
+  id: string
+  name: string
+  parent: string | null
+  isDirectory: boolean
+  workspace: string
+  description: string
+  color: string
+  icon: string
+  path: string
+  childrenCount: number
+  hasChildren: boolean
+  ancestors: Array<{ id: string; name: string }>
+  createdAt: string
+  updatedAt: string
+  children: {
+    count: number
+    next: string | null
+    previous: string | null
+    results: FileNode[]
+  }
+}
+
+export async function fetchFileTree(workspaceId: string, directoryId?: string): Promise<DirectoryResponse> {
+  const path = directoryId ? `files/tree/${directoryId}/` : 'files/tree/'
+  const response = await fetch(workspaceUrl(workspaceId, path))
+  if (!response.ok) throw new Error('Failed to fetch file tree')
+  return response.json()
+}
+
+export async function createDirectory(workspaceId: string, data: { name: string, parent: string, description?: string }) {
+  const response = await fetch(workspaceUrl(workspaceId, 'files/create-folder/'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) throw new Error('Failed to create directory')
+  return response.json()
+}
+
+export async function deleteFileNode(workspaceId: string, fileId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `files/${fileId}/`), {
+    method: 'DELETE'
+  })
+  if (!response.ok) throw new Error('Failed to delete file')
+  return response.ok
+}
+
+export async function renameFileNode(workspaceId: string, fileId: string, name: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `files/${fileId}/rename/`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!response.ok) throw new Error('Failed to rename file')
+  return response.json()
+}
+
+export async function moveFileNodes(workspaceId: string, fileIds: string[], destinationParent: string) {
+  const response = await fetch(workspaceUrl(workspaceId, 'files/move/'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ file_ids: fileIds, destination_parent: destinationParent })
+  })
+  if (!response.ok) throw new Error('Failed to move files')
+  return response.json()
+}

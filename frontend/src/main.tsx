@@ -16,6 +16,7 @@ const AssetDetailPage = lazy(() => import('./pages/AssetDetailPage.tsx'))
 const AssetTypeLayout = lazy(() => import('./pages/AssetTypeLayout.tsx'))
 const AssetTypeAboutPage = lazy(() => import('./pages/AssetTypeAboutPage.tsx'))
 const AssetTypeAttributesPage = lazy(() => import('./pages/AssetTypeAttributesPage.tsx'))
+const LibraryPage = lazy(() => import('./pages/LibraryPage.tsx'))
 
 // Generic lazy loader wrapper
 function createLazyLoader(
@@ -78,6 +79,30 @@ const router = createBrowserRouter([
             handle: {
               crumb: "Map"
             },
+          },
+          {
+            path: "library",
+            handle: {
+              crumb: "Library"
+            },
+            children: [
+              {
+                index: true,
+                element: <LibraryPage />,
+                loader: async ({ params }) => {
+                  const { fetchFileTree } = await import('./api/assets')
+                  return fetchFileTree(params.workspaceId!)
+                },
+              },
+              {
+                path: ":directoryId",
+                element: <LibraryPage />,
+                loader: async ({ params }) => {
+                  const { fetchFileTree } = await import('./api/assets')
+                  return fetchFileTree(params.workspaceId!, params.directoryId)
+                },
+              },
+            ],
           },
           {
             path: "asset-types",

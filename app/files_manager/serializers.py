@@ -38,6 +38,7 @@ class DirectorySerializer(serializers.ModelSerializer):
     is_directory = serializers.BooleanField(read_only=True, default=True)
     children_count = serializers.SerializerMethodField()
     has_children = serializers.SerializerMethodField()
+    ancestors = serializers.SerializerMethodField()
 
     class Meta:
         model = Directory
@@ -53,6 +54,7 @@ class DirectorySerializer(serializers.ModelSerializer):
             "path",
             "children_count",
             "has_children",
+            "ancestors",
             "created_at",
             "updated_at",
         ]
@@ -65,6 +67,15 @@ class DirectorySerializer(serializers.ModelSerializer):
     def get_has_children(self, obj):
         """Return whether this directory has children (for lazy loading)."""
         return obj.children.exists()
+
+    def get_ancestors(self, obj):
+        """Return list of ancestor directories from root to parent."""
+        ancestors = []
+        current = obj.parent
+        while current:
+            ancestors.insert(0, {"id": str(current.id), "name": current.name})
+            current = current.parent
+        return ancestors
 
 
 class FileBaseSerializer(serializers.ModelSerializer):
