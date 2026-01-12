@@ -95,7 +95,7 @@ class FilterGroupSerializer(serializers.Serializer):
 
                     new_q = Q(
                         **{
-                            "attributes__attribute_type_attribute__api_key": api_key,
+                            "attributes__asset_type_attribute__api_key": api_key,
                             f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": value,
                         }
                     )
@@ -104,6 +104,8 @@ class FilterGroupSerializer(serializers.Serializer):
                     else:
                         q |= new_q
 
+                if q is None:
+                    return Q()
                 if self.validated_data.get("inverse", False):
                     q = ~q
                 return q
@@ -113,12 +115,13 @@ class FilterGroupSerializer(serializers.Serializer):
                 json_path = "__".join(parts[2:])
                 q = Q(
                     **{
-                        "attributes__attribute_type_attribute__api_key": api_key,
-                        f"attributes__{self.LOOKUP_MAP['json']}__{json_path}__{operator}": value,
+                        "attributes__asset_type_attribute__api_key": api_key,
+                        f"attributes__jsonattributevalue__value__{json_path}__{operator}": value,
                     }
                 )
-            if self.validated_data.get("inverse", False):
-                q = ~q
+                if self.validated_data.get("inverse", False):
+                    q = ~q
+                return q
 
         query_obj = Q(**{f"{field}__{operator}": value})
         if self.validated_data.get("inverse", False):
