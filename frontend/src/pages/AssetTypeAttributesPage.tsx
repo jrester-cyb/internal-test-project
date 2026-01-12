@@ -114,7 +114,7 @@ export default function AssetTypeAttributesPage() {
     }, 300) // 300ms debounce
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, assetTypeId])
+  }, [searchTerm])
 
   // Reset to loader data when it changes
   useEffect(() => {

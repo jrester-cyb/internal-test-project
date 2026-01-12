@@ -60,6 +60,10 @@ const router = createBrowserRouter([
           const workspace = await fetchWorkspace(params.workspaceId!)
           return workspace
         },
+        shouldRevalidate: ({ currentParams, nextParams }) => {
+          // Only reload if we're changing to a different workspace
+          return currentParams.workspaceId !== nextParams.workspaceId
+        },
         handle: {
           crumb: (data: any) => data?.loaderData?.name || 'Workspace'
         },
@@ -96,7 +100,10 @@ const router = createBrowserRouter([
                   const { fetchAssetType } = await import('./api/assets')
                   return fetchAssetType(params.workspaceId!, params.assetTypeId!)
                 },
-                shouldRevalidate: () => false, // Only load once for breadcrumb, don't reload on navigation
+                shouldRevalidate: ({ currentParams, nextParams }) => {
+                  // Only reload if we're changing to a different asset type
+                  return currentParams.assetTypeId !== nextParams.assetTypeId
+                },
                 handle: {
                   crumb: (data: any) => data?.loaderData?.name || 'Asset Type'
                 },
@@ -129,6 +136,10 @@ const router = createBrowserRouter([
                       const count = response.count || 0
 
                       return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId, workspaceId: params.workspaceId };
+                    },
+                    shouldRevalidate: ({ currentUrl, nextUrl }) => {
+                      // Only revalidate if search param changes
+                      return currentUrl.searchParams.get('search') !== nextUrl.searchParams.get('search')
                     },
                   },
                   {
