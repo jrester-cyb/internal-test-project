@@ -173,15 +173,7 @@ const router = createBrowserRouter([
                         path: ":assetId",
                         element: <AssetDetailPage />,
                         handle: {
-                          crumb: async ({ params }) => {
-                            const { fetchAsset } = await import('./api/assets')
-                            try {
-                              const asset = await fetchAsset(params.workspaceId!, params.assetId!)
-                              return asset ? asset.name : 'Asset Detail'
-                            } catch {
-                              return 'Asset Detail'
-                            }
-                          },
+                          crumb: ({ loaderData }) => loaderData?.name || 'Asset Detail',
                           hideNavbar: true,
                         },
                         loader: async ({ params }) => {

@@ -18,7 +18,7 @@ export default function AssetDetailPage() {
               Asset Type
             </Typography>
             <Typography variant="body1">
-              {asset.asset_type?.name || 'N/A'}
+              {asset.assetTypeName || 'N/A'}
             </Typography>
           </Grid>
 
@@ -33,20 +33,22 @@ export default function AssetDetailPage() {
             </Grid>
           )}
 
-          {asset.attributes && asset.attributes.length > 0 && (
+          {asset.attributes && Object.keys(asset.attributes).length > 0 && (
             <Grid item xs={12}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 Attributes
               </Typography>
               <Grid container spacing={2}>
-                {asset.attributes.map((attr) => (
-                  <Grid item xs={12} sm={6} md={4} key={attr.id}>
+                {Object.entries(asset.attributes).map(([key, value]) => (
+                  <Grid item xs={12} sm={6} md={4} key={key}>
                     <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                       <Typography variant="caption" color="text.secondary">
-                        {attr.attribute_type_attribute?.name || 'Unknown'}
+                        {key}
                       </Typography>
                       <Typography variant="body2">
-                        {attr.value !== null && attr.value !== undefined ? String(attr.value) : 'N/A'}
+                        {value !== null && value !== undefined
+                          ? (typeof value === 'object' ? JSON.stringify(value) : String(value))
+                          : 'N/A'}
                       </Typography>
                     </Paper>
                   </Grid>
