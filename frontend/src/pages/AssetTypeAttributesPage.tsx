@@ -4,7 +4,7 @@ import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator a
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute } from '../api/assets'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -398,7 +398,7 @@ export default function AssetTypeAttributesPage() {
 
   const handleDelete = async (attr: AssetTypeAttribute) => {
     // Check if this is a base attribute - if so, suggest hiding instead
-    const isBaseAttribute = !attr.workspace && !attr.isExtension
+    const isBaseAttribute = !attr.workspace
     if (isBaseAttribute) {
       const useHide = confirm(
         `"${attr.name}" is a base attribute shared across workspaces. It cannot be deleted from this workspace.\n\n` +
@@ -415,11 +415,36 @@ export default function AssetTypeAttributesPage() {
     }
 
     try {
+      const apiKey = attr.apiKey
+      const isOverride = attr.isOverride
+
       await deleteAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
-      // Remove from local state
-      setAllAttributes(prev => prev.filter(a => a.id !== attr.id))
-      if (selectedAttribute?.id === attr.id) {
-        setSelectedAttribute(null)
+
+      if (isOverride) {
+        // This was an override - fetch the base attribute to replace it
+        const baseAttr = await fetchAssetAttributeByApiKey(workspaceId!, assetTypeId!, apiKey)
+        if (baseAttr) {
+          // Replace the override with the base attribute
+          setAllAttributes(prev => prev.map(a =>
+            a.id === attr.id || a.apiKey === apiKey ? baseAttr : a
+          ))
+          // Update selected attribute to show the base
+          if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === apiKey) {
+            setSelectedAttribute(baseAttr)
+          }
+        } else {
+          // No base found (shouldn't happen), remove from list
+          setAllAttributes(prev => prev.filter(a => a.id !== attr.id))
+          if (selectedAttribute?.id === attr.id) {
+            setSelectedAttribute(null)
+          }
+        }
+      } else {
+        // This was an extension - remove from list
+        setAllAttributes(prev => prev.filter(a => a.id !== attr.id))
+        if (selectedAttribute?.id === attr.id) {
+          setSelectedAttribute(null)
+        }
       }
     } catch (error: any) {
       console.error('Failed to delete attribute:', error)

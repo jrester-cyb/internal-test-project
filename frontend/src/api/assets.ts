@@ -178,6 +178,17 @@ export async function fetchAssetAttributeDefinitions(workspaceId: string, assetT
   return response.json()
 }
 
+export async function fetchAssetAttributeByApiKey(workspaceId: string, assetTypeId: string, apiKey: string) {
+  const params = new URLSearchParams({
+    search: apiKey,
+    page_size: '1'
+  })
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
+  if (!response.ok) throw new Error('Failed to fetch attribute')
+  const data = await response.json()
+  return data.results?.[0] || null
+}
+
 export async function fetchAttributeAssetCount(workspaceId: string, assetTypeId: string, attributeId: string) {
   const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/asset-count/`))
   if (!response.ok) throw new Error('Failed to fetch attribute asset count')
