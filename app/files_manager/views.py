@@ -301,11 +301,13 @@ class FileNodeViewSet(viewsets.ModelViewSet):
     def _get_tree_response(self, request, directory_id=None):
         """
         Internal method to get a directory and its paginated children.
+        Supports search filtering via ?search= query param.
         """
         workspace_pk = self.kwargs.get("workspace_pk")
         from workspaces.models import Workspace
 
         workspace = Workspace.objects.get(pk=workspace_pk)
+        search_query = request.query_params.get("search", "").strip()
 
         if directory_id:
             # Get specific directory by ID
@@ -325,9 +327,27 @@ class FileNodeViewSet(viewsets.ModelViewSet):
             current_dir = Directory.get_or_create_root(workspace)
 
         # Get children queryset with ordering (directories first, then by name)
-        children = FileNode.objects.filter(parent=current_dir).order_by(
-            "-polymorphic_ctype", "name"
+        # Use Case/When to ensure directories come first regardless of polymorphic_ctype ordering
+        from django.db.models import Case, When, Value, IntegerField
+        from django.contrib.contenttypes.models import ContentType
+
+        directory_ct = ContentType.objects.get_for_model(Directory)
+
+        children = (
+            FileNode.objects.filter(parent=current_dir)
+            .annotate(
+                dir_order=Case(
+                    When(polymorphic_ctype=directory_ct, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("dir_order", "name")
         )
+
+        # Apply search filter if provided
+        if search_query:
+            children = children.filter(name__icontains=search_query)
 
         # Paginate children
         paginator = self.pagination_class()
@@ -359,6 +379,12 @@ class FileNodeViewSet(viewsets.ModelViewSet):
         tags=["Files"],
         parameters=[
             OpenApiParameter(
+                name="search",
+                description="Search files and folders by name",
+                required=False,
+                type=str,
+            ),
+            OpenApiParameter(
                 name="page",
                 description="Page number for children pagination",
                 required=False,
@@ -385,6 +411,12 @@ class FileNodeViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Files"],
         parameters=[
+            OpenApiParameter(
+                name="search",
+                description="Search files and folders by name",
+                required=False,
+                type=str,
+            ),
             OpenApiParameter(
                 name="page",
                 description="Page number for children pagination",

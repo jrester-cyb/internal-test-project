@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import {
   Box,
   Typography,
@@ -20,6 +21,8 @@ import {
   DialogActions,
   TextField,
   Button,
+  CircularProgress,
+  LinearProgress,
 } from '@mui/material'
 import {
   Folder as FolderIcon,
@@ -33,9 +36,13 @@ import {
   MoreVert as MoreVertIcon,
   CreateNewFolder as CreateNewFolderIcon,
   Home as HomeIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material'
 import { useLoaderData, useNavigate, useParams, useRevalidator } from 'react-router-dom'
+import { FixedSizeList as VirtualList } from 'react-window'
 import {
+  fetchFileTree,
   createDirectory,
   deleteFileNode,
   renameFileNode,
@@ -60,6 +67,68 @@ function formatDate(dateString: string) {
   })
 }
 
+interface VirtualListItemProps {
+  index: number
+  style: React.CSSProperties
+  data: {
+    items: FileNode[]
+    onNavigate: (item: FileNode) => void
+    onContextMenu: (event: React.MouseEvent, item: FileNode) => void
+    setContextMenu: (menu: any) => void
+    resourceTypeIcons: Record<string, React.ReactElement>
+    isLastItemRef?: React.RefObject<HTMLDivElement>
+  }
+}
+
+const VirtualListItem: React.FC<VirtualListItemProps> = ({ index, style, data }) => {
+  const { items, onNavigate, onContextMenu, setContextMenu, resourceTypeIcons, isLastItemRef } = data
+  const item = items[index]
+  const isLastItem = index === items.length - 1
+
+  if (!item) return null
+
+  return (
+    <div
+      style={style}
+      ref={isLastItem ? isLastItemRef : null}
+    >
+      <ListItem
+        disablePadding
+        onContextMenu={(e) => onContextMenu(e, item)}
+        secondaryAction={
+          <IconButton
+            edge="end"
+            onClick={(e) => {
+              e.stopPropagation()
+              setContextMenu({
+                mouseX: e.clientX,
+                mouseY: e.clientY,
+                item,
+              })
+            }}
+          >
+            <MoreVertIcon />
+          </IconButton>
+        }
+      >
+        <ListItemButton
+          onClick={() => item.isDirectory && onNavigate(item)}
+          sx={{ py: 1.5 }}
+        >
+          <ListItemIcon>
+            {resourceTypeIcons[item.resourceType] || <FileIcon />}
+          </ListItemIcon>
+          <ListItemText
+            primary={item.name}
+            secondary={formatDate(item.updatedAt)}
+            primaryTypographyProps={{ fontWeight: item.isDirectory ? 500 : 400 }}
+          />
+        </ListItemButton>
+      </ListItem>
+    </div>
+  )
+}
+
 export default function LibraryPage() {
   const currentDir = useLoaderData() as DirectoryResponse
   const { workspaceId, directoryId } = useParams()
@@ -81,6 +150,56 @@ export default function LibraryPage() {
   const [renameDialog, setRenameDialog] = useState(false)
   const [renameItem, setRenameItem] = useState<FileNode | null>(null)
   const [renameName, setRenameName] = useState('')
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchData, setSearchData] = useState<DirectoryResponse | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
+
+  // Infinite scroll state
+  const [allChildren, setAllChildren] = useState<FileNode[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasNextPage, setHasNextPage] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+
+  // Initialize and clear search when directory changes
+  useEffect(() => {
+    clearSearch()
+    // Initialize children from loader data
+    const children = currentDir.children?.results || []
+    setAllChildren(children)
+    setCurrentPage(1)
+    setHasNextPage(!!currentDir.children?.next)
+  }, [directoryId, currentDir])
+
+  // Debounced search effect
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchData(null)
+      setIsSearching(false)
+      return
+    }
+
+    setIsSearching(true)
+    const timeoutId = setTimeout(async () => {
+      if (!workspaceId) return
+
+      try {
+        const searchResults = await fetchFileTree(workspaceId, directoryId, searchQuery, 1, 100)
+        setSearchData(searchResults)
+      } catch (error) {
+        console.error('Search failed:', error)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300) // 300ms debounce delay
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery, workspaceId, directoryId])
+
+  // Reference for virtual list container
+  const lastItemRef = useRef<HTMLDivElement>(null)
+
 
   // Build breadcrumbs from ancestors
   const basePath = `/workspaces/${workspaceId}/library`
@@ -182,7 +301,39 @@ export default function LibraryPage() {
     handleCloseContextMenu()
   }
 
-  const children = currentDir.children?.results || []
+  // Handle search functionality
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  const clearSearch = () => {
+    setSearchQuery('')
+    setSearchData(null)
+    setIsSearching(false)
+  }
+
+  // Load more items for infinite scroll
+  const loadMore = async () => {
+    if (!workspaceId || isLoadingMore || !hasNextPage || searchData) return
+
+    try {
+      setIsLoadingMore(true)
+      const nextPage = currentPage + 1
+      const moreData = await fetchFileTree(workspaceId, directoryId, undefined, nextPage, 100)
+
+      const newChildren = moreData.children?.results || []
+      setAllChildren(prev => [...prev, ...newChildren])
+      setCurrentPage(nextPage)
+      setHasNextPage(!!moreData.children?.next)
+    } catch (error) {
+      console.error('Failed to load more:', error)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
+
+  // Use search data if available, otherwise use accumulated children data
+  const sortedChildren = searchData ? (searchData.children?.results || []) : allChildren
 
   return (
     <Box
@@ -190,9 +341,10 @@ export default function LibraryPage() {
         flexGrow: 1,
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
+        height: '100%',
+        minHeight: 0,
         bgcolor: 'background.default',
-        p: 3,
+        p: 2,
       }}
     >
       {/* Header */}
@@ -200,47 +352,89 @@ export default function LibraryPage() {
         <Typography variant="h5" component="h2">
           Library
         </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<CreateNewFolderIcon />}
-          onClick={() => setNewFolderDialog(true)}
-        >
-          New Folder
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Search files and folders..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+              endAdornment: searchQuery && (
+                <IconButton size="small" onClick={clearSearch}>
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              ),
+            }}
+            sx={{ minWidth: 300 }}
+          />
+          <Button
+            variant="outlined"
+            startIcon={<CreateNewFolderIcon />}
+            onClick={() => setNewFolderDialog(true)}
+            disabled={isSearching || !!searchData}
+          >
+            New Folder
+          </Button>
+        </Stack>
       </Stack>
 
       {/* Breadcrumbs */}
-      <Paper sx={{ p: 1.5, mb: 2 }}>
-        <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
-          {breadcrumbs.map((crumb, index) => {
-            const isLast = index === breadcrumbs.length - 1
-            return isLast ? (
-              <Stack key={crumb.path} direction="row" alignItems="center" spacing={0.5}>
-                {index === 0 && <HomeIcon fontSize="small" />}
-                <Typography color="text.primary" fontWeight={500}>
-                  {crumb.name}
-                </Typography>
-              </Stack>
-            ) : (
-              <Link
-                key={crumb.path}
-                component="button"
-                underline="hover"
-                color="inherit"
-                onClick={() => handleBreadcrumbClick(crumb.path)}
-                sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-              >
-                {index === 0 && <HomeIcon fontSize="small" />}
-                {crumb.name}
-              </Link>
-            )
-          })}
-        </Breadcrumbs>
-      </Paper>
+      {!searchData && (
+        <Paper sx={{ mb: 2 }}>
+          <Box sx={{ p: 1.5 }}>
+            <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
+              {breadcrumbs.map((crumb, index) => {
+                const isLast = index === breadcrumbs.length - 1
+                return isLast ? (
+                  <Stack key={crumb.path} direction="row" alignItems="center" spacing={0.5}>
+                    {index === 0 && <HomeIcon fontSize="small" />}
+                    <Typography color="text.primary" fontWeight={500}>
+                      {crumb.name}
+                    </Typography>
+                  </Stack>
+                ) : (
+                  <Link
+                    key={crumb.path}
+                    component="button"
+                    underline="hover"
+                    color="inherit"
+                    onClick={() => handleBreadcrumbClick(crumb.path)}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                  >
+                    {index === 0 && <HomeIcon fontSize="small" />}
+                    {crumb.name}
+                  </Link>
+                )
+              })}
+            </Breadcrumbs>
+          </Box>
+          {/* Progress bar integrated into breadcrumbs */}
+          <Box sx={{ height: 4 }}>
+            {(isSearching || isLoadingMore) && <LinearProgress />}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Search Results Header */}
+      {searchData && (
+        <Paper sx={{ mb: 2 }}>
+          <Box sx={{ p: 1.5 }}>
+            <Typography variant="body1" color="text.secondary">
+              Search results for "{searchQuery}" ({sortedChildren.length} items found)
+            </Typography>
+          </Box>
+          {/* Progress bar integrated into search header */}
+          <Box sx={{ height: 4 }}>
+            {(isSearching || isLoadingMore) && <LinearProgress />}
+          </Box>
+        </Paper>
+      )}
+
 
       {/* File List */}
-      <Paper sx={{ flexGrow: 1, overflow: 'auto' }}>
-        {children.length === 0 ? (
+      <Paper sx={{ flexGrow: 1, overflow: 'hidden' }}>
+        {sortedChildren.length === 0 ? (
           <Box
             display="flex"
             flexDirection="column"
@@ -249,56 +443,48 @@ export default function LibraryPage() {
             height="200px"
           >
             <FolderOpenIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-            <Typography color="text.secondary">This folder is empty</Typography>
+            <Typography color="text.secondary">
+              {searchData ? 'No files found matching your search' : 'This folder is empty'}
+            </Typography>
           </Box>
         ) : (
-          <List disablePadding>
-            {children.map((item) => (
-              <ListItem
-                key={item.id}
-                disablePadding
-                onContextMenu={(e) => handleContextMenu(e, item)}
-                secondaryAction={
-                  <IconButton
-                    edge="end"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setContextMenu({
-                        mouseX: e.clientX,
-                        mouseY: e.clientY,
-                        item,
-                      })
-                    }}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
-                }
-              >
-                <ListItemButton
-                  onClick={() => item.isDirectory && handleNavigate(item)}
-                  sx={{ py: 1.5 }}
-                >
-                  <ListItemIcon>
-                    {resourceTypeIcons[item.resourceType] || <FileIcon />}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={item.name}
-                    secondary={formatDate(item.updatedAt)}
-                    primaryTypographyProps={{ fontWeight: item.isDirectory ? 500 : 400 }}
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          <VirtualList
+            height={600} // Fixed height for virtual scrolling
+            itemCount={sortedChildren.length + (isLoadingMore ? 1 : 0)}
+            itemSize={73} // Height of each list item
+            itemData={{
+              items: sortedChildren,
+              onNavigate: handleNavigate,
+              onContextMenu: handleContextMenu,
+              setContextMenu,
+              resourceTypeIcons,
+              isLastItemRef: lastItemRef,
+            }}
+            onScroll={({ scrollOffset, scrollDirection }) => {
+              // Trigger load more when scrolled near bottom
+              const threshold = 600 * 0.8 // 80% of container height
+              const maxScroll = (sortedChildren.length * 73) - 600
+              if (scrollOffset > maxScroll - threshold && scrollDirection === 'forward') {
+                loadMore()
+              }
+            }}
+          >
+            {({ index, style, data }) => {
+              // Show loading indicator as last item
+              if (index === sortedChildren.length && isLoadingMore) {
+                return (
+                  <div style={style}>
+                    <Box display="flex" justifyContent="center" py={2}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  </div>
+                )
+              }
+              return <VirtualListItem index={index} style={style} data={data} />
+            }}
+          </VirtualList>
         )}
       </Paper>
-
-      {/* Pagination info */}
-      {currentDir.children && currentDir.children.count > 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Showing {children.length} of {currentDir.children.count} items
-        </Typography>
-      )}
 
       {/* Context Menu */}
       <Menu

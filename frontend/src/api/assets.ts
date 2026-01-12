@@ -323,9 +323,26 @@ export interface DirectoryResponse {
   }
 }
 
-export async function fetchFileTree(workspaceId: string, directoryId?: string): Promise<DirectoryResponse> {
+export async function fetchFileTree(
+  workspaceId: string, 
+  directoryId?: string, 
+  search?: string,
+  page?: number,
+  pageSize?: number
+): Promise<DirectoryResponse> {
   const path = directoryId ? `files/tree/${directoryId}/` : 'files/tree/'
-  const response = await fetch(workspaceUrl(workspaceId, path))
+  const params = new URLSearchParams()
+  if (search) {
+    params.append('search', search)
+  }
+  if (page) {
+    params.append('page', page.toString())
+  }
+  if (pageSize) {
+    params.append('page_size', pageSize.toString())
+  }
+  const url = workspaceUrl(workspaceId, path) + (params.toString() ? `?${params}` : '')
+  const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to fetch file tree')
   return response.json()
 }
