@@ -200,6 +200,35 @@ export default function AssetTypeAttributesPage() {
     }
   }, [assetTypeId, nextUrl, isLoadingMore, hasMore, allAttributes.length, count])
 
+  // Proactively fetch more items when list is running low (e.g., after hiding)
+  useEffect(() => {
+    const MIN_ITEMS_THRESHOLD = 20
+
+    if (
+      !includeHidden &&
+      allAttributes.length < MIN_ITEMS_THRESHOLD &&
+      nextUrl &&
+      !fetchInProgressRef.current
+    ) {
+      const fetchMore = async () => {
+        fetchInProgressRef.current = true
+        setIsLoadingMore(true)
+        try {
+          const response = await fetchAssetAttributeDefinitionsFromUrl(nextUrl)
+          setAllAttributes(prev => [...prev, ...response.results])
+          setNextUrl(response.next)
+          setHasMore(!!response.next)
+        } catch (err) {
+          console.error('Failed to fetch more attributes:', err)
+        } finally {
+          setIsLoadingMore(false)
+          fetchInProgressRef.current = false
+        }
+      }
+      fetchMore()
+    }
+  }, [allAttributes.length, nextUrl, includeHidden])
+
   // Fetch asset count when attribute is selected
   useEffect(() => {
     if (!selectedAttribute || !workspaceId || !assetTypeId) {
@@ -478,21 +507,6 @@ export default function AssetTypeAttributesPage() {
         // If not showing hidden, remove from list and select next
         const currentIndex = allAttributes.findIndex(a => a.id === attr.id || a.apiKey === hiddenAttr.apiKey)
         const newList = allAttributes.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
-
-        // Proactively fetch more items if list is getting short and there are more pages
-        const MIN_ITEMS_THRESHOLD = 10
-        if (newList.length < MIN_ITEMS_THRESHOLD && nextUrl && !isLoadingMore) {
-          // Fetch in background without blocking
-          setIsLoadingMore(true)
-          fetchAssetAttributeDefinitionsFromUrl(nextUrl)
-            .then(response => {
-              setAllAttributes(prev => [...prev, ...response.results])
-              setNextUrl(response.next)
-              setHasMore(!!response.next)
-            })
-            .catch(err => console.error('Failed to fetch more attributes:', err))
-            .finally(() => setIsLoadingMore(false))
-        }
 
         setAllAttributes(newList)
 
