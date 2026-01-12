@@ -32,6 +32,14 @@ class Asset(SoftDeleteMixin):
         db_index=True,
         help_text="H3 index of the geometry centroid",
     )
+    default_folder = models.ForeignKey(
+        "files.Directory",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assets_with_default",
+        help_text="Default folder for file uploads related to this asset",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

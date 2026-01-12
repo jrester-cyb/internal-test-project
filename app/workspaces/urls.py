@@ -7,6 +7,7 @@ from assets.views import (
     AssetTypeAttributeChoiceViewSet,
     AssetViewSet,
 )
+from files.views import FileNodeViewSet
 
 router = DefaultRouter()
 router.register(r"workspaces", WorkspaceViewSet, basename="workspace")
@@ -47,6 +48,14 @@ assets_router.register(
     basename="workspace-asset",
 )
 
+# Nested router for files under workspaces
+files_router = NestedDefaultRouter(router, r"workspaces", lookup="workspace")
+files_router.register(
+    r"files",
+    FileNodeViewSet,
+    basename="workspace-file",
+)
+
 # Nested router for assets under asset types
 assettype_assets_router = NestedDefaultRouter(
     asset_types_router, r"asset-types", lookup="assettype"
@@ -63,5 +72,6 @@ urlpatterns = (
     + attributes_router.urls
     + choices_router.urls
     + assets_router.urls
+    + files_router.urls
     + assettype_assets_router.urls
 )
