@@ -327,19 +327,19 @@ export async function fetchFileTree(
   workspaceId: string, 
   directoryId?: string, 
   search?: string,
-  page?: number,
-  pageSize?: number
+  limit?: number,
+  offset?: number
 ): Promise<DirectoryResponse> {
   const path = directoryId ? `files/tree/${directoryId}/` : 'files/tree/'
   const params = new URLSearchParams()
   if (search) {
     params.append('search', search)
   }
-  if (page) {
-    params.append('page', page.toString())
+  if (limit !== undefined) {
+    params.append('limit', limit.toString())
   }
-  if (pageSize) {
-    params.append('page_size', pageSize.toString())
+  if (offset !== undefined) {
+    params.append('offset', offset.toString())
   }
   const url = workspaceUrl(workspaceId, path) + (params.toString() ? `?${params}` : '')
   const response = await fetch(url)

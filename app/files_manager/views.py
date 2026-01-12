@@ -3,7 +3,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import PageNumberPagination, LimitOffsetPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
@@ -90,6 +90,13 @@ class FileNodePagination(PageNumberPagination):
     page_size = 100
     page_size_query_param = "page_size"
     max_page_size = 1000
+
+
+class FileNodeTreePagination(LimitOffsetPagination):
+    """Pagination for tree endpoints using limit/offset."""
+
+    default_limit = 100
+    max_limit = 1000
 
 
 @extend_schema_view(
@@ -349,8 +356,8 @@ class FileNodeViewSet(viewsets.ModelViewSet):
         if search_query:
             children = children.filter(name__icontains=search_query)
 
-        # Paginate children
-        paginator = self.pagination_class()
+        # Paginate children using limit/offset pagination
+        paginator = FileNodeTreePagination()
         page = paginator.paginate_queryset(children, request)
 
         if page is not None:
@@ -385,14 +392,14 @@ class FileNodeViewSet(viewsets.ModelViewSet):
                 type=str,
             ),
             OpenApiParameter(
-                name="page",
-                description="Page number for children pagination",
+                name="limit",
+                description="Number of children to return (default 100, max 1000)",
                 required=False,
                 type=int,
             ),
             OpenApiParameter(
-                name="page_size",
-                description="Number of children per page (default 100, max 1000)",
+                name="offset",
+                description="Number of children to skip for pagination",
                 required=False,
                 type=int,
             ),
@@ -418,14 +425,14 @@ class FileNodeViewSet(viewsets.ModelViewSet):
                 type=str,
             ),
             OpenApiParameter(
-                name="page",
-                description="Page number for children pagination",
+                name="limit",
+                description="Number of children to return (default 100, max 1000)",
                 required=False,
                 type=int,
             ),
             OpenApiParameter(
-                name="page_size",
-                description="Number of children per page (default 100, max 1000)",
+                name="offset",
+                description="Number of children to skip for pagination",
                 required=False,
                 type=int,
             ),
