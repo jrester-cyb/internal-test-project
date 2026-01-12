@@ -102,17 +102,20 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Asset Type Attributes"],
         summary="Get asset count for attribute",
-        description="Returns the count of assets that have a value for this attribute"
+        description="Returns the count of assets that have a value for this attribute",
     )
     @action(detail=True, methods=["get"], url_path="asset-count")
     def asset_count(self, request, pk=None, workspace_pk=None, assettype_pk=None):
         """Get count of assets with values for this attribute"""
         from ..models import BaseAttributeValue
-        
-        count = BaseAttributeValue.objects.filter(
-            asset_type_attribute_id=pk
-        ).values('asset_id').distinct().count()
-        
+
+        count = (
+            BaseAttributeValue.objects.filter(asset_type_attribute_id=pk)
+            .values("asset_id")
+            .distinct()
+            .count()
+        )
+
         return Response({"count": count})
 
     @extend_schema(
