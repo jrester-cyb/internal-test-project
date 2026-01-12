@@ -55,16 +55,13 @@ const router = createBrowserRouter([
       {
         path: "workspaces/:workspaceId",
         element: <WorkspaceLayout />,
+        loader: async ({ params }) => {
+          const { fetchWorkspace } = await import('./api/assets')
+          const workspace = await fetchWorkspace(params.workspaceId!)
+          return workspace
+        },
         handle: {
-          crumb: async ({ params }) => {
-            const { fetchWorkspace } = await import('./api/assets')
-            try {
-              const workspace = await fetchWorkspace(params.workspaceId!)
-              return workspace?.name || 'Workspace'
-            } catch {
-              return 'Workspace'
-            }
-          }
+          crumb: (data: any) => data?.loaderData?.name || 'Workspace'
         },
         children: [
           {
@@ -95,14 +92,12 @@ const router = createBrowserRouter([
               },
               {
                 path: ":assetTypeId",
+                loader: async ({ params }) => {
+                  const { fetchAssetType } = await import('./api/assets')
+                  return fetchAssetType(params.workspaceId!, params.assetTypeId!)
+                },
                 handle: {
-                  crumb: async ({ params }) => {
-                    const { fetchAssetTypes } = await import('./api/assets')
-                    const assetTypes = await fetchAssetTypes(params.workspaceId!)
-                    const assetsArray = Array.isArray(assetTypes) ? assetTypes : assetTypes.results || []
-                    const assetType = assetsArray.find((at: any) => at.id == params.assetTypeId)
-                    return assetType ? assetType.name : 'Asset Type'
-                  }
+                  crumb: (data: any) => data?.loaderData?.name || 'Asset Type'
                 },
                 element: <AssetTypeLayout />,
                 children: [

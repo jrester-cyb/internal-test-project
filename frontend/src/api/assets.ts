@@ -122,6 +122,12 @@ export async function fetchAssetTypes(workspaceId: string) {
   return response.json()
 }
 
+export async function fetchAssetType(workspaceId: string, assetTypeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/`))
+  if (!response.ok) throw new Error('Failed to fetch asset type')
+  return response.json()
+}
+
 export async function fetchAssetsByType(workspaceId: string, assetTypeId: string, page: number = 1, pageSize: number = 25) {
   const params = new URLSearchParams({
     page: page.toString(),
