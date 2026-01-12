@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from ..models import (
     AssetTypeAttribute,
@@ -44,9 +45,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        """Filter attributes by parent asset type"""
-        return AssetTypeAttribute.objects.filter(
-            asset_type_id=self.kwargs["assettype_pk"]
+        """Filter attributes by parent asset type and annotate with asset count"""
+        return (
+            AssetTypeAttribute.objects.filter(asset_type_id=self.kwargs["assettype_pk"])
+            .select_related("asset_type__workspace__organization")
+            .annotate(asset_count=Count("values__asset", distinct=True))
         )
 
     def perform_create(self, serializer):

@@ -98,7 +98,7 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
 
 
 class AssetTypeAttributeSerializer(serializers.ModelSerializer):
-    asset_count = serializers.SerializerMethodField()
+    asset_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = AssetTypeAttribute
@@ -117,10 +117,6 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
-
-    def get_asset_count(self, obj):
-        """Count distinct assets that have a value for this attribute"""
-        return obj.values.values("asset").distinct().count()
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):
@@ -240,8 +236,15 @@ class AssetSerializer(serializers.ModelSerializer):
             # asset_type_attribute should be prefetched
             api_key = getattr(field_value.asset_type_attribute, "api_key", None)
             if api_key:
-                # All attribute values have .value (ChoiceAttributeValue has it as property)
-                values[api_key] = field_value.value
+                # Get the concrete instance (polymorphic should do this automatically)
+                # but we need to handle the case where it might not have been done
+                if hasattr(field_value, "value"):
+                    values[api_key] = field_value.value
+                else:
+                    # Force getting the concrete instance
+                    concrete_instance = field_value.get_real_instance()
+                    if hasattr(concrete_instance, "value"):
+                        values[api_key] = concrete_instance.value
         return values
 
     def create(self, validated_data):

@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Prefetch
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Centroid
@@ -21,7 +21,6 @@ import boto3
 import os
 from ..models import Asset, BaseAttributeValue
 from ..serializers import AssetSerializer
-from django.db.models import Q
 
 
 class AssetPagination(PageNumberPagination):
@@ -78,15 +77,14 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Select related for asset_type to avoid N+1 on asset_type_name
         queryset = queryset.select_related("asset_type")
 
-        # Prefetch all attribute value types with their attribute definitions
+        # Prefetch attributes with their definitions
         queryset = queryset.prefetch_related(
-            "attributes__asset_type_attribute",  # Critical: prefetch the attribute definition
-            "attributes__textattributevalue",
-            "attributes__numberattributevalue",
-            "attributes__booleanattributevalue",
-            "attributes__dateattributevalue",
-            "attributes__datetimeattributevalue",
-            "attributes__jsonattributevalue",
+            Prefetch(
+                "attributes",
+                queryset=BaseAttributeValue.objects.select_related(
+                    "asset_type_attribute"
+                ),
+            )
         )
 
         # Special case: filter by attributes using query parameters like ?attr_hostname=server01

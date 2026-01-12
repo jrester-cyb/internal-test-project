@@ -7,11 +7,12 @@ import requests
 class OSMImporter:
     OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-    def __init__(self):
+    def __init__(self, workspace_id=None):
         self.session = requests.Session()
         self.session.headers.update(
             {"User-Agent": "AssetVisualizer/1.0 (jaryd.rester@cybirical.com)"}
         )
+        self.workspace_id = workspace_id
 
     def query_overpass(
         self, query: str, max_retries: int = 3, retry_delay: int = 10
@@ -73,6 +74,7 @@ class OSMImporter:
     def get_or_create_asset_type(self, osm_type: str) -> AssetType:
         asset_type, created = AssetType.objects.get_or_create(
             name=f"OSM {osm_type.title()}",
+            workspace_id=self.workspace_id,
             defaults={"description": f"OpenStreetMap {osm_type} features"},
         )
         if created:
@@ -186,20 +188,18 @@ class OSMImporter:
             AssetTypeAttribute,
         )
 
-        attribute_defs = {
-            ad.api_key: ad for ad in asset.asset_type.field_definitions.all()
-        }
+        attribute_defs = {ad.api_key: ad for ad in asset.asset_type.attributes.all()}
         # Ensure osm_id and osm_type are set
         if "osm_id" in attribute_defs:
             TextAttributeValue.objects.update_or_create(
                 asset=asset,
-                field_definition=attribute_defs["osm_id"],
+                asset_type_attribute=attribute_defs["osm_id"],
                 defaults={"value": str(osm_id)},
             )
         if "osm_type" in attribute_defs:
             TextAttributeValue.objects.update_or_create(
                 asset=asset,
-                field_definition=attribute_defs["osm_type"],
+                asset_type_attribute=attribute_defs["osm_type"],
                 defaults={"value": str(osm_type)},
             )
 
@@ -209,7 +209,7 @@ class OSMImporter:
         sanitized_tags = self.sanitize_tags(tags)
         # Get the current max order for this asset type
         existing_orders = set(
-            asset.asset_type.field_definitions.values_list("order", flat=True)
+            asset.asset_type.attributes.values_list("order", flat=True)
         )
         next_order = max(existing_orders) + 1 if existing_orders else 0
 
@@ -232,7 +232,7 @@ class OSMImporter:
                 next_order += 1
             TextAttributeValue.objects.update_or_create(
                 asset=asset,
-                field_definition=attr_def,
+                asset_type_attribute=attr_def,
                 defaults={"value": str(tag_value)},
             )
 
@@ -240,7 +240,7 @@ class OSMImporter:
         if "tags" in attribute_defs:
             JSONAttributeValue.objects.update_or_create(
                 asset=asset,
-                field_definition=attribute_defs["tags"],
+                asset_type_attribute=attribute_defs["tags"],
                 defaults={"value": sanitized_tags},
             )
 
@@ -254,6 +254,9 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--limit", type=int, default=10_000, help="Max features per type"
+        )
+        parser.add_argument(
+            "--workspace-id", type=str, required=True, help="Workspace ID (UUID)"
         )
 
     def geocode_location(self, location_name: str) -> tuple:
@@ -276,11 +279,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         location = options["location"]
         limit = options["limit"]
+        workspace_id = options["workspace_id"]
         self.stdout.write(self.style.SUCCESS(f"Importing OSM data for {location}"))
         bbox = self.geocode_location(location)
         self.stdout.write(self.style.SUCCESS(f"Using bounding box: {bbox}"))
 
-        importer = OSMImporter()
+        importer = OSMImporter(workspace_id=workspace_id)
 
         import_features = [
             ("power", "line", limit, "Powerline"),

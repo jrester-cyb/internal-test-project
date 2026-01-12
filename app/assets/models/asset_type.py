@@ -26,4 +26,4 @@ class AssetType(SoftDeleteMixin):
         ordering = ["workspace", "name"]
 
     def __str__(self):
-        return f"{self.name} ({self.workspace.name})"
+        return self.name

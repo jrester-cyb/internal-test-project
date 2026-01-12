@@ -13,11 +13,11 @@ const sharedComponents: Components<Theme> = {
   MuiLink: {
     styleOverrides: {
       root: ({ theme }) => ({
-        color: theme.palette.secondary.main,
-        textDecorationColor: theme.palette.secondary.main,
+        color: theme.palette.primary.main,
+        textDecorationColor: theme.palette.primary.main,
         '&:hover': {
-          color: theme.palette.secondary.light,
-          textDecorationColor: theme.palette.secondary.light,
+          color: theme.palette.primary.main,
+          textDecorationColor: theme.palette.primary.main,
         },
       }),
     },
@@ -173,5 +173,32 @@ export const darkTheme = createTheme({
       secondary: '#b0b0b0',
     },
   },
-  components: sharedComponents,
+  components: {...sharedComponents, MuiOutlinedInput: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        '& .MuiOutlinedInput-notchedOutline': {
+          borderColor: `rgba(${parseInt(theme.palette.secondary.main.slice(1, 3), 16)}, ${parseInt(theme.palette.secondary.main.slice(3, 5), 16)}, ${parseInt(theme.palette.secondary.main.slice(5, 7), 16)}, 0.8)`,
+        },
+        '&:hover .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.secondary.light,
+        },
+        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.secondary.light,
+        },
+      }),
+    },
+  },
+  MuiLink: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        color: theme.palette.secondary.main,
+        textDecorationColor: theme.palette.secondary.main,
+        '&:hover': {
+          color: theme.palette.secondary.light,
+          textDecorationColor: theme.palette.secondary.light,
+        },
+      }),
+    },
+  },
+},
 })
