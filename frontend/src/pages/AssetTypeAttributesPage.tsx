@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Menu, Collapse, Divider } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, MoreVert as MoreVertIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon } from '@mui/icons-material'
+import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, fetchAssetAttributeDefinitions } from '../api/assets'
@@ -769,58 +770,29 @@ export default function AssetTypeAttributesPage() {
                 <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   Details
                 </Typography>
-                <Stack direction="row" sx={{ overflow: 'hidden', alignItems: 'center' }}>
-                  <Collapse in={leftColumnWidth <= 65} orientation="horizontal" timeout={250}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<EditIcon />}
-                      onClick={() => handleEdit(selectedAttribute)}
-                      sx={{ whiteSpace: 'nowrap', mr: 1 }}
-                    >
-                      Edit
-                    </Button>
-                  </Collapse>
-                  <Collapse in={leftColumnWidth <= 50} orientation="horizontal" timeout={250}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      startIcon={<DeleteIcon />}
-                      onClick={() => handleDelete(selectedAttribute)}
-                      sx={{ whiteSpace: 'nowrap', mr: 1 }}
-                    >
-                      Delete
-                    </Button>
-                  </Collapse>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => setMenuAnchorEl(e.currentTarget)}
-                    sx={{
-                      opacity: leftColumnWidth > 50 ? 1 : 0,
-                      pointerEvents: leftColumnWidth > 50 ? 'auto' : 'none',
-                      transition: 'opacity 150ms',
-                      transitionDelay: leftColumnWidth > 50 ? '105ms' : '0ms',
-                    }}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
-                  <Menu
-                    anchorEl={menuAnchorEl}
-                    open={Boolean(menuAnchorEl)}
-                    onClose={() => setMenuAnchorEl(null)}
-                  >
-                    {leftColumnWidth > 65 && (
-                      <MenuItem onClick={() => { handleEdit(selectedAttribute); setMenuAnchorEl(null); }}>
-                        <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
-                      </MenuItem>
-                    )}
-                    <MenuItem onClick={() => { handleDelete(selectedAttribute); setMenuAnchorEl(null); }}>
-                      <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
-                    </MenuItem>
-                  </Menu>
-                </Stack>
+                <ActionButtons
+                  width={leftColumnWidth}
+                  actions={[
+                    {
+                      label: 'Edit',
+                      icon: <EditIcon fontSize="small" />,
+                      onClick: () => handleEdit(selectedAttribute),
+                      color: 'primary',
+                      variant: 'outlined',
+                      collapseThreshold: 65
+                    },
+                    {
+                      label: 'Delete',
+                      icon: <DeleteIcon fontSize="small" />,
+                      onClick: () => handleDelete(selectedAttribute),
+                      color: 'error',
+                      variant: 'outlined',
+                      collapseThreshold: 50
+                    }
+                  ]}
+                  menuAnchorEl={menuAnchorEl}
+                  setMenuAnchorEl={setMenuAnchorEl}
+                />
               </Stack>
 
               <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, minHeight: 0 }}>

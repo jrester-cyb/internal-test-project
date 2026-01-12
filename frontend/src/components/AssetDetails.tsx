@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Box, Typography, IconButton, CircularProgress, Drawer, Divider, Chip, Paper } from '@mui/material'
-import { Close as CloseIcon } from '@mui/icons-material'
+import { Box, Typography, IconButton, CircularProgress, Drawer, Paper } from '@mui/material'
+import { Close as CloseIcon, Edit as EditIcon, Delete as DeleteIcon, ContentCopy as CopyIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import { getAsset } from '../api/assets'
+import ActionButtons from './ActionButtons'
 
 interface AssetDetailsProps {
   asset: Asset
   workspaceId: string
   onClose: () => void
+  onEdit?: (asset: Asset) => void
+  onDelete?: (asset: Asset) => void
 }
 
-export default function AssetDetails({ asset, workspaceId, onClose }: AssetDetailsProps) {
+export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDelete }: AssetDetailsProps) {
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -32,6 +35,34 @@ export default function AssetDetails({ asset, workspaceId, onClose }: AssetDetai
 
   const displayAsset = fullAsset || asset
 
+  const handleCopyId = () => {
+    navigator.clipboard.writeText(displayAsset.id)
+  }
+
+  const actions = [
+    ...(onEdit ? [{
+      label: 'Edit',
+      icon: <EditIcon fontSize="small" />,
+      onClick: () => onEdit(displayAsset),
+      color: 'primary' as const,
+      variant: 'outlined' as const
+    }] : []),
+    ...(onDelete ? [{
+      label: 'Delete',
+      icon: <DeleteIcon fontSize="small" />,
+      onClick: () => onDelete(displayAsset),
+      color: 'error' as const,
+      variant: 'outlined' as const
+    }] : []),
+    {
+      label: 'Copy ID',
+      icon: <CopyIcon fontSize="small" />,
+      onClick: handleCopyId,
+      color: 'secondary' as const,
+      variant: 'text' as const
+    }
+  ]
+
   return (
     <Drawer
       anchor="right"
@@ -42,9 +73,12 @@ export default function AssetDetails({ asset, workspaceId, onClose }: AssetDetai
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="h6" component="h2">Asset Details</Typography>
-        <IconButton onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ActionButtons actions={actions} simple size="small" spacing={0.5} />
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </Box>
 
       <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
