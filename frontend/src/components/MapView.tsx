@@ -23,8 +23,10 @@ interface MapViewProps {
   activeFilters: any
   selectedAssetTypes: string[]
   attributeFilters: AttributeFilter[]
+  nameFilter: string
   setSelectedAssetTypes: (types: string[]) => void
   setAttributeFilters: (filters: AttributeFilter[]) => void
+  setNameFilter: (name: string) => void
   loadMapData: (bounds: number[], zoom: number, filters?: any) => void
   handleClusterClick: (cluster: Cluster) => void
   handleAssetClick: (asset: Asset) => void
@@ -48,8 +50,10 @@ export default function MapView({
   activeFilters,
   selectedAssetTypes,
   attributeFilters,
+  nameFilter,
   setSelectedAssetTypes,
   setAttributeFilters,
+  setNameFilter,
   loadMapData,
   handleClusterClick,
   handleAssetClick,
@@ -59,7 +63,7 @@ export default function MapView({
   MapEvents
 }: MapViewProps) {
   const [filterOpen, setFilterOpen] = useState(false)
-  const totalFilters = selectedAssetTypes.length + attributeFilters.length
+  const totalFilters = selectedAssetTypes.length + attributeFilters.length + (nameFilter ? 1 : 0)
 
   return (
     <>
@@ -70,6 +74,8 @@ export default function MapView({
           onAssetTypesChange={setSelectedAssetTypes}
           attributeFilters={attributeFilters}
           onAttributeFiltersChange={setAttributeFilters}
+          nameFilter={nameFilter}
+          onNameFilterChange={setNameFilter}
           open={filterOpen}
           onClose={() => setFilterOpen(false)}
           onToggle={() => setFilterOpen(!filterOpen)}

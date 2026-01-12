@@ -1,5 +1,5 @@
-import { type ReactNode } from 'react'
-import { Box, Button, Stack, IconButton, Menu, MenuItem, Collapse, Tooltip } from '@mui/material'
+import { type ReactNode, Fragment } from 'react'
+import { Box, Button, Stack, IconButton, Menu, MenuItem, Collapse, Tooltip, Divider } from '@mui/material'
 import { MoreVert as MoreVertIcon } from '@mui/icons-material'
 
 // Generic action button type
@@ -11,6 +11,7 @@ export interface ActionButtonConfig {
   variant?: 'text' | 'outlined' | 'contained'
   disabled?: boolean
   collapseThreshold?: number // Show as button when width <= this value (for responsive mode)
+  dividerBefore?: boolean // Show a divider before this item in the menu
 }
 
 interface ActionButtonsProps {
@@ -159,18 +160,20 @@ export default function ActionButtons({
           if (isButtonVisible(action.collapseThreshold || 50)) return null
 
           return (
-            <MenuItem
-              key={index}
-              onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
-              disabled={action.disabled}
-            >
-              {action.icon && (
-                <Box component="span" sx={{ mr: 1, display: 'flex', alignItems: 'center', fontSize: 'small' }}>
-                  {action.icon}
-                </Box>
-              )}
-              {action.label}
-            </MenuItem>
+            <Fragment key={index}>
+              {action.dividerBefore && <Divider />}
+              <MenuItem
+                onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
+                disabled={action.disabled}
+              >
+                {action.icon && (
+                  <Box component="span" sx={{ mr: 1, display: 'flex', alignItems: 'center', fontSize: 'small' }}>
+                    {action.icon}
+                  </Box>
+                )}
+                {action.label}
+              </MenuItem>
+            </Fragment>
           )
         })}
       </Menu>

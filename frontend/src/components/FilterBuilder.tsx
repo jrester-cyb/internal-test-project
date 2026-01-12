@@ -38,6 +38,8 @@ interface FilterBuilderProps {
   onAssetTypesChange: (assetTypeIds: string[]) => void
   attributeFilters: AttributeFilter[]
   onAttributeFiltersChange: (filters: AttributeFilter[]) => void
+  nameFilter?: string
+  onNameFilterChange?: (name: string) => void
   open?: boolean
   onClose?: () => void
   onToggle?: () => void
@@ -49,6 +51,8 @@ export default function FilterBuilder({
   onAssetTypesChange,
   attributeFilters,
   onAttributeFiltersChange,
+  nameFilter = '',
+  onNameFilterChange,
   open: externalOpen,
   onClose: externalOnClose,
   onToggle
@@ -438,6 +442,41 @@ export default function FilterBuilder({
         </Box>
 
         <Divider sx={{ mb: 2 }} />
+
+        {/* Name Filter */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            Search by Name
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Filter by asset name..."
+            value={nameFilter}
+            onChange={(e) => onNameFilterChange?.(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                '& fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                },
+                '&:hover fieldset': {
+                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
+              },
+              '& .MuiOutlinedInput-input': {
+                color: 'white',
+                '&::placeholder': {
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  opacity: 1,
+                },
+              },
+            }}
+          />
+        </Box>
 
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
           <Button

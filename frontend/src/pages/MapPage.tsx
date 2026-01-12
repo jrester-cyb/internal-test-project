@@ -53,6 +53,7 @@ function MapPage() {
   const [interpretation, setInterpretation] = useState<string>('')
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
+  const [nameFilter, setNameFilter] = useState('')
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return
@@ -62,6 +63,15 @@ function MapPage() {
       // Merge asset type and attribute filters with other filters
       let mergedFilters = filters ? { ...filters } : null
       const filterGroups: any[] = []
+
+      // Add name filter if present
+      if (nameFilter.trim()) {
+        filterGroups.push({
+          field: 'name',
+          value: nameFilter.trim(),
+          operator: 'icontains'
+        })
+      }
 
       // Group attribute filters by asset type
       const attributesByType: Record<string, any[]> = {}
@@ -158,7 +168,7 @@ function MapPage() {
     } finally {
       setLoading(false)
     }
-  }, [workspaceId, selectedAssetTypes, attributeFilters])
+  }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter])
 
   const handleClusterClick = async (cluster: Cluster) => {
     if (!workspaceId) return
@@ -262,8 +272,10 @@ function MapPage() {
       activeFilters={activeFilters}
       selectedAssetTypes={selectedAssetTypes}
       attributeFilters={attributeFilters}
+      nameFilter={nameFilter}
       setSelectedAssetTypes={setSelectedAssetTypes}
       setAttributeFilters={setAttributeFilters}
+      setNameFilter={setNameFilter}
       loadMapData={loadMapData}
       handleClusterClick={handleClusterClick}
       handleAssetClick={handleAssetClick}

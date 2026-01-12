@@ -1,7 +1,7 @@
 import { Suspense, useState, useEffect } from 'react'
 import { Outlet, useNavigation, useNavigate, useParams } from 'react-router-dom'
 import { AppBar, Toolbar, Box, Typography, CircularProgress, LinearProgress, Menu, MenuItem } from '@mui/material'
-import { Help as HelpIcon, Person as PersonIcon, SwapHoriz as SwapHorizIcon, DarkMode as DarkModeIcon, LightMode as LightModeIcon } from '@mui/icons-material'
+import { Help as HelpIcon, Person as PersonIcon, AccountCircle as AccountCircleIcon, SwapHoriz as SwapHorizIcon, DarkMode as DarkModeIcon, LightMode as LightModeIcon, Logout as LogoutIcon } from '@mui/icons-material'
 import Sidebar from './components/Sidebar'
 import AppBreadcrumbs from './components/AppBreadcrumbs'
 import ActionButtons from './components/ActionButtons'
@@ -112,7 +112,7 @@ function App() {
       onClick: handleProfile,
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: Infinity // Show when window >= 400px
+      collapseThreshold: Infinity
     },
     {
       label: isDarkMode ? 'Toggle Light Mode' : 'Toggle Dark Mode',
@@ -124,10 +124,12 @@ function App() {
     },
     {
       label: 'Logout',
+      icon: <LogoutIcon fontSize="small" />,
       onClick: () => console.log('Logout clicked'),
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: Infinity // Show when window >= 400px
+      collapseThreshold: Infinity, // Show when window >= 400px
+      dividerBefore: true
     }
   ]
 
@@ -148,7 +150,7 @@ function App() {
             menuAnchorEl={actionsMenuAnchorEl}
             setMenuAnchorEl={setActionsMenuAnchorEl}
             showWhenWider
-            menuIcon={<PersonIcon />}
+            menuIcon={<AccountCircleIcon />}
           />
         </Toolbar>
         {isNavigating && <LinearProgress color="secondary" />}
