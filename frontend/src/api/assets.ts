@@ -36,6 +36,7 @@ export interface RelatedAsset {
 
 export interface RelatedAssetsResponse {
   parent: RelatedAsset | null
+  siblings: RelatedAsset[]
   children: RelatedAsset[]
 }
 

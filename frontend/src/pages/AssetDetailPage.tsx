@@ -195,12 +195,19 @@ export default function AssetDetailPage() {
 
             <Grid size={{ xs: 12, md: 6 }}>
               <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardHeader title="Related Assets" />
+                <CardHeader title="Asset Tree" />
                 <CardContent sx={{ flex: 1, overflow: 'auto', maxHeight: 400 }}>
                   <RelatedAssetsTree
                     relatedAssets={relatedAssets!}
                     workspaceId={workspaceId!}
-                    currentAssetId={asset.id}
+                    currentAsset={{
+                      id: asset.id,
+                      name: asset.name,
+                      assetType: asset.assetType,
+                      assetTypeName: asset.assetTypeName || '',
+                      relatedUrl: '',
+                      hasChildren: false,
+                    }}
                     loading={relatedLoading}
                     error={relatedError}
                   />

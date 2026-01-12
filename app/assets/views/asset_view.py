@@ -109,12 +109,12 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Assets"],
-        summary="Get related assets (parent and children)",
-        description="Returns the parent asset (if any) and all child assets for the specified asset. Each related asset includes a 'relatedUrl' to fetch its own relationships.",
+        summary="Get related assets (parent, siblings, and children)",
+        description="Returns the parent asset (if any), sibling assets, and all child assets for the specified asset. Each related asset includes a 'relatedUrl' to fetch its own relationships.",
     )
     @action(detail=True, methods=["get"])
     def related(self, request, workspace_pk=None, assettype_pk=None, pk=None):
-        """Get related assets (parent and children) for an asset"""
+        """Get related assets (parent, siblings, and children) for an asset"""
         asset = self.get_object()
 
         def build_related_url(asset_id):
@@ -123,17 +123,29 @@ class AssetViewSet(viewsets.ModelViewSet):
                 f"/api/workspaces/{workspace_pk}/assets/{asset_id}/related/"
             )
 
+        def serialize_asset(a):
+            """Serialize an asset for the response"""
+            return {
+                "id": str(a.id),
+                "name": a.name,
+                "asset_type": str(a.asset_type_id),
+                "asset_type_name": a.asset_type.name,
+                "related_url": build_related_url(a.id),
+                "has_children": a.children.exists(),
+            }
+
         # Get parent (simple serialization without nested attributes)
         parent_data = None
+        siblings_data = []
         if asset.parent:
-            parent_data = {
-                "id": str(asset.parent.id),
-                "name": asset.parent.name,
-                "asset_type": str(asset.parent.asset_type_id),
-                "asset_type_name": asset.parent.asset_type.name,
-                "related_url": build_related_url(asset.parent.id),
-                "has_children": asset.parent.children.exclude(id=asset.id).exists(),
-            }
+            parent_data = serialize_asset(asset.parent)
+            # Get siblings (other children of the same parent, excluding current asset)
+            siblings = (
+                asset.parent.children.select_related("asset_type")
+                .prefetch_related("children")
+                .exclude(id=asset.id)
+            )
+            siblings_data = [serialize_asset(sibling) for sibling in siblings]
 
         # Get children with their own related URLs
         children = (
@@ -141,21 +153,12 @@ class AssetViewSet(viewsets.ModelViewSet):
             .prefetch_related("children")
             .all()
         )
-        children_data = [
-            {
-                "id": str(child.id),
-                "name": child.name,
-                "asset_type": str(child.asset_type_id),
-                "asset_type_name": child.asset_type.name,
-                "related_url": build_related_url(child.id),
-                "has_children": child.children.exists(),
-            }
-            for child in children
-        ]
+        children_data = [serialize_asset(child) for child in children]
 
         return Response(
             {
                 "parent": parent_data,
+                "siblings": siblings_data,
                 "children": children_data,
             }
         )
