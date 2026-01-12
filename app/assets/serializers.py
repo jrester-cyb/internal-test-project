@@ -236,15 +236,10 @@ class AssetSerializer(serializers.ModelSerializer):
             # asset_type_attribute should be prefetched
             api_key = getattr(field_value.asset_type_attribute, "api_key", None)
             if api_key:
-                # Get the concrete instance (polymorphic should do this automatically)
-                # but we need to handle the case where it might not have been done
-                if hasattr(field_value, "value"):
-                    values[api_key] = field_value.value
-                else:
-                    # Force getting the concrete instance
-                    concrete_instance = field_value.get_real_instance()
-                    if hasattr(concrete_instance, "value"):
-                        values[api_key] = concrete_instance.value
+                # Always get the concrete instance to ensure we have the value field
+                concrete_instance = field_value.get_real_instance()
+                if hasattr(concrete_instance, "value"):
+                    values[api_key] = concrete_instance.value
         return values
 
     def create(self, validated_data):

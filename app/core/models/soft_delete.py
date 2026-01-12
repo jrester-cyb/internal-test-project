@@ -1,6 +1,7 @@
 import pgtrigger
 from django.db import models
 from polymorphic.managers import PolymorphicManager
+from polymorphic.query import PolymorphicQuerySet
 
 
 class SoftDeleteWithTimestamp(pgtrigger.SoftDelete):
@@ -160,7 +161,7 @@ class AllObjectsManager(models.Manager):
         )
 
 
-class PolymorphicSoftDeleteQuerySet(models.QuerySet):
+class PolymorphicSoftDeleteQuerySet(PolymorphicQuerySet):
     """Polymorphic QuerySet that returns proper counts for soft delete operations."""
 
     def delete(self):
