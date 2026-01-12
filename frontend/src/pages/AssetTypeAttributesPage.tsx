@@ -481,8 +481,22 @@ export default function AssetTypeAttributesPage() {
         setAllAttributes(newList)
 
         if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
-          if (newList.length === 0) {
-            // No items left
+          if (newList.length === 0 && nextUrl) {
+            // No visible items left but more pages available - fetch next page
+            setSelectedAttribute(null)
+            try {
+              const response = await fetchAssetAttributeDefinitionsFromUrl(nextUrl)
+              if (response.results.length > 0) {
+                setAllAttributes(response.results)
+                setNextUrl(response.next)
+                setHasMore(!!response.next)
+                setSelectedAttribute(response.results[0])
+              }
+            } catch (fetchError) {
+              console.error('Failed to fetch more attributes:', fetchError)
+            }
+          } else if (newList.length === 0) {
+            // No items left and no more pages
             setSelectedAttribute(null)
           } else if (currentIndex < newList.length) {
             // Select the item that's now at the same index (next item)
