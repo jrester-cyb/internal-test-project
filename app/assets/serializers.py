@@ -98,7 +98,7 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
 
 
 class AssetTypeAttributeSerializer(serializers.ModelSerializer):
-    asset_count = serializers.IntegerField(read_only=True)
+    asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
 
     class Meta:
         model = AssetTypeAttribute

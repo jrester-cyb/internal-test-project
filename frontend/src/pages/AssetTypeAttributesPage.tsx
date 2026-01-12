@@ -35,6 +35,8 @@ export default function AssetTypeAttributesPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(!!initialNextUrl)
   const [selectedAttribute, setSelectedAttribute] = useState<AssetTypeAttribute | null>(null)
+  const [selectedAttributeAssetCount, setSelectedAttributeAssetCount] = useState<number | null>(null)
+  const [isLoadingCount, setIsLoadingCount] = useState(false)
   const [leftColumnWidth, setLeftColumnWidth] = useState(50) // percentage
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
@@ -189,6 +191,30 @@ export default function AssetTypeAttributesPage() {
       }
     }
   }, [assetTypeId, nextUrl, isLoadingMore, hasMore, allAttributes.length, count])
+
+  // Fetch asset count when attribute is selected
+  useEffect(() => {
+    if (!selectedAttribute || !workspaceId || !assetTypeId) {
+      setSelectedAttributeAssetCount(null)
+      return
+    }
+
+    const fetchCount = async () => {
+      setIsLoadingCount(true)
+      try {
+        const { fetchAttributeAssetCount } = await import('../api/assets')
+        const data = await fetchAttributeAssetCount(workspaceId, assetTypeId, selectedAttribute.id)
+        setSelectedAttributeAssetCount(data.count)
+      } catch (error) {
+        console.error('Failed to fetch asset count:', error)
+        setSelectedAttributeAssetCount(0)
+      } finally {
+        setIsLoadingCount(false)
+      }
+    }
+
+    fetchCount()
+  }, [selectedAttribute?.id, workspaceId, assetTypeId])
 
   // Update list height when container size changes
   useEffect(() => {
@@ -515,7 +541,14 @@ export default function AssetTypeAttributesPage() {
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Usage</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
-                    {selectedAttribute!.assetCount ?? 0} {(selectedAttribute!.assetCount ?? 0) === 1 ? 'asset' : 'assets'}
+                    {isLoadingCount ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CircularProgress size={16} />
+                        <span>Loading...</span>
+                      </Box>
+                    ) : (
+                      `${selectedAttributeAssetCount ?? 0} ${(selectedAttributeAssetCount ?? 0) === 1 ? 'asset' : 'assets'}`
+                    )}
                   </TableCell>
                 </TableRow>
               </TableBody>

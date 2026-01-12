@@ -153,6 +153,12 @@ export async function fetchAssetAttributeDefinitions(workspaceId: string, assetT
   return response.json()
 }
 
+export async function fetchAttributeAssetCount(workspaceId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/asset-count/`))
+  if (!response.ok) throw new Error('Failed to fetch attribute asset count')
+  return response.json()
+}
+
 export async function fetchAssetAttributeDefinitionsFromUrl(url: string) {
   const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
