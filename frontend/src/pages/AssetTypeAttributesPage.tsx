@@ -970,14 +970,14 @@ export default function AssetTypeAttributesPage() {
                 <ActionButtons
                   width={leftColumnWidth}
                   actions={[
-                    {
+                    ...(!selectedAttribute.isHidden ? [{
                       label: 'Edit',
                       icon: <EditIcon fontSize="small" />,
                       onClick: () => handleEdit(selectedAttribute),
-                      color: 'primary',
-                      variant: 'outlined',
+                      color: 'primary' as const,
+                      variant: 'outlined' as const,
                       collapseThreshold: 65
-                    },
+                    }] : []),
                     // Show Unhide for hidden attributes, Hide for all non-hidden attributes
                     ...(selectedAttribute.isHidden ? [{
                       label: 'Unhide',
@@ -994,8 +994,8 @@ export default function AssetTypeAttributesPage() {
                       variant: 'outlined' as const,
                       collapseThreshold: 50
                     }]),
-                    // Show Delete for workspace attributes (extensions and overrides)
-                    ...(selectedAttribute.workspace ? [{
+                    // Show Delete for workspace attributes (extensions and overrides) that are not hidden
+                    ...(selectedAttribute.workspace && !selectedAttribute.isHidden ? [{
                       label: 'Delete',
                       icon: <DeleteIcon fontSize="small" />,
                       onClick: () => handleDelete(selectedAttribute),

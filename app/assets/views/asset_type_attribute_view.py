@@ -271,6 +271,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             if existing_override:
                 existing_override.is_hidden = True
                 existing_override.save()
+                # Set override flag for serializer
+                existing_override._is_override = True
+                existing_override._base_attribute_id = instance.id
                 serializer = self.get_serializer(existing_override)
             else:
                 # Create hidden override
@@ -286,6 +289,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     order=instance.order,
                     is_hidden=True,
                 )
+                # Set override flag for serializer
+                new_override._is_override = True
+                new_override._base_attribute_id = instance.id
                 serializer = self.get_serializer(new_override)
 
             return Response(serializer.data)
@@ -347,6 +353,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     # Override has other changes - just unhide it
                     existing_override.is_hidden = False
                     existing_override.save()
+                    # Set override flag for serializer
+                    existing_override._is_override = True
+                    existing_override._base_attribute_id = instance.id
                     serializer = self.get_serializer(existing_override)
 
                 return Response(serializer.data)
@@ -355,10 +364,42 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
         else:
-            # Workspace extension - just unhide it (keep the extension)
-            instance.is_hidden = False
-            instance.save()
-            serializer = self.get_serializer(instance)
+            # Workspace attribute - check if it's an override or a true extension
+            base_attribute = AssetTypeAttribute.objects.filter(
+                asset_type_id=assettype_pk,
+                workspace_id__isnull=True,
+                api_key=instance.api_key,
+                deleted_at__isnull=True,
+            ).first()
+
+            if base_attribute:
+                # This is an override - check if it only exists to hide
+                is_only_hidden = (
+                    instance.name == base_attribute.name
+                    and instance.attribute_type == base_attribute.attribute_type
+                    and instance.is_required == base_attribute.is_required
+                    and instance.default_value == base_attribute.default_value
+                    and instance.description == base_attribute.description
+                    and instance.order == base_attribute.order
+                )
+
+                if is_only_hidden:
+                    # Override was only for hiding - delete it and return base
+                    instance.delete()
+                    serializer = self.get_serializer(base_attribute)
+                else:
+                    # Override has other changes - just unhide it
+                    instance.is_hidden = False
+                    instance.save()
+                    instance._is_override = True
+                    instance._base_attribute_id = base_attribute.id
+                    serializer = self.get_serializer(instance)
+            else:
+                # True workspace extension - just unhide it
+                instance.is_hidden = False
+                instance.save()
+                serializer = self.get_serializer(instance)
+
             return Response(serializer.data)
 
     @extend_schema(
