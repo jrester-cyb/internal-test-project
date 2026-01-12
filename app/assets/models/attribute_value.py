@@ -26,6 +26,13 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
+        indexes = [
+            models.Index(
+                fields=["asset_type_attribute", "asset"],
+                name="idx_attr_asset",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
 
     def __str__(self):
         return f"{self.asset.name}.{self.asset_type_attribute}"
