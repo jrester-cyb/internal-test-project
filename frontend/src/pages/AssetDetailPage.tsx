@@ -340,7 +340,7 @@ export default function AssetDetailPage() {
                 <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Created</TableCell>
                 <TableCell sx={{ border: 0, pr: 0 }}>
                   <Typography variant="body2">
-                    {new Date(asset.createdAt).toLocaleString()}
+                    {asset.createdAt ? new Date(asset.createdAt).toLocaleString() : 'N/A'}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -348,7 +348,7 @@ export default function AssetDetailPage() {
                 <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Updated</TableCell>
                 <TableCell sx={{ border: 0, pr: 0 }}>
                   <Typography variant="body2">
-                    {new Date(asset.updatedAt).toLocaleString()}
+                    {asset.updatedAt ? new Date(asset.updatedAt).toLocaleString() : 'N/A'}
                   </Typography>
                 </TableCell>
               </TableRow>

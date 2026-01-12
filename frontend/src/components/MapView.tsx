@@ -63,7 +63,7 @@ export default function MapView({
 
   return (
     <>
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
+      <Box sx={{ flexGrow: 1, position: 'relative', height: '100%', width: '100%' }}>
         <FilterBuilder
           workspaceId={workspaceId}
           selectedAssetTypes={selectedAssetTypes}

@@ -6,7 +6,7 @@ import { MoreVert as MoreVertIcon } from '@mui/icons-material'
 export interface ActionButtonConfig {
   label: string
   icon?: ReactNode
-  onClick: () => void
+  onClick: (event?: React.MouseEvent<HTMLElement>) => void
   color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' | 'inherit'
   variant?: 'text' | 'outlined' | 'contained'
   disabled?: boolean
@@ -28,6 +28,8 @@ interface ActionButtonsProps {
   showWhenWider?: boolean
   // When true, render as icon buttons with tooltips instead of full buttons
   iconOnly?: boolean
+  // Custom icon for the overflow menu button (defaults to MoreVertIcon)
+  menuIcon?: ReactNode
 }
 
 // Custom component for responsive action buttons
@@ -40,7 +42,8 @@ export default function ActionButtons({
   size = 'small',
   spacing = 1,
   showWhenWider = false,
-  iconOnly = false
+  iconOnly = false,
+  menuIcon = <MoreVertIcon />
 }: ActionButtonsProps) {
   // Simple mode - just render all buttons
   if (simple) {
@@ -143,12 +146,13 @@ export default function ActionButtons({
           transitionDelay: isMenuVisible() ? '105ms' : '0ms',
         }}
       >
-        <MoreVertIcon />
+        {menuIcon}
       </IconButton>
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
         onClose={() => setMenuAnchorEl(null)}
+        sx={{ zIndex: 1400 }}
       >
         {actions.map((action, index) => {
           // Only show in menu if button is hidden
@@ -157,7 +161,7 @@ export default function ActionButtons({
           return (
             <MenuItem
               key={index}
-              onClick={() => { action.onClick(); setMenuAnchorEl(null); }}
+              onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
               disabled={action.disabled}
             >
               {action.icon && (

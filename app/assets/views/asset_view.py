@@ -298,7 +298,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         ],
     )
     @action(detail=False, methods=["post"])
-    def search(self, request, assettype_pk=None):
+    def search(self, request, workspace_pk=None, assettype_pk=None):
         """Search assets by multiple attribute and geographic conditions with AND/OR logic"""
         from django.db.models import Prefetch
 
@@ -307,6 +307,8 @@ class AssetViewSet(viewsets.ModelViewSet):
         # If accessed via nested route, filter by asset type
         if assettype_pk:
             queryset = Asset.objects.filter(asset_type_id=assettype_pk)
+        elif workspace_pk:
+            queryset = Asset.objects.filter(asset_type__workspace_id=workspace_pk)
         else:
             queryset = Asset.objects.all()
 
@@ -315,7 +317,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             Prefetch(
                 "attributes",
                 queryset=BaseAttributeValue.objects.select_related(
-                    "attribute_type_attribute"
+                    "asset_type_attribute"
                 ),
             ),
         )
@@ -364,7 +366,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         ],
     )
     @action(detail=False, methods=["post"])
-    def interpret_search(self, request):
+    def interpret_search(self, request, workspace_pk=None):
         """Interpret natural language search query using AWS Bedrock and return structured filters"""
         query_text = request.data.get("query", "").strip()
 
@@ -479,10 +481,14 @@ Format the output as follows:
         ],
     )
     @action(detail=False, methods=["get", "post"])
-    def tiles(self, request):
+    def tiles(self, request, workspace_pk=None):
         """Get assets as lightweight GeoJSON features for map rendering"""
         # Start with base queryset
         queryset = Asset.objects.all()
+
+        # Filter by workspace if provided
+        if workspace_pk:
+            queryset = queryset.filter(asset_type__workspace_id=workspace_pk)
 
         # Apply search filters if provided (POST request)
         if request.method == "POST" and request.data:
@@ -579,10 +585,14 @@ Format the output as follows:
         ],
     )
     @action(detail=False, methods=["get", "post"])
-    def clusters(self, request):
+    def clusters(self, request, workspace_pk=None):
         """Get asset clusters grouped by H3 prefix for map overview"""
         # Start with base queryset
         queryset = Asset.objects.all()
+
+        # Filter by workspace if provided
+        if workspace_pk:
+            queryset = queryset.filter(asset_type__workspace_id=workspace_pk)
 
         # Apply search filters if provided (POST request)
         if request.method == "POST" and request.data:
