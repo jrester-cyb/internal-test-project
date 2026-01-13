@@ -325,11 +325,14 @@ export default function AssetTypeAttributesPage() {
       setAllAttributes(updatedAttributes)
 
       // Update orders in the backend with bulk API
+      // Only send non-hidden attributes to avoid order conflicts
       try {
-        const updates = updatedAttributes.map(attr => ({
-          id: attr.id,
-          order: attr.order
-        }))
+        const updates = updatedAttributes
+          .filter(attr => !attr.isHidden)
+          .map(attr => ({
+            id: attr.id,
+            order: attr.order
+          }))
         await reorderAssetTypeAttributes(workspaceId!, assetTypeId!, updates)
       } catch (error) {
         console.error('Failed to update attribute order:', error)
@@ -493,12 +496,11 @@ export default function AssetTypeAttributesPage() {
       const hiddenAttr = await hideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
 
       if (includeHidden) {
-        // If showing hidden, update the row in place
-        setAllAttributes(prev => prev.map(a =>
-          a.id === attr.id || a.apiKey === hiddenAttr.apiKey
-            ? { ...hiddenAttr, isHidden: true }
-            : a
-        ))
+        // If showing hidden, move the row to the bottom of the list
+        setAllAttributes(prev => {
+          const filtered = prev.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
+          return [...filtered, { ...hiddenAttr, isHidden: true }]
+        })
         if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
           setSelectedAttribute({ ...hiddenAttr, isHidden: true })
         }
@@ -561,6 +563,7 @@ export default function AssetTypeAttributesPage() {
   }
 
   function SortableRow({ attr, style: virtualStyle, index }: { attr: AssetTypeAttribute, style: React.CSSProperties, index: number }) {
+    const isHidden = attr.isHidden
     const {
       attributes: dndAttributes,
       listeners,
@@ -568,7 +571,7 @@ export default function AssetTypeAttributesPage() {
       transform,
       transition,
       isDragging,
-    } = useSortable({ id: attr.id })
+    } = useSortable({ id: attr.id, disabled: isHidden })
 
     const combinedStyle: React.CSSProperties = {
       ...virtualStyle,
@@ -593,7 +596,17 @@ export default function AssetTypeAttributesPage() {
             selected={isSelected}
           >
             <TableCell sx={{ minWidth: '40px', padding: '8px', width: '40px' }}>
-              <IconButton size="small" {...dndAttributes} {...listeners} sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' } }}>
+              <IconButton
+                size="small"
+                {...(isHidden ? {} : dndAttributes)}
+                {...(isHidden ? {} : listeners)}
+                sx={{
+                  cursor: isHidden ? 'not-allowed' : 'grab',
+                  '&:active': { cursor: isHidden ? 'not-allowed' : 'grabbing' },
+                  opacity: isHidden ? 0.3 : 1
+                }}
+                disabled={isHidden}
+              >
                 <DragIndicatorIcon fontSize="small" />
               </IconButton>
             </TableCell>

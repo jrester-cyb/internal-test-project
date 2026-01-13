@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Max
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from ..models import (
     AssetTypeAttribute,
@@ -295,7 +295,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=["post"], url_path="hide")
     def hide(self, request, pk=None, workspace_pk=None, assettype_pk=None):
-        """Hide a base attribute for this workspace"""
+        """Hide a base attribute for this workspace. Moves hidden attributes to the end of the list."""
         if not workspace_pk:
             return Response(
                 {"error": "Hide action is only available via workspace endpoint"},
@@ -303,6 +303,18 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             )
 
         instance = self.get_object()
+
+        # Get the max order among all attributes in this workspace context to place hidden at end
+        max_order = (
+            AssetTypeAttribute.objects.filter(
+                asset_type_id=assettype_pk,
+                deleted_at__isnull=True,
+            )
+            .filter(Q(workspace__isnull=True) | Q(workspace_id=workspace_pk))
+            .aggregate(max_order=Max("order"))["max_order"]
+            or 0
+        )
+        hidden_order = max_order + 1
 
         if instance.workspace_id is None:
             # Base attribute - create or update a hidden override
@@ -315,6 +327,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
             if existing_override:
                 existing_override.is_hidden = True
+                existing_override.order = hidden_order
                 existing_override.save()
                 # Set override flag for serializer
                 existing_override._is_override = True
@@ -332,7 +345,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     default_value=instance.default_value,
                     description=instance.description,
                     tags=instance.tags,
-                    order=instance.order,
+                    order=hidden_order,
                     is_hidden=True,
                 )
                 # Set override flag for serializer
@@ -342,8 +355,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
             return Response(serializer.data)
         else:
-            # Workspace attribute - just mark it hidden
+            # Workspace attribute - mark it hidden and move to end
             instance.is_hidden = True
+            instance.order = hidden_order
             instance.save()
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
