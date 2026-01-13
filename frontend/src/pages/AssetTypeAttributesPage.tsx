@@ -484,11 +484,12 @@ export default function AssetTypeAttributesPage() {
       const hiddenAttr = await hideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
 
       if (includeHidden) {
-        // If showing hidden, move the row to the bottom of the list
-        setAllAttributes(prev => {
-          const filtered = prev.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
-          return [...filtered, { ...hiddenAttr, isHidden: true }]
-        })
+        // If showing hidden, update the row in place with isHidden flag
+        setAllAttributes(prev => prev.map(a =>
+          a.id === attr.id || a.apiKey === hiddenAttr.apiKey
+            ? { ...hiddenAttr, isHidden: true }
+            : a
+        ))
         if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
           setSelectedAttribute({ ...hiddenAttr, isHidden: true })
         }
