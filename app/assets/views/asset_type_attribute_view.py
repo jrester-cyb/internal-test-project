@@ -13,6 +13,7 @@ from django.db.models import (
     Case,
     When,
     IntegerField,
+    Exists,
 )
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -97,51 +98,64 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 base_attribute_id=OuterRef("id"),
             ).values("base_attribute_id")
 
-            # Get global attributes (excluding those with overrides), overrides, and extensions
-            # Django-polymorphic automatically fetches child model data via JOINs
-            queryset = BaseAssetTypeAttribute.objects.filter(
-                Q(
-                    asset_type_id=assettype_pk,
-                    polymorphic_ctype__model="globalassettypeattribute",
-                )
-                | Q(
-                    asset_type_id=assettype_pk,
-                    workspaceoverrideassettypeattribute__workspace_id=workspace_pk,
-                )
-                | Q(
-                    asset_type_id=assettype_pk,
-                    workspacelocalassettypeattribute__workspace_id=workspace_pk,
-                )
-            ).exclude(
-                polymorphic_ctype__model="globalassettypeattribute",
-                id__in=Subquery(overridden_globals),
+            # Subquery to check if attribute is hidden in this workspace
+            hidden_check = WorkspaceHiddenAttribute.objects.filter(
+                workspace_id=workspace_pk,
+                hidden_attribute_id=OuterRef("id"),
+                deleted_at__isnull=True,
             )
 
-            # Hidden attributes are always included - the UI handles visibility
-            # The is_hidden field in the serializer indicates hidden status
+            # Subquery to get workspace name for override and local attributes
+            from workspaces.models import Workspace
+
+            workspace_name_subquery = Workspace.objects.filter(
+                Q(id=OuterRef("workspaceoverrideassettypeattribute__workspace_id"))
+                | Q(id=OuterRef("workspacelocalassettypeattribute__workspace_id"))
+            ).values("name")[:1]
+
+            # Get global attributes (excluding those with overrides), overrides, and extensions
+            queryset = (
+                BaseAssetTypeAttribute.objects.filter(
+                    Q(
+                        asset_type_id=assettype_pk,
+                        polymorphic_ctype__model="globalassettypeattribute",
+                    )
+                    | Q(
+                        asset_type_id=assettype_pk,
+                        workspaceoverrideassettypeattribute__workspace_id=workspace_pk,
+                    )
+                    | Q(
+                        asset_type_id=assettype_pk,
+                        workspacelocalassettypeattribute__workspace_id=workspace_pk,
+                    )
+                )
+                .exclude(
+                    polymorphic_ctype__model="globalassettypeattribute",
+                    id__in=Subquery(overridden_globals),
+                )
+                .annotate(
+                    # Annotate is_hidden using Exists subquery
+                    _is_hidden=Exists(hidden_check),
+                    # Annotate workspace_name for override/local attributes
+                    _workspace_name=Subquery(workspace_name_subquery),
+                )
+                .select_related(
+                    "polymorphic_ctype",
+                )
+            )
 
             # Build ordering annotation
-            # Try workspace-specific order first, fall back to global order
             try:
                 config = WorkspaceAssetTypeConfig.objects.get(
                     workspace_id=workspace_pk,
                     asset_type_id=assettype_pk,
                 )
                 if config.attribute_order:
-                    # Build Case/When for workspace ordering
-                    # For each UUID in the config, we match by:
-                    # - Direct ID match (for globals, extensions, and overrides stored by their own ID)
-                    # - OR base_attribute_id match (for overrides when config has the global ID)
                     order_cases = []
                     for idx, item in enumerate(config.attribute_order):
-                        # Handle various formats:
-                        # - dict: {"id": "uuid", "order": 0} (legacy format)
-                        # - string that looks like dict: "{'id': 'uuid', 'order': 0}" (corrupted data)
-                        # - plain UUID string: "uuid"
                         if isinstance(item, dict):
                             attr_id = item.get("id", "")
                         elif isinstance(item, str) and item.startswith("{"):
-                            # Parse string that looks like a dict
                             import ast
 
                             try:
@@ -155,7 +169,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                                 attr_id = str(item)
                         else:
                             attr_id = str(item)
-                        # Match either the object's own ID or the base_attribute_id for overrides
                         order_cases.append(
                             When(
                                 Q(id=attr_id)
@@ -174,29 +187,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                         )
                     ).order_by("effective_order", "created_at")
                 else:
-                    # Config exists but no order - fall back to global
                     queryset = self._annotate_global_order(queryset)
             except WorkspaceAssetTypeConfig.DoesNotExist:
-                # No workspace config - fall back to global ordering
                 queryset = self._annotate_global_order(queryset)
-
-            # Prefetch related objects to avoid N+1 queries
-            from django.db.models import Prefetch
-
-            # Prefetch hidden attribute records for this workspace
-            hidden_qs = WorkspaceHiddenAttribute.objects.filter(
-                workspace_id=workspace_pk,
-                deleted_at__isnull=True,
-            )
-
-            # For polymorphic querysets, we can only prefetch relations that exist on all models
-            # or on the base model. hidden_in_workspaces exists on GlobalAssetTypeAttribute,
-            # workspace exists on Override and Local, base_attribute only on Override.
-            # We'll use select_related on polymorphic_ctype and handle the rest in serializers
-            # by caching lookups in context.
-            queryset = queryset.select_related(
-                "polymorphic_ctype",
-            )
 
         return queryset
 
@@ -204,31 +197,21 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         """Add cached data to serializer context for performance."""
         context = super().get_serializer_context()
 
-        # Get workspace_pk from URL kwargs
         workspace_pk = self.kwargs.get("workspace_pk")
         if workspace_pk:
-            # Cache hidden global attribute IDs (1 query)
-            context["hidden_global_ids"] = set(
-                WorkspaceHiddenAttribute.objects.filter(
-                    workspace_id=workspace_pk,
-                    deleted_at__isnull=True,
-                ).values_list("hidden_attribute_id", flat=True)
-            )
-
-            # Cache the workspace name (1 query)
-            from workspaces.models import Workspace
-
-            try:
-                workspace = Workspace.objects.get(pk=workspace_pk)
-                context["workspace_name"] = workspace.name
-            except Workspace.DoesNotExist:
-                context["workspace_name"] = None
-
-            # Cache all global attributes for this asset type (for override base_attribute lookups)
+            # Cache global attributes for base_attribute lookups in override serializer
+            # Annotate them with _is_hidden so they have the same annotation as main queryset
             assettype_pk = self.kwargs.get("assettype_pk")
             if assettype_pk:
+                hidden_check = WorkspaceHiddenAttribute.objects.filter(
+                    workspace_id=workspace_pk,
+                    hidden_attribute_id=OuterRef("id"),
+                    deleted_at__isnull=True,
+                )
                 global_attrs = GlobalAssetTypeAttribute.objects.filter(
                     asset_type_id=assettype_pk
+                ).annotate(
+                    _is_hidden=Exists(hidden_check),
                 )
                 context["global_attributes_by_id"] = {
                     str(attr.id): attr for attr in global_attrs

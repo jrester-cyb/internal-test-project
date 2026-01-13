@@ -113,16 +113,11 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BaseAssetTypeAttribute
+        # Only include fields that exist on the base model
+        # The to_representation method handles the polymorphic child serialization
         fields = [
             "id",
             "asset_type",
-            "name",
-            "api_key",
-            "attribute_type",
-            "is_required",
-            "default_value",
-            "description",
-            "tags",
             "created_at",
             "updated_at",
         ]
@@ -196,28 +191,8 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in the current workspace."""
-        # First check if we have hidden IDs cached in context (most efficient)
-        hidden_global_ids = self.context.get("hidden_global_ids")
-        if hidden_global_ids is not None:
-            return obj.id in hidden_global_ids
-
-        # Check if we have prefetched hidden data on the instance
-        if hasattr(obj, "_prefetched_hidden"):
-            return len(obj._prefetched_hidden) > 0
-
-        # Fallback to query if not prefetched
-        request = self.context.get("request")
-        if not request:
-            return False
-
-        workspace_pk = request.parser_context.get("kwargs", {}).get("workspace_pk")
-        if not workspace_pk:
-            return False
-
-        return obj.hidden_in_workspaces.filter(
-            workspace_id=workspace_pk,
-            deleted_at__isnull=True,
-        ).exists()
+        # Assumes _is_hidden is always annotated on the queryset
+        return getattr(obj, "_is_hidden", False)
 
 
 class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer):
@@ -271,10 +246,8 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
             base_attr, context=self.context
         ).data
 
-        # Get workspace name from cache if available
-        workspace_name = self.context.get("workspace_name")
-        if workspace_name is None and instance.workspace:
-            workspace_name = instance.workspace.name
+        # Get workspace name from annotation if available
+        workspace_name = getattr(instance, "_workspace_name", None)
 
         # Build result with metadata first, then base data, then overrides
         result = {
@@ -347,11 +320,8 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "asset_type", "workspace", "created_at", "updated_at"]
 
     def get_workspace_name(self, obj):
-        """Get workspace name from cache if available."""
-        workspace_name = self.context.get("workspace_name")
-        if workspace_name is not None:
-            return workspace_name
-        return obj.workspace.name if obj.workspace else None
+        """Get workspace name from annotation if available."""
+        return getattr(obj, "_workspace_name", None)
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in its workspace."""
