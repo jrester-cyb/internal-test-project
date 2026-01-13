@@ -169,32 +169,16 @@ export default function AssetTypeAttributesPage() {
     // Fetch more when we're within 5 items of the end
     const THRESHOLD = 5
     const shouldFetch = visibleStopIndex >= allAttributes.length - THRESHOLD
-    // Check if there are more items based on total count, not nextUrl
-    const hasMoreItems = allAttributes.length < totalCount
+    // Check if there are more items using nextUrl
+    const hasMoreItems = !!nextUrl
 
     if (shouldFetch && hasMoreItems && !fetchInProgressRef.current && workspaceId && assetTypeId) {
       // Set immediately and synchronously before any async work
       fetchInProgressRef.current = true
       setIsLoadingMore(true)
 
-      // Calculate offset based on current list length
-      const PAGE_SIZE = 25
-      const offset = allAttributes.length
-
-      // Build URL from scratch
-      const baseUrl = `/api/workspaces/${workspaceId}/asset-types/${assetTypeId}/attributes/`
-      const params = new URLSearchParams()
-      params.set('limit', PAGE_SIZE.toString())
-      params.set('offset', offset.toString())
-      if (includeHidden) {
-        params.set('include_hidden', 'true')
-      }
-      if (searchTerm) {
-        params.set('search', searchTerm)
-      }
-      const fetchUrl = `${baseUrl}?${params.toString()}`
-
-      fetchAssetAttributeDefinitionsFromUrl(fetchUrl)
+      // Use the nextUrl directly - it already has the correct page params
+      fetchAssetAttributeDefinitionsFromUrl(nextUrl)
         .then(response => {
           const newAttributes = response.results || []
 
@@ -206,7 +190,7 @@ export default function AssetTypeAttributesPage() {
           if (newAttributes.length > 0) {
             setAllAttributes(prev => {
               const existingIds = new Set(prev.map(attr => attr.id))
-              const uniqueNewAttributes = newAttributes.filter(attr => !existingIds.has(attr.id))
+              const uniqueNewAttributes = newAttributes.filter((attr: AssetTypeAttribute) => !existingIds.has(attr.id))
               return [...prev, ...uniqueNewAttributes]
             })
             setNextUrl(response.next || null)
