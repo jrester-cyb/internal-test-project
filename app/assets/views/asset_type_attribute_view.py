@@ -571,6 +571,25 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Asset Type Attributes"],
+        summary="Get global definition for an override",
+    )
+    @action(detail=True, methods=["get"], url_path="global-definition")
+    def global_definition(self, request, pk=None, workspace_pk=None, assettype_pk=None):
+        """Get the global (base) definition for an override attribute."""
+        override = WorkspaceOverrideAssetTypeAttribute.objects.filter(id=pk).first()
+        if not override:
+            return Response(
+                {"detail": "Not an override attribute"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            GlobalAssetTypeAttributeSerializer(override.base_attribute).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Asset Type Attributes"],
         summary="Get all unique tags",
     )
     @action(detail=False, methods=["get"], url_path="tags")

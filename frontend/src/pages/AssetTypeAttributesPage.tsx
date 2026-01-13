@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete, Popover, Badge, Drawer, useMediaQuery, useTheme } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon, Close as CloseIcon, Share as ShareIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags } from '../api/assets'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -52,6 +52,9 @@ export default function AssetTypeAttributesPage() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [globalDefinition, setGlobalDefinition] = useState<AssetTypeAttribute | null>(null)
+  const [isLoadingGlobalDefinition, setIsLoadingGlobalDefinition] = useState(false)
+  const [showingGlobalDefinition, setShowingGlobalDefinition] = useState(false)
 
   // Responsive breakpoint detection - use lg (1200px) to include iPads in landscape
   const theme = useTheme()
@@ -92,6 +95,12 @@ export default function AssetTypeAttributesPage() {
       setSelectedAttribute(null)
     }
   }, [displayedAttributes, selectedAttribute])
+
+  // Reset global definition view when selected attribute changes
+  useEffect(() => {
+    setShowingGlobalDefinition(false)
+    setGlobalDefinition(null)
+  }, [selectedAttribute?.id])
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     info: true,
@@ -830,7 +839,11 @@ export default function AssetTypeAttributesPage() {
     )
   }
 
+  // The attribute to display in the details pane - either global definition or selected
+  const displayedAttribute = showingGlobalDefinition && globalDefinition ? globalDefinition : selectedAttribute
+
   const renderSection = (sectionId: string) => {
+    if (!displayedAttribute) return null
     switch (sectionId) {
       case 'info':
         return (
@@ -846,14 +859,14 @@ export default function AssetTypeAttributesPage() {
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'top' }}>Name</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5, fontWeight: 600 }}>
-                    <CopyableText>{selectedAttribute!.name}</CopyableText>
+                    <CopyableText>{displayedAttribute.name}</CopyableText>
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Description</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5, color: selectedAttribute!.description ? 'text.primary' : 'text.disabled', fontStyle: selectedAttribute!.description ? 'normal' : 'italic' }}>
-                    {selectedAttribute!.description ? (
-                      <TruncatedText text={selectedAttribute!.description} maxLines={3} title="Description" />
+                  <TableCell sx={{ border: 0, py: 0.5, color: displayedAttribute.description ? 'text.primary' : 'text.disabled', fontStyle: displayedAttribute.description ? 'normal' : 'italic' }}>
+                    {displayedAttribute.description ? (
+                      <TruncatedText text={displayedAttribute.description} maxLines={3} title="Description" />
                     ) : (
                       'No description'
                     )}
@@ -879,15 +892,41 @@ export default function AssetTypeAttributesPage() {
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Scope</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      {selectedAttribute!.isOverride ? (
-                        <Chip
-                          label="Override"
-                          size="small"
-                          color="warning"
-                          variant="outlined"
-                        />
-                      ) : selectedAttribute!.workspace ? (
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      {displayedAttribute.isOverride ? (
+                        <>
+                          <Chip
+                            label="Override"
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                          {!showingGlobalDefinition && (
+                            <Button
+                              size="small"
+                              variant="text"
+                              startIcon={isLoadingGlobalDefinition ? <CircularProgress size={14} /> : <OpenInNewIcon />}
+                              disabled={isLoadingGlobalDefinition}
+                              onClick={async () => {
+                                if (!workspaceId || !assetTypeId || !selectedAttribute) return
+                                setIsLoadingGlobalDefinition(true)
+                                try {
+                                  const globalDef = await fetchGlobalAttributeDefinition(workspaceId, assetTypeId, selectedAttribute.id)
+                                  setGlobalDefinition(globalDef)
+                                  setShowingGlobalDefinition(true)
+                                } catch (err) {
+                                  console.error('Failed to fetch global definition:', err)
+                                } finally {
+                                  setIsLoadingGlobalDefinition(false)
+                                }
+                              }}
+                              sx={{ textTransform: 'none', minWidth: 'auto' }}
+                            >
+                              View Global
+                            </Button>
+                          )}
+                        </>
+                      ) : displayedAttribute.workspace ? (
                         <Chip
                           label="Local"
                           size="small"
@@ -902,7 +941,7 @@ export default function AssetTypeAttributesPage() {
                           variant="outlined"
                         />
                       )}
-                      {selectedAttribute!.isHidden && (
+                      {displayedAttribute.isHidden && (
                         <Tooltip title="Hidden in this workspace only" arrow>
                           <Chip
                             icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
@@ -913,9 +952,9 @@ export default function AssetTypeAttributesPage() {
                           />
                         </Tooltip>
                       )}
-                      {selectedAttribute!.workspaceName && (
+                      {displayedAttribute.workspaceName && (
                         <Typography variant="caption" color="text.secondary">
-                          ({selectedAttribute!.workspaceName})
+                          ({displayedAttribute.workspaceName})
                         </Typography>
                       )}
                     </Stack>
@@ -940,40 +979,42 @@ export default function AssetTypeAttributesPage() {
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>Type</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
-                      {selectedAttribute!.attributeType.charAt(0).toUpperCase() + selectedAttribute!.attributeType.slice(1)}
+                      {displayedAttribute.attributeType.charAt(0).toUpperCase() + displayedAttribute.attributeType.slice(1)}
                     </Box>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="warning"
-                      startIcon={<CompareArrowsIcon />}
-                      onClick={() => {
-                        setEditingAttribute(selectedAttribute)
-                        setFormData({
-                          name: selectedAttribute!.name,
-                          apiKey: selectedAttribute!.apiKey,
-                          attributeType: selectedAttribute!.attributeType,
-                          isRequired: selectedAttribute!.isRequired,
-                          description: selectedAttribute!.description || '',
-                          defaultValue: selectedAttribute!.defaultValue,
-                          tags: selectedAttribute!.tags || []
-                        })
-                        setPendingTypeChange(null)
-                        setTypeChangeDialogOpen(true)
-                      }}
-                      sx={{
-                        textTransform: 'none',
-                        minWidth: 'auto'
-                      }}
-                    >
-                      Convert Type
-                    </Button>
+                    {!showingGlobalDefinition && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        startIcon={<CompareArrowsIcon />}
+                        onClick={() => {
+                          setEditingAttribute(selectedAttribute)
+                          setFormData({
+                            name: displayedAttribute.name,
+                            apiKey: displayedAttribute.apiKey,
+                            attributeType: displayedAttribute.attributeType,
+                            isRequired: displayedAttribute.isRequired,
+                            description: displayedAttribute.description || '',
+                            defaultValue: displayedAttribute.defaultValue,
+                            tags: displayedAttribute.tags || []
+                          })
+                          setPendingTypeChange(null)
+                          setTypeChangeDialogOpen(true)
+                        }}
+                        sx={{
+                          textTransform: 'none',
+                          minWidth: 'auto'
+                        }}
+                      >
+                        Convert Type
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Required</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
-                    {selectedAttribute!.isRequired ? (
+                    {displayedAttribute.isRequired ? (
                       <Chip label="Required" color="error" size="small" />
                     ) : (
                       <Chip label="Optional" variant="outlined" size="small" />
@@ -983,25 +1024,25 @@ export default function AssetTypeAttributesPage() {
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>API Key</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
-                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{selectedAttribute!.apiKey}</CopyableText>
+                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{displayedAttribute.apiKey}</CopyableText>
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Default</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5, color: selectedAttribute!.defaultValue !== undefined && selectedAttribute!.defaultValue !== null ? 'text.primary' : 'text.disabled', fontStyle: selectedAttribute!.defaultValue !== undefined && selectedAttribute!.defaultValue !== null ? 'normal' : 'italic' }}>
-                    {selectedAttribute!.defaultValue !== undefined && selectedAttribute!.defaultValue !== null
-                      ? (typeof selectedAttribute!.defaultValue === 'object'
-                        ? JSON.stringify(selectedAttribute!.defaultValue, null, 2)
-                        : String(selectedAttribute!.defaultValue))
+                  <TableCell sx={{ border: 0, py: 0.5, color: displayedAttribute.defaultValue !== undefined && displayedAttribute.defaultValue !== null ? 'text.primary' : 'text.disabled', fontStyle: displayedAttribute.defaultValue !== undefined && displayedAttribute.defaultValue !== null ? 'normal' : 'italic' }}>
+                    {displayedAttribute.defaultValue !== undefined && displayedAttribute.defaultValue !== null
+                      ? (typeof displayedAttribute.defaultValue === 'object'
+                        ? JSON.stringify(displayedAttribute.defaultValue, null, 2)
+                        : String(displayedAttribute.defaultValue))
                       : 'No default value'}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Tags</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
-                    {selectedAttribute!.tags && selectedAttribute!.tags.length > 0 ? (
+                    {displayedAttribute.tags && displayedAttribute.tags.length > 0 ? (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selectedAttribute!.tags.map((tag: string) => (
+                        {displayedAttribute.tags.map((tag: string) => (
                           <Chip key={tag} label={tag} size="small" variant="outlined" />
                         ))}
                       </Box>
@@ -1021,12 +1062,13 @@ export default function AssetTypeAttributesPage() {
           <DraggableSection key="choices" id="choices">
             {({ dndAttributes, listeners }) => (
               <AttributeChoicesSection
-                attribute={selectedAttribute!}
+                attribute={displayedAttribute}
                 workspaceId={workspaceId!}
                 assetTypeId={assetTypeId!}
                 expanded={expandedSections.choices}
                 onToggleExpanded={() => toggleSection('choices')}
                 dragHandleProps={{ ...dndAttributes, ...listeners }}
+                readOnly={showingGlobalDefinition}
               />
             )}
           </DraggableSection>
@@ -1045,28 +1087,28 @@ export default function AssetTypeAttributesPage() {
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>ID</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
-                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{selectedAttribute!.id}</CopyableText>
+                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
                   </TableCell>
                 </TableRow>
-                {selectedAttribute!.baseAttributeId && (
+                {displayedAttribute.baseAttributeId && (
                   <TableRow>
                     <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Base ID</TableCell>
                     <TableCell sx={{ border: 0, py: 0.5 }}>
-                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{selectedAttribute!.baseAttributeId}</CopyableText>
+                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.baseAttributeId}</CopyableText>
                     </TableCell>
                   </TableRow>
                 )}
-                {selectedAttribute!.workspace && (
+                {displayedAttribute.workspace && (
                   <TableRow>
                     <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Workspace ID</TableCell>
                     <TableCell sx={{ border: 0, py: 0.5 }}>
-                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{selectedAttribute!.workspace}</CopyableText>
+                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.workspace}</CopyableText>
                     </TableCell>
                   </TableRow>
                 )}
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Order</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>{selectedAttribute!.order}</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>{displayedAttribute.order}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -1078,71 +1120,79 @@ export default function AssetTypeAttributesPage() {
   }
 
   // Details panel content - reused in both split view and drawer
-  const detailsPanelContent = selectedAttribute ? (
+  const detailsPanelContent = displayedAttribute ? (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} sx={{ flexShrink: 0, p: 2, pb: 0 }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ overflow: 'hidden' }}>
-          {isSmallScreen && (
+          {showingGlobalDefinition ? (
+            <IconButton size="small" onClick={() => { setShowingGlobalDefinition(false); setGlobalDefinition(null) }} edge="start">
+              <CloseIcon />
+            </IconButton>
+          ) : isSmallScreen && (
             <IconButton size="small" onClick={() => setSelectedAttribute(null)} edge="start">
               <CloseIcon />
             </IconButton>
           )}
           <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Details
+            {showingGlobalDefinition ? 'Global Definition' : 'Details'}
           </Typography>
         </Stack>
-        <ActionButtons
-          width={isSmallScreen ? 0 : 100 - leftColumnWidth}
-          actions={[
-            ...(!selectedAttribute.isHidden ? [{
-              label: 'Edit',
-              icon: <EditIcon fontSize="small" />,
-              onClick: () => handleEdit(selectedAttribute),
-              color: 'primary' as const,
-              variant: 'outlined' as const,
-              minWidth: 20 // Show when right panel >= 20%
-            }] : []),
-            ...(selectedAttribute.isHidden ? [{
-              label: 'Unhide',
-              icon: <ShowIcon fontSize="small" />,
-              onClick: () => handleUnhide(selectedAttribute),
-              color: 'success' as const,
-              variant: 'outlined' as const,
-              minWidth: 30 // Show when right panel >= 30%
-            }] : [{
-              label: 'Hide',
-              icon: <HideIcon fontSize="small" />,
-              onClick: () => handleHide(selectedAttribute),
-              color: 'warning' as const,
-              variant: 'outlined' as const,
-              minWidth: 30 // Show when right panel >= 30%
-            }]),
-            // Share - always in menu
-            {
-              label: 'Share Attribute',
-              icon: <ShareIcon fontSize="small" />,
-              onClick: () => {
-                const url = new URL(window.location.href)
-                url.searchParams.set('search', selectedAttribute.apiKey)
-                url.searchParams.set('selected', selectedAttribute.id)
-                navigator.clipboard.writeText(url.toString())
+        {showingGlobalDefinition ? (
+          <Chip label="Global" size="small" color="success" variant="outlined" />
+        ) : (
+          <ActionButtons
+            width={isSmallScreen ? 0 : 100 - leftColumnWidth}
+            actions={[
+              ...(!selectedAttribute!.isHidden ? [{
+                label: 'Edit',
+                icon: <EditIcon fontSize="small" />,
+                onClick: () => handleEdit(selectedAttribute!),
+                color: 'primary' as const,
+                variant: 'outlined' as const,
+                minWidth: 20 // Show when right panel >= 20%
+              }] : []),
+              ...(selectedAttribute!.isHidden ? [{
+                label: 'Unhide',
+                icon: <ShowIcon fontSize="small" />,
+                onClick: () => handleUnhide(selectedAttribute!),
+                color: 'success' as const,
+                variant: 'outlined' as const,
+                minWidth: 30 // Show when right panel >= 30%
+              }] : [{
+                label: 'Hide',
+                icon: <HideIcon fontSize="small" />,
+                onClick: () => handleHide(selectedAttribute!),
+                color: 'warning' as const,
+                variant: 'outlined' as const,
+                minWidth: 30 // Show when right panel >= 30%
+              }]),
+              // Share - always in menu
+              {
+                label: 'Share Attribute',
+                icon: <ShareIcon fontSize="small" />,
+                onClick: () => {
+                  const url = new URL(window.location.href)
+                  url.searchParams.set('search', selectedAttribute!.apiKey)
+                  url.searchParams.set('selected', selectedAttribute!.id)
+                  navigator.clipboard.writeText(url.toString())
+                },
+                color: 'primary' as const,
+                minWidth: Infinity, // Always in menu
+                dividerBefore: true
               },
-              color: 'primary' as const,
-              minWidth: Infinity, // Always in menu
-              dividerBefore: true
-            },
-            // Delete - always in menu, only for workspace attributes
-            ...(selectedAttribute.workspace && !selectedAttribute.isHidden ? [{
-              label: 'Delete',
-              icon: <DeleteIcon fontSize="small" />,
-              onClick: () => handleDelete(selectedAttribute),
-              color: 'error' as const,
-              minWidth: Infinity // Always in menu
-            }] : [])
-          ]}
-          menuAnchorEl={menuAnchorEl}
-          setMenuAnchorEl={setMenuAnchorEl}
-        />
+              // Delete - always in menu, only for workspace attributes
+              ...(selectedAttribute!.workspace && !selectedAttribute!.isHidden ? [{
+                label: 'Delete',
+                icon: <DeleteIcon fontSize="small" />,
+                onClick: () => handleDelete(selectedAttribute!),
+                color: 'error' as const,
+                minWidth: Infinity // Always in menu
+              }] : [])
+            ]}
+            menuAnchorEl={menuAnchorEl}
+            setMenuAnchorEl={setMenuAnchorEl}
+          />
+        )}
       </Stack>
 
       <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, minHeight: 0 }}>

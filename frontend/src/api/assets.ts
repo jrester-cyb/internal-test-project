@@ -195,6 +195,12 @@ export async function fetchAttributeAssetCount(workspaceId: string, assetTypeId:
   return response.json()
 }
 
+export async function fetchGlobalAttributeDefinition(workspaceId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/global-definition/`))
+  if (!response.ok) throw new Error('Failed to fetch global definition')
+  return response.json()
+}
+
 export async function fetchAssetAttributeDefinitionsFromUrl(url: string) {
   const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')

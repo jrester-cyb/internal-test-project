@@ -31,6 +31,7 @@ interface AttributeChoicesSectionProps {
   expanded?: boolean
   onToggleExpanded?: () => void
   dragHandleProps?: Record<string, unknown>
+  readOnly?: boolean
 }
 
 export default function AttributeChoicesSection({
@@ -39,7 +40,8 @@ export default function AttributeChoicesSection({
   assetTypeId,
   expanded: controlledExpanded,
   onToggleExpanded,
-  dragHandleProps
+  dragHandleProps,
+  readOnly = false
 }: Readonly<AttributeChoicesSectionProps>) {
   const [internalExpanded, setInternalExpanded] = useState(false)
   const expanded = controlledExpanded ?? internalExpanded
@@ -155,7 +157,7 @@ export default function AttributeChoicesSection({
         </Typography>
       )
     },
-    {
+    ...(!readOnly ? [{
       key: 'actions',
       header: '',
       width: 48,
@@ -170,8 +172,8 @@ export default function AttributeChoicesSection({
           <DeleteIcon fontSize="small" />
         </IconButton>
       )
-    }
-  ], [handleDeleteChoice])
+    }] : [])
+  ], [handleDeleteChoice, readOnly])
 
   return (
     <>
@@ -214,16 +216,18 @@ export default function AttributeChoicesSection({
               Choices {loaded ? `(${choices.length})` : ''}
             </Typography>
           </Box>
-          <IconButton
-            size="small"
-            color="primary"
-            onClick={(e) => {
-              e.stopPropagation()
-              setDialogOpen(true)
-            }}
-          >
-            <AddIcon fontSize="small" />
-          </IconButton>
+          {!readOnly && (
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={(e) => {
+                e.stopPropagation()
+                setDialogOpen(true)
+              }}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
         <Collapse in={expanded}>
           <Box sx={{ height: 300, mt: 1, display: 'flex', flexDirection: 'column' }}>
@@ -236,7 +240,7 @@ export default function AttributeChoicesSection({
                 items={choices}
                 columns={columns}
                 emptyMessage="No choices defined"
-                onReorder={handleReorder}
+                onReorder={readOnly ? undefined : handleReorder}
               />
             )}
           </Box>
