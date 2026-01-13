@@ -95,7 +95,7 @@ function App() {
       onClick: handleWorkspaceClick,
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: 600 // Show when window >= 600px
+      minWidth: 600 // Show when window >= 600px
     }] : []),
 
     {
@@ -104,7 +104,7 @@ function App() {
       onClick: handleHelp,
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: 500 // Show when window >= 500px
+      minWidth: 500 // Show when window >= 500px
     },
     {
       label: 'Profile',
@@ -112,7 +112,7 @@ function App() {
       onClick: handleProfile,
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: Infinity
+      minWidth: Infinity
     },
     {
       label: isDarkMode ? 'Toggle Light Mode' : 'Toggle Dark Mode',
@@ -120,7 +120,7 @@ function App() {
       onClick: toggleTheme,
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: Infinity // Show when window >= 550px
+      minWidth: Infinity // Always in menu
     },
     {
       label: 'Logout',
@@ -128,7 +128,7 @@ function App() {
       onClick: () => console.log('Logout clicked'),
       color: 'inherit' as const,
       variant: 'text' as const,
-      collapseThreshold: Infinity, // Show when window >= 400px
+      minWidth: Infinity, // Always in menu
       dividerBefore: true
     }
   ]
@@ -149,7 +149,6 @@ function App() {
             width={windowWidth}
             menuAnchorEl={actionsMenuAnchorEl}
             setMenuAnchorEl={setActionsMenuAnchorEl}
-            showWhenWider
             menuIcon={<AccountCircleIcon />}
           />
         </Toolbar>

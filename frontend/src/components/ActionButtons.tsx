@@ -10,13 +10,15 @@ export interface ActionButtonConfig {
   color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' | 'inherit'
   variant?: 'text' | 'outlined' | 'contained'
   disabled?: boolean
-  collapseThreshold?: number // Show as button when width <= this value (for responsive mode)
+  /** Minimum width required to show this button. Button shows when width >= this value.
+   *  Use Infinity to always keep in menu, 0 to always show as button. */
+  minWidth?: number
   dividerBefore?: boolean // Show a divider before this item in the menu
 }
 
 interface ActionButtonsProps {
   actions: ActionButtonConfig[]
-  // For responsive mode with collapsing buttons
+  // For responsive mode with collapsing buttons - the current container width
   width?: number
   menuAnchorEl?: HTMLElement | null
   setMenuAnchorEl?: (el: HTMLElement | null) => void
@@ -24,9 +26,6 @@ interface ActionButtonsProps {
   simple?: boolean
   size?: 'small' | 'medium' | 'large'
   spacing?: number
-  // When true, buttons show when width >= threshold (for pixel widths)
-  // When false (default), buttons show when width <= threshold (for percentage widths)
-  showWhenWider?: boolean
   // When true, render as icon buttons with tooltips instead of full buttons
   iconOnly?: boolean
   // Custom icon for the overflow menu button (defaults to MoreVertIcon)
@@ -42,7 +41,6 @@ export default function ActionButtons({
   simple = false,
   size = 'small',
   spacing = 1,
-  showWhenWider = false,
   iconOnly = false,
   menuIcon = <MoreVertIcon />
 }: ActionButtonsProps) {
@@ -87,28 +85,16 @@ export default function ActionButtons({
     return null
   }
 
-  // Helper to check if button should be visible
-  const isButtonVisible = (threshold: number) => {
-    if (showWhenWider) {
-      return width >= threshold // Show when container is wide enough (pixel mode)
-    }
-    return width <= threshold // Show when panel is small enough (percentage mode)
-  }
+  // Button shows when width >= minWidth (simple, consistent logic)
+  const isButtonVisible = (minWidth: number) => width >= minWidth
 
-  // Helper to check if menu should be visible (any button is hidden)
-  const isMenuVisible = () => {
-    if (showWhenWider) {
-      const maxThreshold = Math.max(...actions.map(a => a.collapseThreshold || 50))
-      return width < maxThreshold // Menu shows when not all buttons fit
-    }
-    const minThreshold = Math.min(...actions.map(a => a.collapseThreshold || 50))
-    return width > minThreshold // Menu shows when any button is collapsed
-  }
+  // Menu shows when any button is hidden
+  const isMenuVisible = () => actions.some(a => !isButtonVisible(a.minWidth ?? 0))
 
   return (
     <Stack direction="row" sx={{ overflow: 'hidden', alignItems: 'center' }}>
       {actions.map((action, index) => (
-        <Collapse key={index} in={isButtonVisible(action.collapseThreshold || 50)} orientation="horizontal" timeout={250}>
+        <Collapse key={index} in={isButtonVisible(action.minWidth ?? 0)} orientation="horizontal" timeout={250}>
           {iconOnly && action.icon ? (
             <Tooltip title={action.label}>
               <IconButton
@@ -156,7 +142,7 @@ export default function ActionButtons({
       >
         {actions.map((action, index) => {
           // Only show in menu if button is hidden
-          if (isButtonVisible(action.collapseThreshold || 50)) return null
+          if (isButtonVisible(action.minWidth ?? 0)) return null
 
           return (
             <Fragment key={index}>

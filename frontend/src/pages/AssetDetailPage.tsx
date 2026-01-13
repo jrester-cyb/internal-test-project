@@ -82,7 +82,7 @@ export default function AssetDetailPage() {
       onClick: handleShare,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      collapseThreshold: 500 // Stays visible longest
+      minWidth: 500 // Stays visible longest
     },
     {
       label: 'View on Map',
@@ -90,7 +90,7 @@ export default function AssetDetailPage() {
       onClick: handleViewOnMap,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      collapseThreshold: 550 // Collapses second
+      minWidth: 550 // Collapses second
     },
     {
       label: 'Edit',
@@ -98,7 +98,7 @@ export default function AssetDetailPage() {
       onClick: handleEdit,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      collapseThreshold: 700 // Collapses first
+      minWidth: 700 // Collapses first
     },
     {
       label: 'System Details',
@@ -106,7 +106,7 @@ export default function AssetDetailPage() {
       onClick: () => setDetailsOpen(true),
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      collapseThreshold: Infinity // Always in menu
+      minWidth: Infinity // Always in menu
     },
     {
       label: 'Clone',
@@ -117,7 +117,7 @@ export default function AssetDetailPage() {
       },
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      collapseThreshold: Infinity // Always in menu
+      minWidth: Infinity // Always in menu
     },
     {
       label: 'Download',
@@ -125,7 +125,7 @@ export default function AssetDetailPage() {
       onClick: handleDownload,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      collapseThreshold: Infinity // Always in menu
+      minWidth: Infinity // Always in menu
     }
   ]
 
@@ -177,7 +177,6 @@ export default function AssetDetailPage() {
                   menuAnchorEl={menuAnchorEl}
                   setMenuAnchorEl={setMenuAnchorEl}
                   size="small"
-                  showWhenWider
                   iconOnly
                 />
               </Box>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete, Popover, Badge } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete, Popover, Badge, Drawer, useMediaQuery, useTheme } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon, Close as CloseIcon, Share as ShareIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
@@ -53,6 +53,10 @@ export default function AssetTypeAttributesPage() {
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
+  // Responsive breakpoint detection
+  const theme = useTheme()
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'))
+
   // Calculate if there's enough space to show the Scope column
   // Fixed columns: drag (40px) + scope (100px) + actions (48px) = 188px
   // We want at least 200px for the name column
@@ -82,10 +86,18 @@ export default function AssetTypeAttributesPage() {
     return true
   })
 
+  // If selected attribute is filtered out, deselect it
+  useEffect(() => {
+    if (selectedAttribute && !displayedAttributes.some(attr => attr.id === selectedAttribute.id)) {
+      setSelectedAttribute(null)
+    }
+  }, [displayedAttributes, selectedAttribute])
+
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     info: true,
     configuration: false,
-    choices: false
+    choices: false,
+    system: false
   })
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('attributeDetailsSectionOrder')
@@ -93,15 +105,15 @@ export default function AssetTypeAttributesPage() {
       try {
         const parsed = JSON.parse(saved)
         // Validate that it contains all expected sections
-        if (Array.isArray(parsed) && parsed.length === 3 &&
-          parsed.includes('info') && parsed.includes('configuration') && parsed.includes('choices')) {
+        if (Array.isArray(parsed) && parsed.length === 4 &&
+          parsed.includes('info') && parsed.includes('configuration') && parsed.includes('choices') && parsed.includes('system')) {
           return parsed
         }
       } catch {
         // Invalid JSON, use default
       }
     }
-    return ['info', 'configuration', 'choices']
+    return ['info', 'configuration', 'choices', 'system']
   })
 
   const toggleSection = (section: string) => {
@@ -145,14 +157,14 @@ export default function AssetTypeAttributesPage() {
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
 
-  // Fetch available tags on mount and when dialog opens
+  // Fetch available tags when filter popover opens
   useEffect(() => {
-    if (workspaceId && assetTypeId) {
+    if (filterAnchorEl && workspaceId && assetTypeId) {
       fetchAttributeTags(workspaceId, assetTypeId)
         .then(tags => setAvailableTags(tags))
         .catch(err => console.error('Failed to fetch tags:', err))
     }
-  }, [workspaceId, assetTypeId])
+  }, [filterAnchorEl, workspaceId, assetTypeId])
 
   // Debounced search effect - just update URL, let loader handle data fetching
   useEffect(() => {
@@ -994,16 +1006,154 @@ export default function AssetTypeAttributesPage() {
             )}
           </DraggableSection>
         )
+      case 'system':
+        return (
+          <DraggableSection
+            key="system"
+            id="system"
+            title="System Details"
+            expanded={expandedSections.system}
+            onToggle={() => toggleSection('system')}
+          >
+            <Table size="small" sx={{ mt: 1 }}>
+              <TableBody>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>ID</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{selectedAttribute!.id}</CopyableText>
+                  </TableCell>
+                </TableRow>
+                {selectedAttribute!.baseAttributeId && (
+                  <TableRow>
+                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Base ID</TableCell>
+                    <TableCell sx={{ border: 0, py: 0.5 }}>
+                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{selectedAttribute!.baseAttributeId}</CopyableText>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {selectedAttribute!.workspace && (
+                  <TableRow>
+                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Workspace ID</TableCell>
+                    <TableCell sx={{ border: 0, py: 0.5 }}>
+                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{selectedAttribute!.workspace}</CopyableText>
+                    </TableCell>
+                  </TableRow>
+                )}
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Order</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>{selectedAttribute!.order}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </DraggableSection>
+        )
       default:
         return null
     }
   }
 
+  // Details panel content - reused in both split view and drawer
+  const detailsPanelContent = selectedAttribute ? (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} sx={{ flexShrink: 0, p: 2, pb: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ overflow: 'hidden' }}>
+          {isSmallScreen && (
+            <IconButton size="small" onClick={() => setSelectedAttribute(null)} edge="start">
+              <CloseIcon />
+            </IconButton>
+          )}
+          <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Details
+          </Typography>
+        </Stack>
+        <ActionButtons
+          width={isSmallScreen ? 0 : 100 - leftColumnWidth}
+          actions={[
+            ...(!selectedAttribute.isHidden ? [{
+              label: 'Edit',
+              icon: <EditIcon fontSize="small" />,
+              onClick: () => handleEdit(selectedAttribute),
+              color: 'primary' as const,
+              variant: 'outlined' as const,
+              minWidth: 35 // Show when right panel >= 35%
+            }] : []),
+            ...(selectedAttribute.isHidden ? [{
+              label: 'Unhide',
+              icon: <ShowIcon fontSize="small" />,
+              onClick: () => handleUnhide(selectedAttribute),
+              color: 'success' as const,
+              variant: 'outlined' as const,
+              minWidth: 50 // Show when right panel >= 50%
+            }] : [{
+              label: 'Hide',
+              icon: <HideIcon fontSize="small" />,
+              onClick: () => handleHide(selectedAttribute),
+              color: 'warning' as const,
+              variant: 'outlined' as const,
+              minWidth: 50 // Show when right panel >= 50%
+            }]),
+            // Share - always in menu
+            {
+              label: 'Share Attribute',
+              icon: <ShareIcon fontSize="small" />,
+              onClick: () => {
+                // TODO: Implement share functionality
+                console.log('Share attribute:', selectedAttribute)
+              },
+              color: 'primary' as const,
+              minWidth: Infinity, // Always in menu
+              dividerBefore: true
+            },
+            // Delete - always in menu, only for workspace attributes
+            ...(selectedAttribute.workspace && !selectedAttribute.isHidden ? [{
+              label: 'Delete',
+              icon: <DeleteIcon fontSize="small" />,
+              onClick: () => handleDelete(selectedAttribute),
+              color: 'error' as const,
+              minWidth: Infinity // Always in menu
+            }] : [])
+          ]}
+          menuAnchorEl={menuAnchorEl}
+          setMenuAnchorEl={setMenuAnchorEl}
+        />
+      </Stack>
+
+      <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, minHeight: 0 }}>
+        <DndContext
+          sensors={sectionSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleSectionDragEnd}
+          modifiers={[restrictToVerticalAxis]}
+        >
+          <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+            <Stack spacing={1}>
+              {sectionOrder.map((sectionId, index) => (
+                <>
+                  {index > 0 && <Divider key={`divider-${sectionId}`} />}
+                  {renderSection(sectionId)}
+                </>
+              ))}
+            </Stack>
+          </SortableContext>
+        </DndContext>
+      </Box>
+    </Box>
+  ) : (
+    <Box sx={{ textAlign: 'center', py: 8 }}>
+      <Typography color="text.secondary" variant="h6" gutterBottom>
+        Select an attribute
+      </Typography>
+      <Typography color="text.secondary" variant="body2">
+        Click on an attribute in the table to view its details
+      </Typography>
+    </Box>
+  )
+
   return (
     <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default', p: 2 }}>
       <Box data-resize-container sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden', mb: 2, position: 'relative' }}>
         {/* Left Column - Table */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2, width: `${leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2, width: isSmallScreen ? '100%' : `${leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
           {/* Search Bar and Filter */}
           <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
             <TextField
@@ -1065,6 +1215,11 @@ export default function AssetTypeAttributesPage() {
                     ))
                   }
                   sx={{ minWidth: 250 }}
+                  slotProps={{
+                    popper: {
+                      sx: { zIndex: 1500 }
+                    }
+                  }}
                 />
               </Box>
             </Popover>
@@ -1145,116 +1300,57 @@ export default function AssetTypeAttributesPage() {
           </Box>
         </Box>
 
-        {/* Resizable Divider */}
-        <Box
-          onMouseDown={handleDividerMouseDown}
-          onDoubleClick={handleDividerDoubleClick}
-          sx={{
-            width: '8px',
-            cursor: 'col-resize',
-            bgcolor: isDraggingDivider ? 'primary.main' : 'transparent',
-            '&:hover': { bgcolor: 'primary.light' },
-            transition: 'background-color 0.2s',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        {/* Resizable Divider - hidden on small screens */}
+        {!isSmallScreen && (
           <Box
+            onMouseDown={handleDividerMouseDown}
+            onDoubleClick={handleDividerDoubleClick}
             sx={{
-              width: '3px',
-              height: '40px',
-              borderLeft: '1px solid',
-              borderRight: '1px solid',
-              borderColor: 'grey.400',
-              opacity: isDraggingDivider ? 0 : 1,
+              width: '8px',
+              cursor: 'col-resize',
+              bgcolor: isDraggingDivider ? 'primary.main' : 'transparent',
+              '&:hover': { bgcolor: 'primary.light' },
+              transition: 'background-color 0.2s',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
-        </Box>
+          >
+            <Box
+              sx={{
+                width: '3px',
+                height: '40px',
+                borderLeft: '1px solid',
+                borderRight: '1px solid',
+                borderColor: 'grey.400',
+                opacity: isDraggingDivider ? 0 : 1,
+              }}
+            />
+          </Box>
+        )}
 
-        {/* Right Column - Details Panel */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
-          {selectedAttribute ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} sx={{ flexShrink: 0, p: 2, pb: 0 }}>
-                <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Details
-                </Typography>
-                <ActionButtons
-                  width={leftColumnWidth}
-                  actions={[
-                    ...(!selectedAttribute.isHidden ? [{
-                      label: 'Edit',
-                      icon: <EditIcon fontSize="small" />,
-                      onClick: () => handleEdit(selectedAttribute),
-                      color: 'primary' as const,
-                      variant: 'outlined' as const,
-                      collapseThreshold: 65
-                    }] : []),
-                    // Show Unhide for hidden attributes, Hide for all non-hidden attributes
-                    ...(selectedAttribute.isHidden ? [{
-                      label: 'Unhide',
-                      icon: <ShowIcon fontSize="small" />,
-                      onClick: () => handleUnhide(selectedAttribute),
-                      color: 'success' as const,
-                      variant: 'outlined' as const,
-                      collapseThreshold: 50
-                    }] : [{
-                      label: 'Hide',
-                      icon: <HideIcon fontSize="small" />,
-                      onClick: () => handleHide(selectedAttribute),
-                      color: 'warning' as const,
-                      variant: 'outlined' as const,
-                      collapseThreshold: 50
-                    }]),
-                    // Show Delete for workspace attributes (extensions and overrides) that are not hidden
-                    ...(selectedAttribute.workspace && !selectedAttribute.isHidden ? [{
-                      label: 'Delete',
-                      icon: <DeleteIcon fontSize="small" />,
-                      onClick: () => handleDelete(selectedAttribute),
-                      color: 'error' as const,
-                      variant: 'outlined' as const,
-                      collapseThreshold: 50
-                    }] : [])
-                  ]}
-                  menuAnchorEl={menuAnchorEl}
-                  setMenuAnchorEl={setMenuAnchorEl}
-                />
-              </Stack>
-
-              <Box sx={{ flex: 1, overflow: 'auto', px: 2, pb: 2, minHeight: 0 }}>
-                <DndContext
-                  sensors={sectionSensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleSectionDragEnd}
-                  modifiers={[restrictToVerticalAxis]}
-                >
-                  <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
-                    <Stack spacing={1}>
-                      {sectionOrder.map((sectionId, index) => (
-                        <>
-                          {index > 0 && <Divider key={`divider-${sectionId}`} />}
-                          {renderSection(sectionId)}
-                        </>
-                      ))}
-                    </Stack>
-                  </SortableContext>
-                </DndContext>
-              </Box>
-            </Box>
-          ) : (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <Typography color="text.secondary" variant="h6" gutterBottom>
-                Select an attribute
-              </Typography>
-              <Typography color="text.secondary" variant="body2">
-                Click on an attribute in the table to view its details
-              </Typography>
-            </Box>
-          )}
-        </Box>
+        {/* Right Column - Details Panel - hidden on small screens */}
+        {!isSmallScreen && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
+            {detailsPanelContent}
+          </Box>
+        )}
       </Box>
+
+      {/* Details Drawer for small screens */}
+      <Drawer
+        anchor="right"
+        open={isSmallScreen && !!selectedAttribute}
+        onClose={() => setSelectedAttribute(null)}
+        slotProps={{
+          paper: {
+            sx: { width: '100%', maxWidth: 400 }
+          }
+        }}
+      >
+        {detailsPanelContent}
+      </Drawer>
 
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editingAttribute ? 'Edit Attribute' : 'Add Attribute'}</DialogTitle>

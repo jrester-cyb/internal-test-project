@@ -68,7 +68,6 @@ export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDe
       anchor="right"
       open={true}
       onClose={onClose}
-      sx={{ zIndex: 1400 }}
       PaperProps={{ sx: { width: 400 } }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: 1, borderColor: 'divider' }}>
