@@ -126,8 +126,25 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     # - OR base_attribute_id match (for overrides when config has the global ID)
                     order_cases = []
                     for idx, item in enumerate(config.attribute_order):
+                        # Handle various formats:
+                        # - dict: {"id": "uuid", "order": 0} (legacy format)
+                        # - string that looks like dict: "{'id': 'uuid', 'order': 0}" (corrupted data)
+                        # - plain UUID string: "uuid"
                         if isinstance(item, dict):
                             attr_id = item.get("id", "")
+                        elif isinstance(item, str) and item.startswith("{"):
+                            # Parse string that looks like a dict
+                            import ast
+
+                            try:
+                                parsed = ast.literal_eval(item)
+                                attr_id = (
+                                    parsed.get("id", "")
+                                    if isinstance(parsed, dict)
+                                    else str(item)
+                                )
+                            except (ValueError, SyntaxError):
+                                attr_id = str(item)
                         else:
                             attr_id = str(item)
                         # Match either the object's own ID or the base_attribute_id for overrides

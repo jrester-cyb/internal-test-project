@@ -317,12 +317,9 @@ export default function AssetTypeAttributesPage() {
 
       setAllAttributes(updatedAttributes)
 
-      // Update orders in the backend with bulk API - send ALL items to preserve order
+      // Update orders in the backend - send just the IDs in order
       try {
-        const updates = updatedAttributes.map(attr => ({
-          id: attr.id,
-          order: attr.order
-        }))
+        const updates = updatedAttributes.map(attr => attr.id)
         await reorderAssetTypeAttributes(workspaceId!, assetTypeId!, updates)
       } catch (error) {
         console.error('Failed to update attribute order:', error)
