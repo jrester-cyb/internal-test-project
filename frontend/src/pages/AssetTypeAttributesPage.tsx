@@ -191,7 +191,11 @@ export default function AssetTypeAttributesPage() {
             setAllAttributes(prev => {
               const existingIds = new Set(prev.map(attr => attr.id))
               const uniqueNewAttributes = newAttributes.filter((attr: AssetTypeAttribute) => !existingIds.has(attr.id))
-              return [...prev, ...uniqueNewAttributes]
+              // Keep hidden items at the end
+              const combined = [...prev, ...uniqueNewAttributes]
+              const visible = combined.filter(attr => !attr.isHidden)
+              const hidden = combined.filter(attr => attr.isHidden)
+              return [...visible, ...hidden]
             })
             setNextUrl(response.next || null)
             setHasMore(!!response.next)

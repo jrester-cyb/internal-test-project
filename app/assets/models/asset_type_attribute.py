@@ -51,7 +51,7 @@ class AssetTypeAttribute(SoftDeleteMixin):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta(SoftDeleteMixin.Meta):
-        ordering = ["asset_type", "workspace", "order", "name"]
+        ordering = ["asset_type", "workspace", "is_hidden", "order", "name"]
         constraints = [
             # Unique name per asset_type + workspace (NULL workspace = base fields)
             models.UniqueConstraint(
@@ -65,10 +65,11 @@ class AssetTypeAttribute(SoftDeleteMixin):
                 name="unique_asset_type_workspace_api_key",
                 condition=models.Q(deleted_at__isnull=True),
             ),
-            # Unique order per asset_type + workspace
+            # Unique order per asset_type + workspace + is_hidden
+            # This allows hidden and visible attributes to have separate order sequences
             models.UniqueConstraint(
-                fields=["asset_type", "workspace", "order"],
-                name="unique_asset_type_workspace_order",
+                fields=["asset_type", "workspace", "is_hidden", "order"],
+                name="unique_asset_type_workspace_hidden_order",
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
