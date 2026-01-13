@@ -136,7 +136,7 @@ function App() {
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
       <Sidebar isOpen={sidebarOpen} onToggle={setSidebarOpen} />
-      <AppBar position="fixed" color="primary" elevation={0} sx={{ zIndex: 1301 }}>
+      <AppBar position="fixed" color="primary" elevation={0}>
         <Toolbar>
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Asset Visualizer
@@ -161,7 +161,6 @@ function App() {
         anchorEl={workspaceAnchorEl}
         open={workspaceMenuOpen}
         onClose={handleWorkspaceClose}
-        sx={{ zIndex: 1400 }}
       >
         {workspaces.map((ws) => (
           <MenuItem

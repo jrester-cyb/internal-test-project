@@ -84,7 +84,7 @@ export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' 
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+        <DialogTitle sx={{ position: 'sticky', top: 0, bgcolor: 'background.paper' }}>
           {title}
         </DialogTitle>
         <DialogContent dividers>

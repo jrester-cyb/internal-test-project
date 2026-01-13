@@ -423,7 +423,6 @@ export default function FilterBuilder({
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 1002,
         transition: 'transform 0.3s ease-in-out',
         transform: open ? 'translateY(0)' : 'translateY(calc(-100% + 32px))',
         bgcolor: 'rgba(0, 0, 0, 0.6)',

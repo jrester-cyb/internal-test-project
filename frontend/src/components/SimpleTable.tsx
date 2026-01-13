@@ -327,7 +327,7 @@ export default function SimpleTable<T extends { id: string | number }>({
         </Box>
 
         {isLoadingMore && (
-          <Box sx={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 1 }}>
+          <Box sx={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)' }}>
             <CircularProgress size={24} />
           </Box>
         )}

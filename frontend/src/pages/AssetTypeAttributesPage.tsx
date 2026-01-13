@@ -52,6 +52,13 @@ export default function AssetTypeAttributesPage() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+
+  // Calculate if there's enough space to show the Scope column
+  // Fixed columns: drag (40px) + scope (100px) + actions (48px) = 188px
+  // We want at least 200px for the name column
+  const showScopeColumn = leftColumnPixelWidth >= 388
+  const showHiddenChip = leftColumnPixelWidth > 350
+
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean
     title: string
@@ -668,7 +675,7 @@ export default function AssetTypeAttributesPage() {
                 <CopyableText sx={{ fontWeight: 600 }}>
                   {attr.name}
                 </CopyableText>
-                {attr.isHidden && leftColumnPixelWidth > 350 && (
+                {attr.isHidden && showHiddenChip && (
                   <Tooltip title="Hidden in this workspace only" arrow>
                     <Chip
                       icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
@@ -687,33 +694,35 @@ export default function AssetTypeAttributesPage() {
                 )}
               </Stack>
             </TableCell>
-            <TableCell sx={{ width: '100px' }}>
-              {attr.isOverride ? (
-                <Chip
-                  label="Override"
-                  size="small"
-                  color="warning"
-                  variant="outlined"
-                  sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
-                />
-              ) : attr.workspace ? (
-                <Chip
-                  label="Local"
-                  size="small"
-                  color="info"
-                  variant="outlined"
-                  sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
-                />
-              ) : (
-                <Chip
-                  label="Global"
-                  size="small"
-                  color="success"
-                  variant="outlined"
-                  sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
-                />
-              )}
-            </TableCell>
+            {showScopeColumn && (
+              <TableCell sx={{ width: '100px' }}>
+                {attr.isOverride ? (
+                  <Chip
+                    label="Override"
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                  />
+                ) : attr.workspace ? (
+                  <Chip
+                    label="Local"
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                    sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                  />
+                ) : (
+                  <Chip
+                    label="Global"
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                  />
+                )}
+              </TableCell>
+            )}
             <TableCell sx={{ width: '48px' }}></TableCell>
           </TableRow>
         </TableBody>
@@ -1068,7 +1077,9 @@ export default function AssetTypeAttributesPage() {
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600, width: '40px' }}></TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600, width: '100px' }}>Scope</TableCell>
+                    {showScopeColumn && (
+                      <TableCell sx={{ fontWeight: 600, width: '100px' }}>Scope</TableCell>
+                    )}
                     <TableCell sx={{ fontWeight: 600, width: '48px', textAlign: 'right', pr: 1 }}>
                       <IconButton
                         size="small"
@@ -1127,7 +1138,7 @@ export default function AssetTypeAttributesPage() {
             </Box>
 
             {isLoadingMore && (
-              <Box sx={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 1 }}>
+              <Box sx={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)' }}>
                 <CircularProgress size={24} />
               </Box>
             )}

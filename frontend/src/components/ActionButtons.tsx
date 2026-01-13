@@ -153,7 +153,6 @@ export default function ActionButtons({
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
         onClose={() => setMenuAnchorEl(null)}
-        sx={{ zIndex: 1400 }}
       >
         {actions.map((action, index) => {
           // Only show in menu if button is hidden
