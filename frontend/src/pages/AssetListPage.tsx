@@ -1,32 +1,94 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Pagination, Stack, Select, MenuItem, FormControl, Link } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link, CircularProgress, Stack } from '@mui/material'
 import type { Asset, AssetTypeAttribute } from '../types'
-import { useLoaderData, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { Link as RouterLink } from 'react-router-dom';
+import { useLoaderData, useLocation, useParams } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { fetchAssetsByType } from '../api/assets'
 
 export default function AssetListPage() {
-  const data = useLoaderData() as { assets: Asset[], attributes?: AssetTypeAttribute[], count: number, page: number, pageSize: number };
-  const assets = data.assets || [];
-  const attributes = data.attributes || [];
-  const count = data.count || 0;
-  const page = data.page || 1;
-  const pageSize = data.pageSize || 25;
-  const totalPages = Math.ceil(count / pageSize);
+  const initialData = useLoaderData() as {
+    assets: Asset[],
+    attributes?: AssetTypeAttribute[],
+    count: number,
+    page: number,
+    pageSize: number,
+    workspaceId: string
+  }
 
+  const { assetTypeId } = useParams()
   const location = useLocation()
-  const [searchParams, setSearchParams] = useSearchParams()
 
-  const handlePageChange = (_event: React.ChangeEvent<unknown>, newPage: number) => {
-    const params = new URLSearchParams(searchParams)
-    params.set('page', newPage.toString())
-    setSearchParams(params)
-  }
+  // State for infinite scroll
+  const [assets, setAssets] = useState<Asset[]>(initialData.assets || [])
+  const [attributes] = useState<AssetTypeAttribute[]>(initialData.attributes || [])
+  const [page, setPage] = useState(initialData.page || 1)
+  const [hasMore, setHasMore] = useState((initialData.assets?.length || 0) < (initialData.count || 0))
+  const [isLoading, setIsLoading] = useState(false)
+  const [totalCount] = useState(initialData.count || 0)
 
-  const handlePageSizeChange = (event: any) => {
-    const params = new URLSearchParams(searchParams)
-    params.set('pageSize', event.target.value.toString())
-    params.set('page', '1') // Reset to first page when changing page size
-    setSearchParams(params)
-  }
+  const pageSize = 25
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const loadMoreRef = useRef<HTMLTableRowElement | null>(null)
+
+  // Reset when route changes (different asset type)
+  useEffect(() => {
+    setAssets(initialData.assets || [])
+    setPage(initialData.page || 1)
+    setHasMore((initialData.assets?.length || 0) < (initialData.count || 0))
+  }, [initialData])
+
+  const loadMore = useCallback(async () => {
+    if (isLoading || !hasMore) return
+
+    setIsLoading(true)
+    try {
+      const nextPage = page + 1
+      const response = await fetchAssetsByType(
+        initialData.workspaceId,
+        assetTypeId!,
+        nextPage,
+        pageSize
+      )
+
+      const newAssets = response.results || []
+      setAssets(prev => [...prev, ...newAssets])
+      setPage(nextPage)
+
+      // Check if there are more pages
+      const totalLoaded = assets.length + newAssets.length
+      setHasMore(totalLoaded < response.count)
+    } catch (error) {
+      console.error('Failed to load more assets:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isLoading, hasMore, page, initialData.workspaceId, assetTypeId, assets.length])
+
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          loadMore()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current)
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [hasMore, isLoading, loadMore])
 
   const formatCoordinates = (location: any) => {
     if (!location || !location.coordinates) {
@@ -42,7 +104,6 @@ export default function AssetListPage() {
     return 'N/A'
   }
 
-
   const getAttributeValue = (asset: Asset, apiKey: string) => {
     if (!asset?.attributes?.[apiKey]) {
       return 'N/A'
@@ -57,36 +118,30 @@ export default function AssetListPage() {
   }
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+    <Box sx={{
+      flexGrow: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      bgcolor: 'background.default',
+      height: '100%',
+      minHeight: 0
+    }}>
+      <Box sx={{
+        flexGrow: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        p: 3,
+        minHeight: 0
+      }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} sx={{ flexShrink: 0 }}>
           <Typography variant="h5" component="h2">Assets</Typography>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <FormControl size="small">
-              <Select
-                value={pageSize}
-                onChange={handlePageSizeChange}
-                sx={{ minWidth: 80 }}
-              >
-                <MenuItem value={10}>10</MenuItem>
-                <MenuItem value={25}>25</MenuItem>
-                <MenuItem value={50}>50</MenuItem>
-                <MenuItem value={100}>100</MenuItem>
-              </Select>
-            </FormControl>
-            <Typography color="text.secondary">
-              Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, count)} of {count}
-            </Typography>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size="small"
-            />
-          </Stack>
+          <Typography color="text.secondary">
+            Showing {assets.length} of {totalCount}
+          </Typography>
         </Stack>
-        <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }}>
+        <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
@@ -132,10 +187,24 @@ export default function AssetListPage() {
                   ))}
                 </TableRow>
               ))}
+              {/* Sentinel row for intersection observer */}
+              {hasMore && (
+                <TableRow ref={loadMoreRef}>
+                  <TableCell colSpan={2 + attributes.length} sx={{ textAlign: 'center', py: 2 }}>
+                    {isLoading ? (
+                      <CircularProgress size={24} />
+                    ) : (
+                      <Typography color="text.secondary" variant="body2">
+                        Scroll to load more...
+                      </Typography>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
-        {assets.length === 0 && (
+        {assets.length === 0 && !isLoading && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography color="text.secondary">
               No assets found
@@ -143,6 +212,6 @@ export default function AssetListPage() {
           </Box>
         )}
       </Box>
-    </Box >
-  );
+    </Box>
+  )
 }
