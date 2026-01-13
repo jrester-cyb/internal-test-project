@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -849,13 +850,12 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Get the base attribute (works for all polymorphic types)
-        base_attr = BaseAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-        ).first()
-
-        if not base_attr:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        base_attr = get_object_or_404(
+            BaseAssetTypeAttribute,
+            id=pk,
+            asset_type_id=assettype_pk,
+            deleted_at__isnull=True,
+        )
 
         # Get the real polymorphic instance
         real_instance = base_attr.get_real_instance()
