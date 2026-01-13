@@ -88,7 +88,7 @@ class OSMImporter:
         )
         if created:
             self.create_osm_attributes(asset_type)
-        
+
         # Ensure asset type is linked to workspace
         if self.workspace:
             WorkspaceAssetType.objects.get_or_create(
@@ -96,7 +96,7 @@ class OSMImporter:
                 asset_type=asset_type,
                 defaults={"is_owner": True},
             )
-        
+
         return asset_type
 
     def create_osm_attributes(self, asset_type: AssetType):
@@ -209,10 +209,9 @@ class OSMImporter:
 
         # Get global attributes for this asset type
         attribute_defs = {
-            ad.api_key: ad 
+            ad.api_key: ad
             for ad in GlobalAssetTypeAttribute.objects.filter(
-                asset_type=asset.asset_type,
-                deleted_at__isnull=True
+                asset_type=asset.asset_type, deleted_at__isnull=True
             )
         }
         # Ensure osm_id and osm_type are set
@@ -236,8 +235,7 @@ class OSMImporter:
         # Get the current max order for this asset type
         existing_orders = set(
             GlobalAssetTypeAttribute.objects.filter(
-                asset_type=asset.asset_type,
-                deleted_at__isnull=True
+                asset_type=asset.asset_type, deleted_at__isnull=True
             ).values_list("order", flat=True)
         )
         next_order = max(existing_orders) + 1 if existing_orders else 0
@@ -311,7 +309,7 @@ class Command(BaseCommand):
         location = options["location"]
         limit = options["limit"]
         workspace_id = options["workspace_id"]
-        
+
         # Look up workspace
         try:
             workspace = Workspace.objects.get(id=workspace_id)
@@ -320,9 +318,11 @@ class Command(BaseCommand):
                 workspace = Workspace.objects.get(name=workspace_id)
             except Workspace.DoesNotExist:
                 raise CommandError(f'Workspace "{workspace_id}" not found')
-        
+
         self.stdout.write(self.style.SUCCESS(f"Importing OSM data for {location}"))
-        self.stdout.write(f"Workspace: {workspace.name} (Organization: {workspace.organization.name})")
+        self.stdout.write(
+            f"Workspace: {workspace.name} (Organization: {workspace.organization.name})"
+        )
         bbox = self.geocode_location(location)
         self.stdout.write(self.style.SUCCESS(f"Using bounding box: {bbox}"))
 
