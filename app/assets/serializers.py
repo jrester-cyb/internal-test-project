@@ -206,7 +206,10 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         if not workspace_pk:
             return False
 
-        return obj.hidden_in_workspaces.filter(workspace_id=workspace_pk).exists()
+        return obj.hidden_in_workspaces.filter(
+            workspace_id=workspace_pk,
+            deleted_at__isnull=True,
+        ).exists()
 
 
 class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
@@ -323,7 +326,10 @@ class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in its workspace."""
-        return obj.hidden_in_workspaces.filter(workspace_id=obj.workspace_id).exists()
+        return obj.hidden_in_workspaces.filter(
+            workspace_id=obj.workspace_id,
+            deleted_at__isnull=True,
+        ).exists()
 
 
 class WorkspaceAssetTypeConfigSerializer(serializers.ModelSerializer):

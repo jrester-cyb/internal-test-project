@@ -223,6 +223,81 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         except WorkspaceAssetTypeConfig.DoesNotExist:
             pass
 
+    def _ensure_attribute_in_config(self, workspace_pk, assettype_pk, attr_id):
+        """
+        Ensure an attribute is in the WorkspaceAssetTypeConfig.
+        If no config exists, create one with all current attributes.
+        If config exists but attribute is missing, add it at its global order position.
+        """
+        attr_id_str = str(attr_id)
+
+        try:
+            config = WorkspaceAssetTypeConfig.objects.get(
+                workspace_id=workspace_pk,
+                asset_type_id=assettype_pk,
+            )
+            if config.attribute_order:
+                # Check if attribute is already in the config
+                existing_ids = set()
+                for item in config.attribute_order:
+                    if isinstance(item, dict):
+                        existing_ids.add(str(item.get("id", "")))
+                    else:
+                        existing_ids.add(str(item))
+
+                if attr_id_str not in existing_ids:
+                    # Add at the end (will maintain its visual position)
+                    config.attribute_order.append(attr_id_str)
+                    config.save()
+        except WorkspaceAssetTypeConfig.DoesNotExist:
+            # No config exists - create one with all current attributes
+            # Get all visible attributes in their current order
+            from django.db.models import F, Value, Case, When, IntegerField
+
+            attrs = (
+                BaseAssetTypeAttribute.objects.filter(
+                    Q(
+                        asset_type_id=assettype_pk,
+                        polymorphic_ctype__model="globalassettypeattribute",
+                    )
+                    | Q(
+                        asset_type_id=assettype_pk,
+                        workspaceattributeoverride__workspace_id=workspace_pk,
+                    )
+                    | Q(
+                        asset_type_id=assettype_pk,
+                        workspaceextensionattribute__workspace_id=workspace_pk,
+                    )
+                )
+                .annotate(
+                    effective_order=Case(
+                        When(
+                            polymorphic_ctype__model="globalassettypeattribute",
+                            then=F("globalassettypeattribute__order"),
+                        ),
+                        When(
+                            polymorphic_ctype__model="workspaceattributeoverride",
+                            then=F("workspaceattributeoverride__base_attribute__order"),
+                        ),
+                        When(
+                            polymorphic_ctype__model="workspaceextensionattribute",
+                            then=Value(999999),
+                        ),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("effective_order", "created_at")
+            )
+
+            attribute_order = [str(attr.id) for attr in attrs]
+
+            WorkspaceAssetTypeConfig.objects.create(
+                workspace_id=workspace_pk,
+                asset_type_id=assettype_pk,
+                attribute_order=attribute_order,
+            )
+
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single attribute by ID."""
         pk = self.kwargs["pk"]
@@ -495,13 +570,26 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             # For global and extension attributes, hide themselves
             attr_to_hide = real_instance
 
-        # Create hidden record
-        WorkspaceHiddenAttribute.objects.get_or_create(
-            hidden_attribute=attr_to_hide,
-            workspace_id=workspace_pk,
-            asset_type_id=assettype_pk,
-            defaults={"deleted_at": None},
-        )
+        # Ensure the attribute is in the config before hiding
+        # (so it maintains its position when shown again)
+        self._ensure_attribute_in_config(workspace_pk, assettype_pk, pk)
+
+        # Create or restore hidden record (check for soft-deleted records)
+        try:
+            hidden_record = WorkspaceHiddenAttribute.all_objects.get(
+                hidden_attribute=attr_to_hide,
+                workspace_id=workspace_pk,
+            )
+            # Restore if soft-deleted
+            if hidden_record.deleted_at is not None:
+                hidden_record.deleted_at = None
+                hidden_record.save()
+        except WorkspaceHiddenAttribute.DoesNotExist:
+            WorkspaceHiddenAttribute.objects.create(
+                hidden_attribute=attr_to_hide,
+                workspace_id=workspace_pk,
+                asset_type_id=assettype_pk,
+            )
 
         return Response(
             data=AssetTypeAttributeSerializer(attr_to_hide).data,
