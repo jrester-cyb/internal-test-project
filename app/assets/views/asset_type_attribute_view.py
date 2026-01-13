@@ -103,7 +103,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     asset_type_id=assettype_pk,
                     workspace_id=workspace_pk,
                     deleted_at__isnull=True,
-                ).values_list("base_attribute_id", flat=True)
+                ).values_list("hidden_attribute_id", flat=True)
             )
 
         # 4. Get workspace extensions (if workspace context)
@@ -284,7 +284,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     .first()
                 )
                 is_hidden = WorkspaceHiddenAttribute.objects.filter(
-                    base_attribute_id=pk,
+                    hidden_attribute_id=pk,
                     workspace_id=workspace_pk,
                     deleted_at__isnull=True,
                 ).exists()
@@ -565,7 +565,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     "is_override": True,
                     "is_extension": False,
                     "is_hidden": WorkspaceHiddenAttribute.objects.filter(
-                        base_attribute=global_attr,
+                        hidden_attribute=global_attr,
                         workspace_id=workspace_pk,
                         deleted_at__isnull=True,
                     ).exists(),
@@ -805,7 +805,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         if global_attr:
             # Create hidden record
             WorkspaceHiddenAttribute.objects.get_or_create(
-                base_attribute=global_attr,
+                hidden_attribute=global_attr,
                 workspace_id=workspace_pk,
                 asset_type_id=assettype_pk,
                 defaults={"deleted_at": None},
@@ -844,7 +844,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         if global_attr:
             WorkspaceHiddenAttribute.objects.filter(
-                base_attribute=global_attr,
+                hidden_attribute=global_attr,
                 workspace_id=workspace_pk,
             ).delete()
             return Response({"success": True, "hidden": False})

@@ -23,7 +23,7 @@ class BaseAssetTypeAttribute(PolymorphicSoftDeleteMixin, PolymorphicModel):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset_type = models.ForeignKey(
-        "assets.AssetType", on_delete=models.CASCADE, related_name="all_attributes"
+        "assets.AssetType", on_delete=models.CASCADE, related_name="attributes"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -254,6 +254,47 @@ class WorkspaceHiddenAttribute(BaseAssetTypeAttribute):
     def __str__(self):
         return f"Hidden: {self.hidden_attribute} in {self.workspace.name}"
 
+    # Flatten hidden_attribute fields for serialization compatibility
+    @property
+    def name(self):
+        """Get name from the hidden attribute."""
+        return getattr(self.hidden_attribute, "name", None)
+
+    @property
+    def api_key(self):
+        """Get api_key from the hidden attribute."""
+        return getattr(self.hidden_attribute, "api_key", None)
+
+    @property
+    def attribute_type(self):
+        """Get attribute_type from the hidden attribute."""
+        return getattr(self.hidden_attribute, "attribute_type", None)
+
+    @property
+    def is_required(self):
+        """Get is_required from the hidden attribute."""
+        return getattr(self.hidden_attribute, "is_required", False)
+
+    @property
+    def default_value(self):
+        """Get default_value from the hidden attribute."""
+        return getattr(self.hidden_attribute, "default_value", None)
+
+    @property
+    def description(self):
+        """Get description from the hidden attribute."""
+        return getattr(self.hidden_attribute, "description", "")
+
+    @property
+    def tags(self):
+        """Get tags from the hidden attribute."""
+        return getattr(self.hidden_attribute, "tags", [])
+
+    @property
+    def order(self):
+        """Get order from the hidden attribute."""
+        return getattr(self.hidden_attribute, "order", 0)
+
 
 class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
     """
@@ -293,13 +334,13 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
                     IF EXISTS (
                         SELECT 1 
                         FROM public.assets_workspaceextensionattribute wea
-                            JOIN public.assets_baseassettypeattribute base ON wao.baseassettypeattribute_ptr_id = base.id
+                        JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
                         WHERE wea.workspace_id = NEW.workspace_id
                         AND base.asset_type_id = (
-                                SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
                             WHERE id = NEW.baseassettypeattribute_ptr_id
                         )
-                            AND wao.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND wea.api_key = NEW.api_key
                         AND wea.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
                         AND base.deleted_at IS NULL
                     ) THEN
@@ -349,14 +390,14 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
                     IF EXISTS (
                         SELECT 1 
                         FROM public.assets_workspaceattributeoverride wao
-                        JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
+                        JOIN public.assets_baseassettypeattribute base ON wao.baseassettypeattribute_ptr_id = base.id
                         WHERE wao.workspace_id = NEW.workspace_id
                         AND base.asset_type_id = (
                             SELECT asset_type_id FROM public.assets_baseassettypeattribute 
                             WHERE id = NEW.baseassettypeattribute_ptr_id
                         )
                         AND wao.name = NEW.name
-                        AND wea.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND wao.name IS NOT NULL
                         AND base.deleted_at IS NULL
                     ) THEN
                         RAISE EXCEPTION 'Name "%" conflicts with an override in this workspace', NEW.name;

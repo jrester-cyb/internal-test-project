@@ -1,8 +1,9 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from ..models import AssetType, WorkspaceAssetType
+from ..models import AssetType, WorkspaceAssetType, BaseAssetTypeAttribute
 from ..serializers import (
     AssetTypeSerializer,
     AssetTypeSummarySerializer,
@@ -45,7 +46,19 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
 
         # For detail view, prefetch attributes (both base and workspace extensions)
         if self.action == "retrieve":
-            queryset = queryset.prefetch_related("attributes")
+            # Prefetch all polymorphic attributes with their related hidden_attribute
+            from ..models import WorkspaceHiddenAttribute
+
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "attributes",
+                    queryset=WorkspaceHiddenAttribute.objects.all().select_related(
+                        "hidden_attribute__globalassettypeattribute",
+                        "hidden_attribute__workspaceextensionattribute",
+                        "hidden_attribute__workspaceattributeoverride",
+                    ),
+                )
+            )
 
         return queryset.distinct()
 
