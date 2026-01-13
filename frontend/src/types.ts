@@ -24,6 +24,7 @@ export interface AssetTypeAttribute {
   tags?: string[]
   order: number
   assetCountUrl?: string | null
+  apiUrl?: string | null
   choices?: AssetTypeAttributeChoice[]
   // Workspace extension fields
   workspace?: string | null

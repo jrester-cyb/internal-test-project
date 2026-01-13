@@ -885,7 +885,7 @@ export default function AssetTypeAttributesPage() {
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Description</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5, color: displayedAttribute.description ? 'text.primary' : 'text.disabled', fontStyle: displayedAttribute.description ? 'normal' : 'italic' }}>
                     {displayedAttribute.description ? (
-                      <TruncatedText text={displayedAttribute.description} maxLines={3} title="Description" />
+                      <TruncatedText maxLines={3} title="Description">{displayedAttribute.description}</TruncatedText>
                     ) : (
                       'No description'
                     )}
@@ -1157,7 +1157,14 @@ export default function AssetTypeAttributesPage() {
               )}
 
               <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
-              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId}</CopyableText>
+              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId || ''}</CopyableText>
+
+              {displayedAttribute.apiUrl && (
+                <>
+                  <Typography variant="body2" color="text.secondary">API URL</Typography>
+                  <TruncatedText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.apiUrl}</TruncatedText>
+                </>
+              )}
 
               <Typography variant="body2" color="text.secondary">Order</Typography>
               <Typography variant="body2">{displayedAttribute.order}</Typography>

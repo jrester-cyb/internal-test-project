@@ -169,6 +169,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
     organization_id = serializers.SerializerMethodField()
+    api_url = serializers.SerializerMethodField()
 
     class Meta:
         model = GlobalAssetTypeAttribute
@@ -186,6 +187,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "asset_count_url",
             "is_hidden",
             "organization_id",
+            "api_url",
             "created_at",
             "updated_at",
         ]
@@ -225,6 +227,47 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     def get_organization_id(self, obj):
         """Get organization ID from annotation."""
         return getattr(obj, "_organization_id", None)
+
+    def get_api_url(self, obj):
+        """Return the API URL for this attribute based on current request context."""
+        request = self.context.get("request")
+        if request:
+            from django.urls import reverse
+
+            # Check for workspace context first (workspace endpoint)
+            workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            if not workspace_id:
+                # Check query params (for organization endpoint with workspace_id param)
+                workspace_id = request.query_params.get("workspace_id")
+
+            if workspace_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "workspace-assettype-attribute-detail",
+                        kwargs={
+                            "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+
+            # Fallback to organization endpoint
+            organization_id = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
+            if organization_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "organization-assettype-attribute-detail",
+                        kwargs={
+                            "organization_pk": organization_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+        return None
 
 
 class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer):
@@ -332,6 +375,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     organization_id = serializers.SerializerMethodField()
     asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
+    api_url = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkspaceLocalAssetTypeAttribute
@@ -350,6 +394,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "tags",
             "asset_count_url",
             "is_hidden",
+            "api_url",
             "created_at",
             "updated_at",
         ]
@@ -387,6 +432,26 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Check if this attribute is hidden in its workspace."""
         # Local attributes can't be hidden currently (they're workspace-specific)
         return False
+
+    def get_api_url(self, obj):
+        """Return the API URL for this attribute based on current request context."""
+        request = self.context.get("request")
+        if request:
+            from django.urls import reverse
+
+            workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            if workspace_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "workspace-assettype-attribute-detail",
+                        kwargs={
+                            "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+        return None
 
 
 class WorkspaceAssetTypeConfigSerializer(serializers.ModelSerializer):

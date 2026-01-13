@@ -1,14 +1,14 @@
 import { useState, useLayoutEffect, useRef } from 'react'
-import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material'
+import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, type TypographyProps } from '@mui/material'
 import { ContentCopy } from '@mui/icons-material'
 
-interface TruncatedTextProps {
-  text: string
+interface TruncatedTextProps extends Omit<TypographyProps, 'children'> {
+  children: string
   maxLines?: number
   title?: string
 }
 
-export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' }: TruncatedTextProps) {
+export default function TruncatedText({ children, maxLines = 3, title = 'Full Text', sx, ...typographyProps }: TruncatedTextProps) {
   const textRef = useRef<HTMLSpanElement>(null)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -20,7 +20,7 @@ export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' 
     } else {
       setIsOverflowing(false)
     }
-  }, [text])
+  }, [children])
 
   return (
     <>
@@ -39,9 +39,11 @@ export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' 
               WebkitLineClamp: maxLines,
               WebkitBoxOrient: 'vertical',
               textOverflow: 'ellipsis',
+              ...sx
             }}
+            {...typographyProps}
           >
-            {text}
+            {children}
           </Typography>
           <Tooltip title="Copy" arrow>
             <IconButton
@@ -49,7 +51,7 @@ export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' 
               size="small"
               onClick={(e) => {
                 e.stopPropagation()
-                navigator.clipboard.writeText(text)
+                navigator.clipboard.writeText(children)
               }}
               sx={{
                 p: 0.25,
@@ -89,7 +91,7 @@ export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' 
         </DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ whiteSpace: 'pre-wrap' }}>
-            {text}
+            {children}
           </Typography>
         </DialogContent>
         <DialogActions>
