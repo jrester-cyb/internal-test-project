@@ -1094,7 +1094,7 @@ export default function AssetTypeAttributesPage() {
             expanded={expandedSections.system}
             onToggle={() => toggleSection('system')}
           >
-            <Box sx={{ 
+            <Box sx={{
               mt: 1,
               display: 'grid',
               gridTemplateColumns: 'auto 1fr',
