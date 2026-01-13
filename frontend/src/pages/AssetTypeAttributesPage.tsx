@@ -54,7 +54,7 @@ export default function AssetTypeAttributesPage() {
     confirmLabel: string
     confirmColor: 'primary' | 'error' | 'warning'
     onConfirm: () => void
-  }>({ open: false, title: '', message: '', confirmLabel: 'Confirm', confirmColor: 'primary', onConfirm: () => {} })
+  }>({ open: false, title: '', message: '', confirmLabel: 'Confirm', confirmColor: 'primary', onConfirm: () => { } })
 
   const closeConfirmDialog = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
