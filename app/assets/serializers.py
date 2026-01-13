@@ -258,9 +258,11 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
         result = {
             "id": base_data["id"],
             "isOverride": True,
-            "workspace_id": instance.workspace_id,
+            "workspace": str(instance.workspace_id) if instance.workspace_id else None,
             "workspace_name": instance.workspace.name if instance.workspace else None,
-            "base_attribute_id": instance.base_attribute_id,
+            "base_attribute_id": (
+                str(instance.base_attribute_id) if instance.base_attribute_id else None
+            ),
         }
 
         # Add all base data
