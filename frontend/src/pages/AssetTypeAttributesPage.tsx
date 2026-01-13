@@ -53,9 +53,9 @@ export default function AssetTypeAttributesPage() {
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
-  // Responsive breakpoint detection
+  // Responsive breakpoint detection - use lg (1200px) to include iPads in landscape
   const theme = useTheme()
-  const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'))
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('lg'))
 
   // Calculate if there's enough space to show the Scope column
   // Fixed columns: drag (40px) + scope (100px) + actions (48px) = 188px
@@ -1075,7 +1075,7 @@ export default function AssetTypeAttributesPage() {
               onClick: () => handleEdit(selectedAttribute),
               color: 'primary' as const,
               variant: 'outlined' as const,
-              minWidth: 35 // Show when right panel >= 35%
+              minWidth: 20 // Show when right panel >= 20%
             }] : []),
             ...(selectedAttribute.isHidden ? [{
               label: 'Unhide',
@@ -1083,22 +1083,23 @@ export default function AssetTypeAttributesPage() {
               onClick: () => handleUnhide(selectedAttribute),
               color: 'success' as const,
               variant: 'outlined' as const,
-              minWidth: 50 // Show when right panel >= 50%
+              minWidth: 30 // Show when right panel >= 30%
             }] : [{
               label: 'Hide',
               icon: <HideIcon fontSize="small" />,
               onClick: () => handleHide(selectedAttribute),
               color: 'warning' as const,
               variant: 'outlined' as const,
-              minWidth: 50 // Show when right panel >= 50%
+              minWidth: 30 // Show when right panel >= 30%
             }]),
             // Share - always in menu
             {
               label: 'Share Attribute',
               icon: <ShareIcon fontSize="small" />,
               onClick: () => {
-                // TODO: Implement share functionality
-                console.log('Share attribute:', selectedAttribute)
+                const url = new URL(window.location.href)
+                url.searchParams.set('search', selectedAttribute.apiKey)
+                navigator.clipboard.writeText(url.toString())
               },
               color: 'primary' as const,
               minWidth: Infinity, // Always in menu

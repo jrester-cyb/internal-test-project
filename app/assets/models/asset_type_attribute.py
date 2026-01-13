@@ -145,6 +145,12 @@ class WorkspaceOverrideAssetTypeAttribute(BaseAssetTypeAttribute):
     )
     # Overridable fields - null means "use base value"
     name = models.CharField(max_length=100, null=True, blank=True)
+    api_key = models.CharField(
+        max_length=100, help_text="Key used in API serialization"
+    )
+    attribute_type = models.CharField(
+        max_length=20, choices=BaseAssetTypeAttribute.FIELD_TYPES, null=True, blank=True
+    )
     is_required = models.BooleanField(null=True, blank=True)
     default_value = models.JSONField(null=True, blank=True)
     description = models.TextField(null=True, blank=True)
@@ -213,16 +219,6 @@ class WorkspaceOverrideAssetTypeAttribute(BaseAssetTypeAttribute):
         if override_value is not None:
             return override_value
         return getattr(self.base_attribute, field_name)
-
-    @property
-    def api_key(self):
-        """API key comes from base attribute (cannot be overridden)."""
-        return self.base_attribute.api_key
-
-    @property
-    def attribute_type(self):
-        """Attribute type comes from base attribute (cannot be overridden)."""
-        return self.base_attribute.attribute_type
 
 
 class WorkspaceHiddenAttribute(BaseAssetTypeAttribute):

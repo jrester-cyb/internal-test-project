@@ -32,6 +32,7 @@ from ..serializers import (
     WorkspaceLocalAssetTypeAttributeSerializer,
     WorkspaceAssetTypeConfigSerializer,
 )
+from ..filters import PolymorphicSearchFilter
 from app.pagination import CustomPageNumberPagination
 
 
@@ -57,13 +58,17 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     serializer_class = AssetTypeAttributeSerializer
     filter_backends = [
         DjangoFilterBackend,
-        filters.SearchFilter,
+        PolymorphicSearchFilter,
         filters.OrderingFilter,
     ]
-    search_fields = ["^name", "^api_key", "description"]
+    # Search fields for polymorphic child models
+    polymorphic_search_fields = {
+        "GlobalAssetTypeAttribute": ["^name", "^api_key", "description"],
+        "WorkspaceOverrideAssetTypeAttribute": ["^name", "^api_key", "description"],
+        "WorkspaceLocalAssetTypeAttribute": ["^name", "^api_key", "description"],
+    }
     ordering_fields = [
         "effective_order",
-        "name",
         "created_at",
     ]
 
@@ -184,7 +189,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 ),
                 When(
                     polymorphic_ctype__model="workspaceoverrideassettypeattribute",
-                    then=F("workspaceoverrideassettypeattribute__base_attribute__order"),
+                    then=F(
+                        "workspaceoverrideassettypeattribute__base_attribute__order"
+                    ),
                 ),
                 When(
                     polymorphic_ctype__model="workspacelocalassettypeattribute",
@@ -357,7 +364,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Check if it's an override
         override = (
-            WorkspaceOverrideAssetTypeAttribute.objects.filter(id=pk, asset_type_id=assettype_pk)
+            WorkspaceOverrideAssetTypeAttribute.objects.filter(
+                id=pk, asset_type_id=assettype_pk
+            )
             .select_related("base_attribute", "workspace")
             .first()
         )
@@ -382,7 +391,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Check if it's an extension
         extension = (
-            WorkspaceLocalAssetTypeAttribute.objects.filter(id=pk, asset_type_id=assettype_pk)
+            WorkspaceLocalAssetTypeAttribute.objects.filter(
+                id=pk, asset_type_id=assettype_pk
+            )
             .select_related("workspace")
             .first()
         )
@@ -781,7 +792,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 attribute_id = override.base_attribute_id
             else:
                 # Check extension
-                extension = WorkspaceLocalAssetTypeAttribute.objects.filter(id=pk).first()
+                extension = WorkspaceLocalAssetTypeAttribute.objects.filter(
+                    id=pk
+                ).first()
                 if extension:
                     attribute_type = extension.attribute_type
 
