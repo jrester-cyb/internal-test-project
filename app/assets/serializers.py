@@ -361,12 +361,19 @@ class WorkspaceAssetTypeConfigSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("attribute_order must be a list")
 
-        # Validate each item is a valid UUID string
+        # Validate each item is a valid UUID string (or dict with 'id' key for legacy format)
         import uuid
 
         for item in value:
             try:
-                uuid.UUID(str(item))
+                # Handle both formats:
+                # - Plain UUID string: "uuid"
+                # - Legacy dict format: {"id": "uuid", "order": 0}
+                if isinstance(item, dict):
+                    item_id = item.get("id", "")
+                else:
+                    item_id = item
+                uuid.UUID(str(item_id))
             except ValueError:
                 raise serializers.ValidationError(
                     f"Invalid UUID in attribute_order: {item}"

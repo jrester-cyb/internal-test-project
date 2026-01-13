@@ -46,6 +46,12 @@ export default function AssetTypeAttributesPage() {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
+
+  // Filter attributes based on includeHidden toggle - hidden attributes stay in allAttributes for reordering
+  const displayedAttributes = includeHidden
+    ? allAttributes
+    : allAttributes.filter(attr => !attr.isHidden)
+
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     info: true,
     configuration: false,
@@ -128,16 +134,11 @@ export default function AssetTypeAttributesPage() {
       } else {
         newSearchParams.delete('search')
       }
-      if (includeHidden) {
-        newSearchParams.set('include_hidden', 'true')
-      } else {
-        newSearchParams.delete('include_hidden')
-      }
       setSearchParams(newSearchParams, { replace: true })
     }, 300) // 300ms debounce
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, includeHidden])
+  }, [searchTerm])
 
   // Reset to loader data when it changes
   useEffect(() => {
@@ -168,7 +169,7 @@ export default function AssetTypeAttributesPage() {
   const handleItemsRendered = ({ visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
     // Fetch more when we're within 5 items of the end
     const THRESHOLD = 5
-    const shouldFetch = visibleStopIndex >= allAttributes.length - THRESHOLD
+    const shouldFetch = visibleStopIndex >= displayedAttributes.length - THRESHOLD
     // Check if there are more items using nextUrl
     const hasMoreItems = !!nextUrl
 
@@ -299,28 +300,29 @@ export default function AssetTypeAttributesPage() {
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = allAttributes.findIndex((attr) => attr.id === active.id)
-      const newIndex = allAttributes.findIndex((attr) => attr.id === over.id)
+      // Find indices in displayedAttributes (what user sees and drags)
+      const oldDisplayIndex = displayedAttributes.findIndex((attr) => attr.id === active.id)
+      const newDisplayIndex = displayedAttributes.findIndex((attr) => attr.id === over.id)
 
-      const newAttributes = arrayMove(allAttributes, oldIndex, newIndex)
+      // Reorder the displayed items
+      const newDisplayedOrder = arrayMove(displayedAttributes, oldDisplayIndex, newDisplayIndex)
 
-      // Update the order field for all affected attributes
-      const updatedAttributes = newAttributes.map((attr, index) => ({
+      // Rebuild allAttributes: keep hidden in place, update visible order
+      // We need to interleave the visible items back into all items
+      const hiddenItems = allAttributes.filter(attr => attr.isHidden)
+      const updatedAttributes = [...newDisplayedOrder, ...hiddenItems].map((attr, index) => ({
         ...attr,
         order: index
       }))
 
       setAllAttributes(updatedAttributes)
 
-      // Update orders in the backend with bulk API
-      // Only send non-hidden attributes to avoid order conflicts
+      // Update orders in the backend with bulk API - send ALL items to preserve order
       try {
-        const updates = updatedAttributes
-          .filter(attr => !attr.isHidden)
-          .map(attr => ({
-            id: attr.id,
-            order: attr.order
-          }))
+        const updates = updatedAttributes.map(attr => ({
+          id: attr.id,
+          order: attr.order
+        }))
         await reorderAssetTypeAttributes(workspaceId!, assetTypeId!, updates)
       } catch (error) {
         console.error('Failed to update attribute order:', error)
@@ -483,32 +485,29 @@ export default function AssetTypeAttributesPage() {
     try {
       const hiddenAttr = await hideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
 
-      if (includeHidden) {
-        // If showing hidden, update the row in place with isHidden flag
-        setAllAttributes(prev => prev.map(a =>
-          a.id === attr.id || a.apiKey === hiddenAttr.apiKey
-            ? { ...hiddenAttr, isHidden: true }
-            : a
-        ))
-        if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
+      // Update the attribute in place with isHidden flag
+      setAllAttributes(prev => prev.map(a =>
+        a.id === attr.id || a.apiKey === hiddenAttr.apiKey
+          ? { ...hiddenAttr, isHidden: true }
+          : a
+      ))
+
+      // Handle selection when hiding
+      if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
+        if (includeHidden) {
+          // If showing hidden, just update the selected attribute
           setSelectedAttribute({ ...hiddenAttr, isHidden: true })
-        }
-      } else {
-        // If not showing hidden, remove from list and select next
-        const currentIndex = allAttributes.findIndex(a => a.id === attr.id || a.apiKey === hiddenAttr.apiKey)
-        const newList = allAttributes.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
+        } else {
+          // If not showing hidden, select next visible attribute
+          const currentVisibleIndex = displayedAttributes.findIndex(a => a.id === attr.id || a.apiKey === hiddenAttr.apiKey)
+          const visibleWithoutCurrent = displayedAttributes.filter(a => a.id !== attr.id && a.apiKey !== hiddenAttr.apiKey)
 
-        setAllAttributes(newList)
-
-        if (selectedAttribute?.id === attr.id || selectedAttribute?.apiKey === hiddenAttr.apiKey) {
-          if (newList.length === 0) {
+          if (visibleWithoutCurrent.length === 0) {
             setSelectedAttribute(null)
-          } else if (currentIndex < newList.length) {
-            // Select the item that's now at the same index (next item)
-            setSelectedAttribute(newList[currentIndex])
+          } else if (currentVisibleIndex < visibleWithoutCurrent.length) {
+            setSelectedAttribute(visibleWithoutCurrent[currentVisibleIndex])
           } else {
-            // Was at the end, go to top
-            setSelectedAttribute(newList[0])
+            setSelectedAttribute(visibleWithoutCurrent[0])
           }
         }
       }
@@ -946,15 +945,21 @@ export default function AssetTypeAttributesPage() {
               </Table>
 
               {/* Virtual Scrolling List */}
-              {allAttributes.length === 0 ? (
+              {displayedAttributes.length === 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 2, p: 4 }}>
                   <Typography variant="h6" color="text.secondary">
-                    {searchTerm ? 'No attributes found' : 'No attributes yet'}
+                    {searchTerm
+                      ? 'No attributes found'
+                      : (allAttributes.length > 0 && !includeHidden)
+                        ? 'All attributes are hidden'
+                        : 'No attributes yet'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {searchTerm
                       ? `No attributes match "${searchTerm}". Try a different search term.`
-                      : 'Click the + button to create your first attribute.'}
+                      : (allAttributes.length > 0 && !includeHidden)
+                        ? 'Toggle "Show hidden" to view hidden attributes.'
+                        : 'Click the + button to create your first attribute.'}
                   </Typography>
                 </Box>
               ) : (
@@ -964,17 +969,17 @@ export default function AssetTypeAttributesPage() {
                   onDragEnd={handleDragEnd}
                   modifiers={[restrictToVerticalAxis]}
                 >
-                  <SortableContext items={allAttributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
+                  <SortableContext items={displayedAttributes.map(a => a.id)} strategy={verticalListSortingStrategy}>
                     <List
                       ref={listRef}
                       height={listHeight}
-                      itemCount={allAttributes.length}
+                      itemCount={displayedAttributes.length}
                       itemSize={53}
                       width="100%"
                       onItemsRendered={handleItemsRendered}
                     >
                       {({ index, style }) => {
-                        const attr = allAttributes[index]
+                        const attr = displayedAttributes[index]
                         return <SortableRow key={attr.id} attr={attr} style={style} index={index} />
                       }}
                     </List>

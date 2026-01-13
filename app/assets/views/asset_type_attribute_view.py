@@ -2,9 +2,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
-import django_filters
 from django.db.models import (
     Q,
     Subquery,
@@ -110,22 +109,8 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 id__in=Subquery(overridden_globals),
             )
 
-            # Check if we should include hidden attributes (default: false)
-            include_hidden = (
-                self.request.query_params.get("include_hidden", "false").lower()
-                == "true"
-            )
-            if not include_hidden:
-                # Exclude attributes that are marked as hidden for this workspace
-                hidden_attribute_ids = WorkspaceHiddenAttribute.objects.filter(
-                    workspace_id=workspace_pk,
-                ).values_list("hidden_attribute_id", flat=True)
-                queryset = queryset.exclude(
-                    Q(id__in=hidden_attribute_ids)
-                    | Q(
-                        workspaceattributeoverride__base_attribute_id__in=hidden_attribute_ids
-                    )
-                )
+            # Hidden attributes are always included - the UI handles visibility
+            # The is_hidden field in the serializer indicates hidden status
 
             # Build ordering annotation
             # Try workspace-specific order first, fall back to global order
@@ -223,81 +208,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         except WorkspaceAssetTypeConfig.DoesNotExist:
             pass
 
-    def _ensure_attribute_in_config(self, workspace_pk, assettype_pk, attr_id):
-        """
-        Ensure an attribute is in the WorkspaceAssetTypeConfig.
-        If no config exists, create one with all current attributes.
-        If config exists but attribute is missing, add it at its global order position.
-        """
-        attr_id_str = str(attr_id)
-
-        try:
-            config = WorkspaceAssetTypeConfig.objects.get(
-                workspace_id=workspace_pk,
-                asset_type_id=assettype_pk,
-            )
-            if config.attribute_order:
-                # Check if attribute is already in the config
-                existing_ids = set()
-                for item in config.attribute_order:
-                    if isinstance(item, dict):
-                        existing_ids.add(str(item.get("id", "")))
-                    else:
-                        existing_ids.add(str(item))
-
-                if attr_id_str not in existing_ids:
-                    # Add at the end (will maintain its visual position)
-                    config.attribute_order.append(attr_id_str)
-                    config.save()
-        except WorkspaceAssetTypeConfig.DoesNotExist:
-            # No config exists - create one with all current attributes
-            # Get all visible attributes in their current order
-            from django.db.models import F, Value, Case, When, IntegerField
-
-            attrs = (
-                BaseAssetTypeAttribute.objects.filter(
-                    Q(
-                        asset_type_id=assettype_pk,
-                        polymorphic_ctype__model="globalassettypeattribute",
-                    )
-                    | Q(
-                        asset_type_id=assettype_pk,
-                        workspaceattributeoverride__workspace_id=workspace_pk,
-                    )
-                    | Q(
-                        asset_type_id=assettype_pk,
-                        workspaceextensionattribute__workspace_id=workspace_pk,
-                    )
-                )
-                .annotate(
-                    effective_order=Case(
-                        When(
-                            polymorphic_ctype__model="globalassettypeattribute",
-                            then=F("globalassettypeattribute__order"),
-                        ),
-                        When(
-                            polymorphic_ctype__model="workspaceattributeoverride",
-                            then=F("workspaceattributeoverride__base_attribute__order"),
-                        ),
-                        When(
-                            polymorphic_ctype__model="workspaceextensionattribute",
-                            then=Value(999999),
-                        ),
-                        default=Value(0),
-                        output_field=IntegerField(),
-                    )
-                )
-                .order_by("effective_order", "created_at")
-            )
-
-            attribute_order = [str(attr.id) for attr in attrs]
-
-            WorkspaceAssetTypeConfig.objects.create(
-                workspace_id=workspace_pk,
-                asset_type_id=assettype_pk,
-                attribute_order=attribute_order,
-            )
-
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single attribute by ID."""
         pk = self.kwargs["pk"]
@@ -381,7 +291,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     if override.deleted_at is not None:
                         override.deleted_at = None
                         override.save()
-                    created = False
                 except WorkspaceAttributeOverride.DoesNotExist:
                     # Create new override
                     override = WorkspaceAttributeOverride.objects.create(
@@ -569,10 +478,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         else:
             # For global and extension attributes, hide themselves
             attr_to_hide = real_instance
-
-        # Ensure the attribute is in the config before hiding
-        # (so it maintains its position when shown again)
-        self._ensure_attribute_in_config(workspace_pk, assettype_pk, pk)
 
         # Create or restore hidden record (check for soft-deleted records)
         try:
@@ -783,11 +688,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        attribute_order = request.data
+        attribute_order = [str(item) for item in request.data]
 
         with transaction.atomic():
             if workspace_pk:
-                # Update or create WorkspaceAssetTypeConfig
+                # Simply save the order as provided - UI sends all attributes including hidden
                 config, _ = WorkspaceAssetTypeConfig.objects.update_or_create(
                     workspace_id=workspace_pk,
                     asset_type_id=assettype_pk,
