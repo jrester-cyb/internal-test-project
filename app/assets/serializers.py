@@ -256,7 +256,7 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
 
         # Build result with metadata first, then base data, then overrides
         result = {
-            "id": base_data["id"],
+            "id": str(instance.id),  # Override's own ID
             "isOverride": True,
             "workspace": str(instance.workspace_id) if instance.workspace_id else None,
             "workspace_name": instance.workspace.name if instance.workspace else None,
@@ -265,8 +265,10 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
             ),
         }
 
-        # Add all base data
-        result.update(base_data)
+        # Add all base data (except id, which we already set)
+        for key, value in base_data.items():
+            if key != "id":
+                result[key] = value
 
         # Apply overrides (these will replace base values)
         if instance.name is not None:
