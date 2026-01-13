@@ -79,21 +79,19 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Select related for asset_type and organization to avoid N+1 queries
         queryset = queryset.select_related("asset_type", "organization")
 
-        # Prefetch polymorphic attributes - django-polymorphic will handle subclass queries
+        # Prefetch polymorphic attributes - django-polymorphic will batch-fetch by type
         # This will make one query per polymorphic type that exists in the results
         queryset = queryset.prefetch_related(
             Prefetch(
                 "attributes",
-                queryset=BaseAttributeValue.objects.select_related(
-                    "asset_type_attribute"
-                ).prefetch_related("polymorphic_ctype"),
+                queryset=BaseAttributeValue.objects.all(),
             )
         )
 
         return queryset.distinct()
 
     def get_serializer_context(self):
-        """Add workspace to serializer context"""
+        """Add workspace and api_key_map to serializer context"""
         context = super().get_serializer_context()
         workspace_pk = self.kwargs.get("workspace_pk")
         if workspace_pk:
@@ -103,6 +101,20 @@ class AssetViewSet(viewsets.ModelViewSet):
                 context["workspace"] = Workspace.objects.get(pk=workspace_pk)
             except Workspace.DoesNotExist:
                 pass
+
+        # Pre-load api_key map for all GlobalAssetTypeAttributes in this asset type
+        # This avoids N+1 queries when serializing attributes
+        assettype_pk = self.kwargs.get("assettype_pk")
+        if assettype_pk:
+            from ..models import GlobalAssetTypeAttribute
+
+            global_attrs = GlobalAssetTypeAttribute.objects.filter(
+                asset_type_id=assettype_pk
+            ).values("id", "api_key")
+            context["_api_key_map"] = {
+                str(ga["id"]): ga["api_key"] for ga in global_attrs
+            }
+
         return context
 
     def perform_create(self, serializer):
@@ -342,17 +354,19 @@ class AssetViewSet(viewsets.ModelViewSet):
         if assettype_pk:
             queryset = Asset.objects.filter(asset_type_id=assettype_pk)
         elif workspace_pk:
-            queryset = Asset.objects.filter(workspace_memberships__workspace_id=workspace_pk)
+            queryset = Asset.objects.filter(
+                workspace_memberships__workspace_id=workspace_pk
+            )
         else:
             queryset = Asset.objects.all()
 
         # Optimize prefetch with select_related to reduce queries
-        queryset = queryset.select_related("asset_type").prefetch_related(
+        queryset = queryset.select_related(
+            "asset_type", "organization"
+        ).prefetch_related(
             Prefetch(
                 "attributes",
-                queryset=BaseAttributeValue.objects.select_related(
-                    "asset_type_attribute"
-                ),
+                queryset=BaseAttributeValue.objects.all(),
             ),
         )
 

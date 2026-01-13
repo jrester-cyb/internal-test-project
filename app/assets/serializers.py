@@ -719,15 +719,34 @@ class AssetSerializer(serializers.ModelSerializer):
         """Get attributes as a dictionary using prefetched data"""
         # Use prefetched attributes if available
         attributes = getattr(obj, "attributes", None)
+        if not attributes:
+            return {}
+
+        # Get all attribute values (these are prefetched as polymorphic instances)
+        attr_values = list(attributes.all())
+        if not attr_values:
+            return {}
+
+        # Collect all unique asset_type_attribute IDs
+        attr_type_ids = set(av.asset_type_attribute_id for av in attr_values)
+
+        # Use cached api_key map from context if available (set by view for batch optimization)
+        api_key_map = self.context.get("_api_key_map")
+        if api_key_map is None:
+            # Batch fetch all the GlobalAssetTypeAttribute instances (which have api_key)
+            from .models import GlobalAssetTypeAttribute
+
+            global_attrs = GlobalAssetTypeAttribute.objects.filter(
+                id__in=attr_type_ids
+            ).values("id", "api_key")
+            api_key_map = {str(ga["id"]): ga["api_key"] for ga in global_attrs}
+
         values = {}
-        for field_value in attributes.all():
-            # asset_type_attribute should be prefetched
-            api_key = getattr(field_value.asset_type_attribute, "api_key", None)
-            if api_key:
-                # Always get the concrete instance to ensure we have the value field
-                concrete_instance = field_value.get_real_instance()
-                if hasattr(concrete_instance, "value"):
-                    values[api_key] = concrete_instance.value
+        for field_value in attr_values:
+            attr_id = str(field_value.asset_type_attribute_id)
+            api_key = api_key_map.get(attr_id)
+            if api_key and hasattr(field_value, "value"):
+                values[api_key] = field_value.value
         return values
 
     def create(self, validated_data):
