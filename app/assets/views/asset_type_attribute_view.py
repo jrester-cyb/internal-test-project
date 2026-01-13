@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
-from django.db.models import Q, Max
+from django.db.models import Q, Max, Subquery, OuterRef
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from ..models import (
@@ -70,8 +70,30 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             workspace_pk = self.kwargs["workspace_pk"]
             assettype_pk = self.kwargs["assettype_pk"]
 
-            queryset = BaseAssetTypeAttribute.objects.filter(
+            # Subquery to get IDs of global attributes that have overrides for this workspace
+            overridden_globals = WorkspaceAttributeOverride.objects.filter(
+                workspace_id=workspace_pk,
                 asset_type_id=assettype_pk,
+                base_attribute_id=OuterRef("id"),
+            ).values("base_attribute_id")
+
+            # Get global attributes (excluding those with overrides), overrides, and extensions
+            queryset = BaseAssetTypeAttribute.objects.filter(
+                Q(
+                    asset_type_id=assettype_pk,
+                    polymorphic_ctype__model="globalassettypeattribute",
+                )
+                | Q(
+                    asset_type_id=assettype_pk,
+                    workspaceattributeoverride__workspace_id=workspace_pk,
+                )
+                | Q(
+                    asset_type_id=assettype_pk,
+                    workspaceextensionattribute__workspace_id=workspace_pk,
+                )
+            ).exclude(
+                polymorphic_ctype__model="globalassettypeattribute",
+                id__in=Subquery(overridden_globals),
             )
 
             # Check if we should include hidden attributes (default: false)
@@ -152,7 +174,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Find the attribute
         global_attr = GlobalAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            id=pk, asset_type_id=assettype_pk
         ).first()
 
         if global_attr:
@@ -192,7 +214,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     "is_hidden": WorkspaceHiddenAttribute.objects.filter(
                         hidden_attribute=global_attr,
                         workspace_id=workspace_pk,
-                        deleted_at__isnull=True,
                     ).exists(),
                     "base_attribute_id": global_attr.id,
                     "name": override.name or global_attr.name,
@@ -259,9 +280,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Check if it's an override
         override = (
-            WorkspaceAttributeOverride.objects.filter(
-                id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-            )
+            WorkspaceAttributeOverride.objects.filter(id=pk, asset_type_id=assettype_pk)
             .select_related("base_attribute", "workspace")
             .first()
         )
@@ -318,7 +337,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         # Check if it's an extension
         extension = (
             WorkspaceExtensionAttribute.objects.filter(
-                id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+                id=pk, asset_type_id=assettype_pk
             )
             .select_related("workspace")
             .first()
@@ -335,7 +354,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             is_hidden = WorkspaceHiddenAttribute.objects.filter(
                 hidden_attribute_id=pk,
                 workspace_id=workspace_pk,
-                deleted_at__isnull=True,
             ).exists()
 
             data = {
@@ -383,7 +401,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Check if it's a global attribute
         global_attr = GlobalAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            id=pk, asset_type_id=assettype_pk
         ).first()
 
         if global_attr:
@@ -397,7 +415,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Check if it's an override
         override = WorkspaceAttributeOverride.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            id=pk, asset_type_id=assettype_pk
         ).first()
 
         if override:
@@ -406,7 +424,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         # Check if it's an extension
         extension = WorkspaceExtensionAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            id=pk, asset_type_id=assettype_pk
         ).first()
 
         if extension:
@@ -429,13 +447,8 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             )
 
         # Get the base attribute (works for all polymorphic types)
-        print(
-            BaseAssetTypeAttribute.objects.filter(
-                id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-            )
-        )
         base_attr = BaseAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            id=pk, asset_type_id=assettype_pk
         ).first()
 
         if not base_attr:
@@ -482,7 +495,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             BaseAssetTypeAttribute,
             id=pk,
             asset_type_id=assettype_pk,
-            deleted_at__isnull=True,
         )
 
         # Get the real polymorphic instance
@@ -517,9 +529,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         all_tags = set()
 
         # Tags from global attributes
-        for attr in GlobalAssetTypeAttribute.objects.filter(
-            asset_type_id=assettype_pk, deleted_at__isnull=True
-        ):
+        for attr in GlobalAssetTypeAttribute.objects.filter(asset_type_id=assettype_pk):
             if attr.tags:
                 all_tags.update(attr.tags)
 
@@ -528,7 +538,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             for override in WorkspaceAttributeOverride.objects.filter(
                 asset_type_id=assettype_pk,
                 workspace_id=workspace_pk,
-                deleted_at__isnull=True,
             ):
                 if override.tags:
                     all_tags.update(override.tags)
@@ -537,7 +546,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             for ext in WorkspaceExtensionAttribute.objects.filter(
                 asset_type_id=assettype_pk,
                 workspace_id=workspace_pk,
-                deleted_at__isnull=True,
             ):
                 if ext.tags:
                     all_tags.update(ext.tags)
@@ -556,9 +564,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         attribute_id = pk
 
         # Check if this is an override - if so, use base_attribute_id for the count
-        override = WorkspaceAttributeOverride.objects.filter(
-            id=pk, deleted_at__isnull=True
-        ).first()
+        override = WorkspaceAttributeOverride.objects.filter(id=pk).first()
         if override:
             attribute_id = override.base_attribute_id
 
@@ -609,7 +615,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
                 # Try global attribute
                 global_attr = GlobalAssetTypeAttribute.objects.filter(
-                    id=attr_id, asset_type_id=assettype_pk, deleted_at__isnull=True
+                    id=attr_id, asset_type_id=assettype_pk
                 ).first()
 
                 if global_attr:
@@ -630,7 +636,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
                 # Try override
                 override = WorkspaceAttributeOverride.objects.filter(
-                    id=attr_id, asset_type_id=assettype_pk, deleted_at__isnull=True
+                    id=attr_id, asset_type_id=assettype_pk
                 ).first()
                 if override:
                     override.order = new_order
@@ -639,7 +645,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
                 # Try extension
                 extension = WorkspaceExtensionAttribute.objects.filter(
-                    id=attr_id, asset_type_id=assettype_pk, deleted_at__isnull=True
+                    id=attr_id, asset_type_id=assettype_pk
                 ).first()
                 if extension:
                     extension.order = new_order
@@ -656,7 +662,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         """Get distinct values for this attribute."""
         # Find the attribute to get its type
         global_attr = GlobalAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            id=pk, asset_type_id=assettype_pk
         ).first()
 
         attribute_type = None
@@ -667,9 +673,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         else:
             # Check override
             override = (
-                WorkspaceAttributeOverride.objects.filter(
-                    id=pk, deleted_at__isnull=True
-                )
+                WorkspaceAttributeOverride.objects.filter(id=pk)
                 .select_related("base_attribute")
                 .first()
             )
@@ -678,9 +682,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 attribute_id = override.base_attribute_id
             else:
                 # Check extension
-                extension = WorkspaceExtensionAttribute.objects.filter(
-                    id=pk, deleted_at__isnull=True
-                ).first()
+                extension = WorkspaceExtensionAttribute.objects.filter(id=pk).first()
                 if extension:
                     attribute_type = extension.attribute_type
 

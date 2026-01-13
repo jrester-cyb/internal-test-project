@@ -146,7 +146,6 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
                 real_instance, context=self.context
             )
         elif isinstance(real_instance, WorkspaceHiddenAttribute):
-            print("here")
             serializer = WorkspaceHiddenAttributeSerializer(
                 real_instance, context=self.context
             )
@@ -189,18 +188,6 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
     """Serializer for workspace-specific attribute overrides."""
 
-    # Effective values (override or fall back to base)
-    effective_name = serializers.SerializerMethodField()
-    effective_is_required = serializers.SerializerMethodField()
-    effective_default_value = serializers.SerializerMethodField()
-    effective_description = serializers.SerializerMethodField()
-    effective_tags = serializers.SerializerMethodField()
-    effective_order = serializers.SerializerMethodField()
-    # From base attribute (read-only)
-    api_key = serializers.CharField(source="base_attribute.api_key", read_only=True)
-    attribute_type = serializers.CharField(
-        source="base_attribute.attribute_type", read_only=True
-    )
     workspace_name = serializers.CharField(
         source="workspace.name", read_only=True, allow_null=True
     )
@@ -213,8 +200,6 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
             "base_attribute",
             "workspace",
             "workspace_name",
-            "api_key",
-            "attribute_type",
             # Override fields (nullable)
             "name",
             "is_required",
@@ -222,13 +207,6 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
             "description",
             "tags",
             "order",
-            # Effective values
-            "effective_name",
-            "effective_is_required",
-            "effective_default_value",
-            "effective_description",
-            "effective_tags",
-            "effective_order",
             "created_at",
             "updated_at",
         ]
@@ -241,23 +219,38 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_effective_name(self, obj):
-        return obj.get_effective_value("name")
+    def to_representation(self, instance):
+        """Return the base attribute serialized with isOverride flag."""
+        from .serializers import GlobalAssetTypeAttributeSerializer
 
-    def get_effective_is_required(self, obj):
-        return obj.get_effective_value("is_required")
+        # Serialize the base attribute
+        base_data = GlobalAssetTypeAttributeSerializer(
+            instance.base_attribute, context=self.context
+        ).data
 
-    def get_effective_default_value(self, obj):
-        return obj.get_effective_value("default_value")
+        # Apply overrides
+        if instance.name is not None:
+            base_data["name"] = instance.name
+        if instance.is_required is not None:
+            base_data["is_required"] = instance.is_required
+        if instance.default_value is not None:
+            base_data["default_value"] = instance.default_value
+        if instance.description is not None:
+            base_data["description"] = instance.description
+        if instance.tags is not None:
+            base_data["tags"] = instance.tags
+        if instance.order is not None:
+            base_data["order"] = instance.order
 
-    def get_effective_description(self, obj):
-        return obj.get_effective_value("description")
+        # Add override metadata
+        base_data["isOverride"] = True
+        base_data["workspace_id"] = instance.workspace_id
+        base_data["workspace_name"] = (
+            instance.workspace.name if instance.workspace else None
+        )
+        base_data["base_attribute_id"] = instance.base_attribute_id
 
-    def get_effective_tags(self, obj):
-        return obj.get_effective_value("tags")
-
-    def get_effective_order(self, obj):
-        return obj.get_effective_value("order")
+        return base_data
 
 
 class WorkspaceHiddenAttributeSerializer(serializers.Serializer):
