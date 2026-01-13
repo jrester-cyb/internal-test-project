@@ -121,17 +121,30 @@ class SoftDeleteQuerySet(models.QuerySet):
         Soft delete all objects in this queryset.
         Returns proper count even though trigger prevents actual deletion.
         """
-        # Collect all instances by model
-        collector = models.deletion.Collector(using=self.db)
-        collector.collect(self)
+        # Count objects before deletion
+        count = self.count()
+
+        if count == 0:
+            return 0, {}
+
+        # Try to collect cascade information for accurate reporting
+        try:
+            collector = models.deletion.Collector(using=self.db)
+            collector.collect(self)
+            collected_data = collector.data
+        except (ValueError, TypeError):
+            # If collection fails due to polymorphic FK issues, use simple count
+            # Perform the delete (trigger will prevent but update deleted_at)
+            super().delete()
+            return count, {self.model._meta.label: count}
 
         # Perform the delete (trigger will prevent but update deleted_at)
         super().delete()
 
         # Return the count that would have been deleted
-        return sum(len(instances) for instances in collector.data.values()), {
+        return sum(len(instances) for instances in collected_data.values()), {
             model._meta.label: len(instances)
-            for model, instances in collector.data.items()
+            for model, instances in collected_data.items()
         }
 
 
@@ -169,17 +182,30 @@ class PolymorphicSoftDeleteQuerySet(PolymorphicQuerySet):
         Soft delete all polymorphic objects in this queryset.
         Returns proper count even though trigger prevents actual deletion.
         """
-        # Collect all instances by model
-        collector = models.deletion.Collector(using=self.db)
-        collector.collect(self)
+        # Count objects before deletion
+        count = self.count()
+
+        if count == 0:
+            return 0, {}
+
+        # Try to collect cascade information for accurate reporting
+        try:
+            collector = models.deletion.Collector(using=self.db)
+            collector.collect(self)
+            collected_data = collector.data
+        except (ValueError, TypeError):
+            # If collection fails due to polymorphic FK issues, use simple count
+            # Perform the delete (trigger will prevent but update deleted_at)
+            super().delete()
+            return count, {self.model._meta.label: count}
 
         # Perform the delete (trigger will prevent but update deleted_at)
         super().delete()
 
         # Return the count that would have been deleted
-        return sum(len(instances) for instances in collector.data.values()), {
+        return sum(len(instances) for instances in collected_data.values()), {
             model._meta.label: len(instances)
-            for model, instances in collector.data.items()
+            for model, instances in collected_data.items()
         }
 
     def force_delete(self):
@@ -248,11 +274,9 @@ class SoftDeleteMixin(models.Model):
         Returns proper deletion count even though trigger returns NULL.
         """
         using = using or self._state.db
-        # Collect deletion info before the operation
-        collector = models.deletion.Collector(using=using, origin=self)
-        collector.collect([self], keep_parents=keep_parents)
 
-        # Execute DELETE on this table (trigger will intercept and soft delete)
+        # For polymorphic models with complex relationships, use direct SQL deletion
+        # to avoid type checking issues in Django's collector
         from django.db import connections
 
         connection = connections[using]
@@ -261,15 +285,26 @@ class SoftDeleteMixin(models.Model):
         pk_field = self._meta.pk
         pk_column = pk_field.column
 
+        try:
+            # Try to collect deletion info for proper count reporting
+            collector = models.deletion.Collector(using=using, origin=self)
+            collector.collect([self], keep_parents=keep_parents)
+            collected_data = collector.data
+        except (ValueError, TypeError) as e:
+            # If collection fails due to polymorphic type issues, estimate the count
+            # This happens when there are ForeignKey constraints between polymorphic types
+            collected_data = {self.__class__: [self]}
+
+        # Execute DELETE on this table (trigger will intercept and soft delete)
         with connection.cursor() as cursor:
             cursor.execute(
                 f"DELETE FROM {self._meta.db_table} WHERE {pk_column} = %s", [self.pk]
             )
 
         # Return the count that would have been deleted
-        return len(collector.data), {
+        return len(collected_data), {
             model._meta.label: len(instances)
-            for model, instances in collector.data.items()
+            for model, instances in collected_data.items()
         }
 
     def force_delete(self, *args, **kwargs):
