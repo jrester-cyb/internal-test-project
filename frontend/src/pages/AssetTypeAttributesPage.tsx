@@ -1094,50 +1094,43 @@ export default function AssetTypeAttributesPage() {
             expanded={expandedSections.system}
             onToggle={() => toggleSection('system')}
           >
-            <Table size="small" sx={{ mt: 1 }}>
-              <TableBody>
-                <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 120, verticalAlign: 'middle' }}>ID</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>
-                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
-                  </TableCell>
-                </TableRow>
-                {displayedAttribute.baseAttributeId && (
-                  <TableRow>
-                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Base ID</TableCell>
-                    <TableCell sx={{ border: 0, py: 0.5 }}>
-                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.baseAttributeId}</CopyableText>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {displayedAttribute.organizationId && (
-                  <TableRow>
-                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Organization ID</TableCell>
-                    <TableCell sx={{ border: 0, py: 0.5 }}>
-                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.organizationId}</CopyableText>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {displayedAttribute.workspace && (
-                  <TableRow>
-                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Workspace ID</TableCell>
-                    <TableCell sx={{ border: 0, py: 0.5 }}>
-                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.workspace}</CopyableText>
-                    </TableCell>
-                  </TableRow>
-                )}
-                <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Asset Type ID</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>
-                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId}</CopyableText>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Order</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>{displayedAttribute.order}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+            <Box sx={{ 
+              mt: 1,
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              gap: 2,
+              rowGap: 1.5
+            }}>
+              <Typography variant="body2" color="text.secondary">ID</Typography>
+              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
+
+              {displayedAttribute.baseAttributeId && (
+                <>
+                  <Typography variant="body2" color="text.secondary">Global Attribute ID</Typography>
+                  <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.baseAttributeId}</CopyableText>
+                </>
+              )}
+
+              {displayedAttribute.organizationId && (
+                <>
+                  <Typography variant="body2" color="text.secondary">Organization ID</Typography>
+                  <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.organizationId}</CopyableText>
+                </>
+              )}
+
+              {displayedAttribute.workspace && (
+                <>
+                  <Typography variant="body2" color="text.secondary">Workspace ID</Typography>
+                  <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.workspace}</CopyableText>
+                </>
+              )}
+
+              <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
+              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId}</CopyableText>
+
+              <Typography variant="body2" color="text.secondary">Order</Typography>
+              <Typography variant="body2">{displayedAttribute.order}</Typography>
+            </Box>
           </DraggableSection>
         )
       default:
