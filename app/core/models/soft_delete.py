@@ -182,6 +182,22 @@ class PolymorphicSoftDeleteQuerySet(PolymorphicQuerySet):
             for model, instances in collector.data.items()
         }
 
+    def force_delete(self):
+        """
+        Permanently delete all objects in this queryset, bypassing soft deletion.
+        """
+        # Get the actual model class (not the polymorphic base)
+        model_class = self.model
+        if hasattr(model_class, "_meta"):
+            model_name = model_class._meta.object_name
+            app_label = model_class._meta.app_label
+        else:
+            model_name = model_class.__name__
+            app_label = model_class._meta.app_label
+
+        with pgtrigger.ignore(f"{app_label}.{model_name}:soft_delete"):
+            return super().delete()
+
 
 class PolymorphicSoftDeleteManager(PolymorphicManager):
     """Polymorphic manager that excludes soft-deleted objects by default."""

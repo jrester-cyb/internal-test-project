@@ -314,7 +314,6 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
         max_length=20, choices=BaseAssetTypeAttribute.FIELD_TYPES
     )
     is_required = models.BooleanField(default=False)
-    is_hidden = models.BooleanField(default=False)
     default_value = models.JSONField(null=True, blank=True)
     description = models.TextField(blank=True)
     tags = models.JSONField(

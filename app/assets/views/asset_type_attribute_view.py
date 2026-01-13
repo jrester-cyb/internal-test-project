@@ -11,10 +11,12 @@ from ..models import (
     WorkspaceAttributeOverride,
     WorkspaceHiddenAttribute,
     WorkspaceExtensionAttribute,
+    BaseAssetTypeAttribute,
     BaseAttributeValue,
     WorkspaceAsset,
 )
 from ..serializers import (
+    AssetTypeAttributeSerializer,
     GlobalAssetTypeAttributeSerializer,
     WorkspaceAttributeOverrideSerializer,
     WorkspaceHiddenAttributeSerializer,
@@ -797,51 +799,42 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if it's a global attribute
-        global_attr = GlobalAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-        ).first()
-
-        if global_attr:
-            # Create hidden record
-            WorkspaceHiddenAttribute.objects.get_or_create(
-                hidden_attribute=global_attr,
-                workspace_id=workspace_pk,
-                asset_type_id=assettype_pk,
-                defaults={"deleted_at": None},
-            )
-            return Response({"success": True, "hidden": True})
-
-        # Check if it's an override (hide the underlying global attribute)
-        override = (
-            WorkspaceAttributeOverride.objects.filter(
+        # Get the base attribute (works for all polymorphic types)
+        print(
+            BaseAssetTypeAttribute.objects.filter(
                 id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
             )
-            .select_related("base_attribute")
-            .first()
         )
-
-        if override:
-            # Create hidden record for the base attribute
-            WorkspaceHiddenAttribute.objects.get_or_create(
-                hidden_attribute=override.base_attribute,
-                workspace_id=workspace_pk,
-                asset_type_id=assettype_pk,
-                defaults={"deleted_at": None},
-            )
-            return Response({"success": True, "hidden": True})
-
-        # Check if it's an extension
-        extension = WorkspaceExtensionAttribute.objects.filter(
+        base_attr = BaseAssetTypeAttribute.objects.filter(
             id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
         ).first()
 
-        if extension:
-            extension.is_hidden = True
-            extension.save()
-            return Response({"success": True, "hidden": True})
+        if not base_attr:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # Get the real polymorphic instance
+        real_instance = base_attr.get_real_instance()
+
+        # Determine which attribute to hide
+        if isinstance(real_instance, WorkspaceAttributeOverride):
+            # For overrides, hide the underlying global attribute
+            attr_to_hide = real_instance.base_attribute
+        else:
+            # For global and extension attributes, hide themselves
+            attr_to_hide = real_instance
+
+        # Create hidden record
+        WorkspaceHiddenAttribute.objects.get_or_create(
+            hidden_attribute=attr_to_hide,
+            workspace_id=workspace_pk,
+            asset_type_id=assettype_pk,
+            defaults={"deleted_at": None},
+        )
+
+        return Response(
+            data=AssetTypeAttributeSerializer(attr_to_hide).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=["Asset Type Attributes"],
@@ -856,29 +849,35 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if it's a global attribute - remove hidden record
-        global_attr = GlobalAssetTypeAttribute.objects.filter(
+        # Get the base attribute (works for all polymorphic types)
+        base_attr = BaseAssetTypeAttribute.objects.filter(
             id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
         ).first()
 
-        if global_attr:
-            WorkspaceHiddenAttribute.objects.filter(
-                hidden_attribute=global_attr,
-                workspace_id=workspace_pk,
-            ).delete()
-            return Response({"success": True, "hidden": False})
+        if not base_attr:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if it's an extension
-        extension = WorkspaceExtensionAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-        ).delete()
+        # Get the real polymorphic instance
+        real_instance = base_attr.get_real_instance()
 
-        if extension:
-            extension.is_hidden = False
-            extension.save()
-            return Response({"success": True, "hidden": False})
+        # Determine which attribute to unhide
+        if isinstance(real_instance, WorkspaceAttributeOverride):
+            # For overrides, unhide the underlying global attribute
+            attr_to_unhide = real_instance.base_attribute
+        else:
+            # For global and extension attributes, unhide themselves
+            attr_to_unhide = real_instance
 
-        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # Remove hidden record
+        WorkspaceHiddenAttribute.objects.filter(
+            hidden_attribute=attr_to_unhide,
+            workspace_id=workspace_pk,
+        ).force_delete()
+
+        return Response(
+            data=AssetTypeAttributeSerializer(attr_to_unhide).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=["Asset Type Attributes"],
