@@ -5,7 +5,18 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
-from django.db.models import Q, Max, Subquery, OuterRef
+from django.db.models import (
+    Q,
+    Max,
+    Subquery,
+    OuterRef,
+    F,
+    Value,
+    Case,
+    When,
+    IntegerField,
+)
+from django.db.models.functions import Coalesce
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from ..models import (
@@ -103,6 +114,29 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             )
             if not include_hidden:
                 queryset = queryset.not_instance_of(WorkspaceHiddenAttribute)
+
+            # Apply default ordering by order field from child models
+            queryset = queryset.annotate(
+                effective_order=Case(
+                    When(
+                        polymorphic_ctype__model="globalassettypeattribute",
+                        then=F("globalassettypeattribute__order"),
+                    ),
+                    When(
+                        polymorphic_ctype__model="workspaceattributeoverride",
+                        then=Coalesce(
+                            F("workspaceattributeoverride__order"),
+                            F("workspaceattributeoverride__base_attribute__order"),
+                        ),
+                    ),
+                    When(
+                        polymorphic_ctype__model="workspaceextensionattribute",
+                        then=F("workspaceextensionattribute__order"),
+                    ),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                )
+            ).order_by("effective_order", "created_at")
 
         return queryset
 

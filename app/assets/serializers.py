@@ -228,29 +228,33 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
             instance.base_attribute, context=self.context
         ).data
 
-        # Apply overrides
+        # Build result with metadata first, then base data, then overrides
+        result = {
+            "id": base_data["id"],
+            "isOverride": True,
+            "workspace_id": instance.workspace_id,
+            "workspace_name": instance.workspace.name if instance.workspace else None,
+            "base_attribute_id": instance.base_attribute_id,
+        }
+
+        # Add all base data
+        result.update(base_data)
+
+        # Apply overrides (these will replace base values)
         if instance.name is not None:
-            base_data["name"] = instance.name
+            result["name"] = instance.name
         if instance.is_required is not None:
-            base_data["is_required"] = instance.is_required
+            result["is_required"] = instance.is_required
         if instance.default_value is not None:
-            base_data["default_value"] = instance.default_value
+            result["default_value"] = instance.default_value
         if instance.description is not None:
-            base_data["description"] = instance.description
+            result["description"] = instance.description
         if instance.tags is not None:
-            base_data["tags"] = instance.tags
+            result["tags"] = instance.tags
         if instance.order is not None:
-            base_data["order"] = instance.order
+            result["order"] = instance.order
 
-        # Add override metadata
-        base_data["isOverride"] = True
-        base_data["workspace_id"] = instance.workspace_id
-        base_data["workspace_name"] = (
-            instance.workspace.name if instance.workspace else None
-        )
-        base_data["base_attribute_id"] = instance.base_attribute_id
-
-        return base_data
+        return result
 
 
 class WorkspaceHiddenAttributeSerializer(serializers.Serializer):
