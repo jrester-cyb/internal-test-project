@@ -199,6 +199,11 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
             # Build the URL based on whether we have workspace context
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+
+            # If no workspace in URL params, check query params (for organization endpoint)
+            if not workspace_id:
+                workspace_id = request.query_params.get("workspace_id")
+
             if workspace_id:
                 return request.build_absolute_uri(
                     reverse(

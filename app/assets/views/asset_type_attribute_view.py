@@ -414,7 +414,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     **filter_args,
                 )
 
-        return Response(AssetTypeAttributeSerializer(asset_type_attribute).data)
+        return Response(
+            AssetTypeAttributeSerializer(
+                asset_type_attribute, context={"request": request}
+            ).data
+        )
 
     def create(self, request, *args, **kwargs):
         """

@@ -927,7 +927,7 @@ export default function AssetTypeAttributesPage() {
                               startIcon={isLoadingGlobalDefinition ? <CircularProgress size={14} /> : <OpenInNewIcon />}
                               disabled={isLoadingGlobalDefinition}
                               onClick={async () => {
-                                if (!assetTypeId || !selectedAttribute) return
+                                if (!assetTypeId || !selectedAttribute || !workspaceId) return
                                 const orgId = selectedAttribute.organizationId
                                 if (!orgId) {
                                   console.warn('Organization ID not available on attribute')
@@ -936,37 +936,30 @@ export default function AssetTypeAttributesPage() {
                                 setIsLoadingGlobalDefinition(true)
                                 try {
                                   const globalDefId = selectedAttribute.baseAttributeId || selectedAttribute.id
-                                  const globalDef = await fetchGlobalAttributeDefinition(orgId, assetTypeId, globalDefId)
+                                  const globalDef = await fetchGlobalAttributeDefinition(orgId, assetTypeId, globalDefId, workspaceId)
 
+                                  // Switch to global definition view first
                                   setGlobalDefinition(globalDef)
                                   setShowingGlobalDefinition(true)
+                                  setIsLoadingGlobalDefinition(false)
 
-                                  // Fetch count after switching using the URL from the global definition
+                                  // Then fetch count after view has switched
                                   const countUrl = globalDef.assetCountUrl
-                                  console.log('Asset count URL:', countUrl)
                                   if (countUrl) {
                                     setIsLoadingCount(true)
                                     fetch(countUrl)
-                                      .then(response => {
-                                        console.log('Asset count response:', response)
-                                        return response.json()
-                                      })
-                                      .then(data => {
-                                        console.log('Asset count data:', data)
-                                        setSelectedAttributeAssetCount(data.count)
-                                      })
+                                      .then(response => response.json())
+                                      .then(data => setSelectedAttributeAssetCount(data.count))
                                       .catch(err => {
                                         console.error('Failed to fetch asset count:', err)
                                         setSelectedAttributeAssetCount(0)
                                       })
                                       .finally(() => setIsLoadingCount(false))
                                   } else {
-                                    console.warn('No asset count URL available')
                                     setSelectedAttributeAssetCount(null)
                                   }
                                 } catch (err) {
                                   console.error('Failed to fetch global definition:', err)
-                                } finally {
                                   setIsLoadingGlobalDefinition(false)
                                 }
                               }}
