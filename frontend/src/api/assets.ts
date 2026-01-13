@@ -201,6 +201,12 @@ export async function fetchAssetAttributeDefinitionsFromUrl(url: string) {
   return response.json()
 }
 
+export async function fetchAttributeTags(workspaceId: string, assetTypeId: string): Promise<string[]> {
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/tags/`))
+  if (!response.ok) throw new Error('Failed to fetch attribute tags')
+  return response.json()
+}
+
 export async function fetchAllAssetAttributeDefinitions(workspaceId: string, assetTypeId: string) {
   const params = new URLSearchParams({
     page_size: '1000' // Fetch all attributes

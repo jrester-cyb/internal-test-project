@@ -4,7 +4,7 @@ import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator a
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey } from '../api/assets'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -107,6 +107,16 @@ export default function AssetTypeAttributesPage() {
   const [isApiKeyManuallyEdited, setIsApiKeyManuallyEdited] = useState(false)
   const [typeChangeDialogOpen, setTypeChangeDialogOpen] = useState(false)
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+
+  // Fetch available tags when dialog opens
+  useEffect(() => {
+    if (editDialogOpen && workspaceId && assetTypeId) {
+      fetchAttributeTags(workspaceId, assetTypeId)
+        .then(tags => setAvailableTags(tags))
+        .catch(err => console.error('Failed to fetch tags:', err))
+    }
+  }, [editDialogOpen, workspaceId, assetTypeId])
 
   // Debounced search effect - just update URL, let loader handle data fetching
   useEffect(() => {
@@ -1263,7 +1273,7 @@ export default function AssetTypeAttributesPage() {
             <Autocomplete
               multiple
               freeSolo
-              options={[]}
+              options={availableTags}
               value={formData.tags}
               onChange={(_, newValue) => setFormData({ ...formData, tags: newValue as string[] })}
               renderTags={(value, getTagProps) =>

@@ -268,6 +268,28 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Asset Type Attributes"],
+        summary="Get all unique tags used in this workspace",
+        description="Returns a list of all unique tags used across attributes in this asset type (both base and workspace-specific)",
+    )
+    @action(detail=False, methods=["get"], url_path="tags")
+    def tags(self, request, workspace_pk=None, assettype_pk=None):
+        """Get all unique tags used in attributes for this asset type in this workspace"""
+        # Get all attributes visible in this workspace (base + workspace-specific)
+        queryset = AssetTypeAttribute.objects.filter(
+            asset_type_id=assettype_pk,
+            deleted_at__isnull=True,
+        ).filter(Q(workspace__isnull=True) | Q(workspace_id=workspace_pk))
+
+        # Collect all unique tags
+        all_tags = set()
+        for attr in queryset:
+            if attr.tags:
+                all_tags.update(attr.tags)
+
+        return Response(sorted(all_tags))
+
+    @extend_schema(
+        tags=["Asset Type Attributes"],
         summary="Hide attribute for this workspace",
         description="Hides a base attribute for this workspace by creating an override with is_hidden=True",
     )
@@ -366,6 +388,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     and existing_override.is_required == instance.is_required
                     and existing_override.default_value == instance.default_value
                     and existing_override.description == instance.description
+                    and existing_override.tags == instance.tags
                     and existing_override.order == instance.order
                 )
 
@@ -404,6 +427,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     and instance.is_required == base_attribute.is_required
                     and instance.default_value == base_attribute.default_value
                     and instance.description == base_attribute.description
+                    and instance.tags == base_attribute.tags
                     and instance.order == base_attribute.order
                 )
 
