@@ -138,3 +138,29 @@ class TagsFilter(filters.BaseFilterBackend):
 
         translated = translate_polymorphic_Q_object(queryset.model, tag_q)
         return queryset.filter(translated)
+
+
+class HiddenFilter(filters.BaseFilterBackend):
+    """
+    Filter attributes by hidden status.
+
+    Usage:
+        ?include_hidden=true   (show all attributes including hidden)
+        ?include_hidden=false  (exclude hidden attributes, show only non-hidden)
+        (no param)             (show all attributes by default)
+    """
+
+    def filter_queryset(self, request, queryset, view):
+        include_hidden_param = request.query_params.get("include_hidden")
+        if include_hidden_param is None:
+            return queryset
+
+        # Convert string to boolean
+        include_hidden = include_hidden_param.lower() in ("true", "1", "yes")
+
+        # If include_hidden is False, exclude hidden attributes
+        if not include_hidden:
+            return queryset.filter(_is_hidden=False)
+
+        # If include_hidden is True, return all (don't filter)
+        return queryset

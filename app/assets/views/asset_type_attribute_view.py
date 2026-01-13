@@ -16,7 +16,8 @@ from django.db.models import (
     Exists,
 )
 from django.db import transaction
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 from ..models import (
     GlobalAssetTypeAttribute,
     WorkspaceOverrideAssetTypeAttribute,
@@ -33,12 +34,52 @@ from ..serializers import (
     WorkspaceLocalAssetTypeAttributeSerializer,
     WorkspaceAssetTypeConfigSerializer,
 )
-from ..filters import PolymorphicSearchFilter, ScopeFilter, TagsFilter
+from ..filters import PolymorphicSearchFilter, ScopeFilter, TagsFilter, HiddenFilter
 from app.pagination import CustomPageNumberPagination
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Asset Type Attributes"]),
+    list=extend_schema(
+        tags=["Asset Type Attributes"],
+        parameters=[
+            OpenApiParameter(
+                name="search",
+                description="Search attributes by name, API key, or description",
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="scope",
+                description="Filter by attribute scope. Comma-separated values: global, override, local",
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="exclude_scope",
+                description="Exclude attribute scopes. Comma-separated values: global, override, local",
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="tags",
+                description="Filter by tags. Comma-separated list of tags",
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="include_hidden",
+                description="Include hidden attributes. true = show all (including hidden), false = exclude hidden attributes, omit = show all",
+                required=False,
+                type=OpenApiTypes.BOOL,
+            ),
+            OpenApiParameter(
+                name="ordering",
+                description="Order results by field. Options: effective_order, created_at, -effective_order, -created_at",
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+        ],
+    ),
     create=extend_schema(tags=["Asset Type Attributes"]),
     retrieve=extend_schema(tags=["Asset Type Attributes"]),
     update=extend_schema(tags=["Asset Type Attributes"]),
@@ -62,6 +103,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         PolymorphicSearchFilter,
         ScopeFilter,
         TagsFilter,
+        HiddenFilter,
         filters.OrderingFilter,
     ]
     # Search fields for polymorphic child models

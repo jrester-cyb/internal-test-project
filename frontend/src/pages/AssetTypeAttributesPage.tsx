@@ -1099,6 +1099,12 @@ export default function AssetTypeAttributesPage() {
                     <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
                   </TableCell>
                 </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Asset Type ID</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId}</CopyableText>
+                  </TableCell>
+                </TableRow>
                 {displayedAttribute.baseAttributeId && (
                   <TableRow>
                     <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Base ID</TableCell>
