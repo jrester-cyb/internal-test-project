@@ -453,19 +453,35 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Asset Type Attributes"],
         summary="Get asset count for attribute",
-        description="Returns the count of assets that have a value for this attribute",
+        description="Returns the count of assets visible in this workspace that have a value for this attribute",
     )
     @action(detail=True, methods=["get"], url_path="asset-count")
     def asset_count(self, request, pk=None, workspace_pk=None, assettype_pk=None):
-        """Get count of assets with values for this attribute"""
-        from ..models import BaseAttributeValue
+        """Get count of assets visible in this workspace with values for this attribute"""
+        from ..models import BaseAttributeValue, WorkspaceAsset
 
-        count = (
-            BaseAttributeValue.objects.filter(asset_type_attribute_id=pk)
-            .values("asset_id")
-            .distinct()
-            .count()
-        )
+        # Get asset IDs visible in this workspace
+        if workspace_pk:
+            workspace_asset_ids = WorkspaceAsset.objects.filter(
+                workspace_id=workspace_pk
+            ).values_list("asset_id", flat=True)
+
+            count = (
+                BaseAttributeValue.objects.filter(
+                    asset_type_attribute_id=pk, asset_id__in=workspace_asset_ids
+                )
+                .values("asset_id")
+                .distinct()
+                .count()
+            )
+        else:
+            # No workspace filter - count all assets with this attribute
+            count = (
+                BaseAttributeValue.objects.filter(asset_type_attribute_id=pk)
+                .values("asset_id")
+                .distinct()
+                .count()
+            )
 
         return Response({"count": count})
 
