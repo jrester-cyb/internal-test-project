@@ -9,7 +9,6 @@ from .asset_type_attribute import (
 )
 
 # Legacy alias for backwards compatibility
-AssetTypeAttribute = GlobalAssetTypeAttribute
 from .asset_type_attribute_choice import (
     # Base choices (on global attributes)
     AssetTypeAttributeChoice,

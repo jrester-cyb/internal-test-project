@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
+import django_filters
 from django.db.models import Q, Max
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -19,8 +20,6 @@ from ..models import (
 from ..serializers import (
     AssetTypeAttributeSerializer,
     GlobalAssetTypeAttributeSerializer,
-    WorkspaceAttributeOverrideSerializer,
-    WorkspaceHiddenAttributeSerializer,
     WorkspaceExtensionAttributeSerializer,
     MergedAttributeSerializer,
 )
@@ -46,7 +45,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     - WorkspaceExtensionAttribute: Workspace-only extension attributes
     """
 
-    serializer_class = MergedAttributeSerializer
+    serializer_class = AssetTypeAttributeSerializer
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -65,200 +64,25 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        """Return merged attributes for the list view."""
-        # This is primarily used for non-list operations
-        # List uses custom logic in list()
-        return GlobalAssetTypeAttribute.objects.filter(
-            asset_type_id=self.kwargs["assettype_pk"],
-            deleted_at__isnull=True,
-        )
+        """Return attributes for the list view."""
+        queryset = BaseAssetTypeAttribute.objects.none()
+        if self.kwargs.get("workspace_pk"):
+            workspace_pk = self.kwargs["workspace_pk"]
+            assettype_pk = self.kwargs["assettype_pk"]
 
-    def _get_merged_attributes(self, assettype_pk, workspace_pk, include_hidden=False):
-        """
-        Get merged attributes for a workspace context.
-
-        Returns a list of dicts with unified attribute data:
-        - Global attributes (possibly with overrides applied)
-        - Workspace extension attributes
-        - Optionally hidden attributes
-        """
-        # 1. Get all global attributes
-        global_attrs = GlobalAssetTypeAttribute.objects.filter(
-            asset_type_id=assettype_pk,
-            deleted_at__isnull=True,
-        ).select_related("asset_type")
-
-        # 2. Get workspace overrides (if workspace context)
-        overrides_by_base = {}
-        if workspace_pk:
-            overrides = WorkspaceAttributeOverride.objects.filter(
+            queryset = BaseAssetTypeAttribute.objects.filter(
                 asset_type_id=assettype_pk,
-                workspace_id=workspace_pk,
-                deleted_at__isnull=True,
-            ).select_related("base_attribute", "workspace")
-            overrides_by_base = {o.base_attribute_id: o for o in overrides}
-
-        # 3. Get hidden attributes (if workspace context)
-        hidden_base_ids = set()
-        if workspace_pk:
-            hidden_base_ids = set(
-                WorkspaceHiddenAttribute.objects.filter(
-                    asset_type_id=assettype_pk,
-                    workspace_id=workspace_pk,
-                    deleted_at__isnull=True,
-                ).values_list("hidden_attribute_id", flat=True)
             )
 
-        # 4. Get workspace extensions (if workspace context)
-        extensions = []
-        if workspace_pk:
-            extensions = WorkspaceExtensionAttribute.objects.filter(
-                asset_type_id=assettype_pk,
-                workspace_id=workspace_pk,
-                deleted_at__isnull=True,
-            ).select_related("workspace")
-
-        # Build merged result
-        result = []
-
-        # Process global attributes
-        for attr in global_attrs:
-            is_hidden = attr.id in hidden_base_ids
-            if is_hidden and not include_hidden:
-                continue
-
-            override = overrides_by_base.get(attr.id)
-
-            if override:
-                # Use override values where set, else fall back to base
-                result.append(
-                    {
-                        "id": override.id,
-                        "asset_type_id": attr.asset_type_id,
-                        "workspace_id": workspace_pk,
-                        "workspace_name": (
-                            override.workspace.name if override.workspace else None
-                        ),
-                        "attribute_kind": "override",
-                        "is_override": True,
-                        "is_extension": False,
-                        "is_hidden": is_hidden,
-                        "base_attribute_id": attr.id,
-                        "name": (
-                            override.name if override.name is not None else attr.name
-                        ),
-                        "api_key": attr.api_key,
-                        "attribute_type": attr.attribute_type,
-                        "is_required": (
-                            override.is_required
-                            if override.is_required is not None
-                            else attr.is_required
-                        ),
-                        "default_value": (
-                            override.default_value
-                            if override.default_value is not None
-                            else attr.default_value
-                        ),
-                        "description": (
-                            override.description
-                            if override.description is not None
-                            else attr.description
-                        ),
-                        "tags": (
-                            override.tags if override.tags is not None else attr.tags
-                        ),
-                        "order": (
-                            override.order if override.order is not None else attr.order
-                        ),
-                        "created_at": attr.created_at,
-                        "updated_at": override.updated_at,
-                    }
-                )
-            else:
-                # No override - use global attribute directly
-                result.append(
-                    {
-                        "id": attr.id,
-                        "asset_type_id": attr.asset_type_id,
-                        "workspace_id": None,
-                        "workspace_name": None,
-                        "attribute_kind": "global",
-                        "is_override": False,
-                        "is_extension": False,
-                        "is_hidden": is_hidden,
-                        "base_attribute_id": None,
-                        "name": attr.name,
-                        "api_key": attr.api_key,
-                        "attribute_type": attr.attribute_type,
-                        "is_required": attr.is_required,
-                        "default_value": attr.default_value,
-                        "description": attr.description,
-                        "tags": attr.tags or [],
-                        "order": attr.order,
-                        "created_at": attr.created_at,
-                        "updated_at": attr.updated_at,
-                    }
-                )
-
-        # Process workspace extensions
-        for ext in extensions:
-            if ext.is_hidden and not include_hidden:
-                continue
-
-            result.append(
-                {
-                    "id": ext.id,
-                    "asset_type_id": ext.asset_type_id,
-                    "workspace_id": ext.workspace_id,
-                    "workspace_name": ext.workspace.name if ext.workspace else None,
-                    "attribute_kind": "extension",
-                    "is_override": False,
-                    "is_extension": True,
-                    "is_hidden": ext.is_hidden,
-                    "base_attribute_id": None,
-                    "name": ext.name,
-                    "api_key": ext.api_key,
-                    "attribute_type": ext.attribute_type,
-                    "is_required": ext.is_required,
-                    "default_value": ext.default_value,
-                    "description": ext.description,
-                    "tags": ext.tags or [],
-                    "order": ext.order,
-                    "created_at": ext.created_at,
-                    "updated_at": ext.updated_at,
-                }
+            # Check if we should include hidden attributes (default: false)
+            include_hidden = (
+                self.request.query_params.get("include_hidden", "false").lower()
+                == "true"
             )
+            if not include_hidden:
+                queryset = queryset.not_instance_of(WorkspaceHiddenAttribute)
 
-        return result
-
-    def list(self, request, *args, **kwargs):
-        """
-        List merged attributes for this asset type.
-
-        Query params:
-            - include_hidden: If "true", includes hidden attributes
-        """
-        assettype_pk = self.kwargs["assettype_pk"]
-        workspace_pk = self.kwargs.get("workspace_pk")
-        include_hidden = (
-            request.query_params.get("include_hidden", "").lower() == "true"
-        )
-
-        merged = self._get_merged_attributes(assettype_pk, workspace_pk, include_hidden)
-
-        # Sort by order, then name
-        sorted_result = sorted(
-            merged, key=lambda x: (x.get("is_hidden", False), x["order"], x["name"])
-        )
-
-        # Paginate
-        page = self.paginate_queryset(sorted_result)
-        if page is not None:
-            serializer = MergedAttributeSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = MergedAttributeSerializer(sorted_result, many=True)
-        return Response(serializer.data)
+        return queryset
 
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single attribute by ID."""
@@ -266,177 +90,19 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         assettype_pk = self.kwargs["assettype_pk"]
         workspace_pk = self.kwargs.get("workspace_pk")
 
-        # Try to find in each model
-        # First check if it's a global attribute
-        global_attr = GlobalAssetTypeAttribute.objects.filter(
-            id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-        ).first()
+        # filter objects
+        filter_args = {
+            "id": pk,
+            "asset_type_id": assettype_pk,
+            "workspace_id": workspace_pk,
+        }
 
-        if global_attr:
-            # Check for override in workspace context
-            override = None
-            is_hidden = False
-            if workspace_pk:
-                override = (
-                    WorkspaceAttributeOverride.objects.filter(
-                        base_attribute_id=pk,
-                        workspace_id=workspace_pk,
-                        deleted_at__isnull=True,
-                    )
-                    .select_related("workspace")
-                    .first()
-                )
-                is_hidden = WorkspaceHiddenAttribute.objects.filter(
-                    hidden_attribute_id=pk,
-                    workspace_id=workspace_pk,
-                    deleted_at__isnull=True,
-                ).exists()
-
-            if override:
-                data = {
-                    "id": override.id,
-                    "asset_type_id": global_attr.asset_type_id,
-                    "workspace_id": workspace_pk,
-                    "workspace_name": override.workspace.name,
-                    "attribute_kind": "override",
-                    "is_override": True,
-                    "is_extension": False,
-                    "is_hidden": is_hidden,
-                    "base_attribute_id": global_attr.id,
-                    "name": override.name or global_attr.name,
-                    "api_key": global_attr.api_key,
-                    "attribute_type": global_attr.attribute_type,
-                    "is_required": (
-                        override.is_required
-                        if override.is_required is not None
-                        else global_attr.is_required
-                    ),
-                    "default_value": (
-                        override.default_value
-                        if override.default_value is not None
-                        else global_attr.default_value
-                    ),
-                    "description": (
-                        override.description
-                        if override.description is not None
-                        else global_attr.description
-                    ),
-                    "tags": (
-                        override.tags if override.tags is not None else global_attr.tags
-                    ),
-                    "order": (
-                        override.order
-                        if override.order is not None
-                        else global_attr.order
-                    ),
-                    "created_at": global_attr.created_at,
-                    "updated_at": override.updated_at,
-                }
-            else:
-                data = {
-                    "id": global_attr.id,
-                    "asset_type_id": global_attr.asset_type_id,
-                    "workspace_id": None,
-                    "workspace_name": None,
-                    "attribute_kind": "global",
-                    "is_override": False,
-                    "is_extension": False,
-                    "is_hidden": is_hidden,
-                    "base_attribute_id": None,
-                    "name": global_attr.name,
-                    "api_key": global_attr.api_key,
-                    "attribute_type": global_attr.attribute_type,
-                    "is_required": global_attr.is_required,
-                    "default_value": global_attr.default_value,
-                    "description": global_attr.description,
-                    "tags": global_attr.tags or [],
-                    "order": global_attr.order,
-                    "created_at": global_attr.created_at,
-                    "updated_at": global_attr.updated_at,
-                }
-
-            return Response(MergedAttributeSerializer(data).data)
-
-        # Check if it's an override
-        override = (
-            WorkspaceAttributeOverride.objects.filter(
-                id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-            )
-            .select_related("base_attribute", "workspace")
-            .first()
+        asset_type_attribute = get_object_or_404(
+            BaseAssetTypeAttribute,
+            **filter_args,
         )
 
-        if override:
-            base = override.base_attribute
-            data = {
-                "id": override.id,
-                "asset_type_id": override.asset_type_id,
-                "workspace_id": override.workspace_id,
-                "workspace_name": override.workspace.name,
-                "attribute_kind": "override",
-                "is_override": True,
-                "is_extension": False,
-                "is_hidden": False,
-                "base_attribute_id": base.id,
-                "name": override.name or base.name,
-                "api_key": base.api_key,
-                "attribute_type": base.attribute_type,
-                "is_required": (
-                    override.is_required
-                    if override.is_required is not None
-                    else base.is_required
-                ),
-                "default_value": (
-                    override.default_value
-                    if override.default_value is not None
-                    else base.default_value
-                ),
-                "description": (
-                    override.description
-                    if override.description is not None
-                    else base.description
-                ),
-                "tags": override.tags if override.tags is not None else base.tags,
-                "order": override.order if override.order is not None else base.order,
-                "created_at": base.created_at,
-                "updated_at": override.updated_at,
-            }
-            return Response(MergedAttributeSerializer(data).data)
-
-        # Check if it's an extension
-        extension = (
-            WorkspaceExtensionAttribute.objects.filter(
-                id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-            )
-            .select_related("workspace")
-            .first()
-        )
-
-        if extension:
-            data = {
-                "id": extension.id,
-                "asset_type_id": extension.asset_type_id,
-                "workspace_id": extension.workspace_id,
-                "workspace_name": extension.workspace.name,
-                "attribute_kind": "extension",
-                "is_override": False,
-                "is_extension": True,
-                "is_hidden": extension.is_hidden,
-                "base_attribute_id": None,
-                "name": extension.name,
-                "api_key": extension.api_key,
-                "attribute_type": extension.attribute_type,
-                "is_required": extension.is_required,
-                "default_value": extension.default_value,
-                "description": extension.description,
-                "tags": extension.tags or [],
-                "order": extension.order,
-                "created_at": extension.created_at,
-                "updated_at": extension.updated_at,
-            }
-            return Response(MergedAttributeSerializer(data).data)
-
-        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(AssetTypeAttributeSerializer(asset_type_attribute).data)
 
     def create(self, request, *args, **kwargs):
         """
@@ -456,30 +122,8 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 asset_type_id=assettype_pk,
                 workspace_id=workspace_pk,
             )
-            # Return merged format
-            data = {
-                "id": instance.id,
-                "asset_type_id": instance.asset_type_id,
-                "workspace_id": instance.workspace_id,
-                "workspace_name": instance.workspace.name,
-                "attribute_kind": "extension",
-                "is_override": False,
-                "is_extension": True,
-                "is_hidden": instance.is_hidden,
-                "base_attribute_id": None,
-                "name": instance.name,
-                "api_key": instance.api_key,
-                "attribute_type": instance.attribute_type,
-                "is_required": instance.is_required,
-                "default_value": instance.default_value,
-                "description": instance.description,
-                "tags": instance.tags or [],
-                "order": instance.order,
-                "created_at": instance.created_at,
-                "updated_at": instance.updated_at,
-            }
             return Response(
-                MergedAttributeSerializer(data).data,
+                AssetTypeAttributeSerializer(instance).data,
                 status=status.HTTP_201_CREATED,
             )
         else:
@@ -487,30 +131,8 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             serializer = GlobalAssetTypeAttributeSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             instance = serializer.save(asset_type_id=assettype_pk)
-            # Return merged format
-            data = {
-                "id": instance.id,
-                "asset_type_id": instance.asset_type_id,
-                "workspace_id": None,
-                "workspace_name": None,
-                "attribute_kind": "global",
-                "is_override": False,
-                "is_extension": False,
-                "is_hidden": False,
-                "base_attribute_id": None,
-                "name": instance.name,
-                "api_key": instance.api_key,
-                "attribute_type": instance.attribute_type,
-                "is_required": instance.is_required,
-                "default_value": instance.default_value,
-                "description": instance.description,
-                "tags": instance.tags or [],
-                "order": instance.order,
-                "created_at": instance.created_at,
-                "updated_at": instance.updated_at,
-            }
             return Response(
-                MergedAttributeSerializer(data).data,
+                AssetTypeAttributeSerializer(instance).data,
                 status=status.HTTP_201_CREATED,
             )
 
@@ -710,6 +332,12 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             serializer.save()
             extension.refresh_from_db()
 
+            is_hidden = WorkspaceHiddenAttribute.objects.filter(
+                hidden_attribute_id=pk,
+                workspace_id=workspace_pk,
+                deleted_at__isnull=True,
+            ).exists()
+
             data = {
                 "id": extension.id,
                 "asset_type_id": extension.asset_type_id,
@@ -718,7 +346,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 "attribute_kind": "extension",
                 "is_override": False,
                 "is_extension": True,
-                "is_hidden": extension.is_hidden,
+                "is_hidden": is_hidden,
                 "base_attribute_id": None,
                 "name": extension.name,
                 "api_key": extension.api_key,

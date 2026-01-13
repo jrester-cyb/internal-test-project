@@ -104,6 +104,63 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
         return instance
 
 
+class AssetTypeAttributeSerializer(serializers.ModelSerializer):
+    """
+    Polymorphic serializer for all asset type attribute models.
+    Automatically selects the correct serializer based on the instance type.
+    """
+
+    class Meta:
+        model = BaseAssetTypeAttribute
+        fields = [
+            "id",
+            "asset_type",
+            "name",
+            "api_key",
+            "attribute_type",
+            "is_required",
+            "default_value",
+            "description",
+            "tags",
+            "order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+
+    def to_representation(self, instance):
+        """Route to the appropriate serializer based on instance type."""
+        # Get the real polymorphic instance
+        if hasattr(instance, "get_real_instance"):
+            real_instance = instance.get_real_instance()
+        else:
+            real_instance = instance
+
+        # Select serializer based on instance type
+        if isinstance(real_instance, WorkspaceAttributeOverride):
+            serializer = WorkspaceAttributeOverrideSerializer(
+                real_instance, context=self.context
+            )
+        elif isinstance(real_instance, WorkspaceExtensionAttribute):
+            serializer = WorkspaceExtensionAttributeSerializer(
+                real_instance, context=self.context
+            )
+        elif isinstance(real_instance, WorkspaceHiddenAttribute):
+            print("here")
+            serializer = WorkspaceHiddenAttributeSerializer(
+                real_instance, context=self.context
+            )
+        elif isinstance(real_instance, GlobalAssetTypeAttribute):
+            serializer = GlobalAssetTypeAttributeSerializer(
+                real_instance, context=self.context
+            )
+        else:
+            # Fallback to base serialization
+            return super().to_representation(real_instance)
+
+        return serializer.data
+
+
 class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for global (base) asset type attributes."""
 
@@ -203,30 +260,17 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
         return obj.get_effective_value("order")
 
 
-class WorkspaceHiddenAttributeSerializer(serializers.ModelSerializer):
+class WorkspaceHiddenAttributeSerializer(serializers.Serializer):
     """Serializer for hidden attribute records."""
 
-    base_attribute_name = serializers.CharField(
-        source="base_attribute.name", read_only=True
-    )
-    base_attribute_api_key = serializers.CharField(
-        source="base_attribute.api_key", read_only=True
-    )
-    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
-
-    class Meta:
-        model = WorkspaceHiddenAttribute
-        fields = [
-            "id",
-            "asset_type",
-            "base_attribute",
-            "base_attribute_name",
-            "base_attribute_api_key",
-            "workspace",
-            "workspace_name",
-            "created_at",
-        ]
-        read_only_fields = ["id", "asset_type", "created_at"]
+    # When serializing let's return the serialized data of hidden_attribute
+    def to_representation(self, instance):
+        return {
+            **AssetTypeAttributeSerializer(
+                instance.hidden_attribute, context=self.context
+            ).data,
+            "isHidden": True,
+        }
 
 
 class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
@@ -318,10 +362,6 @@ class AssetCustomAttributeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
-
-
-# Legacy alias for backwards compatibility during migration
-AssetTypeAttributeSerializer = GlobalAssetTypeAttributeSerializer
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):
@@ -567,7 +607,7 @@ class AssetSerializer(serializers.ModelSerializer):
                         model_class.objects.create(
                             asset=asset, asset_type_attribute=field_def, value=value
                         )
-                except AssetTypeAttribute.DoesNotExist:
+                except BaseAssetTypeAttribute.DoesNotExist:
                     pass  # Skip unknown fields
 
         return asset
@@ -585,7 +625,7 @@ class AssetSerializer(serializers.ModelSerializer):
             for api_key, value in attributes.items():
                 try:
                     instance.set_attribute(api_key, value)
-                except AssetTypeAttribute.DoesNotExist:
+                except BaseAssetTypeAttribute.DoesNotExist:
                     pass  # Skip unknown fields
                 except ValueError as e:
                     raise serializers.ValidationError({f"attributes.{api_key}": str(e)})
@@ -605,7 +645,7 @@ class AssetSerializer(serializers.ModelSerializer):
             if workspace:
                 field_defs = data["asset_type"].get_attributes_for_workspace(workspace)
             else:
-                field_defs = AssetTypeAttribute.objects.filter(
+                field_defs = BaseAssetTypeAttribute.objects.filter(
                     asset_type=data["asset_type"],
                     workspace__isnull=True,  # Only base attributes if no workspace context
                 )
