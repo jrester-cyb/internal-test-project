@@ -565,8 +565,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             workspace_id=workspace_pk,
         ).force_delete()
 
+        # Return the actual instance that was unhidden (override, not base attribute)
         return Response(
-            data=AssetTypeAttributeSerializer(attr_to_unhide).data,
+            data=AssetTypeAttributeSerializer(real_instance).data,
             status=status.HTTP_200_OK,
         )
 
