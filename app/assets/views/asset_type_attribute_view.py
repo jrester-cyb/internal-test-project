@@ -812,6 +812,25 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             )
             return Response({"success": True, "hidden": True})
 
+        # Check if it's an override (hide the underlying global attribute)
+        override = (
+            WorkspaceAttributeOverride.objects.filter(
+                id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
+            )
+            .select_related("base_attribute")
+            .first()
+        )
+
+        if override:
+            # Create hidden record for the base attribute
+            WorkspaceHiddenAttribute.objects.get_or_create(
+                hidden_attribute=override.base_attribute,
+                workspace_id=workspace_pk,
+                asset_type_id=assettype_pk,
+                defaults={"deleted_at": None},
+            )
+            return Response({"success": True, "hidden": True})
+
         # Check if it's an extension
         extension = WorkspaceExtensionAttribute.objects.filter(
             id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
@@ -852,7 +871,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         # Check if it's an extension
         extension = WorkspaceExtensionAttribute.objects.filter(
             id=pk, asset_type_id=assettype_pk, deleted_at__isnull=True
-        ).first()
+        ).delete()
 
         if extension:
             extension.is_hidden = False
