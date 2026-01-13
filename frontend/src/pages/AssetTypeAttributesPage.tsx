@@ -1003,6 +1003,22 @@ export default function AssetTypeAttributesPage() {
                     </Stack>
                   </TableCell>
                 </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Tags</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    {displayedAttribute.tags && displayedAttribute.tags.length > 0 ? (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {displayedAttribute.tags.map((tag: string) => (
+                          <Chip key={tag} label={tag} size="small" variant="outlined" />
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
+                        No tags
+                      </Typography>
+                    )}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </DraggableSection>
@@ -1080,22 +1096,6 @@ export default function AssetTypeAttributesPage() {
                       : 'No default value'}
                   </TableCell>
                 </TableRow>
-                <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Tags</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>
-                    {displayedAttribute.tags && displayedAttribute.tags.length > 0 ? (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {displayedAttribute.tags.map((tag: string) => (
-                          <Chip key={tag} label={tag} size="small" variant="outlined" />
-                        ))}
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-                        No tags
-                      </Typography>
-                    )}
-                  </TableCell>
-                </TableRow>
               </TableBody>
             </Table>
           </DraggableSection>
@@ -1132,8 +1132,15 @@ export default function AssetTypeAttributesPage() {
               gap: 2,
               rowGap: 1.5
             }}>
-              <Typography variant="body2" color="text.secondary">ID</Typography>
-              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
+              {displayedAttribute.apiUrl && (
+                <>
+                  <Typography variant="body2" color="text.secondary">API URL</Typography>
+                  <TruncatedText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.apiUrl}</TruncatedText>
+                </>
+              )}
+
+              <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
+              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId || ''}</CopyableText>
 
               {displayedAttribute.baseAttributeId && (
                 <>
@@ -1141,6 +1148,12 @@ export default function AssetTypeAttributesPage() {
                   <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.baseAttributeId}</CopyableText>
                 </>
               )}
+
+              <Typography variant="body2" color="text.secondary">ID</Typography>
+              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
+
+              <Typography variant="body2" color="text.secondary">Order</Typography>
+              <Typography variant="body2">{displayedAttribute.order}</Typography>
 
               {displayedAttribute.organizationId && (
                 <>
@@ -1155,19 +1168,6 @@ export default function AssetTypeAttributesPage() {
                   <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.workspace}</CopyableText>
                 </>
               )}
-
-              <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
-              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId || ''}</CopyableText>
-
-              {displayedAttribute.apiUrl && (
-                <>
-                  <Typography variant="body2" color="text.secondary">API URL</Typography>
-                  <TruncatedText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.apiUrl}</TruncatedText>
-                </>
-              )}
-
-              <Typography variant="body2" color="text.secondary">Order</Typography>
-              <Typography variant="body2">{displayedAttribute.order}</Typography>
             </Box>
           </DraggableSection>
         )
