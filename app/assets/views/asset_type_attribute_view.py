@@ -113,7 +113,14 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 == "true"
             )
             if not include_hidden:
-                queryset = queryset.not_instance_of(WorkspaceHiddenAttribute)
+                # Exclude attributes that are marked as hidden for this workspace
+                hidden_attribute_ids = WorkspaceHiddenAttribute.objects.filter(
+                    workspace_id=workspace_pk,
+                ).values_list("hidden_attribute_id", flat=True)
+                queryset = queryset.exclude(
+                    Q(id__in=hidden_attribute_ids) |
+                    Q(workspaceattributeoverride__base_attribute_id__in=hidden_attribute_ids)
+                )
 
             # Apply default ordering by order field from child models
             queryset = queryset.annotate(
@@ -138,6 +145,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 )
             ).order_by("effective_order", "created_at")
 
+        print(queryset)
         return queryset
 
     def retrieve(self, request, *args, **kwargs):
@@ -213,16 +221,25 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         if global_attr:
             if workspace_pk:
-                # Create or update workspace override
-                override, created = WorkspaceAttributeOverride.objects.get_or_create(
-                    base_attribute=global_attr,
-                    workspace_id=workspace_pk,
-                    asset_type_id=assettype_pk,
-                    defaults={"deleted_at": None},
-                )
-                # Restore if soft-deleted
-                if override.deleted_at is not None:
-                    override.deleted_at = None
+                # Check for existing override (including soft-deleted)
+                try:
+                    override = WorkspaceAttributeOverride.all_objects.get(
+                        base_attribute=global_attr,
+                        workspace_id=workspace_pk,
+                    )
+                    # Restore if soft-deleted
+                    if override.deleted_at is not None:
+                        override.deleted_at = None
+                        override.save()
+                    created = False
+                except WorkspaceAttributeOverride.DoesNotExist:
+                    # Create new override
+                    override = WorkspaceAttributeOverride.objects.create(
+                        base_attribute=global_attr,
+                        workspace_id=workspace_pk,
+                        asset_type_id=assettype_pk,
+                    )
+                    created = True
 
                 # Update override fields
                 for field in [

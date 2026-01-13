@@ -164,6 +164,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for global (base) asset type attributes."""
 
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
+    is_hidden = serializers.SerializerMethodField()
 
     class Meta:
         model = GlobalAssetTypeAttribute
@@ -179,10 +180,24 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "tags",
             "order",
             "asset_count",
+            "is_hidden",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+
+    def get_is_hidden(self, obj):
+        """Check if this attribute is hidden in the current workspace."""
+        # Get workspace_pk from context if available
+        request = self.context.get("request")
+        if not request:
+            return False
+
+        workspace_pk = request.parser_context.get("kwargs", {}).get("workspace_pk")
+        if not workspace_pk:
+            return False
+
+        return obj.hidden_in_workspaces.filter(workspace_id=workspace_pk).exists()
 
 
 class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
@@ -277,6 +292,7 @@ class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
         source="workspace.name", read_only=True, allow_null=True
     )
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
+    is_hidden = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkspaceExtensionAttribute
@@ -289,16 +305,20 @@ class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
             "api_key",
             "attribute_type",
             "is_required",
-            "is_hidden",
             "default_value",
             "description",
             "tags",
             "order",
             "asset_count",
+            "is_hidden",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "asset_type", "workspace", "created_at", "updated_at"]
+
+    def get_is_hidden(self, obj):
+        """Check if this attribute is hidden in its workspace."""
+        return obj.hidden_in_workspaces.filter(workspace_id=obj.workspace_id).exists()
 
 
 class MergedAttributeSerializer(serializers.Serializer):
