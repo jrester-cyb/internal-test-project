@@ -52,6 +52,7 @@ export default function AssetTypeAttributesPage() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [excludedScopes, setExcludedScopes] = useState<string[]>([])
   const [globalDefinition, setGlobalDefinition] = useState<AssetTypeAttribute | null>(null)
   const [isLoadingGlobalDefinition, setIsLoadingGlobalDefinition] = useState(false)
   const [showingGlobalDefinition, setShowingGlobalDefinition] = useState(false)
@@ -77,10 +78,19 @@ export default function AssetTypeAttributesPage() {
 
   const closeConfirmDialog = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
-  // Filter attributes based on includeHidden toggle and selected tags
+  // Helper to get attribute scope
+  const getAttributeScope = (attr: AssetTypeAttribute): 'global' | 'override' | 'local' => {
+    if (attr.isOverride) return 'override'
+    if (attr.workspace) return 'local'
+    return 'global'
+  }
+
+  // Filter attributes based on includeHidden toggle, selected tags, and excluded scopes
   const displayedAttributes = allAttributes.filter(attr => {
     // Filter by hidden status
     if (!includeHidden && attr.isHidden) return false
+    // Filter by excluded scopes
+    if (excludedScopes.includes(getAttributeScope(attr))) return false
     // Filter by selected tags (if any tags selected, attribute must have at least one matching tag)
     if (selectedTags.length > 0) {
       if (!attr.tags || attr.tags.length === 0) return false
@@ -1243,12 +1253,12 @@ export default function AssetTypeAttributesPage() {
                 startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />,
               }}
             />
-            <Tooltip title={(selectedTags.length > 0 || includeHidden) ? "Filters applied" : "Filter"} arrow placement="top">
+            <Tooltip title={(selectedTags.length > 0 || excludedScopes.length > 0 || includeHidden) ? "Filters applied" : "Filter"} arrow placement="top">
               <IconButton
                 size="small"
                 onClick={(e) => setFilterAnchorEl(e.currentTarget)}
                 sx={{
-                  color: (selectedTags.length > 0 || includeHidden)
+                  color: (selectedTags.length > 0 || excludedScopes.length > 0 || includeHidden)
                     ? (theme => theme.palette.mode === 'light' ? 'primary.main' : 'secondary.main')
                     : 'text.secondary',
                 }}
@@ -1276,6 +1286,33 @@ export default function AssetTypeAttributesPage() {
                   label="Include hidden attributes"
                   sx={{ mb: 1.5, display: 'block' }}
                 />
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Scope</Typography>
+                <Stack direction="row" spacing={0.5} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
+                  {[
+                    { value: 'global', label: 'Global', color: 'success' as const },
+                    { value: 'override', label: 'Override', color: 'warning' as const },
+                    { value: 'local', label: 'Local', color: 'info' as const },
+                  ].map(scope => {
+                    const isExcluded = excludedScopes.includes(scope.value)
+                    return (
+                      <Chip
+                        key={scope.value}
+                        label={scope.label}
+                        size="small"
+                        color={isExcluded ? 'default' : scope.color}
+                        variant={isExcluded ? 'outlined' : 'filled'}
+                        onClick={() => {
+                          if (isExcluded) {
+                            setExcludedScopes(excludedScopes.filter(s => s !== scope.value))
+                          } else {
+                            setExcludedScopes([...excludedScopes, scope.value])
+                          }
+                        }}
+                        sx={{ cursor: 'pointer' }}
+                      />
+                    )
+                  })}
+                </Stack>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Tags</Typography>
                 <Autocomplete
                   multiple
