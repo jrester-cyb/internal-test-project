@@ -197,6 +197,31 @@ export default function AssetTypeAttributesPage() {
     }
   }, []) // Only run on mount
 
+  // Auto-select attribute from URL param on load
+  useEffect(() => {
+    const selectedId = searchParams.get('selected')
+    if (selectedId && allAttributes.length > 0 && !selectedAttribute) {
+      const attr = allAttributes.find(a => a.id === selectedId)
+      if (attr) {
+        setSelectedAttribute(attr)
+      }
+    }
+  }, [allAttributes]) // Only run when attributes load
+
+  // Keep URL in sync with selected attribute
+  useEffect(() => {
+    const newParams = new URLSearchParams(searchParams)
+    if (selectedAttribute) {
+      newParams.set('selected', selectedAttribute.id)
+    } else {
+      newParams.delete('selected')
+    }
+    // Only update if different to avoid loops
+    if (newParams.get('selected') !== searchParams.get('selected')) {
+      setSearchParams(newParams, { replace: true })
+    }
+  }, [selectedAttribute])
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -1099,6 +1124,7 @@ export default function AssetTypeAttributesPage() {
               onClick: () => {
                 const url = new URL(window.location.href)
                 url.searchParams.set('search', selectedAttribute.apiKey)
+                url.searchParams.set('selected', selectedAttribute.id)
                 navigator.clipboard.writeText(url.toString())
               },
               color: 'primary' as const,

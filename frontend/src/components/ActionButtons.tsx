@@ -144,9 +144,12 @@ export default function ActionButtons({
           // Only show in menu if button is hidden
           if (isButtonVisible(action.minWidth ?? 0)) return null
 
+          // Only show divider if there's a visible item above this one
+          const hasVisibleItemAbove = action.dividerBefore && actions.slice(0, index).some(a => !isButtonVisible(a.minWidth ?? 0))
+
           return (
             <Fragment key={index}>
-              {action.dividerBefore && <Divider />}
+              {hasVisibleItemAbove && <Divider />}
               <MenuItem
                 onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
                 disabled={action.disabled}
