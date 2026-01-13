@@ -121,13 +121,8 @@ class WorkspaceChoiceOverride(BaseWorkspaceChoice):
     order = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["base_choice", "workspace"],
-                name="unique_choice_override_per_workspace",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-        ]
+        # NOTE: Uniqueness enforced at application level
+        pass
 
     def __str__(self):
         return f"Override: {self.base_choice.label} in {self.workspace.name}"
@@ -158,13 +153,8 @@ class WorkspaceHiddenChoice(BaseWorkspaceChoice):
     )
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["base_choice", "workspace"],
-                name="unique_hidden_choice_per_workspace",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-        ]
+        # NOTE: Uniqueness enforced at application level
+        pass
 
     def __str__(self):
         return f"Hidden: {self.base_choice.label} in {self.workspace.name}"

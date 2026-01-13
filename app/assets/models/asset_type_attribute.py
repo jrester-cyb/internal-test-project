@@ -53,36 +53,66 @@ class GlobalAssetTypeAttribute(BaseAssetTypeAttribute):
     order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ["asset_type", "order", "name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["asset_type", "name"],
-                name="unique_base_attr_name",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-            models.UniqueConstraint(
-                fields=["asset_type", "api_key"],
-                name="unique_base_attr_api_key",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-            models.UniqueConstraint(
-                fields=["asset_type", "order"],
-                name="unique_base_attr_order",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-        ]
+        ordering = ["order", "name"]
+        # NOTE: Unique constraints involving asset_type or deleted_at must be enforced
+        # at the database level via pgtrigger since Django doesn't support constraints
+        # on child models that reference parent fields in multi-table inheritance.
         triggers = [
+            pgtrigger.Trigger(
+                name="unique_global_api_key_per_asset_type",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_globalassettypeattribute gata
+                        JOIN public.assets_baseassettypeattribute base ON gata.baseassettypeattribute_ptr_id = base.id
+                        WHERE base.asset_type_id = (
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                        AND gata.api_key = NEW.api_key
+                        AND gata.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Duplicate api_key "%" for asset_type', NEW.api_key;
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+            pgtrigger.Trigger(
+                name="unique_global_name_per_asset_type",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_globalassettypeattribute gata
+                        JOIN public.assets_baseassettypeattribute base ON gata.baseassettypeattribute_ptr_id = base.id
+                        WHERE base.asset_type_id = (
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                        AND gata.name = NEW.name
+                        AND gata.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Duplicate name "%" for asset_type', NEW.name;
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
             pgtrigger.Trigger(
                 name="01_update_base_attr_orders_after_delete",
                 operation=pgtrigger.Delete,
                 when=pgtrigger.After,
                 func="""
-                    UPDATE assets_assettypeattribute 
+                    UPDATE public.assets_assettypeattribute 
                     SET "order" = -("order" + 1000)
                     WHERE asset_type_id = OLD.asset_type_id 
                     AND "order" > OLD."order";
                     
-                    UPDATE assets_assettypeattribute 
+                    UPDATE public.assets_assettypeattribute 
                     SET "order" = -("order" + 1000) - 1
                     WHERE asset_type_id = OLD.asset_type_id 
                     AND "order" < -1000;
@@ -126,7 +156,51 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
             models.UniqueConstraint(
                 fields=["base_attribute", "workspace"],
                 name="unique_override_per_workspace",
-                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        triggers = [
+            pgtrigger.Trigger(
+                name="unique_override_name_vs_extensions",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    -- Only check if name is being set
+                    IF NEW.name IS NOT NULL THEN
+                        -- Check against extension names in same workspace
+                        IF EXISTS (
+                            SELECT 1 
+                            FROM public.assets_workspaceextensionattribute wea
+                            JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
+                            WHERE wea.workspace_id = NEW.workspace_id
+                            AND base.asset_type_id = (
+                                SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                                WHERE id = NEW.baseassettypeattribute_ptr_id
+                            )
+                            AND wea.name = NEW.name
+                            AND base.deleted_at IS NULL
+                        ) THEN
+                            RAISE EXCEPTION 'Name "%" conflicts with an extension in this workspace', NEW.name;
+                        END IF;
+                        
+                        -- Check against other override names in same workspace
+                        IF EXISTS (
+                            SELECT 1 
+                            FROM public.assets_workspaceattributeoverride wao
+                            JOIN public.assets_baseassettypeattribute base ON wao.baseassettypeattribute_ptr_id = base.id
+                            WHERE wao.workspace_id = NEW.workspace_id
+                            AND base.asset_type_id = (
+                                SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                                WHERE id = NEW.baseassettypeattribute_ptr_id
+                            )
+                            AND wao.name = NEW.name
+                            AND wao.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                            AND base.deleted_at IS NULL
+                        ) THEN
+                            RAISE EXCEPTION 'Name "%" conflicts with another override in this workspace', NEW.name;
+                        END IF;
+                    END IF;
+                    RETURN NEW;
+                """,
             ),
         ]
 
@@ -153,12 +227,13 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
 
 class WorkspaceHiddenAttribute(BaseAssetTypeAttribute):
     """
-    Tracks which global attributes are hidden in a specific workspace.
+    Tracks which attributes are hidden in a specific workspace.
+    Can hide both GlobalAssetTypeAttribute and WorkspaceExtensionAttribute.
     Simple join - no field overrides, just hiding.
     """
 
-    base_attribute = models.ForeignKey(
-        GlobalAssetTypeAttribute,
+    hidden_attribute = models.ForeignKey(
+        BaseAssetTypeAttribute,
         on_delete=models.CASCADE,
         related_name="hidden_in_workspaces",
     )
@@ -171,14 +246,13 @@ class WorkspaceHiddenAttribute(BaseAssetTypeAttribute):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["base_attribute", "workspace"],
+                fields=["hidden_attribute", "workspace"],
                 name="unique_hidden_per_workspace",
-                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
 
     def __str__(self):
-        return f"Hidden: {self.base_attribute} in {self.workspace.name}"
+        return f"Hidden: {self.hidden_attribute} in {self.workspace.name}"
 
 
 class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
@@ -208,17 +282,102 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
     order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ["workspace", "asset_type", "order", "name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["asset_type", "workspace", "name"],
-                name="unique_extension_attr_name",
-                condition=models.Q(deleted_at__isnull=True),
+        ordering = ["workspace", "order", "name"]
+        triggers = [
+            pgtrigger.Trigger(
+                name="unique_extension_api_key_per_workspace",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    -- Check against other extensions
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_workspaceextensionattribute wea
+                            JOIN public.assets_baseassettypeattribute base ON wao.baseassettypeattribute_ptr_id = base.id
+                        WHERE wea.workspace_id = NEW.workspace_id
+                        AND base.asset_type_id = (
+                                SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                            AND wao.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND wea.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Duplicate api_key "%" for workspace and asset_type', NEW.api_key;
+                    END IF;
+                    
+                    -- Check against global attributes for same asset_type
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_globalassettypeattribute gata
+                        JOIN public.assets_baseassettypeattribute base ON gata.baseassettypeattribute_ptr_id = base.id
+                        WHERE base.asset_type_id = (
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                        AND gata.api_key = NEW.api_key
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'api_key "%" conflicts with a global attribute', NEW.api_key;
+                    END IF;
+                    RETURN NEW;
+                """,
             ),
-            models.UniqueConstraint(
-                fields=["asset_type", "workspace", "api_key"],
-                name="unique_extension_attr_api_key",
-                condition=models.Q(deleted_at__isnull=True),
+            pgtrigger.Trigger(
+                name="unique_extension_name_per_workspace",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    -- Check against other extensions
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_workspaceextensionattribute wea
+                        JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
+                        WHERE wea.workspace_id = NEW.workspace_id
+                        AND base.asset_type_id = (
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                        AND wea.name = NEW.name
+                        AND wea.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Duplicate name "%" for workspace and asset_type', NEW.name;
+                    END IF;
+                    
+                    -- Check against override names in same workspace
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_workspaceattributeoverride wao
+                        JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
+                        WHERE wao.workspace_id = NEW.workspace_id
+                        AND base.asset_type_id = (
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                        AND wao.name = NEW.name
+                        AND wea.baseassettypeattribute_ptr_id != NEW.baseassettypeattribute_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Name "%" conflicts with an override in this workspace', NEW.name;
+                    END IF;
+                    
+                    -- Check against global attributes for same asset_type
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_globalassettypeattribute gata
+                        JOIN public.assets_baseassettypeattribute base ON gata.baseassettypeattribute_ptr_id = base.id
+                        WHERE base.asset_type_id = (
+                            SELECT asset_type_id FROM public.assets_baseassettypeattribute 
+                            WHERE id = NEW.baseassettypeattribute_ptr_id
+                        )
+                        AND gata.name = NEW.name
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Name "%" conflicts with a global attribute', NEW.name;
+                    END IF;
+                    RETURN NEW;
+                """,
             ),
         ]
 

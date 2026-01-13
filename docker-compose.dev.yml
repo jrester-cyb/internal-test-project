@@ -79,18 +79,18 @@ services:
     depends_on:
       - web
       - frontend
-  localstack:
-    image: localstack/localstack:latest
-    ports:
-      - "4566:4566"
-    environment:
-      - SERVICES=lambda
-      - DEBUG=1
-      - LAMBDA_EXECUTOR=docker
-      - DOCKER_HOST=unix:///var/run/docker.sock
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./lambda-functions:/etc/localstack/init/ready.d"
+  # localstack:
+  #   image: localstack/localstack:latest
+  #   ports:
+  #     - "4566:4566"
+  #   environment:
+  #     - SERVICES=lambda
+  #     - DEBUG=1
+  #     - LAMBDA_EXECUTOR=docker
+  #     - DOCKER_HOST=unix:///var/run/docker.sock
+  #   volumes:
+  #     - "/var/run/docker.sock:/var/run/docker.sock"
+  #     - "./lambda-functions:/etc/localstack/init/ready.d"
 
 volumes:
   postgres_data:
