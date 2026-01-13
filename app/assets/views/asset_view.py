@@ -7,6 +7,7 @@ from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Centroid
 from django_filters.rest_framework import DjangoFilterBackend
+from silk.profiling.profiler import silk_profile
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -79,12 +80,12 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Select related for asset_type and organization to avoid N+1 queries
         queryset = queryset.select_related("asset_type", "organization")
 
-        # Prefetch polymorphic attributes - django-polymorphic will batch-fetch by type
-        # This will make one query per polymorphic type that exists in the results
+        # Prefetch attributes using non_polymorphic() to avoid expensive polymorphic resolution
+        # We'll batch-fetch the actual values from concrete tables in the serializer
         queryset = queryset.prefetch_related(
             Prefetch(
                 "attributes",
-                queryset=BaseAttributeValue.objects.all(),
+                queryset=BaseAttributeValue.objects.non_polymorphic(),
             )
         )
 
@@ -102,20 +103,124 @@ class AssetViewSet(viewsets.ModelViewSet):
             except Workspace.DoesNotExist:
                 pass
 
-        # Pre-load api_key map for all GlobalAssetTypeAttributes in this asset type
+        # Pre-load api_key map for all asset type attributes in this asset type
         # This avoids N+1 queries when serializing attributes
+        # Priority: workspace override > global (keyed by global ID since values point to global)
         assettype_pk = self.kwargs.get("assettype_pk")
         if assettype_pk:
-            from ..models import GlobalAssetTypeAttribute
+            from ..models import (
+                GlobalAssetTypeAttribute,
+                WorkspaceOverrideAssetTypeAttribute,
+                WorkspaceLocalAssetTypeAttribute,
+            )
 
+            api_key_map = {}
+
+            # Start with global attributes
             global_attrs = GlobalAssetTypeAttribute.objects.filter(
                 asset_type_id=assettype_pk
             ).values("id", "api_key")
-            context["_api_key_map"] = {
-                str(ga["id"]): ga["api_key"] for ga in global_attrs
-            }
+            for ga in global_attrs:
+                api_key_map[str(ga["id"])] = ga["api_key"]
+
+            # Overlay workspace overrides - these override the global's api_key
+            # Key by base_attribute_id since attribute values point to the global
+            if workspace_pk:
+                override_attrs = WorkspaceOverrideAssetTypeAttribute.objects.filter(
+                    asset_type_id=assettype_pk, workspace_id=workspace_pk
+                ).values("base_attribute_id", "api_key")
+                for oa in override_attrs:
+                    # Override the global's api_key with the workspace override's api_key
+                    api_key_map[str(oa["base_attribute_id"])] = oa["api_key"]
+
+                # Add workspace local attributes
+                local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
+                    asset_type_id=assettype_pk, workspace_id=workspace_pk
+                ).values("id", "api_key")
+                for la in local_attrs:
+                    api_key_map[str(la["id"])] = la["api_key"]
+
+            context["_api_key_map"] = api_key_map
 
         return context
+
+    def list(self, request, *args, **kwargs):
+        """Override list to batch-load attribute values for all assets"""
+        with silk_profile(name="1. filter_queryset"):
+            queryset = self.filter_queryset(self.get_queryset())
+
+        with silk_profile(name="2. paginate_queryset"):
+            page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            with silk_profile(name="3. _build_value_map"):
+                value_map = self._build_value_map(page)
+
+            with silk_profile(name="4. get_serializer_context"):
+                context = self.get_serializer_context()
+                context["_value_map"] = value_map
+
+            with silk_profile(name="5. serializer.data"):
+                serializer = self.get_serializer(page, many=True, context=context)
+                data = serializer.data
+
+            with silk_profile(name="6. get_paginated_response"):
+                return self.get_paginated_response(data)
+
+        # Non-paginated response
+        assets = list(queryset)
+        value_map = self._build_value_map(assets)
+        context = self.get_serializer_context()
+        context["_value_map"] = value_map
+        serializer = self.get_serializer(assets, many=True, context=context)
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        """Override retrieve to batch-load attribute values for single asset"""
+        instance = self.get_object()
+        value_map = self._build_value_map([instance])
+        context = self.get_serializer_context()
+        context["_value_map"] = value_map
+        serializer = self.get_serializer(instance, context=context)
+        return Response(serializer.data)
+
+    def _build_value_map(self, assets):
+        """Batch-fetch values from all concrete tables for given assets"""
+        from ..models import (
+            TextAttributeValue,
+            NumberAttributeValue,
+            BooleanAttributeValue,
+            DateAttributeValue,
+            DateTimeAttributeValue,
+            JSONAttributeValue,
+        )
+
+        # Collect all value IDs from prefetched attributes
+        value_ids = []
+        for asset in assets:
+            if hasattr(asset, "attributes"):
+                for attr in asset.attributes.all():
+                    value_ids.append(attr.id)
+
+        if not value_ids:
+            return {}
+
+        value_map = {}
+        # Query each concrete table once for all assets
+        for Model in [
+            TextAttributeValue,
+            NumberAttributeValue,
+            BooleanAttributeValue,
+            DateAttributeValue,
+            DateTimeAttributeValue,
+            JSONAttributeValue,
+        ]:
+            for row in Model.objects.filter(
+                baseattributevalue_ptr_id__in=value_ids
+            ).values("baseattributevalue_ptr_id", "value"):
+                value_map[str(row["baseattributevalue_ptr_id"])] = row["value"]
+
+        return value_map
 
     def perform_create(self, serializer):
         """Create asset owned by workspace's organization and link to workspace"""

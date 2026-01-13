@@ -100,6 +100,14 @@ DATABASES = {
     }
 }
 
+# Cache configuration - using Redis
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": f"redis://{os.environ.get('REDIS_HOST', 'redis')}:6379/1",
+    }
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -157,6 +165,11 @@ REST_FRAMEWORK = {
     ],
 }
 
+
+# Django Silk profiling settings
+SILKY_PYTHON_PROFILER = True
+SILKY_PYTHON_PROFILER_BINARY = True
+SILKY_META = True
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {

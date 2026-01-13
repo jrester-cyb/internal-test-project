@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework_gis.serializers import GeometryField
+from silk.profiling.profiler import silk_profile
 from .models import (
     AssetType,
     WorkspaceAssetType,
@@ -663,7 +664,8 @@ class AssetSerializer(serializers.ModelSerializer):
         source="organization.name", read_only=True
     )
     attributes = serializers.SerializerMethodField()
-    geometry = GeometryField(required=False, allow_null=True)
+    # Only serialize location (Point) for list/retrieve - geometry is expensive
+    # Use a separate endpoint or field for full geometry when needed
     location = GeometryField(read_only=True)
     parent = serializers.PrimaryKeyRelatedField(
         queryset=Asset.objects.all(),
@@ -684,7 +686,6 @@ class AssetSerializer(serializers.ModelSerializer):
             "parent",
             "name",
             "description",
-            "geometry",
             "location",
             "h3_index",
             "attributes",
@@ -715,6 +716,7 @@ class AssetSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(f"/api/assets/{obj.id}/")
         return None
 
+    @silk_profile(name="AssetSerializer.get_attributes")
     def get_attributes(self, obj):
         """Get attributes as a dictionary using prefetched data"""
         # Use prefetched attributes if available
@@ -722,31 +724,23 @@ class AssetSerializer(serializers.ModelSerializer):
         if not attributes:
             return {}
 
-        # Get all attribute values (these are prefetched as polymorphic instances)
+        # Get all attribute values (these are prefetched as non-polymorphic base instances)
         attr_values = list(attributes.all())
         if not attr_values:
             return {}
 
-        # Collect all unique asset_type_attribute IDs
-        attr_type_ids = set(av.asset_type_attribute_id for av in attr_values)
-
-        # Use cached api_key map from context if available (set by view for batch optimization)
-        api_key_map = self.context.get("_api_key_map")
-        if api_key_map is None:
-            # Batch fetch all the GlobalAssetTypeAttribute instances (which have api_key)
-            from .models import GlobalAssetTypeAttribute
-
-            global_attrs = GlobalAssetTypeAttribute.objects.filter(
-                id__in=attr_type_ids
-            ).values("id", "api_key")
-            api_key_map = {str(ga["id"]): ga["api_key"] for ga in global_attrs}
+        # Use cached maps from context (set by view for batch optimization)
+        api_key_map = self.context.get("_api_key_map", {})
+        value_map = self.context.get("_value_map", {})
 
         values = {}
         for field_value in attr_values:
             attr_id = str(field_value.asset_type_attribute_id)
             api_key = api_key_map.get(attr_id)
-            if api_key and hasattr(field_value, "value"):
-                values[api_key] = field_value.value
+            if api_key:
+                value = value_map.get(str(field_value.id))
+                if value is not None:
+                    values[api_key] = value
         return values
 
     def create(self, validated_data):
