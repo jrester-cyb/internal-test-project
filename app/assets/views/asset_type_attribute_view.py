@@ -666,8 +666,16 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Get the base attribute with annotations
+        base_attr = GlobalAssetTypeAttribute.objects.filter(
+            id=override.base_attribute_id
+        ).annotate(
+            _is_hidden=Value(False),  # Global definition is never hidden
+            _organization_id=F("asset_type__organization_id")
+        ).first()
+
         return Response(
-            GlobalAssetTypeAttributeSerializer(override.base_attribute).data,
+            GlobalAssetTypeAttributeSerializer(base_attr).data,
             status=status.HTTP_200_OK,
         )
 
