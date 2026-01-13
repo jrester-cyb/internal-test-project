@@ -341,7 +341,7 @@ export default function AssetTypeAttributesPage() {
     }
   }
 
-  const handleEdit = (attr: AssetTypeAttribute) => {
+  const openEditDialog = (attr: AssetTypeAttribute) => {
     setEditingAttribute(attr)
     setFormData({
       name: attr.name,
@@ -354,6 +354,26 @@ export default function AssetTypeAttributesPage() {
     })
     setIsApiKeyUnlocked(false)
     setEditDialogOpen(true)
+  }
+
+  const handleEdit = (attr: AssetTypeAttribute) => {
+    // Check if this is a global attribute - warn about creating an override
+    const isBaseAttribute = !attr.workspace && !attr.isOverride
+    if (isBaseAttribute) {
+      setConfirmDialog({
+        open: true,
+        title: '⚠️ Create Workspace Override',
+        message: `Editing "${attr.name}" will create a workspace-specific override.\n\nThis will:\n• Disconnect this attribute from the global definition\n• Existing assets in this workspace will lose their values for this attribute\n• Future changes to the global attribute won't apply to this workspace\n\nAre you sure you want to proceed?`,
+        confirmLabel: 'Create Override',
+        confirmColor: 'warning',
+        onConfirm: () => {
+          closeConfirmDialog()
+          openEditDialog(attr)
+        }
+      })
+      return
+    }
+    openEditDialog(attr)
   }
 
   const handleAdd = () => {
@@ -631,7 +651,7 @@ export default function AssetTypeAttributesPage() {
             <TableCell sx={{ fontWeight: 600 }}>
               <Stack direction="row" spacing={1} alignItems="center">
                 <span>{attr.name}</span>
-                {attr.isHidden ? (
+                {attr.isHidden && (
                   <Chip
                     icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
                     label="Hidden"
@@ -640,30 +660,35 @@ export default function AssetTypeAttributesPage() {
                     variant="outlined"
                     sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }, opacity: 0.7 }}
                   />
-                ) : (
-                  <>
-                    {attr.isOverride && (
-                      <Chip
-                        icon={<CompareArrowsIcon sx={{ fontSize: '14px !important' }} />}
-                        label="Override"
-                        size="small"
-                        color="warning"
-                        variant="outlined"
-                        sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
-                      />
-                    )}
-                    {attr.workspace && !attr.isOverride && (
-                      <Chip
-                        label="Extension"
-                        size="small"
-                        color="info"
-                        variant="outlined"
-                        sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
-                      />
-                    )}
-                  </>
                 )}
               </Stack>
+            </TableCell>
+            <TableCell sx={{ width: '100px' }}>
+              {attr.isOverride ? (
+                <Chip
+                  label="Override"
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                />
+              ) : attr.workspace ? (
+                <Chip
+                  label="Local"
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                />
+              ) : (
+                <Chip
+                  label="Global"
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                />
+              )}
             </TableCell>
             <TableCell sx={{ width: '48px' }}></TableCell>
           </TableRow>
@@ -771,44 +796,49 @@ export default function AssetTypeAttributesPage() {
                     )}
                   </TableCell>
                 </TableRow>
-                {(selectedAttribute!.isOverride || selectedAttribute!.workspace || selectedAttribute!.isHidden) && (
-                  <TableRow>
-                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Scope</TableCell>
-                    <TableCell sx={{ border: 0, py: 0.5 }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        {selectedAttribute!.isHidden ? (
-                          <Chip
-                            icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
-                            label="Hidden"
-                            size="small"
-                            color="default"
-                            variant="outlined"
-                          />
-                        ) : selectedAttribute!.isOverride ? (
-                          <Chip
-                            icon={<CompareArrowsIcon sx={{ fontSize: '14px !important' }} />}
-                            label="Workspace Override"
-                            size="small"
-                            color="warning"
-                            variant="outlined"
-                          />
-                        ) : selectedAttribute!.workspace ? (
-                          <Chip
-                            label="Workspace Extension"
-                            size="small"
-                            color="info"
-                            variant="outlined"
-                          />
-                        ) : null}
-                        {selectedAttribute!.workspaceName && (
-                          <Typography variant="caption" color="text.secondary">
-                            ({selectedAttribute!.workspaceName})
-                          </Typography>
-                        )}
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                )}
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Scope</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      {selectedAttribute!.isOverride ? (
+                        <Chip
+                          label="Override"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                        />
+                      ) : selectedAttribute!.workspace ? (
+                        <Chip
+                          label="Local"
+                          size="small"
+                          color="info"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Chip
+                          label="Global"
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                        />
+                      )}
+                      {selectedAttribute!.isHidden && (
+                        <Chip
+                          icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
+                          label="Hidden"
+                          size="small"
+                          color="default"
+                          variant="outlined"
+                        />
+                      )}
+                      {selectedAttribute!.workspaceName && (
+                        <Typography variant="caption" color="text.secondary">
+                          ({selectedAttribute!.workspaceName})
+                        </Typography>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </DraggableSection>
@@ -961,6 +991,7 @@ export default function AssetTypeAttributesPage() {
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600, width: '40px' }}></TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600, width: '100px' }}>Scope</TableCell>
                     <TableCell sx={{ fontWeight: 600, width: '48px', textAlign: 'right', pr: 1 }}>
                       <IconButton
                         size="small"
