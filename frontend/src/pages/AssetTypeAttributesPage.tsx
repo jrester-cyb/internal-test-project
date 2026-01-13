@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete, Popover, Badge } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
@@ -11,6 +11,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import AttributeChoicesSection from '../components/AttributeChoicesSection'
 import ConfirmDialog from '../components/ConfirmDialog'
+import CopyableText from '../components/CopyableText'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -45,8 +46,10 @@ export default function AssetTypeAttributesPage() {
   const [leftColumnWidth, setLeftColumnWidth] = useState(50) // percentage
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
+  const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean
     title: string
@@ -58,10 +61,17 @@ export default function AssetTypeAttributesPage() {
 
   const closeConfirmDialog = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
-  // Filter attributes based on includeHidden toggle - hidden attributes stay in allAttributes for reordering
-  const displayedAttributes = includeHidden
-    ? allAttributes
-    : allAttributes.filter(attr => !attr.isHidden)
+  // Filter attributes based on includeHidden toggle and selected tags
+  const displayedAttributes = allAttributes.filter(attr => {
+    // Filter by hidden status
+    if (!includeHidden && attr.isHidden) return false
+    // Filter by selected tags (if any tags selected, attribute must have at least one matching tag)
+    if (selectedTags.length > 0) {
+      if (!attr.tags || attr.tags.length === 0) return false
+      if (!selectedTags.some(tag => attr.tags.includes(tag))) return false
+    }
+    return true
+  })
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     info: true,
@@ -126,14 +136,14 @@ export default function AssetTypeAttributesPage() {
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
 
-  // Fetch available tags when dialog opens
+  // Fetch available tags on mount and when dialog opens
   useEffect(() => {
-    if (editDialogOpen && workspaceId && assetTypeId) {
+    if (workspaceId && assetTypeId) {
       fetchAttributeTags(workspaceId, assetTypeId)
         .then(tags => setAvailableTags(tags))
         .catch(err => console.error('Failed to fetch tags:', err))
     }
-  }, [editDialogOpen, workspaceId, assetTypeId])
+  }, [workspaceId, assetTypeId])
 
   // Debounced search effect - just update URL, let loader handle data fetching
   useEffect(() => {
@@ -650,16 +660,18 @@ export default function AssetTypeAttributesPage() {
             </TableCell>
             <TableCell sx={{ fontWeight: 600 }}>
               <Stack direction="row" spacing={1} alignItems="center">
-                <span>{attr.name}</span>
+                <CopyableText>{attr.name}</CopyableText>
                 {attr.isHidden && (
-                  <Chip
-                    icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
-                    label="Hidden"
-                    size="small"
-                    color="default"
-                    variant="outlined"
-                    sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }, opacity: 0.7 }}
-                  />
+                  <Tooltip title="Hidden in this workspace only" arrow>
+                    <Chip
+                      icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
+                      label="Hidden"
+                      size="small"
+                      color="default"
+                      variant="outlined"
+                      sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }, opacity: 0.7 }}
+                    />
+                  </Tooltip>
                 )}
               </Stack>
             </TableCell>
@@ -775,16 +787,26 @@ export default function AssetTypeAttributesPage() {
               <TableBody>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'top' }}>Name</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5, fontWeight: 600 }}>{selectedAttribute!.name}</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5, fontWeight: 600 }}>
+                    <CopyableText>{selectedAttribute!.name}</CopyableText>
+                  </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Description</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5, color: selectedAttribute!.description ? 'text.primary' : 'text.disabled', fontStyle: selectedAttribute!.description ? 'normal' : 'italic' }}>
-                    {selectedAttribute!.description || 'No description'}
+                    {selectedAttribute!.description ? (
+                      <CopyableText>{selectedAttribute!.description}</CopyableText>
+                    ) : (
+                      'No description'
+                    )}
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Usage</TableCell>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>
+                    <Tooltip title="Count of assets using this attribute in the current workspace only" arrow>
+                      <span style={{ cursor: 'help' }}>Usage</span>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
                     {isLoadingCount ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -792,7 +814,7 @@ export default function AssetTypeAttributesPage() {
                         <span>Loading...</span>
                       </Box>
                     ) : (
-                      `${selectedAttributeAssetCount ?? 0} ${(selectedAttributeAssetCount ?? 0) === 1 ? 'asset' : 'assets'}`
+                      `${selectedAttributeAssetCount ?? 0} ${(selectedAttributeAssetCount ?? 0) === 1 ? 'asset' : 'assets'} in this workspace`
                     )}
                   </TableCell>
                 </TableRow>
@@ -823,13 +845,15 @@ export default function AssetTypeAttributesPage() {
                         />
                       )}
                       {selectedAttribute!.isHidden && (
-                        <Chip
-                          icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
-                          label="Hidden"
-                          size="small"
-                          color="default"
-                          variant="outlined"
-                        />
+                        <Tooltip title="Hidden in this workspace only" arrow>
+                          <Chip
+                            icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
+                            label="Hidden"
+                            size="small"
+                            color="default"
+                            variant="outlined"
+                          />
+                        </Tooltip>
                       )}
                       {selectedAttribute!.workspaceName && (
                         <Typography variant="caption" color="text.secondary">
@@ -900,8 +924,8 @@ export default function AssetTypeAttributesPage() {
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>API Key</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                    {selectedAttribute!.apiKey}
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{selectedAttribute!.apiKey}</CopyableText>
                   </TableCell>
                 </TableRow>
                 <TableRow>
@@ -960,7 +984,7 @@ export default function AssetTypeAttributesPage() {
         {/* Left Column - Table */}
         <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2, width: `${leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
           {/* Search Bar and Filter */}
-          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
             <TextField
               size="small"
               placeholder="Search attributes..."
@@ -971,17 +995,58 @@ export default function AssetTypeAttributesPage() {
                 startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />,
               }}
             />
-            <Tooltip title={includeHidden ? "Showing hidden attributes" : "Hidden attributes are filtered out"}>
-              <ToggleButton
-                value="includeHidden"
-                selected={includeHidden}
-                onChange={() => setIncludeHidden(!includeHidden)}
+            <Tooltip title={(selectedTags.length > 0 || includeHidden) ? "Filters applied" : "Filter"} arrow placement="top">
+              <IconButton
                 size="small"
-                sx={{ minWidth: 40 }}
+                onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+                sx={{
+                  color: (selectedTags.length > 0 || includeHidden)
+                    ? (theme => theme.palette.mode === 'light' ? 'primary.main' : 'secondary.main')
+                    : 'text.secondary',
+                }}
               >
-                {includeHidden ? <ShowIcon fontSize="small" /> : <HideIcon fontSize="small" />}
-              </ToggleButton>
+                <FilterIcon />
+              </IconButton>
             </Tooltip>
+            <Popover
+              open={Boolean(filterAnchorEl)}
+              anchorEl={filterAnchorEl}
+              onClose={() => setFilterAnchorEl(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <Box sx={{ p: 2, minWidth: 280 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5 }}>Filter Options</Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeHidden}
+                      onChange={() => setIncludeHidden(!includeHidden)}
+                      size="small"
+                    />
+                  }
+                  label="Include hidden attributes"
+                  sx={{ mb: 1.5, display: 'block' }}
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Tags</Typography>
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={availableTags}
+                  value={selectedTags}
+                  onChange={(_, newValue) => setSelectedTags(newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder={selectedTags.length === 0 ? "Select tags..." : ""} />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
+                    ))
+                  }
+                  sx={{ minWidth: 250 }}
+                />
+              </Box>
+            </Popover>
           </Stack>
           <Box ref={containerRef} sx={{ position: 'relative', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
             <Box component={Paper} sx={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
