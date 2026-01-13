@@ -166,7 +166,7 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
 class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for global (base) asset type attributes."""
 
-    asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
+    asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
     organization_id = serializers.SerializerMethodField()
 
@@ -183,13 +183,34 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "description",
             "tags",
             "order",
-            "asset_count",
+            "asset_count_url",
             "is_hidden",
             "organization_id",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+
+    def get_asset_count_url(self, obj):
+        """Get URL to the asset-count endpoint."""
+        request = self.context.get("request")
+        if request:
+            from django.urls import reverse
+
+            # Build the URL based on whether we have workspace context
+            workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            if workspace_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "workspace-assettype-attribute-asset-count",
+                        kwargs={
+                            "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+        return None
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in the current workspace."""
@@ -304,7 +325,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     workspace_name = serializers.SerializerMethodField()
     organization_id = serializers.SerializerMethodField()
-    asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
+    asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
 
     class Meta:
@@ -322,7 +343,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "default_value",
             "description",
             "tags",
-            "asset_count",
+            "asset_count_url",
             "is_hidden",
             "created_at",
             "updated_at",
@@ -336,6 +357,26 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     def get_organization_id(self, obj):
         """Get organization ID from annotation."""
         return getattr(obj, "_organization_id", None)
+
+    def get_asset_count_url(self, obj):
+        """Get URL to the asset-count endpoint."""
+        request = self.context.get("request")
+        if request:
+            from django.urls import reverse
+
+            workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            if workspace_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "workspace-assettype-attribute-asset-count",
+                        kwargs={
+                            "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+        return None
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in its workspace."""

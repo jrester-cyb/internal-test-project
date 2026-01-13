@@ -317,7 +317,13 @@ export default function AssetTypeAttributesPage() {
 
   // Fetch asset count when attribute is selected
   useEffect(() => {
-    if (!selectedAttribute || !workspaceId || !assetTypeId) {
+    if (!selectedAttribute) {
+      setSelectedAttributeAssetCount(null)
+      return
+    }
+
+    const url = selectedAttribute.assetCountUrl
+    if (!url) {
       setSelectedAttributeAssetCount(null)
       return
     }
@@ -325,8 +331,9 @@ export default function AssetTypeAttributesPage() {
     const fetchCount = async () => {
       setIsLoadingCount(true)
       try {
-        const { fetchAttributeAssetCount } = await import('../api/assets')
-        const data = await fetchAttributeAssetCount(workspaceId, assetTypeId, selectedAttribute.id)
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Failed to fetch asset count')
+        const data = await response.json()
         setSelectedAttributeAssetCount(data.count)
       } catch (error) {
         console.error('Failed to fetch asset count:', error)
@@ -337,7 +344,7 @@ export default function AssetTypeAttributesPage() {
     }
 
     fetchCount()
-  }, [selectedAttribute?.id, workspaceId, assetTypeId])
+  }, [selectedAttribute?.id, selectedAttribute?.assetCountUrl])
 
   // Update list height when container size changes
   useEffect(() => {
@@ -920,7 +927,7 @@ export default function AssetTypeAttributesPage() {
                               startIcon={isLoadingGlobalDefinition ? <CircularProgress size={14} /> : <OpenInNewIcon />}
                               disabled={isLoadingGlobalDefinition}
                               onClick={async () => {
-                                if (!assetTypeId || !selectedAttribute || !workspaceId) return
+                                if (!assetTypeId || !selectedAttribute) return
                                 const orgId = selectedAttribute.organizationId
                                 if (!orgId) {
                                   console.warn('Organization ID not available on attribute')
@@ -934,16 +941,29 @@ export default function AssetTypeAttributesPage() {
                                   setGlobalDefinition(globalDef)
                                   setShowingGlobalDefinition(true)
 
-                                  // Fetch count after switching
-                                  setIsLoadingCount(true)
-                                  const { fetchAttributeAssetCount } = await import('../api/assets')
-                                  fetchAttributeAssetCount(workspaceId, assetTypeId, globalDefId)
-                                    .then(countData => setSelectedAttributeAssetCount(countData.count))
-                                    .catch(err => {
-                                      console.error('Failed to fetch asset count:', err)
-                                      setSelectedAttributeAssetCount(0)
-                                    })
-                                    .finally(() => setIsLoadingCount(false))
+                                  // Fetch count after switching using the URL from the global definition
+                                  const countUrl = globalDef.assetCountUrl
+                                  console.log('Asset count URL:', countUrl)
+                                  if (countUrl) {
+                                    setIsLoadingCount(true)
+                                    fetch(countUrl)
+                                      .then(response => {
+                                        console.log('Asset count response:', response)
+                                        return response.json()
+                                      })
+                                      .then(data => {
+                                        console.log('Asset count data:', data)
+                                        setSelectedAttributeAssetCount(data.count)
+                                      })
+                                      .catch(err => {
+                                        console.error('Failed to fetch asset count:', err)
+                                        setSelectedAttributeAssetCount(0)
+                                      })
+                                      .finally(() => setIsLoadingCount(false))
+                                  } else {
+                                    console.warn('No asset count URL available')
+                                    setSelectedAttributeAssetCount(null)
+                                  }
                                 } catch (err) {
                                   console.error('Failed to fetch global definition:', err)
                                 } finally {

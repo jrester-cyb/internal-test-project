@@ -23,7 +23,7 @@ export interface AssetTypeAttribute {
   description?: string
   tags?: string[]
   order: number
-  assetCount?: number
+  assetCountUrl?: string | null
   choices?: AssetTypeAttributeChoice[]
   // Workspace extension fields
   workspace?: string | null
