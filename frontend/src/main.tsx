@@ -54,6 +54,7 @@ const router = createBrowserRouter([
         },
       },
       {
+        id: "workspace-route",
         path: "workspaces/:workspaceId",
         element: <WorkspaceLayout />,
         loader: async ({ params }) => {

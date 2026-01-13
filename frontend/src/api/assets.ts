@@ -216,8 +216,8 @@ export async function fetchAttributeAssetCount(workspaceId: string, assetTypeId:
   return response.json()
 }
 
-export async function fetchGlobalAttributeDefinition(workspaceId: string, assetTypeId: string, attributeId: string) {
-  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/global-definition/`))
+export async function fetchGlobalAttributeDefinition(organizationId: string, assetTypeId: string, attributeId: string) {
+  const response = await fetch(`${API_BASE}/organizations/${organizationId}/asset-types/${assetTypeId}/attributes/${attributeId}/`)
   if (!response.ok) throw new Error('Failed to fetch global definition')
   return response.json()
 }

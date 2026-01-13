@@ -129,6 +129,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Return attributes for the list view."""
         queryset = BaseAssetTypeAttribute.objects.none()
+
         if self.kwargs.get("workspace_pk"):
             workspace_pk = self.kwargs["workspace_pk"]
             assettype_pk = self.kwargs["assettype_pk"]
@@ -234,6 +235,26 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             except WorkspaceAssetTypeConfig.DoesNotExist:
                 queryset = self._annotate_global_order(queryset)
 
+        elif self.kwargs.get("organization_pk"):
+            # Organization-level view: only global attributes
+            organization_pk = self.kwargs["organization_pk"]
+            assettype_pk = self.kwargs["assettype_pk"]
+
+            queryset = (
+                GlobalAssetTypeAttribute.objects.filter(
+                    asset_type_id=assettype_pk,
+                    asset_type__organization_id=organization_pk,
+                )
+                .annotate(
+                    _is_hidden=Value(False),  # No hidden status at org level
+                    _organization_id=F("asset_type__organization_id"),
+                )
+                .select_related("polymorphic_ctype")
+            )
+
+            # Use global order
+            queryset = self._annotate_global_order(queryset)
+
         return queryset
 
     def get_serializer_context(self):
@@ -320,18 +341,78 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         pk = self.kwargs["pk"]
         assettype_pk = self.kwargs["assettype_pk"]
         workspace_pk = self.kwargs.get("workspace_pk")
+        organization_pk = self.kwargs.get("organization_pk")
 
-        # filter objects
-        filter_args = {
-            "id": pk,
-            "asset_type_id": assettype_pk,
-            "workspace_id": workspace_pk,
-        }
+        if organization_pk:
+            # Organization-level: only fetch global attributes
+            asset_type_attribute = get_object_or_404(
+                GlobalAssetTypeAttribute.objects.annotate(
+                    _is_hidden=Value(False),
+                    _organization_id=F("asset_type__organization_id"),
+                ),
+                id=pk,
+                asset_type_id=assettype_pk,
+                asset_type__organization_id=organization_pk,
+            )
+        else:
+            # Workspace-level: fetch any attribute type
+            filter_args = {
+                "id": pk,
+                "asset_type_id": assettype_pk,
+            }
 
-        asset_type_attribute = get_object_or_404(
-            BaseAssetTypeAttribute,
-            **filter_args,
-        )
+            if workspace_pk:
+                # For workspace endpoints, we need to handle all attribute types
+                # Get the attribute first to determine its type
+                asset_type_attribute = get_object_or_404(
+                    BaseAssetTypeAttribute,
+                    id=pk,
+                    asset_type_id=assettype_pk,
+                )
+
+                # Re-fetch with annotations
+                if isinstance(asset_type_attribute, GlobalAssetTypeAttribute):
+                    hidden_check = WorkspaceHiddenAttribute.objects.filter(
+                        workspace_id=workspace_pk,
+                        hidden_attribute_id=asset_type_attribute.id,
+                        deleted_at__isnull=True,
+                    )
+                    asset_type_attribute = GlobalAssetTypeAttribute.objects.annotate(
+                        _is_hidden=Exists(hidden_check),
+                        _organization_id=F("asset_type__organization_id"),
+                    ).get(id=pk)
+                elif isinstance(
+                    asset_type_attribute,
+                    (
+                        WorkspaceOverrideAssetTypeAttribute,
+                        WorkspaceLocalAssetTypeAttribute,
+                    ),
+                ):
+                    from workspaces.models import Workspace
+
+                    workspace_name_subquery = Workspace.objects.filter(
+                        Q(
+                            id=OuterRef(
+                                "workspaceoverrideassettypeattribute__workspace_id"
+                            )
+                        )
+                        | Q(
+                            id=OuterRef(
+                                "workspacelocalassettypeattribute__workspace_id"
+                            )
+                        )
+                    ).values("name")[:1]
+
+                    asset_type_attribute = BaseAssetTypeAttribute.objects.annotate(
+                        _is_hidden=Value(False),
+                        _workspace_name=Subquery(workspace_name_subquery),
+                        _organization_id=F("asset_type__organization_id"),
+                    ).get(id=pk)
+            else:
+                asset_type_attribute = get_object_or_404(
+                    BaseAssetTypeAttribute,
+                    **filter_args,
+                )
 
         return Response(AssetTypeAttributeSerializer(asset_type_attribute).data)
 
@@ -649,33 +730,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         # Return the actual instance that was unhidden (override, not base attribute)
         return Response(
             data=AssetTypeAttributeSerializer(real_instance).data,
-            status=status.HTTP_200_OK,
-        )
-
-    @extend_schema(
-        tags=["Asset Type Attributes"],
-        summary="Get global definition for an override",
-    )
-    @action(detail=True, methods=["get"], url_path="global-definition")
-    def global_definition(self, request, pk=None, workspace_pk=None, assettype_pk=None):
-        """Get the global (base) definition for an override attribute."""
-        override = WorkspaceOverrideAssetTypeAttribute.objects.filter(id=pk).first()
-        if not override:
-            return Response(
-                {"detail": "Not an override attribute"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Get the base attribute with annotations
-        base_attr = GlobalAssetTypeAttribute.objects.filter(
-            id=override.base_attribute_id
-        ).annotate(
-            _is_hidden=Value(False),  # Global definition is never hidden
-            _organization_id=F("asset_type__organization_id")
-        ).first()
-
-        return Response(
-            GlobalAssetTypeAttributeSerializer(base_attr).data,
             status=status.HTTP_200_OK,
         )
 

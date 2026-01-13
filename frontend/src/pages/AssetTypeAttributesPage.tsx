@@ -920,12 +920,30 @@ export default function AssetTypeAttributesPage() {
                               startIcon={isLoadingGlobalDefinition ? <CircularProgress size={14} /> : <OpenInNewIcon />}
                               disabled={isLoadingGlobalDefinition}
                               onClick={async () => {
-                                if (!workspaceId || !assetTypeId || !selectedAttribute) return
+                                if (!assetTypeId || !selectedAttribute || !workspaceId) return
+                                const orgId = selectedAttribute.organizationId
+                                if (!orgId) {
+                                  console.warn('Organization ID not available on attribute')
+                                  return
+                                }
                                 setIsLoadingGlobalDefinition(true)
                                 try {
-                                  const globalDef = await fetchGlobalAttributeDefinition(workspaceId, assetTypeId, selectedAttribute.id)
+                                  const globalDefId = selectedAttribute.baseAttributeId || selectedAttribute.id
+                                  const globalDef = await fetchGlobalAttributeDefinition(orgId, assetTypeId, globalDefId)
+
                                   setGlobalDefinition(globalDef)
                                   setShowingGlobalDefinition(true)
+
+                                  // Fetch count after switching
+                                  setIsLoadingCount(true)
+                                  const { fetchAttributeAssetCount } = await import('../api/assets')
+                                  fetchAttributeAssetCount(workspaceId, assetTypeId, globalDefId)
+                                    .then(countData => setSelectedAttributeAssetCount(countData.count))
+                                    .catch(err => {
+                                      console.error('Failed to fetch asset count:', err)
+                                      setSelectedAttributeAssetCount(0)
+                                    })
+                                    .finally(() => setIsLoadingCount(false))
                                 } catch (err) {
                                   console.error('Failed to fetch global definition:', err)
                                 } finally {
