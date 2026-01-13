@@ -32,7 +32,6 @@ from ..serializers import (
     GlobalAssetTypeAttributeSerializer,
     WorkspaceExtensionAttributeSerializer,
     WorkspaceAssetTypeConfigSerializer,
-    MergedAttributeSerializer,
 )
 from app.pagination import CustomPageNumberPagination
 
@@ -335,44 +334,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                         setattr(override, field, request.data[field])
                 override.save()
 
-                data = {
-                    "id": override.id,
-                    "asset_type_id": global_attr.asset_type_id,
-                    "workspace_id": workspace_pk,
-                    "workspace_name": override.workspace.name,
-                    "attribute_kind": "override",
-                    "is_override": True,
-                    "is_extension": False,
-                    "is_hidden": WorkspaceHiddenAttribute.objects.filter(
-                        hidden_attribute=global_attr,
-                        workspace_id=workspace_pk,
-                    ).exists(),
-                    "base_attribute_id": global_attr.id,
-                    "name": override.name or global_attr.name,
-                    "api_key": global_attr.api_key,
-                    "attribute_type": global_attr.attribute_type,
-                    "is_required": (
-                        override.is_required
-                        if override.is_required is not None
-                        else global_attr.is_required
-                    ),
-                    "default_value": (
-                        override.default_value
-                        if override.default_value is not None
-                        else global_attr.default_value
-                    ),
-                    "description": (
-                        override.description
-                        if override.description is not None
-                        else global_attr.description
-                    ),
-                    "tags": (
-                        override.tags if override.tags is not None else global_attr.tags
-                    ),
-                    "created_at": global_attr.created_at,
-                    "updated_at": override.updated_at,
-                }
-                return Response(MergedAttributeSerializer(data).data)
+                return Response(
+                    AssetTypeAttributeSerializer(
+                        override, context={"request": request}
+                    ).data
+                )
             else:
                 # Update global attribute directly
                 serializer = GlobalAssetTypeAttributeSerializer(
@@ -382,27 +348,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 serializer.save()
                 global_attr.refresh_from_db()
 
-                data = {
-                    "id": global_attr.id,
-                    "asset_type_id": global_attr.asset_type_id,
-                    "workspace_id": None,
-                    "workspace_name": None,
-                    "attribute_kind": "global",
-                    "is_override": False,
-                    "is_extension": False,
-                    "is_hidden": False,
-                    "base_attribute_id": None,
-                    "name": global_attr.name,
-                    "api_key": global_attr.api_key,
-                    "attribute_type": global_attr.attribute_type,
-                    "is_required": global_attr.is_required,
-                    "default_value": global_attr.default_value,
-                    "description": global_attr.description,
-                    "tags": global_attr.tags or [],
-                    "created_at": global_attr.created_at,
-                    "updated_at": global_attr.updated_at,
-                }
-                return Response(MergedAttributeSerializer(data).data)
+                return Response(
+                    AssetTypeAttributeSerializer(
+                        global_attr, context={"request": request}
+                    ).data
+                )
 
         # Check if it's an override
         override = (
@@ -423,40 +373,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     setattr(override, field, request.data[field])
             override.save()
 
-            base = override.base_attribute
-            data = {
-                "id": override.id,
-                "asset_type_id": override.asset_type_id,
-                "workspace_id": override.workspace_id,
-                "workspace_name": override.workspace.name,
-                "attribute_kind": "override",
-                "is_override": True,
-                "is_extension": False,
-                "is_hidden": False,
-                "base_attribute_id": base.id,
-                "name": override.name or base.name,
-                "api_key": base.api_key,
-                "attribute_type": base.attribute_type,
-                "is_required": (
-                    override.is_required
-                    if override.is_required is not None
-                    else base.is_required
-                ),
-                "default_value": (
-                    override.default_value
-                    if override.default_value is not None
-                    else base.default_value
-                ),
-                "description": (
-                    override.description
-                    if override.description is not None
-                    else base.description
-                ),
-                "tags": override.tags if override.tags is not None else base.tags,
-                "created_at": base.created_at,
-                "updated_at": override.updated_at,
-            }
-            return Response(MergedAttributeSerializer(data).data)
+            return Response(
+                AssetTypeAttributeSerializer(
+                    override, context={"request": request}
+                ).data
+            )
 
         # Check if it's an extension
         extension = (
@@ -475,32 +396,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             serializer.save()
             extension.refresh_from_db()
 
-            is_hidden = WorkspaceHiddenAttribute.objects.filter(
-                hidden_attribute_id=pk,
-                workspace_id=workspace_pk,
-            ).exists()
-
-            data = {
-                "id": extension.id,
-                "asset_type_id": extension.asset_type_id,
-                "workspace_id": extension.workspace_id,
-                "workspace_name": extension.workspace.name,
-                "attribute_kind": "extension",
-                "is_override": False,
-                "is_extension": True,
-                "is_hidden": is_hidden,
-                "base_attribute_id": None,
-                "name": extension.name,
-                "api_key": extension.api_key,
-                "attribute_type": extension.attribute_type,
-                "is_required": extension.is_required,
-                "default_value": extension.default_value,
-                "description": extension.description,
-                "tags": extension.tags or [],
-                "created_at": extension.created_at,
-                "updated_at": extension.updated_at,
-            }
-            return Response(MergedAttributeSerializer(data).data)
+            return Response(
+                AssetTypeAttributeSerializer(
+                    extension, context={"request": request}
+                ).data
+            )
 
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 

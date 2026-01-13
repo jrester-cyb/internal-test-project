@@ -326,40 +326,6 @@ class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
         return obj.hidden_in_workspaces.filter(workspace_id=obj.workspace_id).exists()
 
 
-class MergedAttributeSerializer(serializers.Serializer):
-    """
-    Unified serializer for presenting attributes in a merged view.
-    Handles all attribute types and presents them with a consistent interface.
-    """
-
-    id = serializers.UUIDField()
-    asset_type = serializers.UUIDField(source="asset_type_id")
-    workspace = serializers.UUIDField(source="workspace_id", allow_null=True)
-    workspace_name = serializers.CharField(allow_null=True)
-
-    # Attribute type info
-    attribute_kind = (
-        serializers.CharField()
-    )  # 'global', 'override', 'extension', 'hidden'
-    is_override = serializers.BooleanField()
-    is_extension = serializers.BooleanField()
-    is_hidden = serializers.BooleanField()
-    base_attribute_id = serializers.UUIDField(allow_null=True)
-
-    # Core fields
-    name = serializers.CharField()
-    api_key = serializers.CharField()
-    attribute_type = serializers.CharField()
-    is_required = serializers.BooleanField()
-    default_value = serializers.JSONField(allow_null=True)
-    description = serializers.CharField(allow_blank=True)
-    tags = serializers.ListField(child=serializers.CharField(), default=list)
-
-    # Timestamps
-    created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-
-
 class WorkspaceAssetTypeConfigSerializer(serializers.ModelSerializer):
     """Serializer for workspace-specific asset type configuration (attribute ordering)."""
 
