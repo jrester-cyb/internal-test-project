@@ -97,12 +97,12 @@ export default function AssetTypeAttributesPage() {
   // Refetch when scope or tag filters change
   useEffect(() => {
     const prev = prevFiltersRef.current
-    const filtersChanged = 
+    const filtersChanged =
       JSON.stringify(prev.excludedScopes) !== JSON.stringify(excludedScopes) ||
       JSON.stringify(prev.selectedTags) !== JSON.stringify(selectedTags)
-    
+
     prevFiltersRef.current = { excludedScopes, selectedTags }
-    
+
     if (filtersChanged && workspaceId && assetTypeId) {
       const doRefetch = async () => {
         setIsRefetching(true)
