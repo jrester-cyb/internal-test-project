@@ -3,7 +3,7 @@ from django.contrib.gis.admin import GISModelAdmin
 from polymorphic.admin import PolymorphicParentModelAdmin, PolymorphicChildModelAdmin
 from .models import (
     AssetType,
-    AssetTypeAttribute,
+    GlobalAssetTypeAttribute,
     Asset,
     BaseAttributeValue,
     TextAttributeValue,
@@ -15,25 +15,8 @@ from .models import (
 )
 
 
-class AssetTypeAttributeInline(admin.TabularInline):
-    model = AssetTypeAttribute
-    extra = 1
-    fields = [
-        "name",
-        "api_key",
-        "attribute_type",
-        "is_required",
-        "default_value",
-        "order",
-    ]
-
-
-class AssetAttributeInline(admin.TabularInline):
-    model = BaseAttributeValue
-    extra = 0
-    fields = ["asset_type_attribute", "polymorphic_ctype"]
-    readonly_fields = ["asset_type_attribute", "polymorphic_ctype"]
-    can_delete = True
+# Note: Inlines for polymorphic models removed due to Django admin check issues
+# with string FK references. Use separate model admins instead.
 
 
 @admin.register(AssetType)
@@ -41,7 +24,6 @@ class AssetTypeAdmin(admin.ModelAdmin):
     list_display = ["name", "created_at", "asset_count"]
     search_fields = ["name", "description"]
     readonly_fields = ["created_at", "updated_at"]
-    inlines = [AssetTypeAttributeInline]
 
     def asset_count(self, obj):
         return obj.assets.count()
@@ -49,8 +31,8 @@ class AssetTypeAdmin(admin.ModelAdmin):
     asset_count.short_description = "Number of Assets"
 
 
-@admin.register(AssetTypeAttribute)
-class AssetTypeAttributeAdmin(admin.ModelAdmin):
+@admin.register(GlobalAssetTypeAttribute)
+class GlobalAssetTypeAttributeAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "asset_type",
@@ -70,7 +52,7 @@ class AssetAdmin(GISModelAdmin):
     list_filter = ["asset_type"]
     search_fields = ["name", "description"]
     readonly_fields = ["created_at", "updated_at"]
-    inlines = [AssetAttributeInline]
+    # Note: AttributeValue inline removed due to polymorphic model FK issues
 
 
 # Polymorphic admin for attribute values
@@ -132,5 +114,5 @@ class BaseAttributeValueAdmin(PolymorphicParentModelAdmin):
         "polymorphic_ctype",
         "updated_at",
     ]
-    list_filter = ["asset_type_attribute__asset_type", "polymorphic_ctype"]
-    search_fields = ["asset__name", "asset_type_attribute__name"]
+    list_filter = ["polymorphic_ctype"]
+    search_fields = ["asset__name"]

@@ -12,13 +12,13 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
         "assets.Asset", on_delete=models.CASCADE, related_name="attributes"
     )
     asset_type_attribute = models.ForeignKey(
-        "assets.AssetTypeAttribute", on_delete=models.CASCADE, related_name="values"
+        "assets.BaseAssetTypeAttribute", on_delete=models.CASCADE, related_name="values"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta(PolymorphicSoftDeleteMixin.Meta):
-        ordering = ["asset", "asset_type_attribute__order"]
+        ordering = ["asset", "created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["asset", "asset_type_attribute"],

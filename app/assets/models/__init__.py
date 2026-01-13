@@ -1,6 +1,17 @@
 from .asset_type import AssetType, WorkspaceAssetType
-from .asset_type_attribute import AssetTypeAttribute
+from .asset_type_attribute import (
+    BaseAssetTypeAttribute,
+    GlobalAssetTypeAttribute,
+    WorkspaceAttributeOverride,
+    WorkspaceHiddenAttribute,
+    WorkspaceExtensionAttribute,
+    AssetCustomAttribute,
+)
+
+# Legacy alias for backwards compatibility
+AssetTypeAttribute = GlobalAssetTypeAttribute
 from .asset_type_attribute_choice import (
+    # Base choices (on global attributes)
     AssetTypeAttributeChoice,
     TextAttributeChoice,
     NumberAttributeChoice,
@@ -8,6 +19,18 @@ from .asset_type_attribute_choice import (
     DateAttributeChoice,
     DateTimeAttributeChoice,
     JSONAttributeChoice,
+    # Workspace choice modifications
+    BaseWorkspaceChoice,
+    WorkspaceChoiceOverride,
+    WorkspaceHiddenChoice,
+    # Workspace extension choices (typed)
+    BaseWorkspaceExtensionChoice,
+    TextExtensionChoice,
+    NumberExtensionChoice,
+    BooleanExtensionChoice,
+    DateExtensionChoice,
+    DateTimeExtensionChoice,
+    JSONExtensionChoice,
 )
 from .asset import Asset, WorkspaceAsset
 from .attribute_value import (

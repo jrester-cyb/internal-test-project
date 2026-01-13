@@ -3,7 +3,12 @@ from rest_framework_gis.serializers import GeometryField
 from .models import (
     AssetType,
     WorkspaceAssetType,
-    AssetTypeAttribute,
+    BaseAssetTypeAttribute,
+    GlobalAssetTypeAttribute,
+    WorkspaceAttributeOverride,
+    WorkspaceHiddenAttribute,
+    WorkspaceExtensionAttribute,
+    AssetCustomAttribute,
     AssetTypeAttributeChoice,
     Asset,
     WorkspaceAsset,
@@ -99,25 +104,146 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
         return instance
 
 
-class AssetTypeAttributeSerializer(serializers.ModelSerializer):
+class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
+    """Serializer for global (base) asset type attributes."""
+
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
-    is_extension = serializers.SerializerMethodField()
-    is_override = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GlobalAssetTypeAttribute
+        fields = [
+            "id",
+            "asset_type",
+            "name",
+            "api_key",
+            "attribute_type",
+            "is_required",
+            "default_value",
+            "description",
+            "tags",
+            "order",
+            "asset_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+
+
+class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
+    """Serializer for workspace-specific attribute overrides."""
+
+    # Effective values (override or fall back to base)
+    effective_name = serializers.SerializerMethodField()
+    effective_is_required = serializers.SerializerMethodField()
+    effective_default_value = serializers.SerializerMethodField()
+    effective_description = serializers.SerializerMethodField()
+    effective_tags = serializers.SerializerMethodField()
+    effective_order = serializers.SerializerMethodField()
+    # From base attribute (read-only)
+    api_key = serializers.CharField(source="base_attribute.api_key", read_only=True)
+    attribute_type = serializers.CharField(
+        source="base_attribute.attribute_type", read_only=True
+    )
     workspace_name = serializers.CharField(
         source="workspace.name", read_only=True, allow_null=True
     )
-    base_attribute_id = serializers.SerializerMethodField()
 
     class Meta:
-        model = AssetTypeAttribute
+        model = WorkspaceAttributeOverride
+        fields = [
+            "id",
+            "asset_type",
+            "base_attribute",
+            "workspace",
+            "workspace_name",
+            "api_key",
+            "attribute_type",
+            # Override fields (nullable)
+            "name",
+            "is_required",
+            "default_value",
+            "description",
+            "tags",
+            "order",
+            # Effective values
+            "effective_name",
+            "effective_is_required",
+            "effective_default_value",
+            "effective_description",
+            "effective_tags",
+            "effective_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "asset_type",
+            "base_attribute",
+            "workspace",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_effective_name(self, obj):
+        return obj.get_effective_value("name")
+
+    def get_effective_is_required(self, obj):
+        return obj.get_effective_value("is_required")
+
+    def get_effective_default_value(self, obj):
+        return obj.get_effective_value("default_value")
+
+    def get_effective_description(self, obj):
+        return obj.get_effective_value("description")
+
+    def get_effective_tags(self, obj):
+        return obj.get_effective_value("tags")
+
+    def get_effective_order(self, obj):
+        return obj.get_effective_value("order")
+
+
+class WorkspaceHiddenAttributeSerializer(serializers.ModelSerializer):
+    """Serializer for hidden attribute records."""
+
+    base_attribute_name = serializers.CharField(
+        source="base_attribute.name", read_only=True
+    )
+    base_attribute_api_key = serializers.CharField(
+        source="base_attribute.api_key", read_only=True
+    )
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+
+    class Meta:
+        model = WorkspaceHiddenAttribute
+        fields = [
+            "id",
+            "asset_type",
+            "base_attribute",
+            "base_attribute_name",
+            "base_attribute_api_key",
+            "workspace",
+            "workspace_name",
+            "created_at",
+        ]
+        read_only_fields = ["id", "asset_type", "created_at"]
+
+
+class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
+    """Serializer for workspace-specific extension attributes."""
+
+    workspace_name = serializers.CharField(
+        source="workspace.name", read_only=True, allow_null=True
+    )
+    asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
+
+    class Meta:
+        model = WorkspaceExtensionAttribute
         fields = [
             "id",
             "asset_type",
             "workspace",
             "workspace_name",
-            "is_extension",
-            "is_override",
-            "base_attribute_id",
             "name",
             "api_key",
             "attribute_type",
@@ -131,25 +257,71 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "asset_type", "created_at", "updated_at"]
+        read_only_fields = ["id", "asset_type", "workspace", "created_at", "updated_at"]
 
-    def get_is_extension(self, obj):
-        """Return True if this is a workspace-specific extension attribute"""
-        return obj.workspace_id is not None
 
-    def get_is_override(self, obj):
-        """
-        Return True if this workspace attribute overrides a base attribute with the same api_key.
-        This is set by the view when merging attributes.
-        """
-        return getattr(obj, "_is_override", False)
+class MergedAttributeSerializer(serializers.Serializer):
+    """
+    Unified serializer for presenting attributes in a merged view.
+    Handles all attribute types and presents them with a consistent interface.
+    """
 
-    def get_base_attribute_id(self, obj):
-        """
-        Return the ID of the base attribute this overrides, if applicable.
-        This is set by the view when merging attributes.
-        """
-        return getattr(obj, "_base_attribute_id", None)
+    id = serializers.UUIDField()
+    asset_type = serializers.UUIDField(source="asset_type_id")
+    workspace = serializers.UUIDField(source="workspace_id", allow_null=True)
+    workspace_name = serializers.CharField(allow_null=True)
+
+    # Attribute type info
+    attribute_kind = (
+        serializers.CharField()
+    )  # 'global', 'override', 'extension', 'hidden'
+    is_override = serializers.BooleanField()
+    is_extension = serializers.BooleanField()
+    is_hidden = serializers.BooleanField()
+    base_attribute_id = serializers.UUIDField(allow_null=True)
+
+    # Core fields
+    name = serializers.CharField()
+    api_key = serializers.CharField()
+    attribute_type = serializers.CharField()
+    is_required = serializers.BooleanField()
+    default_value = serializers.JSONField(allow_null=True)
+    description = serializers.CharField(allow_blank=True)
+    tags = serializers.ListField(child=serializers.CharField(), default=list)
+    order = serializers.IntegerField()
+
+    # Timestamps
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class AssetCustomAttributeSerializer(serializers.ModelSerializer):
+    """Serializer for per-asset custom attributes."""
+
+    workspace_name = serializers.CharField(
+        source="workspace.name", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = AssetCustomAttribute
+        fields = [
+            "id",
+            "asset",
+            "workspace",
+            "workspace_name",
+            "name",
+            "api_key",
+            "attribute_type",
+            "value",
+            "description",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+# Legacy alias for backwards compatibility during migration
+AssetTypeAttributeSerializer = GlobalAssetTypeAttributeSerializer
 
 
 class AssetAttributeSerializer(serializers.ModelSerializer):

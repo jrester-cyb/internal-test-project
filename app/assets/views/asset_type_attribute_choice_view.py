@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from django.db import transaction
-from ..models import AssetTypeAttributeChoice, AssetTypeAttribute
+from ..models import AssetTypeAttributeChoice, GlobalAssetTypeAttribute
 from ..serializers import (
     AssetTypeAttributeChoiceSerializer,
     AssetTypeAttributeChoiceWriteSerializer,
@@ -48,7 +48,7 @@ class AssetTypeAttributeChoiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Automatically set the asset_type_attribute when creating"""
-        asset_type_attribute = AssetTypeAttribute.objects.get(
+        asset_type_attribute = GlobalAssetTypeAttribute.objects.get(
             pk=self.kwargs["attribute_pk"]
         )
         serializer.save(asset_type_attribute=asset_type_attribute)

@@ -6,7 +6,7 @@ from django.contrib.gis.geos import GEOSGeometry
 import json
 from datetime import date, datetime
 
-from assets.models import AssetTypeAttribute
+from assets.models import GlobalAssetTypeAttribute
 
 
 class FilterGroupSerializer(serializers.Serializer):
@@ -86,7 +86,7 @@ class FilterGroupSerializer(serializers.Serializer):
             if len(parts) == 2:
                 api_key = parts[1]
                 # Get the model type based on the api_key
-                asset_attribute_type_qs = AssetTypeAttribute.objects.filter(
+                asset_attribute_type_qs = GlobalAssetTypeAttribute.objects.filter(
                     api_key=api_key
                 ).only("attribute_type")
                 q = None
