@@ -8,6 +8,7 @@ from .models import (
     WorkspaceAttributeOverride,
     WorkspaceHiddenAttribute,
     WorkspaceExtensionAttribute,
+    WorkspaceAssetTypeConfig,
     AssetCustomAttribute,
     AssetTypeAttributeChoice,
     Asset,
@@ -122,7 +123,6 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "default_value",
             "description",
             "tags",
-            "order",
             "created_at",
             "updated_at",
         ]
@@ -221,7 +221,6 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
             "default_value",
             "description",
             "tags",
-            "order",
             "created_at",
             "updated_at",
         ]
@@ -266,8 +265,6 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
             result["description"] = instance.description
         if instance.tags is not None:
             result["tags"] = instance.tags
-        if instance.order is not None:
-            result["order"] = instance.order
 
         return result
 
@@ -308,7 +305,6 @@ class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
             "default_value",
             "description",
             "tags",
-            "order",
             "asset_count",
             "is_hidden",
             "created_at",
@@ -349,11 +345,52 @@ class MergedAttributeSerializer(serializers.Serializer):
     default_value = serializers.JSONField(allow_null=True)
     description = serializers.CharField(allow_blank=True)
     tags = serializers.ListField(child=serializers.CharField(), default=list)
-    order = serializers.IntegerField()
 
     # Timestamps
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
+
+
+class WorkspaceAssetTypeConfigSerializer(serializers.ModelSerializer):
+    """Serializer for workspace-specific asset type configuration (attribute ordering)."""
+
+    workspace_name = serializers.CharField(
+        source="workspace.name", read_only=True, allow_null=True
+    )
+    asset_type_name = serializers.CharField(
+        source="asset_type.name", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = WorkspaceAssetTypeConfig
+        fields = [
+            "id",
+            "workspace",
+            "workspace_name",
+            "asset_type",
+            "asset_type_name",
+            "attribute_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "workspace", "asset_type", "created_at", "updated_at"]
+
+    def validate_attribute_order(self, value):
+        """Validate that attribute_order contains valid UUIDs."""
+        if not isinstance(value, list):
+            raise serializers.ValidationError("attribute_order must be a list")
+
+        # Validate each item is a valid UUID string
+        import uuid
+
+        for item in value:
+            try:
+                uuid.UUID(str(item))
+            except ValueError:
+                raise serializers.ValidationError(
+                    f"Invalid UUID in attribute_order: {item}"
+                )
+        return value
 
 
 class AssetCustomAttributeSerializer(serializers.ModelSerializer):

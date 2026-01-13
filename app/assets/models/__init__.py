@@ -5,6 +5,7 @@ from .asset_type_attribute import (
     WorkspaceAttributeOverride,
     WorkspaceHiddenAttribute,
     WorkspaceExtensionAttribute,
+    WorkspaceAssetTypeConfig,
     AssetCustomAttribute,
 )
 

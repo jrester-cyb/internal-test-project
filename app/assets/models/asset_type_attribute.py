@@ -149,7 +149,6 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
     default_value = models.JSONField(null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     tags = models.JSONField(null=True, blank=True)
-    order = models.IntegerField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -319,10 +318,9 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
     tags = models.JSONField(
         default=list, blank=True, help_text="List of tags for grouping attributes"
     )
-    order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ["workspace", "order", "name"]
+        ordering = ["workspace", "name"]
         triggers = [
             pgtrigger.Trigger(
                 name="unique_extension_api_key_per_workspace",
@@ -423,6 +421,45 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
 
     def __str__(self):
         return f"{self.asset_type.name}.{self.name} [{self.workspace.name}]"
+
+
+class WorkspaceAssetTypeConfig(models.Model):
+    """
+    Workspace-specific configuration for an asset type.
+    Stores the custom attribute ordering for this workspace.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        on_delete=models.CASCADE,
+        related_name="asset_type_configs",
+    )
+    asset_type = models.ForeignKey(
+        "assets.AssetType",
+        on_delete=models.CASCADE,
+        related_name="workspace_configs",
+    )
+    attribute_order = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ordered list of attribute UUIDs (GlobalAssetTypeAttribute and WorkspaceExtensionAttribute)",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "asset_type"],
+                name="unique_workspace_asset_type_config",
+            ),
+        ]
+        verbose_name = "Workspace Asset Type Config"
+        verbose_name_plural = "Workspace Asset Type Configs"
+
+    def __str__(self):
+        return f"{self.workspace.name} - {self.asset_type.name} config"
 
 
 class AssetCustomAttribute(SoftDeleteMixin):
