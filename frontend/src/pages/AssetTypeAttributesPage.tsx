@@ -10,6 +10,7 @@ import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import AttributeChoicesSection from '../components/AttributeChoicesSection'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -46,6 +47,16 @@ export default function AssetTypeAttributesPage() {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    title: string
+    message: string
+    confirmLabel: string
+    confirmColor: 'primary' | 'error' | 'warning'
+    onConfirm: () => void
+  }>({ open: false, title: '', message: '', confirmLabel: 'Confirm', confirmColor: 'primary', onConfirm: () => {} })
+
+  const closeConfirmDialog = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
   // Filter attributes based on includeHidden toggle - hidden attributes stay in allAttributes for reordering
   const displayedAttributes = includeHidden
@@ -414,23 +425,38 @@ export default function AssetTypeAttributesPage() {
     }
   }
 
-  const handleDelete = async (attr: AssetTypeAttribute) => {
+  const handleDelete = (attr: AssetTypeAttribute) => {
     // Check if this is a base attribute - if so, suggest hiding instead
     const isBaseAttribute = !attr.workspace
     if (isBaseAttribute) {
-      const useHide = confirm(
-        `"${attr.name}" is a base attribute shared across workspaces. It cannot be deleted from this workspace.\n\n` +
-        `Would you like to hide it instead? (You can unhide it later)`
-      )
-      if (useHide) {
-        await handleHide(attr)
-      }
+      setConfirmDialog({
+        open: true,
+        title: 'Cannot Delete Base Attribute',
+        message: `"${attr.name}" is a base attribute shared across workspaces. It cannot be deleted from this workspace.\n\nWould you like to hide it instead? (You can unhide it later)`,
+        confirmLabel: 'Hide Instead',
+        confirmColor: 'warning',
+        onConfirm: () => {
+          closeConfirmDialog()
+          handleHide(attr)
+        }
+      })
       return
     }
 
-    if (!confirm(`Are you sure you want to delete the attribute "${attr.name}"?`)) {
-      return
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Attribute',
+      message: `Are you sure you want to delete the attribute "${attr.name}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      confirmColor: 'error',
+      onConfirm: () => {
+        closeConfirmDialog()
+        performDelete(attr)
+      }
+    })
+  }
+
+  const performDelete = async (attr: AssetTypeAttribute) => {
 
     try {
       const apiKey = attr.apiKey
@@ -468,10 +494,17 @@ export default function AssetTypeAttributesPage() {
       console.error('Failed to delete attribute:', error)
       // Check if it's a permission error suggesting to use hide
       if (error.message?.includes('hide')) {
-        const useHide = confirm(error.message + '\n\nWould you like to hide it instead?')
-        if (useHide) {
-          await handleHide(attr)
-        }
+        setConfirmDialog({
+          open: true,
+          title: 'Delete Failed',
+          message: `${error.message}\n\nWould you like to hide it instead?`,
+          confirmLabel: 'Hide Instead',
+          confirmColor: 'warning',
+          onConfirm: () => {
+            closeConfirmDialog()
+            handleHide(attr)
+          }
+        })
       } else {
         alert('Failed to delete attribute: ' + error.message)
       }
@@ -1367,6 +1400,16 @@ export default function AssetTypeAttributesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        confirmColor={confirmDialog.confirmColor}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirmDialog}
+      />
     </Box>
   )
 }
