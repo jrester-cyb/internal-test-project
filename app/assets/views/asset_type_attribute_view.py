@@ -336,6 +336,47 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         except WorkspaceAssetTypeConfig.DoesNotExist:
             pass
 
+    def _copy_choices_to_override(self, global_attr, override):
+        """Copy all choices from a global attribute to an override attribute."""
+        from ..models import (
+            TextAttributeChoice,
+            NumberAttributeChoice,
+            BooleanAttributeChoice,
+            DateAttributeChoice,
+            DateTimeAttributeChoice,
+            JSONAttributeChoice,
+        )
+
+        # Get all choices from the global attribute
+        global_choices = global_attr.choices.filter(deleted_at__isnull=True).order_by(
+            "order"
+        )
+
+        # Map attribute type to choice model
+        choice_model_map = {
+            "text": TextAttributeChoice,
+            "number": NumberAttributeChoice,
+            "boolean": BooleanAttributeChoice,
+            "date": DateAttributeChoice,
+            "datetime": DateTimeAttributeChoice,
+            "json": JSONAttributeChoice,
+        }
+
+        choice_model = choice_model_map.get(global_attr.attribute_type)
+        if not choice_model:
+            return
+
+        # Copy each choice to the override
+        for choice in global_choices:
+            choice_model.objects.create(
+                asset_type_attribute=override,
+                value=choice.value,
+                label=choice.label,
+                icon=choice.icon,
+                color=choice.color,
+                order=choice.order,
+            )
+
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single attribute by ID."""
         pk = self.kwargs["pk"]
@@ -483,6 +524,10 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     if override.deleted_at is not None:
                         override.deleted_at = None
                         override.save()
+                        # Copy choices when restoring a soft-deleted override
+                        # First delete any existing choices on the override
+                        override.choices.all().delete()
+                        self._copy_choices_to_override(global_attr, override)
                 except WorkspaceOverrideAssetTypeAttribute.DoesNotExist:
                     # Create new override
                     override = WorkspaceOverrideAssetTypeAttribute.objects.create(
@@ -497,6 +542,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                         str(global_attr.id),
                         str(override.id),
                     )
+
+                    # Copy choices from global attribute to the override
+                    self._copy_choices_to_override(global_attr, override)
 
                 # Update override fields
                 for field in [

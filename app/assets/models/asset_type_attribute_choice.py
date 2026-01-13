@@ -9,7 +9,7 @@ class AssetTypeAttributeChoice(PolymorphicSoftDeleteMixin, PolymorphicModel):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset_type_attribute = models.ForeignKey(
-        "assets.GlobalAssetTypeAttribute",
+        "assets.BaseAssetTypeAttribute",
         on_delete=models.CASCADE,
         related_name="choices",
     )
@@ -182,7 +182,7 @@ class BaseWorkspaceExtensionChoice(BaseWorkspaceChoice):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name="choices",
+        related_name="workspace_extension_choices",
         help_text="Extension attribute this choice belongs to (if applicable)",
     )
     label = models.CharField(max_length=255)

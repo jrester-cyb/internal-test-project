@@ -965,7 +965,7 @@ export default function AssetTypeAttributesPage() {
                               }}
                               sx={{ textTransform: 'none', minWidth: 'auto' }}
                             >
-                              View Global
+                              View Global Definition
                             </Button>
                           )}
                         </>

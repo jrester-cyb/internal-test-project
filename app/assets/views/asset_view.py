@@ -342,7 +342,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         if assettype_pk:
             queryset = Asset.objects.filter(asset_type_id=assettype_pk)
         elif workspace_pk:
-            queryset = Asset.objects.filter(asset_type__workspace_id=workspace_pk)
+            queryset = Asset.objects.filter(workspace_memberships__workspace_id=workspace_pk)
         else:
             queryset = Asset.objects.all()
 
@@ -522,7 +522,7 @@ Format the output as follows:
 
         # Filter by workspace if provided
         if workspace_pk:
-            queryset = queryset.filter(asset_type__workspace_id=workspace_pk)
+            queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
 
         # Apply search filters if provided (POST request)
         if request.method == "POST" and request.data:
@@ -626,7 +626,7 @@ Format the output as follows:
 
         # Filter by workspace if provided
         if workspace_pk:
-            queryset = queryset.filter(asset_type__workspace_id=workspace_pk)
+            queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
 
         # Apply search filters if provided (POST request)
         if request.method == "POST" and request.data:
