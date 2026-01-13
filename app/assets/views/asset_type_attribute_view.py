@@ -137,13 +137,25 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 )
                 if config.attribute_order:
                     # Build Case/When for workspace ordering
+                    # For each UUID in the config, we match by:
+                    # - Direct ID match (for globals, extensions, and overrides stored by their own ID)
+                    # - OR base_attribute_id match (for overrides when config has the global ID)
                     order_cases = []
                     for idx, item in enumerate(config.attribute_order):
                         if isinstance(item, dict):
                             attr_id = item.get("id", "")
                         else:
                             attr_id = str(item)
-                        order_cases.append(When(id=attr_id, then=Value(idx)))
+                        # Match either the object's own ID or the base_attribute_id for overrides
+                        order_cases.append(
+                            When(
+                                Q(id=attr_id)
+                                | Q(
+                                    workspaceattributeoverride__base_attribute_id=attr_id
+                                ),
+                                then=Value(idx),
+                            )
+                        )
 
                     queryset = queryset.annotate(
                         effective_order=Case(
@@ -211,18 +223,6 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 config.save()
         except WorkspaceAssetTypeConfig.DoesNotExist:
             pass
-
-    def list(self, request, *args, **kwargs):
-        """List attributes with ordering already applied in get_queryset."""
-        queryset = self.filter_queryset(self.get_queryset())
-
-        # Handle pagination
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single attribute by ID."""

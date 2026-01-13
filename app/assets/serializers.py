@@ -130,6 +130,9 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         """Route to the appropriate serializer based on instance type."""
+        # Capture effective_order from annotation before getting real instance
+        effective_order = getattr(instance, "effective_order", None)
+
         # Get the real polymorphic instance
         if hasattr(instance, "get_real_instance"):
             real_instance = instance.get_real_instance()
@@ -157,7 +160,13 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             # Fallback to base serialization
             return super().to_representation(real_instance)
 
-        return serializer.data
+        data = serializer.data
+
+        # Add effective_order to the output if it was annotated
+        if effective_order is not None:
+            data["order"] = effective_order
+
+        return data
 
 
 class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
