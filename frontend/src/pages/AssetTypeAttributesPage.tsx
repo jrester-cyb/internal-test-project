@@ -3,7 +3,7 @@ import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRo
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
-import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
+import { useLoaderData, useParams, useSearchParams, useRouteLoaderData } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
@@ -29,6 +29,9 @@ export default function AssetTypeAttributesPage() {
   const { initialData, initialNextUrl, count, includeHidden: initialIncludeHidden } = loaderData
 
   const { assetTypeId, workspaceId } = useParams()
+  const workspaceData = useRouteLoaderData('workspace-route') as { organization?: string } | undefined
+  const organizationId = workspaceData?.organization
+
   const [searchParams, setSearchParams] = useSearchParams()
   const listRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1094,15 +1097,9 @@ export default function AssetTypeAttributesPage() {
             <Table size="small" sx={{ mt: 1 }}>
               <TableBody>
                 <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>ID</TableCell>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 120, verticalAlign: 'middle' }}>ID</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
                     <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Asset Type ID</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5 }}>
-                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId}</CopyableText>
                   </TableCell>
                 </TableRow>
                 {displayedAttribute.baseAttributeId && (
@@ -1110,6 +1107,14 @@ export default function AssetTypeAttributesPage() {
                     <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Base ID</TableCell>
                     <TableCell sx={{ border: 0, py: 0.5 }}>
                       <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.baseAttributeId}</CopyableText>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {displayedAttribute.organizationId && (
+                  <TableRow>
+                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Organization ID</TableCell>
+                    <TableCell sx={{ border: 0, py: 0.5 }}>
+                      <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.organizationId}</CopyableText>
                     </TableCell>
                   </TableRow>
                 )}
@@ -1121,6 +1126,12 @@ export default function AssetTypeAttributesPage() {
                     </TableCell>
                   </TableRow>
                 )}
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Asset Type ID</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId}</CopyableText>
+                  </TableCell>
+                </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Order</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>{displayedAttribute.order}</TableCell>

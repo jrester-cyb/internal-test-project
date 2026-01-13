@@ -181,6 +181,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     # Annotate workspace_name for override/local attributes
                     _workspace_name=Subquery(workspace_name_subquery),
                 )
+                .annotate(_organization_id=F("asset_type__organization_id"))
                 .select_related(
                     "polymorphic_ctype",
                 )

@@ -168,6 +168,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
     is_hidden = serializers.SerializerMethodField()
+    organization_id = serializers.SerializerMethodField()
 
     class Meta:
         model = GlobalAssetTypeAttribute
@@ -184,6 +185,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "order",
             "asset_count",
             "is_hidden",
+            "organization_id",
             "created_at",
             "updated_at",
         ]
@@ -193,6 +195,10 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Check if this attribute is hidden in the current workspace."""
         # Assumes _is_hidden is always annotated on the queryset
         return getattr(obj, "_is_hidden", False)
+
+    def get_organization_id(self, obj):
+        """Get organization ID from annotation."""
+        return getattr(obj, "_organization_id", None)
 
 
 class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer):
@@ -248,6 +254,7 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
 
         # Get workspace name from annotation if available
         workspace_name = getattr(instance, "_workspace_name", None)
+        organization_id = getattr(instance, "_organization_id", None)
 
         # Build result with metadata first, then base data, then overrides
         result = {
@@ -255,12 +262,13 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
             "isOverride": True,
             "workspace": str(instance.workspace_id) if instance.workspace_id else None,
             "workspace_name": workspace_name,
+            "organization_id": organization_id,
             "base_attribute_id": base_attr_id,
         }
 
-        # Add all base data (except id, which we already set)
+        # Add all base data (except id and organization_id which we already set from annotations)
         for key, value in base_data.items():
-            if key != "id":
+            if key not in ("id", "organization_id"):
                 result[key] = value
 
         # Apply overrides (these will replace base values)
@@ -295,6 +303,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for workspace-specific extension attributes."""
 
     workspace_name = serializers.SerializerMethodField()
+    organization_id = serializers.SerializerMethodField()
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
     is_hidden = serializers.SerializerMethodField()
 
@@ -305,6 +314,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "asset_type",
             "workspace",
             "workspace_name",
+            "organization_id",
             "name",
             "api_key",
             "attribute_type",
@@ -322,6 +332,10 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     def get_workspace_name(self, obj):
         """Get workspace name from annotation if available."""
         return getattr(obj, "_workspace_name", None)
+
+    def get_organization_id(self, obj):
+        """Get organization ID from annotation."""
+        return getattr(obj, "_organization_id", None)
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in its workspace."""

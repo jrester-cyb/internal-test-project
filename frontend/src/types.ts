@@ -28,6 +28,7 @@ export interface AssetTypeAttribute {
   // Workspace extension fields
   workspace?: string | null
   workspaceName?: string | null
+  organizationId?: string | null
   isExtension?: boolean
   isOverride?: boolean
   baseAttributeId?: string | null
