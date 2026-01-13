@@ -199,6 +199,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     "default_value", instance.default_value
                 ),
                 "description": validated_data.get("description", instance.description),
+                "tags": validated_data.get("tags", instance.tags),
                 "order": validated_data.get("order", instance.order),
             }
 
@@ -308,6 +309,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     is_required=instance.is_required,
                     default_value=instance.default_value,
                     description=instance.description,
+                    tags=instance.tags,
                     order=instance.order,
                     is_hidden=True,
                 )

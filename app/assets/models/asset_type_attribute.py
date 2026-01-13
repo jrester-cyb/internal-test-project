@@ -43,6 +43,9 @@ class AssetTypeAttribute(SoftDeleteMixin):
     )
     default_value = models.JSONField(null=True, blank=True)
     description = models.TextField(blank=True)
+    tags = models.JSONField(
+        default=list, blank=True, help_text="List of tags for grouping attributes"
+    )
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -125,6 +125,7 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             "is_hidden",
             "default_value",
             "description",
+            "tags",
             "order",
             "asset_count",
             "created_at",

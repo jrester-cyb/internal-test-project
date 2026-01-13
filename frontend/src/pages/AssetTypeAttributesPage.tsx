@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
@@ -100,7 +100,8 @@ export default function AssetTypeAttributesPage() {
     attributeType: 'text',
     isRequired: false,
     description: '',
-    defaultValue: undefined as any
+    defaultValue: undefined as any,
+    tags: [] as string[]
   })
   const [isApiKeyUnlocked, setIsApiKeyUnlocked] = useState(false)
   const [isApiKeyManuallyEdited, setIsApiKeyManuallyEdited] = useState(false)
@@ -337,7 +338,8 @@ export default function AssetTypeAttributesPage() {
       attributeType: attr.attributeType,
       isRequired: attr.isRequired,
       description: attr.description || '',
-      defaultValue: attr.defaultValue
+      defaultValue: attr.defaultValue,
+      tags: attr.tags || []
     })
     setIsApiKeyUnlocked(false)
     setEditDialogOpen(true)
@@ -351,7 +353,8 @@ export default function AssetTypeAttributesPage() {
       attributeType: 'text',
       isRequired: false,
       description: '',
-      defaultValue: undefined
+      defaultValue: undefined,
+      tags: []
     })
     setIsApiKeyUnlocked(false)
     setIsApiKeyManuallyEdited(false)
@@ -799,7 +802,8 @@ export default function AssetTypeAttributesPage() {
                           attributeType: selectedAttribute!.attributeType,
                           isRequired: selectedAttribute!.isRequired,
                           description: selectedAttribute!.description || '',
-                          defaultValue: selectedAttribute!.defaultValue
+                          defaultValue: selectedAttribute!.defaultValue,
+                          tags: selectedAttribute!.tags || []
                         })
                         setPendingTypeChange(null)
                         setTypeChangeDialogOpen(true)
@@ -837,6 +841,22 @@ export default function AssetTypeAttributesPage() {
                         ? JSON.stringify(selectedAttribute!.defaultValue, null, 2)
                         : String(selectedAttribute!.defaultValue))
                       : 'No default value'}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Tags</TableCell>
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    {selectedAttribute!.tags && selectedAttribute!.tags.length > 0 ? (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selectedAttribute!.tags.map((tag: string) => (
+                          <Chip key={tag} label={tag} size="small" variant="outlined" />
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
+                        No tags
+                      </Typography>
+                    )}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -1239,6 +1259,32 @@ export default function AssetTypeAttributesPage() {
                 />
               }
               label="Required"
+            />
+            <Autocomplete
+              multiple
+              freeSolo
+              options={[]}
+              value={formData.tags}
+              onChange={(_, newValue) => setFormData({ ...formData, tags: newValue as string[] })}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    variant="outlined"
+                    label={option}
+                    size="small"
+                    {...getTagProps({ index })}
+                    key={option}
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Tags"
+                  placeholder="Add tags..."
+                  helperText="Press Enter to add a tag. Used for grouping attributes."
+                />
+              )}
             />
           </Stack>
         </DialogContent>

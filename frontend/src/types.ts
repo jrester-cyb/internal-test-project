@@ -21,6 +21,7 @@ export interface AssetTypeAttribute {
   isRequired: boolean
   defaultValue?: any
   description?: string
+  tags?: string[]
   order: number
   assetCount?: number
   choices?: AssetTypeAttributeChoice[]
