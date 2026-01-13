@@ -54,8 +54,8 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
                     "attributes",
                     queryset=WorkspaceHiddenAttribute.objects.all().select_related(
                         "hidden_attribute__globalassettypeattribute",
-                        "hidden_attribute__workspaceextensionattribute",
-                        "hidden_attribute__workspaceattributeoverride",
+                        "hidden_attribute__workspacelocalassettypeattribute",
+                        "hidden_attribute__workspaceoverrideassettypeattribute",
                     ),
                 )
             )

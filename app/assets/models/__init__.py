@@ -2,9 +2,9 @@ from .asset_type import AssetType, WorkspaceAssetType
 from .asset_type_attribute import (
     BaseAssetTypeAttribute,
     GlobalAssetTypeAttribute,
-    WorkspaceAttributeOverride,
+    WorkspaceOverrideAssetTypeAttribute,
     WorkspaceHiddenAttribute,
-    WorkspaceExtensionAttribute,
+    WorkspaceLocalAssetTypeAttribute,
     WorkspaceAssetTypeConfig,
     AssetCustomAttribute,
 )

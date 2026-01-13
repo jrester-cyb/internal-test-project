@@ -5,9 +5,9 @@ from .models import (
     WorkspaceAssetType,
     BaseAssetTypeAttribute,
     GlobalAssetTypeAttribute,
-    WorkspaceAttributeOverride,
+    WorkspaceOverrideAssetTypeAttribute,
     WorkspaceHiddenAttribute,
-    WorkspaceExtensionAttribute,
+    WorkspaceLocalAssetTypeAttribute,
     WorkspaceAssetTypeConfig,
     AssetCustomAttribute,
     AssetTypeAttributeChoice,
@@ -140,12 +140,12 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
             real_instance = instance
 
         # Select serializer based on instance type
-        if isinstance(real_instance, WorkspaceAttributeOverride):
-            serializer = WorkspaceAttributeOverrideSerializer(
+        if isinstance(real_instance, WorkspaceOverrideAssetTypeAttribute):
+            serializer = WorkspaceOverrideAssetTypeAttributeSerializer(
                 real_instance, context=self.context
             )
-        elif isinstance(real_instance, WorkspaceExtensionAttribute):
-            serializer = WorkspaceExtensionAttributeSerializer(
+        elif isinstance(real_instance, WorkspaceLocalAssetTypeAttribute):
+            serializer = WorkspaceLocalAssetTypeAttributeSerializer(
                 real_instance, context=self.context
             )
         elif isinstance(real_instance, WorkspaceHiddenAttribute):
@@ -212,7 +212,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         ).exists()
 
 
-class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
+class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for workspace-specific attribute overrides."""
 
     workspace_name = serializers.CharField(
@@ -220,7 +220,7 @@ class WorkspaceAttributeOverrideSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = WorkspaceAttributeOverride
+        model = WorkspaceOverrideAssetTypeAttribute
         fields = [
             "id",
             "asset_type",
@@ -296,7 +296,7 @@ class WorkspaceHiddenAttributeSerializer(serializers.Serializer):
         }
 
 
-class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
+class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for workspace-specific extension attributes."""
 
     workspace_name = serializers.CharField(
@@ -306,7 +306,7 @@ class WorkspaceExtensionAttributeSerializer(serializers.ModelSerializer):
     is_hidden = serializers.SerializerMethodField()
 
     class Meta:
-        model = WorkspaceExtensionAttribute
+        model = WorkspaceLocalAssetTypeAttribute
         fields = [
             "id",
             "asset_type",

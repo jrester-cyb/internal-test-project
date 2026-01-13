@@ -167,7 +167,7 @@ class BaseWorkspaceExtensionChoice(BaseWorkspaceChoice):
     Uses polymorphism for typed values like the base choices.
     """
 
-    # Can be attached to either a GlobalAssetTypeAttribute or WorkspaceExtensionAttribute
+    # Can be attached to either a GlobalAssetTypeAttribute or WorkspaceLocalAssetTypeAttribute
     # Using the base polymorphic model to support both
     global_attribute = models.ForeignKey(
         "assets.GlobalAssetTypeAttribute",
@@ -178,7 +178,7 @@ class BaseWorkspaceExtensionChoice(BaseWorkspaceChoice):
         help_text="Global attribute this choice extends (if applicable)",
     )
     extension_attribute = models.ForeignKey(
-        "assets.WorkspaceExtensionAttribute",
+        "assets.WorkspaceLocalAssetTypeAttribute",
         on_delete=models.CASCADE,
         null=True,
         blank=True,

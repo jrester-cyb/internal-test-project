@@ -8,8 +8,8 @@ from core.models.soft_delete import SoftDeleteMixin, PolymorphicSoftDeleteMixin
 class BaseAssetTypeAttribute(PolymorphicSoftDeleteMixin, PolymorphicModel):
     """
     Base polymorphic model for all asset type attributes.
-    Subclasses: GlobalAssetTypeAttribute, WorkspaceAttributeOverride,
-                WorkspaceHiddenAttribute, WorkspaceExtensionAttribute
+    Subclasses: GlobalAssetTypeAttribute, WorkspaceOverrideAssetTypeAttribute,
+                WorkspaceHiddenAttribute, WorkspaceLocalAssetTypeAttribute
     """
 
     FIELD_TYPES = [
@@ -126,7 +126,7 @@ class GlobalAssetTypeAttribute(BaseAssetTypeAttribute):
         return f"{self.asset_type.name}.{self.name}"
 
 
-class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
+class WorkspaceOverrideAssetTypeAttribute(BaseAssetTypeAttribute):
     """
     A workspace-specific override of a GlobalAssetTypeAttribute.
     Only stores fields that can be customized per workspace.
@@ -149,6 +149,7 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
     default_value = models.JSONField(null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     tags = models.JSONField(null=True, blank=True)
+    order = models.IntegerField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -168,7 +169,7 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
                         -- Check against extension names in same workspace
                         IF EXISTS (
                             SELECT 1 
-                            FROM public.assets_workspaceextensionattribute wea
+                            FROM public.assets_workspacelocalassettypeattribute wea
                             JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
                             WHERE wea.workspace_id = NEW.workspace_id
                             AND base.asset_type_id = (
@@ -184,7 +185,7 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
                         -- Check against other override names in same workspace
                         IF EXISTS (
                             SELECT 1 
-                            FROM public.assets_workspaceattributeoverride wao
+                            FROM public.assets_workspaceoverrideassettypeattribute wao
                             JOIN public.assets_baseassettypeattribute base ON wao.baseassettypeattribute_ptr_id = base.id
                             WHERE wao.workspace_id = NEW.workspace_id
                             AND base.asset_type_id = (
@@ -227,7 +228,7 @@ class WorkspaceAttributeOverride(BaseAssetTypeAttribute):
 class WorkspaceHiddenAttribute(BaseAssetTypeAttribute):
     """
     Tracks which attributes are hidden in a specific workspace.
-    Can hide both GlobalAssetTypeAttribute and WorkspaceExtensionAttribute.
+    Can hide both GlobalAssetTypeAttribute and WorkspaceLocalAssetTypeAttribute.
     Simple join - no field overrides, just hiding.
     """
 
@@ -295,7 +296,7 @@ class WorkspaceHiddenAttribute(BaseAssetTypeAttribute):
         return getattr(self.hidden_attribute, "order", 0)
 
 
-class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
+class WorkspaceLocalAssetTypeAttribute(BaseAssetTypeAttribute):
     """
     A workspace-specific extension attribute that doesn't exist in the base asset type.
     """
@@ -318,9 +319,10 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
     tags = models.JSONField(
         default=list, blank=True, help_text="List of tags for grouping attributes"
     )
+    order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ["workspace", "name"]
+        ordering = ["workspace", "order", "name"]
         triggers = [
             pgtrigger.Trigger(
                 name="unique_extension_api_key_per_workspace",
@@ -330,7 +332,7 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
                     -- Check against other extensions
                     IF EXISTS (
                         SELECT 1 
-                        FROM public.assets_workspaceextensionattribute wea
+                        FROM public.assets_workspacelocalassettypeattribute wea
                         JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
                         WHERE wea.workspace_id = NEW.workspace_id
                         AND base.asset_type_id = (
@@ -369,7 +371,7 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
                     -- Check against other extensions
                     IF EXISTS (
                         SELECT 1 
-                        FROM public.assets_workspaceextensionattribute wea
+                        FROM public.assets_workspacelocalassettypeattribute wea
                         JOIN public.assets_baseassettypeattribute base ON wea.baseassettypeattribute_ptr_id = base.id
                         WHERE wea.workspace_id = NEW.workspace_id
                         AND base.asset_type_id = (
@@ -386,7 +388,7 @@ class WorkspaceExtensionAttribute(BaseAssetTypeAttribute):
                     -- Check against override names in same workspace
                     IF EXISTS (
                         SELECT 1 
-                        FROM public.assets_workspaceattributeoverride wao
+                        FROM public.assets_workspaceoverrideassettypeattribute wao
                         JOIN public.assets_baseassettypeattribute base ON wao.baseassettypeattribute_ptr_id = base.id
                         WHERE wao.workspace_id = NEW.workspace_id
                         AND base.asset_type_id = (
@@ -443,7 +445,7 @@ class WorkspaceAssetTypeConfig(models.Model):
     attribute_order = models.JSONField(
         default=list,
         blank=True,
-        help_text="Ordered list of attribute UUIDs (GlobalAssetTypeAttribute and WorkspaceExtensionAttribute)",
+        help_text="Ordered list of attribute UUIDs (GlobalAssetTypeAttribute and WorkspaceLocalAssetTypeAttribute)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
