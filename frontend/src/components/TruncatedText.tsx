@@ -1,0 +1,101 @@
+import { useState, useLayoutEffect, useRef } from 'react'
+import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material'
+import { ContentCopy } from '@mui/icons-material'
+
+interface TruncatedTextProps {
+  text: string
+  maxLines?: number
+  title?: string
+}
+
+export default function TruncatedText({ text, maxLines = 3, title = 'Full Text' }: TruncatedTextProps) {
+  const textRef = useRef<HTMLSpanElement>(null)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = textRef.current
+    if (el) {
+      setIsOverflowing(el.scrollHeight > el.clientHeight)
+    } else {
+      setIsOverflowing(false)
+    }
+  }, [text])
+
+  return (
+    <>
+      <Box
+        sx={{
+          '& .copy-button': { opacity: 0 },
+          '&:hover .copy-button': { opacity: 0.7 },
+        }}
+      >
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography
+            ref={textRef}
+            sx={{
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: maxLines,
+              WebkitBoxOrient: 'vertical',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {text}
+          </Typography>
+          <Tooltip title="Copy" arrow>
+            <IconButton
+              className="copy-button"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(text)
+              }}
+              sx={{
+                p: 0.25,
+                flexShrink: 0,
+                color: 'inherit',
+                '&:hover': { opacity: 1 },
+              }}
+            >
+              <ContentCopy fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        {isOverflowing && (
+          <Typography
+            component="span"
+            onClick={() => setModalOpen(true)}
+            sx={{
+              color: 'primary.main',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              '&:hover': { textDecoration: 'underline' },
+            }}
+          >
+            (See full text)
+          </Typography>
+        )}
+      </Box>
+
+      <Dialog
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+          {title}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ whiteSpace: 'pre-wrap' }}>
+            {text}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setModalOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  )
+}

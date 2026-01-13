@@ -2,6 +2,13 @@ import { createTheme, type Components, type Theme } from '@mui/material/styles'
 
 // Shared component overrides that are the same for both themes
 const sharedComponents: Components<Theme> = {
+  MuiModal: {
+    styleOverrides: {
+      root: {
+        zIndex: 1400, // Above AppBar (1100) and default Modal (1300)
+      },
+    },
+  },
   MuiAppBar: {
     styleOverrides: {
       colorPrimary: {

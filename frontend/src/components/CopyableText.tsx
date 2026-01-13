@@ -20,11 +20,21 @@ export default function CopyableText({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 0.5,
-        '& .copy-button': { opacity: 0 },
+        minWidth: 0,
+        overflow: 'hidden',
+        '& .copy-button': { opacity: 0, flexShrink: 0 },
         '&:hover .copy-button': { opacity: 0.7 },
       }}
     >
-      <Typography sx={sx} {...typographyProps}>
+      <Typography
+        sx={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          ...sx
+        }}
+        {...typographyProps}
+      >
         {children}
       </Typography>
       <Tooltip title="Copy" arrow>

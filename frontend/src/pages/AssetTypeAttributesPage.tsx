@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities'
 import AttributeChoicesSection from '../components/AttributeChoicesSection'
 import ConfirmDialog from '../components/ConfirmDialog'
 import CopyableText from '../components/CopyableText'
+import TruncatedText from '../components/TruncatedText'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -44,6 +45,7 @@ export default function AssetTypeAttributesPage() {
   const [selectedAttributeAssetCount, setSelectedAttributeAssetCount] = useState<number | null>(null)
   const [isLoadingCount, setIsLoadingCount] = useState(false)
   const [leftColumnWidth, setLeftColumnWidth] = useState(50) // percentage
+  const [leftColumnPixelWidth, setLeftColumnPixelWidth] = useState(500)
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null)
@@ -269,6 +271,9 @@ export default function AssetTypeAttributesPage() {
       const rect = container.getBoundingClientRect()
       if (rect.height > 0) {
         setListHeight(rect.height)
+      }
+      if (rect.width > 0) {
+        setLeftColumnPixelWidth(rect.width)
       }
     }
 
@@ -658,10 +663,12 @@ export default function AssetTypeAttributesPage() {
                 <DragIndicatorIcon fontSize="small" />
               </IconButton>
             </TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <CopyableText>{attr.name}</CopyableText>
-                {attr.isHidden && (
+            <TableCell sx={{ fontWeight: 600, maxWidth: 0 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, overflow: 'hidden' }}>
+                <CopyableText sx={{ fontWeight: 600 }}>
+                  {attr.name}
+                </CopyableText>
+                {attr.isHidden && leftColumnPixelWidth > 350 && (
                   <Tooltip title="Hidden in this workspace only" arrow>
                     <Chip
                       icon={<HideIcon sx={{ fontSize: '14px !important' }} />}
@@ -669,7 +676,12 @@ export default function AssetTypeAttributesPage() {
                       size="small"
                       color="default"
                       variant="outlined"
-                      sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }, opacity: 0.7 }}
+                      sx={{
+                        height: 20,
+                        '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' },
+                        opacity: 0.7,
+                        flexShrink: 0
+                      }}
                     />
                   </Tooltip>
                 )}
@@ -795,7 +807,7 @@ export default function AssetTypeAttributesPage() {
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Description</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5, color: selectedAttribute!.description ? 'text.primary' : 'text.disabled', fontStyle: selectedAttribute!.description ? 'normal' : 'italic' }}>
                     {selectedAttribute!.description ? (
-                      <CopyableText>{selectedAttribute!.description}</CopyableText>
+                      <TruncatedText text={selectedAttribute!.description} maxLines={3} title="Description" />
                     ) : (
                       'No description'
                     )}
