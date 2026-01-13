@@ -98,6 +98,7 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             ).values("base_attribute_id")
 
             # Get global attributes (excluding those with overrides), overrides, and extensions
+            # Django-polymorphic automatically fetches child model data via JOINs
             queryset = BaseAssetTypeAttribute.objects.filter(
                 Q(
                     asset_type_id=assettype_pk,
@@ -179,7 +180,61 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 # No workspace config - fall back to global ordering
                 queryset = self._annotate_global_order(queryset)
 
+            # Prefetch related objects to avoid N+1 queries
+            from django.db.models import Prefetch
+
+            # Prefetch hidden attribute records for this workspace
+            hidden_qs = WorkspaceHiddenAttribute.objects.filter(
+                workspace_id=workspace_pk,
+                deleted_at__isnull=True,
+            )
+
+            # For polymorphic querysets, we can only prefetch relations that exist on all models
+            # or on the base model. hidden_in_workspaces exists on GlobalAssetTypeAttribute,
+            # workspace exists on Override and Local, base_attribute only on Override.
+            # We'll use select_related on polymorphic_ctype and handle the rest in serializers
+            # by caching lookups in context.
+            queryset = queryset.select_related(
+                "polymorphic_ctype",
+            )
+
         return queryset
+
+    def get_serializer_context(self):
+        """Add cached data to serializer context for performance."""
+        context = super().get_serializer_context()
+
+        # Get workspace_pk from URL kwargs
+        workspace_pk = self.kwargs.get("workspace_pk")
+        if workspace_pk:
+            # Cache hidden global attribute IDs (1 query)
+            context["hidden_global_ids"] = set(
+                WorkspaceHiddenAttribute.objects.filter(
+                    workspace_id=workspace_pk,
+                    deleted_at__isnull=True,
+                ).values_list("hidden_attribute_id", flat=True)
+            )
+
+            # Cache the workspace name (1 query)
+            from workspaces.models import Workspace
+
+            try:
+                workspace = Workspace.objects.get(pk=workspace_pk)
+                context["workspace_name"] = workspace.name
+            except Workspace.DoesNotExist:
+                context["workspace_name"] = None
+
+            # Cache all global attributes for this asset type (for override base_attribute lookups)
+            assettype_pk = self.kwargs.get("assettype_pk")
+            if assettype_pk:
+                global_attrs = GlobalAssetTypeAttribute.objects.filter(
+                    asset_type_id=assettype_pk
+                )
+                context["global_attributes_by_id"] = {
+                    str(attr.id): attr for attr in global_attrs
+                }
+
+        return context
 
     def _annotate_global_order(self, queryset):
         """Annotate queryset with global ordering (from GlobalAssetTypeAttribute.order)."""

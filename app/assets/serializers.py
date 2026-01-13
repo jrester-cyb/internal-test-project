@@ -130,35 +130,34 @@ class AssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         """Route to the appropriate serializer based on instance type."""
-        # Capture effective_order from annotation before getting real instance
+        # Capture effective_order from annotation before processing
         effective_order = getattr(instance, "effective_order", None)
 
-        # Get the real polymorphic instance
-        if hasattr(instance, "get_real_instance"):
-            real_instance = instance.get_real_instance()
-        else:
-            real_instance = instance
+        # The instance should already be the real polymorphic type from the queryset
+        # We don't need to call get_real_instance() which would cause extra queries
+        # Just use the instance directly since BaseAssetTypeAttribute.objects returns
+        # polymorphic instances automatically
 
         # Select serializer based on instance type
-        if isinstance(real_instance, WorkspaceOverrideAssetTypeAttribute):
+        if isinstance(instance, WorkspaceOverrideAssetTypeAttribute):
             serializer = WorkspaceOverrideAssetTypeAttributeSerializer(
-                real_instance, context=self.context
+                instance, context=self.context
             )
-        elif isinstance(real_instance, WorkspaceLocalAssetTypeAttribute):
+        elif isinstance(instance, WorkspaceLocalAssetTypeAttribute):
             serializer = WorkspaceLocalAssetTypeAttributeSerializer(
-                real_instance, context=self.context
+                instance, context=self.context
             )
-        elif isinstance(real_instance, WorkspaceHiddenAttribute):
+        elif isinstance(instance, WorkspaceHiddenAttribute):
             serializer = WorkspaceHiddenAttributeSerializer(
-                real_instance, context=self.context
+                instance, context=self.context
             )
-        elif isinstance(real_instance, GlobalAssetTypeAttribute):
+        elif isinstance(instance, GlobalAssetTypeAttribute):
             serializer = GlobalAssetTypeAttributeSerializer(
-                real_instance, context=self.context
+                instance, context=self.context
             )
         else:
             # Fallback to base serialization
-            return super().to_representation(real_instance)
+            return super().to_representation(instance)
 
         data = serializer.data
 
@@ -197,7 +196,16 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in the current workspace."""
-        # Get workspace_pk from context if available
+        # First check if we have hidden IDs cached in context (most efficient)
+        hidden_global_ids = self.context.get("hidden_global_ids")
+        if hidden_global_ids is not None:
+            return obj.id in hidden_global_ids
+
+        # Check if we have prefetched hidden data on the instance
+        if hasattr(obj, "_prefetched_hidden"):
+            return len(obj._prefetched_hidden) > 0
+
+        # Fallback to query if not prefetched
         request = self.context.get("request")
         if not request:
             return False
@@ -249,20 +257,32 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
         """Return the base attribute serialized with isOverride flag."""
         from .serializers import GlobalAssetTypeAttributeSerializer
 
+        # Get base attribute from cache if available, otherwise access directly
+        global_attrs_cache = self.context.get("global_attributes_by_id", {})
+        base_attr_id = (
+            str(instance.base_attribute_id) if instance.base_attribute_id else None
+        )
+        base_attr = global_attrs_cache.get(base_attr_id) if base_attr_id else None
+        if base_attr is None:
+            base_attr = instance.base_attribute
+
         # Serialize the base attribute
         base_data = GlobalAssetTypeAttributeSerializer(
-            instance.base_attribute, context=self.context
+            base_attr, context=self.context
         ).data
+
+        # Get workspace name from cache if available
+        workspace_name = self.context.get("workspace_name")
+        if workspace_name is None and instance.workspace:
+            workspace_name = instance.workspace.name
 
         # Build result with metadata first, then base data, then overrides
         result = {
             "id": str(instance.id),  # Override's own ID
             "isOverride": True,
             "workspace": str(instance.workspace_id) if instance.workspace_id else None,
-            "workspace_name": instance.workspace.name if instance.workspace else None,
-            "base_attribute_id": (
-                str(instance.base_attribute_id) if instance.base_attribute_id else None
-            ),
+            "workspace_name": workspace_name,
+            "base_attribute_id": base_attr_id,
         }
 
         # Add all base data (except id, which we already set)
@@ -301,9 +321,7 @@ class WorkspaceHiddenAttributeSerializer(serializers.Serializer):
 class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     """Serializer for workspace-specific extension attributes."""
 
-    workspace_name = serializers.CharField(
-        source="workspace.name", read_only=True, allow_null=True
-    )
+    workspace_name = serializers.SerializerMethodField()
     asset_count = serializers.IntegerField(read_only=True, required=False, default=0)
     is_hidden = serializers.SerializerMethodField()
 
@@ -328,12 +346,17 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "asset_type", "workspace", "created_at", "updated_at"]
 
+    def get_workspace_name(self, obj):
+        """Get workspace name from cache if available."""
+        workspace_name = self.context.get("workspace_name")
+        if workspace_name is not None:
+            return workspace_name
+        return obj.workspace.name if obj.workspace else None
+
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in its workspace."""
-        return obj.hidden_in_workspaces.filter(
-            workspace_id=obj.workspace_id,
-            deleted_at__isnull=True,
-        ).exists()
+        # Local attributes can't be hidden currently (they're workspace-specific)
+        return False
 
 
 class WorkspaceAssetTypeConfigSerializer(serializers.ModelSerializer):
