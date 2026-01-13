@@ -63,7 +63,11 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         filters.OrderingFilter,
     ]
     search_fields = ["^name", "^api_key", "description"]
-    ordering_fields = ["name", "created_at"]
+    ordering_fields = [
+        "effective_order",
+        "name",
+        "created_at",
+    ]
 
     LOOKUP_MAP = {
         "text": "textattributevalue__value",
@@ -124,82 +128,93 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     )
                 )
 
-            # Check for workspace-specific attribute ordering
-            # If config exists, ordering will be applied in the list() method
-            if WorkspaceAssetTypeConfig.objects.filter(
-                workspace_id=workspace_pk,
-                asset_type_id=assettype_pk,
-            ).exists():
-                # Custom order exists, we'll apply it in list()
-                queryset = queryset.select_related()
-            else:
-                # Fall back to global ordering by GlobalAssetTypeAttribute.order
-                queryset = queryset.annotate(
-                    effective_order=Case(
-                        When(
-                            polymorphic_ctype__model="globalassettypeattribute",
-                            then=F("globalassettypeattribute__order"),
-                        ),
-                        When(
-                            polymorphic_ctype__model="workspaceattributeoverride",
-                            then=F("workspaceattributeoverride__base_attribute__order"),
-                        ),
-                        When(
-                            polymorphic_ctype__model="workspaceextensionattribute",
-                            then=Value(
-                                999999
-                            ),  # Extensions at end when no custom order
-                        ),
-                        default=Value(0),
-                        output_field=IntegerField(),
-                    )
-                ).order_by("effective_order", "created_at")
+            # Build ordering annotation
+            # Try workspace-specific order first, fall back to global order
+            try:
+                config = WorkspaceAssetTypeConfig.objects.get(
+                    workspace_id=workspace_pk,
+                    asset_type_id=assettype_pk,
+                )
+                if config.attribute_order:
+                    # Build Case/When for workspace ordering
+                    order_cases = []
+                    for idx, item in enumerate(config.attribute_order):
+                        if isinstance(item, dict):
+                            attr_id = item.get("id", "")
+                        else:
+                            attr_id = str(item)
+                        order_cases.append(When(id=attr_id, then=Value(idx)))
 
-        print(queryset)
+                    queryset = queryset.annotate(
+                        effective_order=Case(
+                            *order_cases,
+                            default=Value(999999),
+                            output_field=IntegerField(),
+                        )
+                    ).order_by("effective_order", "created_at")
+                else:
+                    # Config exists but no order - fall back to global
+                    queryset = self._annotate_global_order(queryset)
+            except WorkspaceAssetTypeConfig.DoesNotExist:
+                # No workspace config - fall back to global ordering
+                queryset = self._annotate_global_order(queryset)
+
         return queryset
 
-    def _apply_workspace_ordering(self, queryset, workspace_pk, assettype_pk):
-        """Apply workspace-specific ordering from WorkspaceAssetTypeConfig."""
+    def _annotate_global_order(self, queryset):
+        """Annotate queryset with global ordering (from GlobalAssetTypeAttribute.order)."""
+        return queryset.annotate(
+            effective_order=Case(
+                When(
+                    polymorphic_ctype__model="globalassettypeattribute",
+                    then=F("globalassettypeattribute__order"),
+                ),
+                When(
+                    polymorphic_ctype__model="workspaceattributeoverride",
+                    then=F("workspaceattributeoverride__base_attribute__order"),
+                ),
+                When(
+                    polymorphic_ctype__model="workspaceextensionattribute",
+                    then=Value(999999),  # Extensions at end when no custom order
+                ),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        ).order_by("effective_order", "created_at")
+
+    def _update_config_for_override(self, workspace_pk, assettype_pk, old_id, new_id):
+        """Update WorkspaceAssetTypeConfig to replace old attribute ID with new override ID."""
         try:
             config = WorkspaceAssetTypeConfig.objects.get(
                 workspace_id=workspace_pk,
                 asset_type_id=assettype_pk,
             )
             if config.attribute_order:
-                # Build order map - handle both formats:
-                # - List of UUIDs: ["uuid1", "uuid2", ...]
-                # - List of dicts: [{"id": "uuid1", "order": 0}, ...]
-                order_map = {}
-                for idx, item in enumerate(config.attribute_order):
+                # Replace old_id with new_id in the order list
+                new_order = []
+                for item in config.attribute_order:
                     if isinstance(item, dict):
-                        attr_id = str(item.get("id", ""))
+                        # Old format: {"id": "uuid", "order": 0}
+                        if str(item.get("id", "")) == old_id:
+                            new_order.append(
+                                {"id": new_id, "order": item.get("order", 0)}
+                            )
+                        else:
+                            new_order.append(item)
                     else:
-                        attr_id = str(item)
-                    order_map[attr_id] = idx
-
-                # Sort queryset results by position in order array
-                result = list(queryset)
-                result.sort(key=lambda x: order_map.get(str(x.id), 999999))
-                return result
+                        # New format: just UUID string
+                        if str(item) == old_id:
+                            new_order.append(new_id)
+                        else:
+                            new_order.append(item)
+                config.attribute_order = new_order
+                config.save()
         except WorkspaceAssetTypeConfig.DoesNotExist:
             pass
-        return queryset
 
     def list(self, request, *args, **kwargs):
-        """List attributes with workspace-specific ordering if available."""
+        """List attributes with ordering already applied in get_queryset."""
         queryset = self.filter_queryset(self.get_queryset())
-        workspace_pk = self.kwargs.get("workspace_pk")
-        assettype_pk = self.kwargs.get("assettype_pk")
-
-        # Apply workspace-specific ordering if we have a config
-        if workspace_pk:
-            queryset = self._apply_workspace_ordering(
-                queryset, workspace_pk, assettype_pk
-            )
-
-        # Convert to list if not already (from custom ordering)
-        if not isinstance(queryset, list):
-            queryset = list(queryset)
 
         # Handle pagination
         page = self.paginate_queryset(queryset)
@@ -300,7 +315,13 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                         workspace_id=workspace_pk,
                         asset_type_id=assettype_pk,
                     )
-                    created = True
+                    # Update WorkspaceAssetTypeConfig to replace global attr ID with override ID
+                    self._update_config_for_override(
+                        workspace_pk,
+                        assettype_pk,
+                        str(global_attr.id),
+                        str(override.id),
+                    )
 
                 # Update override fields
                 for field in [
@@ -521,6 +542,13 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         ).first()
 
         if override:
+            # Update the config to replace override UUID with global UUID
+            if workspace_pk:
+                global_attr_id = str(override.global_attribute_id)
+                override_id = str(override.id)
+                self._update_config_for_override(
+                    workspace_pk, assettype_pk, override_id, global_attr_id
+                )
             override.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
