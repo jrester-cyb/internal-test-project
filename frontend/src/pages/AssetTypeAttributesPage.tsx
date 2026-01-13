@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, ToggleButton, Tooltip, Autocomplete, Popover, Badge, Drawer, useMediaQuery, useTheme } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Popover, Drawer, useMediaQuery, useTheme } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition } from '../api/assets'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -37,10 +37,8 @@ export default function AssetTypeAttributesPage() {
 
   const [allAttributes, setAllAttributes] = useState(initialData || [])
   const [nextUrl, setNextUrl] = useState<string | null>(initialNextUrl)
-  const [totalCount, setTotalCount] = useState(count)
   const [listHeight, setListHeight] = useState(600)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(!!initialNextUrl)
   const [selectedAttribute, setSelectedAttribute] = useState<AssetTypeAttribute | null>(null)
   const [selectedAttributeAssetCount, setSelectedAttributeAssetCount] = useState<number | null>(null)
   const [isLoadingCount, setIsLoadingCount] = useState(false)
@@ -56,6 +54,7 @@ export default function AssetTypeAttributesPage() {
   const [globalDefinition, setGlobalDefinition] = useState<AssetTypeAttribute | null>(null)
   const [isLoadingGlobalDefinition, setIsLoadingGlobalDefinition] = useState(false)
   const [showingGlobalDefinition, setShowingGlobalDefinition] = useState(false)
+  const [isRefetching, setIsRefetching] = useState(false) // Loading state for filter-triggered refetch
 
   // Responsive breakpoint detection - use lg (1200px) to include iPads in landscape
   const theme = useTheme()
@@ -78,24 +77,10 @@ export default function AssetTypeAttributesPage() {
 
   const closeConfirmDialog = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
-  // Helper to get attribute scope
-  const getAttributeScope = (attr: AssetTypeAttribute): 'global' | 'override' | 'local' => {
-    if (attr.isOverride) return 'override'
-    if (attr.workspace) return 'local'
-    return 'global'
-  }
-
-  // Filter attributes based on includeHidden toggle, selected tags, and excluded scopes
+  // Filter attributes - only hidden filtering is client-side, scope/tags are server-side
   const displayedAttributes = allAttributes.filter(attr => {
-    // Filter by hidden status
+    // Filter by hidden status (client-side only)
     if (!includeHidden && attr.isHidden) return false
-    // Filter by excluded scopes
-    if (excludedScopes.includes(getAttributeScope(attr))) return false
-    // Filter by selected tags (if any tags selected, attribute must have at least one matching tag)
-    if (selectedTags.length > 0) {
-      if (!attr.tags || attr.tags.length === 0) return false
-      if (!selectedTags.some(tag => attr.tags.includes(tag))) return false
-    }
     return true
   })
 
@@ -105,6 +90,40 @@ export default function AssetTypeAttributesPage() {
       setSelectedAttribute(null)
     }
   }, [displayedAttributes, selectedAttribute])
+
+  // Track previous filter values to detect changes
+  const prevFiltersRef = useRef({ excludedScopes, selectedTags })
+
+  // Refetch when scope or tag filters change
+  useEffect(() => {
+    const prev = prevFiltersRef.current
+    const filtersChanged = 
+      JSON.stringify(prev.excludedScopes) !== JSON.stringify(excludedScopes) ||
+      JSON.stringify(prev.selectedTags) !== JSON.stringify(selectedTags)
+    
+    prevFiltersRef.current = { excludedScopes, selectedTags }
+    
+    if (filtersChanged && workspaceId && assetTypeId) {
+      const doRefetch = async () => {
+        setIsRefetching(true)
+        try {
+          const response = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId, 1, 25, {
+            search: searchTerm || undefined,
+            includeHidden,
+            excludeScopes: excludedScopes.length > 0 ? excludedScopes : undefined,
+            tags: selectedTags.length > 0 ? selectedTags : undefined,
+          })
+          setAllAttributes(response.results || [])
+          setNextUrl(response.next || null)
+        } catch (error) {
+          console.error('Failed to refetch attributes:', error)
+        } finally {
+          setIsRefetching(false)
+        }
+      }
+      doRefetch()
+    }
+  }, [excludedScopes, selectedTags, workspaceId, assetTypeId, searchTerm, includeHidden])
 
   // Reset global definition view when selected attribute changes
   useEffect(() => {
@@ -205,7 +224,6 @@ export default function AssetTypeAttributesPage() {
   useEffect(() => {
     setAllAttributes(initialData || [])
     setNextUrl(initialNextUrl)
-    setHasMore(!!initialNextUrl)
   }, [initialData, initialNextUrl])
 
   // Initialize search term from URL on mount only
@@ -269,11 +287,6 @@ export default function AssetTypeAttributesPage() {
         .then(response => {
           const newAttributes = response.results || []
 
-          // Update total count from server response
-          if (response.count !== undefined) {
-            setTotalCount(response.count)
-          }
-
           if (newAttributes.length > 0) {
             setAllAttributes(prev => {
               const existingIds = new Set(prev.map(attr => attr.id))
@@ -285,9 +298,7 @@ export default function AssetTypeAttributesPage() {
               return [...visible, ...hidden]
             })
             setNextUrl(response.next || null)
-            setHasMore(!!response.next)
           } else {
-            setHasMore(false)
             setNextUrl(null)
           }
         })
@@ -666,19 +677,7 @@ export default function AssetTypeAttributesPage() {
     }
   }
 
-  const getTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      text: 'default',
-      number: 'primary',
-      boolean: 'success',
-      date: 'secondary',
-      datetime: 'warning',
-      json: 'info'
-    }
-    return colors[type] || 'default'
-  }
-
-  function SortableRow({ attr, style: virtualStyle, index }: { attr: AssetTypeAttribute, style: React.CSSProperties, index: number }) {
+  function SortableRow({ attr, style: virtualStyle }: { attr: AssetTypeAttribute, style: React.CSSProperties }) {
     const isHidden = attr.isHidden
     const {
       attributes: dndAttributes,
@@ -1274,7 +1273,10 @@ export default function AssetTypeAttributesPage() {
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
               <Box sx={{ p: 2, minWidth: 280 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1.5 }}>Filter Options</Typography>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+                  <Typography variant="subtitle2">Filter Options</Typography>
+                  {isRefetching && <CircularProgress size={14} />}
+                </Stack>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -1287,7 +1289,7 @@ export default function AssetTypeAttributesPage() {
                   sx={{ mb: 1.5, display: 'block' }}
                 />
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Scope</Typography>
-                <Stack direction="row" spacing={0.5} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
+                <Stack direction="row" spacing={0.5} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                   {[
                     { value: 'global', label: 'Global', color: 'success' as const },
                     { value: 'override', label: 'Override', color: 'warning' as const },
@@ -1398,7 +1400,7 @@ export default function AssetTypeAttributesPage() {
                     >
                       {({ index, style }) => {
                         const attr = displayedAttributes[index]
-                        return <SortableRow key={attr.id} attr={attr} style={style} index={index} />
+                        return <SortableRow key={attr.id} attr={attr} style={style} />
                       }}
                     </List>
                   </SortableContext>

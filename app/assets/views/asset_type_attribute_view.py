@@ -32,7 +32,7 @@ from ..serializers import (
     WorkspaceLocalAssetTypeAttributeSerializer,
     WorkspaceAssetTypeConfigSerializer,
 )
-from ..filters import PolymorphicSearchFilter
+from ..filters import PolymorphicSearchFilter, ScopeFilter, TagsFilter
 from app.pagination import CustomPageNumberPagination
 
 
@@ -59,6 +59,8 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
     filter_backends = [
         DjangoFilterBackend,
         PolymorphicSearchFilter,
+        ScopeFilter,
+        TagsFilter,
         filters.OrderingFilter,
     ]
     # Search fields for polymorphic child models

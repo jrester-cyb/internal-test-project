@@ -159,18 +159,39 @@ export async function fetchAssetsByType(workspaceId: string, assetTypeId: string
   return response.json()
 }
 
-export async function fetchAssetAttributeDefinitions(workspaceId: string, assetTypeId: string, page: number = 1, pageSize: number = 25, search?: string, includeHidden?: boolean) {
+export interface AttributeFilterOptions {
+  search?: string
+  includeHidden?: boolean
+  excludeScopes?: string[]  // 'global' | 'override' | 'local'
+  tags?: string[]
+}
+
+export async function fetchAssetAttributeDefinitions(
+  workspaceId: string, 
+  assetTypeId: string, 
+  page: number = 1, 
+  pageSize: number = 25, 
+  options?: AttributeFilterOptions
+) {
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString()
   })
 
-  if (search) {
-    params.append('search', search)
+  if (options?.search) {
+    params.append('search', options.search)
   }
 
-  if (includeHidden) {
+  if (options?.includeHidden) {
     params.append('include_hidden', 'true')
+  }
+
+  if (options?.excludeScopes && options.excludeScopes.length > 0) {
+    params.append('exclude_scope', options.excludeScopes.join(','))
+  }
+
+  if (options?.tags && options.tags.length > 0) {
+    params.append('tags', options.tags.join(','))
   }
 
   const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))

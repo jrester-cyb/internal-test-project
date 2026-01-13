@@ -100,7 +100,7 @@ export default function FilterBuilder({
   async function loadAttributeDefinitions(assetTypeId: string) {
     if (!workspaceId) return
     try {
-      const defs = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId)
+      const defs = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId, 1, 1000)
       const attributes = Array.isArray(defs) ? defs : defs.results || []
       setAttributeDefinitions(prev => ({
         ...prev,

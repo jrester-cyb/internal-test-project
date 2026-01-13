@@ -157,7 +157,7 @@ const router = createBrowserRouter([
                       const includeHidden = url.searchParams.get('include_hidden') === 'true'
 
                       const { fetchAssetAttributeDefinitions } = await import('./api/assets')
-                      const response = await fetchAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!, 1, 25, search, includeHidden)
+                      const response = await fetchAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!, 1, 25, { search, includeHidden })
                       const attributes = response.results || []
                       const count = response.count || 0
 
