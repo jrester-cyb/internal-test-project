@@ -95,6 +95,139 @@ const stripJsonComments = (jsonc: string, preservePositions = false): string => 
   return result
 }
 
+// Format JSONC while preserving comments
+// Comments are extracted, JSON is formatted, then comments are re-inserted with proper indentation
+const formatJsonc = (jsonc: string): string => {
+  // Extract comments with their line context
+  interface CommentInfo {
+    type: 'line' | 'block'
+    text: string
+    lineIndex: number
+    isStandalone: boolean // Comment on its own line vs inline
+    precedingContent: string // Non-comment content before this on same line
+  }
+
+  const lines = jsonc.split('\n')
+  const comments: CommentInfo[] = []
+  const cleanLines: string[] = []
+
+  // Parse each line to extract comments
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex]
+    let i = 0
+    let inString = false
+    let escaped = false
+    let cleanPart = ''
+    let commentFound = false
+
+    while (i < line.length && !commentFound) {
+      const char = line[i]
+      const nextChar = line[i + 1]
+
+      if (inString) {
+        cleanPart += char
+        if (escaped) {
+          escaped = false
+        } else if (char === '\\') {
+          escaped = true
+        } else if (char === '"') {
+          inString = false
+        }
+        i++
+        continue
+      }
+
+      if (char === '"') {
+        inString = true
+        cleanPart += char
+        i++
+        continue
+      }
+
+      // Single-line comment
+      if (char === '/' && nextChar === '/') {
+        const commentText = line.substring(i)
+        const precedingContent = cleanPart.trim()
+        comments.push({
+          type: 'line',
+          text: commentText,
+          lineIndex,
+          isStandalone: precedingContent === '',
+          precedingContent
+        })
+        commentFound = true
+        continue
+      }
+
+      // Block comment on single line
+      if (char === '/' && nextChar === '*') {
+        const endIdx = line.indexOf('*/', i + 2)
+        if (endIdx !== -1) {
+          const commentText = line.substring(i, endIdx + 2)
+          const precedingContent = cleanPart.trim()
+          comments.push({
+            type: 'block',
+            text: commentText,
+            lineIndex,
+            isStandalone: precedingContent === '' && line.substring(endIdx + 2).trim() === '',
+            precedingContent
+          })
+          i = endIdx + 2
+          continue
+        }
+      }
+
+      cleanPart += char
+      i++
+    }
+
+    cleanLines.push(cleanPart)
+  }
+
+  // Join and parse the clean JSON
+  const cleanJson = cleanLines.join('\n')
+  const stripped = stripJsonComments(cleanJson)
+
+  if (!stripped.trim()) {
+    // Only comments, just normalize indentation
+    return comments.map(c => c.text).join('\n')
+  }
+
+  let parsed: any
+  try {
+    parsed = JSON.parse(stripped)
+  } catch {
+    // Can't parse, return original
+    return jsonc
+  }
+
+  const formatted = JSON.stringify(parsed, null, 2)
+  const formattedLines = formatted.split('\n')
+
+  // Separate standalone header comments (before any JSON content)
+  const headerComments: CommentInfo[] = []
+  const inlineComments: CommentInfo[] = []
+
+  for (const comment of comments) {
+    if (comment.isStandalone && comment.lineIndex < lines.findIndex(l => l.trim().startsWith('{') || l.trim().startsWith('['))) {
+      headerComments.push(comment)
+    } else if (!comment.isStandalone) {
+      inlineComments.push(comment)
+    }
+  }
+
+  // Build result with header comments
+  const resultLines: string[] = []
+  for (const comment of headerComments) {
+    resultLines.push(comment.text)
+  }
+
+  // Add formatted JSON lines
+  resultLines.push(...formattedLines)
+
+  return resultLines.join('\n')
+}
+
 // Parse JSON error to get position (strips JSONC comments first)
 const getJsonErrorPosition = (jsonc: string): { position: number; line: number; message: string } | null => {
   const json = stripJsonComments(jsonc, true) // Preserve positions for accurate error mapping
@@ -1284,9 +1417,7 @@ export default function JsonEditor({
           onClick={() => {
             handleCloseContextMenu()
             try {
-              const stripped = stripJsonComments(localText)
-              const parsed = JSON.parse(stripped)
-              const formatted = JSON.stringify(parsed, null, 2)
+              const formatted = formatJsonc(localText)
               if (formatted !== localText) {
                 handleTextChange(formatted, 0)
                 pendingCursorRef.current = 0
