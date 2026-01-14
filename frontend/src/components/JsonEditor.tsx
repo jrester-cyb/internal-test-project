@@ -899,6 +899,11 @@ export default function JsonEditor({
               spellCheck={false}
             />
           </Box>
+          {!isValid && (
+            <Typography variant="caption" color="error" sx={{ position: 'absolute', bottom: 8, left: 12 }}>
+              Invalid JSON
+            </Typography>
+          )}
         </Box>
       </Modal>
 
