@@ -1,8 +1,8 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link, CircularProgress, Stack } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link, CircularProgress, Stack, Switch, FormControlLabel } from '@mui/material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useLocation, useParams } from 'react-router-dom'
 import { Link as RouterLink } from 'react-router-dom'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { fetchAssetsByType } from '../api/assets'
 
 export default function AssetListPage() {
@@ -22,6 +22,14 @@ export default function AssetListPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(initialData.nextCursor)
   const [hasMore, setHasMore] = useState(!!initialData.nextCursor)
   const [isLoading, setIsLoading] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
+
+  // Filter attributes based on showHidden toggle
+  const hiddenCount = useMemo(() => attributes.filter(attr => attr.isHidden).length, [attributes])
+  const displayAttributes = useMemo(
+    () => showHidden ? attributes : attributes.filter(attr => !attr.isHidden),
+    [attributes, showHidden]
+  )
 
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLTableRowElement | null>(null)
@@ -131,9 +139,27 @@ export default function AssetListPage() {
       }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} sx={{ flexShrink: 0 }}>
           <Typography variant="h5" component="h2">Assets</Typography>
-          <Typography color="text.secondary">
-            {assets.length} loaded{hasMore ? '...' : ''}
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={2}>
+            {hiddenCount > 0 && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={showHidden}
+                    onChange={(e) => setShowHidden(e.target.checked)}
+                  />
+                }
+                label={
+                  <Typography variant="body2" color="text.secondary">
+                    Show hidden ({hiddenCount})
+                  </Typography>
+                }
+              />
+            )}
+            <Typography color="text.secondary">
+              {assets.length} loaded{hasMore ? '...' : ''}
+            </Typography>
+          </Stack>
         </Stack>
         <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
           <Table size="small" stickyHeader>
@@ -141,8 +167,10 @@ export default function AssetListPage() {
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, minWidth: '150px' }}>Name</TableCell>
                 <TableCell sx={{ fontWeight: 600, minWidth: '150px' }}>Coordinates</TableCell>
-                {attributes.map(attr => (
-                  <TableCell key={attr.id} sx={{ fontWeight: 600, minWidth: '120px' }}>{attr.name}</TableCell>
+                {displayAttributes.map(attr => (
+                  <TableCell key={attr.id} sx={{ fontWeight: 600, minWidth: '120px', opacity: attr.isHidden ? 0.5 : 1 }}>
+                    {attr.name}
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -167,14 +195,15 @@ export default function AssetListPage() {
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', minWidth: '150px' }}>
                     {formatCoordinates(asset.location)}
                   </TableCell>
-                  {attributes.map(attr => (
+                  {displayAttributes.map(attr => (
                     <TableCell key={attr.id} sx={{
                       minWidth: '120px',
                       maxWidth: attr.attributeType === 'json' ? '300px' : 'auto',
                       whiteSpace: attr.attributeType === 'json' ? 'pre-wrap' : 'normal',
                       fontFamily: attr.attributeType === 'json' ? 'monospace' : 'inherit',
                       fontSize: attr.attributeType === 'json' ? '0.75rem' : 'inherit',
-                      wordBreak: 'break-word'
+                      wordBreak: 'break-word',
+                      opacity: attr.isHidden ? 0.5 : 1
                     }}>
                       {getAttributeValue(asset, attr.apiKey)}
                     </TableCell>
@@ -184,7 +213,7 @@ export default function AssetListPage() {
               {/* Sentinel row for intersection observer */}
               {hasMore && (
                 <TableRow ref={loadMoreRef}>
-                  <TableCell colSpan={2 + attributes.length} sx={{ textAlign: 'center', py: 2 }}>
+                  <TableCell colSpan={2 + displayAttributes.length} sx={{ textAlign: 'center', py: 2 }}>
                     {isLoading ? (
                       <CircularProgress size={24} />
                     ) : (

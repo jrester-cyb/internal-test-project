@@ -196,12 +196,16 @@ const router = createBrowserRouter([
                         path: ":assetId",
                         element: <AssetDetailPage />,
                         handle: {
-                          crumb: ({ loaderData }) => loaderData?.name || 'Asset Detail',
+                          crumb: ({ loaderData }) => loaderData?.asset?.name || 'Asset Detail',
                           hideNavbar: true,
                         },
                         loader: async ({ params }) => {
-                          const { fetchAsset } = await import('./api/assets')
-                          return fetchAsset(params.workspaceId!, params.assetId!)
+                          const { fetchAsset, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
+                          const [asset, attributes] = await Promise.all([
+                            fetchAsset(params.workspaceId!, params.assetId!),
+                            fetchAllAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!)
+                          ])
+                          return { asset, attributes }
                         },
                       }
                     ]

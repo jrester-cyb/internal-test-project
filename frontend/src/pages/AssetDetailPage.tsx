@@ -1,15 +1,17 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon } from '@mui/icons-material'
-import type { Asset } from '../types'
+import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider, Switch, FormControlLabel } from '@mui/material'
+import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material'
+import { FixedSizeList as List } from 'react-window'
+import { AutoSizer } from 'react-virtualized-auto-sizer'
+import type { Asset, AssetTypeAttribute } from '../types'
 import ActionButtons from '../components/ActionButtons'
 import RelatedAssetsTree from '../components/RelatedAssetsTree'
 import CopyableText from '../components/CopyableText'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
-  const asset = useLoaderData() as Asset
+  const { asset, attributes } = useLoaderData() as { asset: Asset, attributes: AssetTypeAttribute[] }
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null)
   const [containerWidth, setContainerWidth] = useState(1000)
@@ -18,6 +20,10 @@ export default function AssetDetailPage() {
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
+
+  // Count hidden attributes
+  const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Fetch related assets
   useEffect(() => {
@@ -191,33 +197,97 @@ export default function AssetDetailPage() {
           <Grid container spacing={3}>
             {/* First Row: Attributes, Asset Tree */}
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ height: '100%' }}>
-                <CardHeader title="Attributes" />
-                <CardContent>
-                  {asset.attributes && Object.keys(asset.attributes).length > 0 ? (
-                    <Table size="small">
-                      <TableBody>
-                        {Object.entries(asset.attributes).map(([key, value]) => (
-                          <TableRow key={key}>
-                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%', border: 0 }}>{key}</TableCell>
-                            <TableCell sx={{ border: 0 }}>
+              <Card sx={{ height: 400, display: 'flex', flexDirection: 'column' }}>
+                <CardHeader
+                  title="Attributes"
+                  action={
+                    hiddenCount > 0 && (
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={showHidden}
+                            onChange={(e) => setShowHidden(e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" color="text.secondary">
+                            Show hidden ({hiddenCount})
+                          </Typography>
+                        }
+                        sx={{ mr: 1 }}
+                      />
+                    )
+                  }
+                />
+                <CardContent sx={{ flex: 1, overflow: 'hidden', p: 0, position: 'relative' }}>
+                  <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                    {(() => {
+                      // Filter attributes based on showHidden toggle
+                      const displayAttributes = showHidden
+                        ? attributes
+                        : attributes.filter(attr => !attr.isHidden)
+
+                      if (displayAttributes.length === 0) {
+                        return (
+                          <Box sx={{ p: 2 }}>
+                            <Typography color="text.secondary" variant="body2">
+                              No attributes
+                            </Typography>
+                          </Box>
+                        )
+                      }
+
+                      const AttributeRow = ({ index, style }: { index: number, style: React.CSSProperties }) => {
+                        const attr = displayAttributes[index]
+                        const value = asset.attributes?.[attr.apiKey]
+                        return (
+                          <Box
+                            style={style}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              borderBottom: '1px solid',
+                              borderColor: 'divider',
+                              px: 2,
+                              '&:hover': { bgcolor: 'action.hover' }
+                            }}
+                          >
+                            <Box sx={{ width: '35%', fontWeight: 500, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
+                              <Typography variant="body2" noWrap title={attr.name}>{attr.name}</Typography>
+                            </Box>
+                            <Box sx={{ flex: 1, overflow: 'hidden' }}>
                               {value !== null && value !== undefined
                                 ? (typeof value === 'object' ? (
-                                  <Box component="pre" sx={{ m: 0, fontSize: '0.85rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                                    {JSON.stringify(value, null, 2)}
-                                  </Box>
-                                ) : String(value))
-                                : <Typography color="text.disabled" component="span">N/A</Typography>}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <Typography color="text.secondary" variant="body2">
-                      No attributes
-                    </Typography>
-                  )}
+                                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }} noWrap title={JSON.stringify(value)}>
+                                    {JSON.stringify(value)}
+                                  </Typography>
+                                ) : (
+                                  <Typography variant="body2" noWrap title={String(value)}>{String(value)}</Typography>
+                                ))
+                                : <Typography variant="body2" color="text.disabled">—</Typography>}
+                            </Box>
+                          </Box>
+                        )
+                      }
+
+                      return (
+                        <AutoSizer>
+                          {({ height, width }: { height: number; width: number }) => (
+                            <List
+                              height={height}
+                              width={width}
+                              itemCount={displayAttributes.length}
+                              itemSize={40}
+                            >
+                              {AttributeRow}
+                            </List>
+                          )}
+                        </AutoSizer>
+                      )
+                    })()}
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
