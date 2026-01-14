@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Box, IconButton, Tooltip, Typography, Modal, useTheme, Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material'
+import { Box, IconButton, Tooltip, Typography, Modal, useTheme, Menu, MenuItem, ListItemIcon, ListItemText, Divider } from '@mui/material'
 import UndoIcon from '@mui/icons-material/Undo'
 import RedoIcon from '@mui/icons-material/Redo'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
@@ -7,6 +7,9 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import CodeIcon from '@mui/icons-material/Code'
 import CodeOffIcon from '@mui/icons-material/CodeOff'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import CompressIcon from '@mui/icons-material/Compress'
+import SortByAlphaIcon from '@mui/icons-material/SortByAlpha'
+import ClearIcon from '@mui/icons-material/Clear'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import ContentCutIcon from '@mui/icons-material/ContentCut'
 import ContentPasteIcon from '@mui/icons-material/ContentPaste'
@@ -824,29 +827,6 @@ export default function JsonEditor({
         </span>
       </Tooltip>
       <Box sx={{ width: 1, bgcolor: 'divider', mx: 0.25 }} />
-      <Tooltip title="Format JSON" arrow>
-        <span>
-          <IconButton
-            size="small"
-            onClick={() => {
-              try {
-                const parsed = JSON.parse(localText)
-                const formatted = JSON.stringify(parsed, null, 2)
-                if (formatted !== localText) {
-                  handleTextChange(formatted, 0)
-                  pendingCursorRef.current = 0
-                }
-              } catch {
-                // Invalid JSON, can't format
-              }
-            }}
-            disabled={!isValid || !localText}
-            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-          >
-            <AutoFixHighIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
       <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"} arrow>
         <IconButton
           size="small"
@@ -1097,11 +1077,11 @@ export default function JsonEditor({
             : undefined
         }
       >
-        <MenuItem onClick={handleSelectAll}>
+        <MenuItem onClick={handleCut} disabled={!hasSelection}>
           <ListItemIcon>
-            <SelectAllIcon fontSize="small" />
+            <ContentCutIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Select All</ListItemText>
+          <ListItemText>Cut</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleCopy} disabled={!hasSelection}>
           <ListItemIcon>
@@ -1109,17 +1089,109 @@ export default function JsonEditor({
           </ListItemIcon>
           <ListItemText>Copy</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleCut} disabled={!hasSelection}>
-          <ListItemIcon>
-            <ContentCutIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Cut</ListItemText>
-        </MenuItem>
         <MenuItem onClick={handlePasteFromMenu}>
           <ListItemIcon>
             <ContentPasteIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Paste</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleSelectAll}>
+          <ListItemIcon>
+            <SelectAllIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Select All</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem
+          onClick={() => {
+            handleCloseContextMenu()
+            try {
+              const parsed = JSON.parse(localText)
+              const formatted = JSON.stringify(parsed, null, 2)
+              if (formatted !== localText) {
+                handleTextChange(formatted, 0)
+                pendingCursorRef.current = 0
+              }
+            } catch {
+              // Invalid JSON, can't format
+            }
+          }}
+          disabled={!isValid || !localText}
+        >
+          <ListItemIcon>
+            <AutoFixHighIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Format</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleCloseContextMenu()
+            try {
+              const parsed = JSON.parse(localText)
+              const minified = JSON.stringify(parsed)
+              if (minified !== localText) {
+                handleTextChange(minified, 0)
+                pendingCursorRef.current = 0
+              }
+            } catch {
+              // Invalid JSON, can't minify
+            }
+          }}
+          disabled={!isValid || !localText}
+        >
+          <ListItemIcon>
+            <CompressIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Minify</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleCloseContextMenu()
+            try {
+              const parsed = JSON.parse(localText)
+              const sortKeys = (obj: any): any => {
+                if (Array.isArray(obj)) {
+                  return obj.map(sortKeys)
+                }
+                if (obj !== null && typeof obj === 'object') {
+                  return Object.keys(obj)
+                    .sort()
+                    .reduce((acc, key) => {
+                      acc[key] = sortKeys(obj[key])
+                      return acc
+                    }, {} as any)
+                }
+                return obj
+              }
+              const sorted = JSON.stringify(sortKeys(parsed), null, 2)
+              if (sorted !== localText) {
+                handleTextChange(sorted, 0)
+                pendingCursorRef.current = 0
+              }
+            } catch {
+              // Invalid JSON, can't sort
+            }
+          }}
+          disabled={!isValid || !localText}
+        >
+          <ListItemIcon>
+            <SortByAlphaIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Sort Keys</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem
+          onClick={() => {
+            handleCloseContextMenu()
+            handleTextChange('', 0)
+            pendingCursorRef.current = 0
+          }}
+          disabled={!localText}
+        >
+          <ListItemIcon>
+            <ClearIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Clear</ListItemText>
         </MenuItem>
       </Menu>
     </>
