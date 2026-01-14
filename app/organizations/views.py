@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
+from audit_log.mixins import AuditLogMixin
 from .models import Organization, OrganizationMembership
 from workspaces.models import Workspace
 
@@ -62,7 +63,7 @@ class OrganizationWorkspaceSerializer(serializers.ModelSerializer):
     partial_update=extend_schema(tags=["Organizations"]),
     destroy=extend_schema(tags=["Organizations"]),
 )
-class OrganizationViewSet(viewsets.ModelViewSet):
+class OrganizationViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
     ViewSet for Organization model.
     """
@@ -76,6 +77,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     ]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+
+    # Audit logging configuration
+    audit_action_messages = {
+        "create": "Created organization: {obj}",
+        "update": "Updated organization: {obj}",
+        "destroy": "Deleted organization: {obj}",
+    }
 
     @extend_schema(tags=["Organizations"])
     @action(detail=True, methods=["get"])
@@ -114,7 +122,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Organization Members"]),
     destroy=extend_schema(tags=["Organization Members"]),
 )
-class OrganizationMembershipViewSet(viewsets.ModelViewSet):
+class OrganizationMembershipViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
     ViewSet for OrganizationMembership model.
     """
@@ -123,6 +131,13 @@ class OrganizationMembershipViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["role"]
     ordering_fields = ["joined_at", "role"]
+
+    # Audit logging configuration
+    audit_action_messages = {
+        "create": "Added member to organization: {obj}",
+        "update": "Updated organization member: {obj}",
+        "destroy": "Removed member from organization: {obj}",
+    }
 
     def get_queryset(self):
         return OrganizationMembership.objects.filter(

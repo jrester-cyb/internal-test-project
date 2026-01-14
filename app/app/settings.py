@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "pgtrigger",
     "utils",
     "users_manager",
+    "audit_log",
 ]
 
 # Custom User Model
@@ -65,6 +66,7 @@ MIDDLEWARE = [
     "silk.middleware.SilkyMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "audit_log.middleware.AuditLogMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -194,3 +196,20 @@ SPECTACULAR_SETTINGS = {
         "PriorityEnum": "todos.models.Todo.priority",
     },
 }
+
+# Audit Log settings
+AUDIT_LOG_EXCLUDED_PATHS = [
+    "/health/",
+    "/api/health/",
+    "/static/",
+    "/media/",
+    "/__debug__/",
+    "/silk/",
+    "/admin/jsi18n/",
+]
+AUDIT_LOG_EXCLUDED_METHODS = []  # Empty = log all methods (except GET by default)
+AUDIT_LOG_READS = False  # Set to True to also log GET requests
+AUDIT_LOG_AUTO_CAPTURE = False  # Set to True to auto-capture all model changes
+AUDIT_LOG_AUTO_CAPTURE_MODELS = []  # e.g., ['assets.Asset', 'workspaces.Workspace']
+AUDIT_LOG_RETENTION_DAYS = 365  # How long to keep audit logs
+PERMISSION_CACHE_TIMEOUT = 300  # 5 minutes

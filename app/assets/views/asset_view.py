@@ -15,6 +15,7 @@ from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
 )
+from audit_log.mixins import AuditLogMixin
 from ..filter_serializers import FilterSerializer
 from ..renderers import AssetCamelCaseJSONRenderer, AssetCamelCaseBrowsableAPIRenderer
 import re
@@ -100,7 +101,7 @@ AssetPagination = AssetPageNumberPagination
     partial_update=extend_schema(tags=["Assets"]),
     destroy=extend_schema(tags=["Assets"]),
 )
-class AssetViewSet(viewsets.ModelViewSet):
+class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
     ViewSet for Asset model.
 
@@ -122,6 +123,14 @@ class AssetViewSet(viewsets.ModelViewSet):
     filterset_fields = ["asset_type"]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+
+    # Audit logging configuration
+    audit_action_messages = {
+        "create": "Created asset: {obj}",
+        "update": "Updated asset: {obj}",
+        "partial_update": "Updated asset: {obj}",
+        "destroy": "Deleted asset: {obj}",
+    }
 
     @property
     def paginator(self):

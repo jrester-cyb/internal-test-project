@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
+from audit_log.mixins import AuditLogMixin
 from .models import Workspace
 
 
@@ -27,7 +28,7 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     partial_update=extend_schema(tags=["Workspaces"]),
     destroy=extend_schema(tags=["Workspaces"]),
 )
-class WorkspaceViewSet(viewsets.ModelViewSet):
+class WorkspaceViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
     ViewSet for Workspace model.
     """
@@ -42,3 +43,10 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     filterset_fields = ["organization"]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+
+    # Audit logging configuration
+    audit_action_messages = {
+        "create": "Created workspace: {obj}",
+        "update": "Updated workspace: {obj}",
+        "destroy": "Deleted workspace: {obj}",
+    }

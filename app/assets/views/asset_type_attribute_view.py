@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
+from audit_log.mixins import AuditLogMixin
 import hashlib
 from django.db.models import (
     Q,
@@ -101,7 +102,7 @@ def invalidate_attribute_list_cache(workspace_id, assettype_id):
     partial_update=extend_schema(tags=["Asset Type Attributes"]),
     destroy=extend_schema(tags=["Asset Type Attributes"]),
 )
-class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
+class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing asset type attributes.
 
@@ -127,6 +128,17 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
         "WorkspaceOverrideAssetTypeAttribute": ["^name", "^api_key", "description"],
         "WorkspaceLocalAssetTypeAttribute": ["^name", "^api_key", "description"],
     }
+
+    # Audit logging configuration
+    audit_log_reads = True
+    audit_action_messages = {
+        "create": "Created attribute: {obj}",
+        "update": "Updated attribute: {obj}",
+        "destroy": "Deleted attribute: {obj}",
+        "list": "Listed attributes",
+        "retrieve": "Retrieved attribute: {obj}",
+    }
+
     ordering_fields = [
         "effective_order",
         "created_at",

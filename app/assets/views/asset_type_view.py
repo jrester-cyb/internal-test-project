@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema, extend_schema_view
+from audit_log.mixins import AuditLogMixin
 from ..models import AssetType, WorkspaceAssetType, BaseAssetTypeAttribute
 from ..serializers import (
     AssetTypeSerializer,
@@ -21,7 +22,7 @@ from workspaces.models import Workspace
     partial_update=extend_schema(tags=["Asset Types"]),
     destroy=extend_schema(tags=["Asset Types"]),
 )
-class AssetTypeViewSet(viewsets.ModelViewSet):
+class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
     ViewSet for AssetType model.
 
@@ -33,6 +34,13 @@ class AssetTypeViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+
+    # Audit logging configuration
+    audit_action_messages = {
+        "create": "Created asset type: {obj}",
+        "update": "Updated asset type: {obj}",
+        "destroy": "Deleted asset type: {obj}",
+    }
 
     def get_queryset(self):
         """Filter by workspace via WorkspaceAssetType join table"""
