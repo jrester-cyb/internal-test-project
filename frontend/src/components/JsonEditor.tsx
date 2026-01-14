@@ -477,8 +477,8 @@ export default function JsonEditor({
       return
     }
 
-    // Handle block comment with Ctrl+Shift+/
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '/') {
+    // Handle block comment with Ctrl+Shift+/ (key becomes '?' with shift on US keyboards)
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '/' || e.key === '?')) {
       e.preventDefault()
       const target = e.target as HTMLTextAreaElement
       const start = target.selectionStart
