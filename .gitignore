@@ -19,7 +19,7 @@ __pycache__/
 *.pyd
 
 # Profiler output
-silk/profiler/
+**/silk/*
 
 # Editor directories and files
 .vscode/*

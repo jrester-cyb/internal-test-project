@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider, Switch, FormControlLabel } from '@mui/material'
+import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material'
 import { FixedSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
@@ -8,6 +8,7 @@ import type { Asset, AssetTypeAttribute } from '../types'
 import ActionButtons from '../components/ActionButtons'
 import RelatedAssetsTree from '../components/RelatedAssetsTree'
 import CopyableText from '../components/CopyableText'
+import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
@@ -21,9 +22,19 @@ export default function AssetDetailPage() {
   const [relatedError, setRelatedError] = useState<string | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
 
   // Count hidden attributes
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
+
+  // Get all unique tags from attributes
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    attributes.forEach(attr => {
+      attr.tags?.forEach(tag => tagSet.add(tag))
+    })
+    return Array.from(tagSet).sort()
+  }, [attributes])
 
   // Fetch related assets
   useEffect(() => {
@@ -201,32 +212,30 @@ export default function AssetDetailPage() {
                 <CardHeader
                   title="Attributes"
                   action={
-                    hiddenCount > 0 && (
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            size="small"
-                            checked={showHidden}
-                            onChange={(e) => setShowHidden(e.target.checked)}
-                          />
-                        }
-                        label={
-                          <Typography variant="body2" color="text.secondary">
-                            Show hidden ({hiddenCount})
-                          </Typography>
-                        }
-                        sx={{ mr: 1 }}
-                      />
-                    )
+                    <AttributeFilterPopover
+                      showHidden={showHidden}
+                      onShowHiddenChange={setShowHidden}
+                      selectedTags={selectedTags}
+                      onSelectedTagsChange={setSelectedTags}
+                      hiddenCount={hiddenCount}
+                      availableTags={availableTags}
+                    />
                   }
                 />
                 <CardContent sx={{ flex: 1, overflow: 'hidden', p: 0, position: 'relative' }}>
                   <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
                     {(() => {
-                      // Filter attributes based on showHidden toggle
-                      const displayAttributes = showHidden
+                      // Filter attributes based on showHidden toggle and selected tags
+                      let displayAttributes = showHidden
                         ? attributes
                         : attributes.filter(attr => !attr.isHidden)
+
+                      // Filter by selected tags (if any)
+                      if (selectedTags.length > 0) {
+                        displayAttributes = displayAttributes.filter(attr =>
+                          attr.tags?.some(tag => selectedTags.includes(tag))
+                        )
+                      }
 
                       if (displayAttributes.length === 0) {
                         return (
@@ -253,9 +262,16 @@ export default function AssetDetailPage() {
                               '&:hover': { bgcolor: 'action.hover' }
                             }}
                           >
-                            <Box sx={{ width: '35%', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
-                              <Typography variant="body2" noWrap title={attr.name}>{attr.name}</Typography>
+                            <Box sx={{ width: '35%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
+                                <Typography variant="body2" fontWeight={600} noWrap title={attr.name}>{attr.name}</Typography>
+                              </Box>
+                              {attr.tags && attr.tags.length > 0 && (
+                                <Typography variant="caption" color="text.secondary" noWrap title={attr.tags.join(', ')}>
+                                  {attr.tags.join(', ')}
+                                </Typography>
+                              )}
                             </Box>
                             <Box sx={{ flex: 1, overflow: 'hidden' }}>
                               {value !== null && value !== undefined

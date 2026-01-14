@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Popover, Drawer, useMediaQuery, useTheme } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, FilterList as FilterIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Drawer, useMediaQuery, useTheme } from '@mui/material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
+import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import type { AssetTypeAttribute } from '../types'
 import { useLoaderData, useParams, useSearchParams, useRouteLoaderData } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions } from '../api/assets'
@@ -49,7 +50,6 @@ export default function AssetTypeAttributesPage() {
   const [leftColumnPixelWidth, setLeftColumnPixelWidth] = useState(500)
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
-  const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -198,14 +198,14 @@ export default function AssetTypeAttributesPage() {
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
 
-  // Fetch available tags when filter popover opens
+  // Fetch available tags on mount
   useEffect(() => {
-    if (filterAnchorEl && workspaceId && assetTypeId) {
+    if (workspaceId && assetTypeId) {
       fetchAttributeTags(workspaceId, assetTypeId)
         .then(tags => setAvailableTags(tags))
         .catch(err => console.error('Failed to fetch tags:', err))
     }
-  }, [filterAnchorEl, workspaceId, assetTypeId])
+  }, [workspaceId, assetTypeId])
 
   // Debounced search effect - just update URL, let loader handle data fetching
   useEffect(() => {
@@ -1300,93 +1300,18 @@ export default function AssetTypeAttributesPage() {
                 startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />,
               }}
             />
-            <Tooltip title={(selectedTags.length > 0 || excludedScopes.length > 0 || includeHidden) ? "Filters applied" : "Filter"} arrow placement="top">
-              <IconButton
-                size="small"
-                onClick={(e) => setFilterAnchorEl(e.currentTarget)}
-                sx={{
-                  color: (selectedTags.length > 0 || excludedScopes.length > 0 || includeHidden)
-                    ? (theme => theme.palette.mode === 'light' ? 'primary.main' : 'secondary.main')
-                    : 'text.secondary',
-                }}
-              >
-                <FilterIcon />
-              </IconButton>
-            </Tooltip>
-            <Popover
-              open={Boolean(filterAnchorEl)}
-              anchorEl={filterAnchorEl}
-              onClose={() => setFilterAnchorEl(null)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-              <Box sx={{ p: 2, minWidth: 280 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-                  <Typography variant="subtitle2">Filter Options</Typography>
-                  {isRefetching && <CircularProgress size={14} />}
-                </Stack>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={includeHidden}
-                      onChange={() => setIncludeHidden(!includeHidden)}
-                      size="small"
-                    />
-                  }
-                  label="Include hidden attributes"
-                  sx={{ mb: 1.5, display: 'block' }}
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Scope</Typography>
-                <Stack direction="row" spacing={0.5} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-                  {[
-                    { value: 'global', label: 'Global', color: 'success' as const },
-                    { value: 'override', label: 'Override', color: 'warning' as const },
-                    { value: 'local', label: 'Local', color: 'info' as const },
-                  ].map(scope => {
-                    const isExcluded = excludedScopes.includes(scope.value)
-                    return (
-                      <Chip
-                        key={scope.value}
-                        label={scope.label}
-                        size="small"
-                        color={isExcluded ? 'default' : scope.color}
-                        variant={isExcluded ? 'outlined' : 'filled'}
-                        onClick={() => {
-                          if (isExcluded) {
-                            setExcludedScopes(excludedScopes.filter(s => s !== scope.value))
-                          } else {
-                            setExcludedScopes([...excludedScopes, scope.value])
-                          }
-                        }}
-                        sx={{ cursor: 'pointer' }}
-                      />
-                    )
-                  })}
-                </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Tags</Typography>
-                <Autocomplete
-                  multiple
-                  size="small"
-                  options={availableTags}
-                  value={selectedTags}
-                  onChange={(_, newValue) => setSelectedTags(newValue)}
-                  renderInput={(params) => (
-                    <TextField {...params} placeholder={selectedTags.length === 0 ? "Select tags..." : ""} />
-                  )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
-                    ))
-                  }
-                  sx={{ minWidth: 250 }}
-                  slotProps={{
-                    popper: {
-                      sx: { zIndex: 1500 }
-                    }
-                  }}
-                />
-              </Box>
-            </Popover>
+            <AttributeFilterPopover
+              showHidden={includeHidden}
+              onShowHiddenChange={setIncludeHidden}
+              selectedTags={selectedTags}
+              onSelectedTagsChange={setSelectedTags}
+              excludedScopes={excludedScopes}
+              onExcludedScopesChange={setExcludedScopes}
+              showScopeFilter={true}
+              hiddenCount={allAttributes.filter(a => a.isHidden).length}
+              availableTags={availableTags}
+              isLoading={isRefetching}
+            />
           </Stack>
           <Box ref={containerRef} sx={{ position: 'relative', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
             <Box component={Paper} sx={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
