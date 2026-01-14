@@ -91,7 +91,7 @@ export default function TruncatedText({ children, maxLines = 3, title = 'Full Te
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ position: 'sticky', top: 0, bgcolor: 'background.paper' }}>
+        <DialogTitle sx={{ position: 'sticky', top: 0 }}>
           {title}
         </DialogTitle>
         <DialogContent dividers>
@@ -100,7 +100,7 @@ export default function TruncatedText({ children, maxLines = 3, title = 'Full Te
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setModalOpen(false)}>Close</Button>
+          <Button onClick={() => setModalOpen(false)} color="primary" variant="contained">Close</Button>
         </DialogActions>
       </Dialog>
     </>
