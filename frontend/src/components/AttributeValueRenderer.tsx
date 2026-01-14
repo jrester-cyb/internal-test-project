@@ -29,6 +29,7 @@ function JsonRenderer({ value, maxLines = 3, lineNumbers = 'both' }: { value: an
   return (
     <Box
       sx={{
+        width: '100%',
         bgcolor: 'action.hover',
         borderRadius: 1,
         overflow: 'hidden',

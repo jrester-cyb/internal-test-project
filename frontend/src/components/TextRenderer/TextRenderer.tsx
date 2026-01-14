@@ -227,6 +227,8 @@ export default function TextRenderer({
       <Box
         sx={{
           position: 'relative',
+          boxSizing: 'border-box',
+          width: '100%',
           height,
           overflow: 'hidden',
           bgcolor: 'background.paper',
@@ -256,9 +258,10 @@ export default function TextRenderer({
               position: 'absolute',
               top: 0,
               left: showInlineLineNumbers ? 28 : 0,
-              right: 17, // Account for scrollbar width
+              right: 0,
               bottom: 0,
               overflow: 'hidden',
+              pointerEvents: 'none',
             }}
           >
             <Box
@@ -287,10 +290,15 @@ export default function TextRenderer({
           placeholder={showRawText ? placeholder : undefined}
           readOnly={!isEditable}
           style={{
-            position: 'relative',
+            position: 'absolute',
+            boxSizing: 'border-box',
+            top: 0,
+            left: showInlineLineNumbers ? 28 : 0,
+            right: 0,
+            bottom: 0,
             width: showInlineLineNumbers ? 'calc(100% - 28px)' : '100%',
             height: '100%',
-            marginLeft: showInlineLineNumbers ? 28 : 0,
+            margin: 0,
             fontFamily: 'monospace',
             fontSize: '0.875rem',
             lineHeight: 1.5,
@@ -355,7 +363,10 @@ export default function TextRenderer({
                       position: 'absolute',
                       top: 0,
                       left: showFullscreenLineNumbers ? 28 : 0,
-                      right: 17, // Account for scrollbar width
+                      right: 0,
+                      bottom: 0,
+                      overflow: 'hidden',
+                      pointerEvents: 'none',
                     }}
                   >
                     <Box
@@ -383,10 +394,12 @@ export default function TextRenderer({
                   placeholder={showRawText ? placeholder : undefined}
                   readOnly={!isEditable}
                   style={{
-                    position: 'relative',
-                    width: showFullscreenLineNumbers ? 'calc(100% - 28px)' : '100%',
-                    height: '100%',
-                    marginLeft: showFullscreenLineNumbers ? 28 : 0,
+                    position: 'absolute',
+                    boxSizing: 'border-box',
+                    top: 0,
+                    left: showFullscreenLineNumbers ? 28 : 0,
+                    right: 0,
+                    bottom: 0,
                     fontFamily: 'monospace',
                     fontSize: '0.875rem',
                     lineHeight: 1.5,
