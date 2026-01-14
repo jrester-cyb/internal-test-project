@@ -6,6 +6,7 @@ from .views import (
     AssetTypeAttributeViewSet,
     AssetTypeAttributeChoiceViewSet,
     AssetViewSet,
+    get_attribute_types,
 )
 
 router = DefaultRouter()
@@ -37,5 +38,11 @@ assets_router = NestedDefaultRouter(router, r"asset-types", lookup="assettype")
 assets_router.register(r"assets", AssetViewSet, basename="assettype-asset")
 
 urlpatterns = (
-    router.urls + attributes_router.urls + choices_router.urls + assets_router.urls
+    [
+        path("attribute-types/", get_attribute_types, name="attribute-types"),
+    ]
+    + router.urls
+    + attributes_router.urls
+    + choices_router.urls
+    + assets_router.urls
 )

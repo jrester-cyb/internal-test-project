@@ -22,13 +22,16 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
+from assets.views import get_attribute_types
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("todos.urls")),
     path("api/", include("organizations.urls")),
     path("api/", include("workspaces.urls")),
+    # path("api/", include("users_manager.urls")),
     path("api/utils/", include("utils.urls")),
+    path("api/attribute-types/", get_attribute_types, name="attribute-types"),
     # Silk profiling dashboard
     path("silk/", include("silk.urls", namespace="silk")),
     # OpenAPI schema

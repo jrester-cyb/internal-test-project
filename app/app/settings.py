@@ -52,7 +52,11 @@ INSTALLED_APPS = [
     "files_manager",
     "pgtrigger",
     "utils",
+    "users_manager",
 ]
+
+# Custom User Model
+AUTH_USER_MODEL = "users_manager.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
