@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Drawer, useMediaQuery, useTheme } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Drawer, useMediaQuery, useTheme, Checkbox } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
@@ -1524,29 +1524,41 @@ export default function AssetTypeAttributesPage() {
                 )
               } : undefined}
             />
-            <FormControl fullWidth>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={formData.attributeType}
-                label="Type"
-                disabled={editingAttribute ? true : false}
-                onChange={(e) => {
-                  setFormData({ ...formData, attributeType: e.target.value })
-                }}
-              >
-                <MenuItem value="text">Text</MenuItem>
-                <MenuItem value="number">Number</MenuItem>
-                <MenuItem value="boolean">Boolean</MenuItem>
-                <MenuItem value="date">Date</MenuItem>
-                <MenuItem value="datetime">DateTime</MenuItem>
-                <MenuItem value="json">JSON</MenuItem>
-              </Select>
-              {editingAttribute && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Type cannot be changed here. Use "Convert Type" button in the details panel.
-                </Typography>
+            <Stack direction="row" spacing={3} alignItems="flex-start">
+              <FormControl sx={{ flex: 1 }}>
+                <InputLabel>Type</InputLabel>
+                <Select
+                  value={formData.attributeType}
+                  label="Type"
+                  disabled={editingAttribute ? true : false}
+                  onChange={(e) => {
+                    setFormData({ ...formData, attributeType: e.target.value })
+                  }}
+                >
+                  <MenuItem value="text">Text</MenuItem>
+                  <MenuItem value="number">Number</MenuItem>
+                  <MenuItem value="boolean">Boolean</MenuItem>
+                  <MenuItem value="date">Date</MenuItem>
+                  <MenuItem value="datetime">DateTime</MenuItem>
+                  <MenuItem value="json">JSON</MenuItem>
+                </Select>
+                {editingAttribute && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Type cannot be changed here. Use "Convert Type" button in the details panel.
+                  </Typography>
+                )}
+              </FormControl>
+              {formData.attributeType === 'number' && (
+                <Box sx={{ flex: 1.5 }}>
+                  <UnitAutocomplete
+                    value={formData.unit}
+                    onChange={(unitCode) => setFormData({ ...formData, unit: unitCode })}
+                    layout="single"
+                    helperText="Optional unit for this number"
+                  />
+                </Box>
               )}
-            </FormControl>
+            </Stack>
             {formData.attributeType === 'text' && (
               <TextField
                 label="Default Value"
@@ -1564,13 +1576,6 @@ export default function AssetTypeAttributesPage() {
                 value={formData.defaultValue ?? ''}
                 onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value ? Number(e.target.value) : undefined })}
                 helperText="Optional default value for this attribute"
-              />
-            )}
-            {formData.attributeType === 'number' && (
-              <UnitAutocomplete
-                value={formData.unit}
-                onChange={(unitCode) => setFormData({ ...formData, unit: unitCode })}
-                layout="split"
               />
             )}
             {formData.attributeType === 'boolean' && (
