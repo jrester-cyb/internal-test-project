@@ -1,11 +1,12 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
-import { Box, Typography, Modal, useTheme, alpha } from '@mui/material'
+import { Box, Typography, Modal, useTheme, Grow } from '@mui/material'
 import { TextRendererContext } from './context'
 import type {
   TextRendererProps,
   TextRendererContextValue,
 } from './types'
 import TextRendererToolbar from './TextRendererToolbar'
+import LineNumbers from './LineNumbers'
 
 export default function TextRenderer({
   value,
@@ -133,51 +134,6 @@ export default function TextRenderer({
   // Line count for line numbers
   const lineCount = localText ? localText.split('\n').length : 1
 
-  // Line numbers component
-  const LineNumbers = ({ scrollTop }: { scrollTop: number }) => (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: 28,
-        height: '100%',
-        bgcolor: alpha(theme.palette.background.default, 0.8),
-        borderRight: 1,
-        borderColor: 'divider',
-        fontFamily: 'monospace',
-        fontSize: '0.875rem',
-        lineHeight: 1.5,
-        color: 'text.secondary',
-        userSelect: 'none',
-        overflow: 'hidden',
-        zIndex: 1,
-      }}
-    >
-      <Box
-        sx={{
-          pt: 1.5,
-          px: 0.5,
-          textAlign: 'right',
-          transform: `translateY(${-scrollTop}px)`,
-        }}
-      >
-        {Array.from({ length: lineCount }, (_, i) => (
-          <div
-            key={i + 1}
-            style={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {i + 1}
-          </div>
-        ))}
-      </Box>
-    </Box>
-  )
-
   // Context value
   const contextValue: TextRendererContextValue = {
     localText,
@@ -234,7 +190,7 @@ export default function TextRenderer({
         }}
       >
         {children || (showToolbar && <TextRendererToolbar enableFullscreen={enableFullscreen} />)}
-        <LineNumbers scrollTop={scrollPos.top} />
+        <LineNumbers scrollTop={scrollPos.top} lineCount={lineCount} />
 
         {/* Syntax highlighted background */}
         {!showRawText && (
@@ -314,92 +270,91 @@ export default function TextRenderer({
         <Modal
           open={isFullscreen}
           onClose={exitFullscreen}
-          disableRestoreFocus
-          disableEnforceFocus
-          disableAutoFocus
         >
-          <Box sx={{
-            width: '100vw',
-            height: '100vh',
-            bgcolor: 'background.paper',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
-            <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'background.paper' }}>
-              {children || <TextRendererToolbar enableFullscreen={enableFullscreen} />}
-              <LineNumbers scrollTop={fullscreenScrollPos.top} />
+          <Grow in={isFullscreen} timeout={200}>
+            <Box sx={{
+              width: '100vw',
+              height: '100vh',
+              bgcolor: 'background.paper',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'background.paper' }}>
+                {children || <TextRendererToolbar enableFullscreen={enableFullscreen} />}
+                <LineNumbers scrollTop={fullscreenScrollPos.top} lineCount={lineCount} />
 
-              {!showRawText && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 28,
-                    right: 0,
+                {!showRawText && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 28,
+                      right: 0,
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      lineHeight: 1.5,
+                      color: 'text.primary',
+                      p: 1.5,
+                      whiteSpace: 'pre',
+                      pointerEvents: 'none',
+                      transform: `translate(${-fullscreenScrollPos.left}px, ${-fullscreenScrollPos.top}px)`,
+                    }}
+                    dangerouslySetInnerHTML={{ __html: highlightedContent }}
+                  />
+                )}
+
+                <textarea
+                  ref={fullscreenTextareaRef}
+                  value={localText}
+                  onInput={editorHandlers.onInput}
+                  onKeyDown={handleKeyDown}
+                  onScroll={handleFullscreenScroll}
+                  placeholder={showRawText ? placeholder : undefined}
+                  readOnly={!isEditable}
+                  style={{
+                    position: 'relative',
+                    width: 'calc(100% - 28px)',
+                    height: '100%',
+                    marginLeft: 28,
                     fontFamily: 'monospace',
                     fontSize: '0.875rem',
                     lineHeight: 1.5,
-                    color: 'text.primary',
-                    p: 1.5,
+                    padding: 12,
+                    background: 'transparent',
+                    color: showRawText ? theme.palette.text.primary : 'transparent',
+                    caretColor: isEditable ? theme.palette.text.primary : 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
                     whiteSpace: 'pre',
-                    pointerEvents: 'none',
-                    transform: `translate(${-fullscreenScrollPos.left}px, ${-fullscreenScrollPos.top}px)`,
+                    overflow: 'auto',
+                    cursor: isEditable ? 'text' : 'default',
                   }}
-                  dangerouslySetInnerHTML={{ __html: highlightedContent }}
+                  spellCheck={false}
                 />
-              )}
 
-              <textarea
-                ref={fullscreenTextareaRef}
-                value={localText}
-                onInput={editorHandlers.onInput}
-                onKeyDown={handleKeyDown}
-                onScroll={handleFullscreenScroll}
-                placeholder={showRawText ? placeholder : undefined}
-                readOnly={!isEditable}
-                style={{
-                  position: 'relative',
-                  width: 'calc(100% - 28px)',
-                  height: '100%',
-                  marginLeft: 28,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  lineHeight: 1.5,
-                  padding: 12,
-                  background: 'transparent',
-                  color: showRawText ? theme.palette.text.primary : 'transparent',
-                  caretColor: isEditable ? theme.palette.text.primary : 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  resize: 'none',
-                  whiteSpace: 'pre',
-                  overflow: 'auto',
-                  cursor: isEditable ? 'text' : 'default',
-                }}
-                spellCheck={false}
-              />
-
-              {!isValid && errorInfo && (
-                <Typography
-                  variant="caption"
-                  color="error"
-                  sx={{
-                    position: 'absolute',
-                    bottom: 8,
-                    right: 16,
-                    bgcolor: isDark ? 'grey.900' : 'grey.50',
-                    px: 1,
-                    py: 0.25,
-                    borderRadius: 0.5,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  Error (line {errorInfo.line})
-                </Typography>
-              )}
+                {!isValid && errorInfo && (
+                  <Typography
+                    variant="caption"
+                    color="error"
+                    sx={{
+                      position: 'absolute',
+                      bottom: 8,
+                      right: 16,
+                      bgcolor: isDark ? 'grey.900' : 'grey.50',
+                      px: 1,
+                      py: 0.25,
+                      borderRadius: 0.5,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    Error (line {errorInfo.line})
+                  </Typography>
+                )}
+              </Box>
             </Box>
-          </Box>
+          </Grow>
         </Modal>
       )}
     </TextRendererContext.Provider>
