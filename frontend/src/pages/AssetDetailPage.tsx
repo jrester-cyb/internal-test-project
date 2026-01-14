@@ -39,17 +39,6 @@ export default function AssetDetailPage() {
     return Array.from(tagSet).sort()
   }, [attributes])
 
-  // Get all unique types from attributes
-  const availableTypes = useMemo(() => {
-    const typeSet = new Set<string>()
-    attributes.forEach(attr => {
-      if (attr.attributeType) {
-        typeSet.add(attr.attributeType)
-      }
-    })
-    return Array.from(typeSet).sort()
-  }, [attributes])
-
   // Fetch related assets
   useEffect(() => {
     if (workspaceId && asset.id) {
@@ -238,7 +227,7 @@ export default function AssetDetailPage() {
                       showScopeFilter={true}
                       hiddenCount={hiddenCount}
                       availableTags={availableTags}
-                      availableTypes={availableTypes}
+                      showTypeFilter={true}
                     />
                   }
                 />

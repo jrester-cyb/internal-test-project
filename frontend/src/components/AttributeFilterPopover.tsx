@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Box, Typography, Chip, IconButton, Popover, Switch, FormControlLabel, Autocomplete, TextField, Tooltip, Stack, CircularProgress } from '@mui/material'
 import { FilterList as FilterIcon } from '@mui/icons-material'
+import { fetchAttributeTypes } from '../api/assets'
 
 export interface AttributeFilterOptions {
   showHidden: boolean
@@ -23,7 +24,8 @@ interface AttributeFilterPopoverProps {
   // Data
   hiddenCount: number
   availableTags: string[]
-  availableTypes?: string[]
+  // Whether to show type filter (will fetch types when opened)
+  showTypeFilter?: boolean
   // Optional loading state
   isLoading?: boolean
 }
@@ -40,12 +42,37 @@ export default function AttributeFilterPopover({
   showScopeFilter = false,
   hiddenCount,
   availableTags,
-  availableTypes = [],
+  showTypeFilter = false,
   isLoading = false,
 }: AttributeFilterPopoverProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const [availableTypes, setAvailableTypes] = useState<{ value: string; label: string }[]>([])
+  const [isLoadingTypes, setIsLoadingTypes] = useState(false)
+  const typesFetchedRef = useRef(false)
 
   const hasActiveFilters = showHidden || selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0
+
+  // Fetch types when popover opens (only once)
+  const loadTypes = useCallback(async () => {
+    if (typesFetchedRef.current || !showTypeFilter || !onSelectedTypesChange) return
+
+    setIsLoadingTypes(true)
+    try {
+      const types = await fetchAttributeTypes()
+      setAvailableTypes(types)
+      typesFetchedRef.current = true
+    } catch (error) {
+      console.error('Failed to fetch attribute types:', error)
+    } finally {
+      setIsLoadingTypes(false)
+    }
+  }, [showTypeFilter, onSelectedTypesChange])
+
+  useEffect(() => {
+    if (anchorEl && !typesFetchedRef.current) {
+      loadTypes()
+    }
+  }, [anchorEl, loadTypes])
 
   const handleScopeToggle = (scope: string) => {
     if (!onExcludedScopesChange) return
@@ -56,7 +83,13 @@ export default function AttributeFilterPopover({
     }
   }
 
-  const hasOptions = hiddenCount > 0 || availableTags.length > 0 || availableTypes.length > 0 || showScopeFilter
+  const hasOptions = hiddenCount > 0 || availableTags.length > 0 || showTypeFilter || showScopeFilter
+
+  // Helper to get label for a type value
+  const getTypeLabel = (value: string) => {
+    const type = availableTypes.find(t => t.value === value)
+    return type?.label ?? value
+  }
 
   return (
     <>
@@ -83,7 +116,7 @@ export default function AttributeFilterPopover({
         <Box sx={{ p: 2, minWidth: 280, maxWidth: 320 }}>
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
             <Typography variant="subtitle2">Filter Options</Typography>
-            {isLoading && <CircularProgress size={14} />}
+            {(isLoading || isLoadingTypes) && <CircularProgress size={14} />}
           </Stack>
 
           {hiddenCount > 0 && (
@@ -126,21 +159,23 @@ export default function AttributeFilterPopover({
             </>
           )}
 
-          {availableTypes.length > 0 && onSelectedTypesChange && (
+          {showTypeFilter && onSelectedTypesChange && (
             <>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Type</Typography>
               <Autocomplete
                 multiple
                 size="small"
-                options={availableTypes}
+                options={availableTypes.map(t => t.value)}
+                getOptionLabel={(option) => getTypeLabel(option)}
                 value={selectedTypes}
+                loading={isLoadingTypes}
                 onChange={(_, newValue) => onSelectedTypesChange(newValue)}
                 renderInput={(params) => (
                   <TextField {...params} placeholder={selectedTypes.length === 0 ? "Select types..." : ""} />
                 )}
                 renderTags={(value, getTagProps) =>
                   value.map((option, index) => (
-                    <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
+                    <Chip {...getTagProps({ index })} label={getTypeLabel(option)} size="small" key={option} />
                   ))
                 }
                 slotProps={{

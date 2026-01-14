@@ -7,6 +7,13 @@ function workspaceUrl(workspaceId: string, path: string) {
   return `${API_BASE}/workspaces/${workspaceId}/${path}`
 }
 
+// Fetch available attribute types
+export async function fetchAttributeTypes(): Promise<{ value: string; label: string }[]> {
+  const response = await fetch(`${API_BASE}/attribute-types/`)
+  if (!response.ok) throw new Error('Failed to fetch attribute types')
+  return response.json()
+}
+
 // Unit Categories API - global endpoint (not workspace-scoped)
 export async function fetchUnitCategories(search?: string, category?: string, mode?: 'full' | 'categories' | 'units'): Promise<UnitCategory[]> {
   const allCategories: UnitCategory[] = []
