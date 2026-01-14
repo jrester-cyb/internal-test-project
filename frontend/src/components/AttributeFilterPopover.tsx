@@ -14,6 +14,8 @@ interface AttributeFilterPopoverProps {
   onShowHiddenChange: (value: boolean) => void
   selectedTags: string[]
   onSelectedTagsChange: (tags: string[]) => void
+  selectedTypes?: string[]
+  onSelectedTypesChange?: (types: string[]) => void
   // Optional scope filtering
   excludedScopes?: string[]
   onExcludedScopesChange?: (scopes: string[]) => void
@@ -21,6 +23,7 @@ interface AttributeFilterPopoverProps {
   // Data
   hiddenCount: number
   availableTags: string[]
+  availableTypes?: string[]
   // Optional loading state
   isLoading?: boolean
 }
@@ -30,16 +33,19 @@ export default function AttributeFilterPopover({
   onShowHiddenChange,
   selectedTags,
   onSelectedTagsChange,
+  selectedTypes = [],
+  onSelectedTypesChange,
   excludedScopes = [],
   onExcludedScopesChange,
   showScopeFilter = false,
   hiddenCount,
   availableTags,
+  availableTypes = [],
   isLoading = false,
 }: AttributeFilterPopoverProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 
-  const hasActiveFilters = showHidden || selectedTags.length > 0 || excludedScopes.length > 0
+  const hasActiveFilters = showHidden || selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0
 
   const handleScopeToggle = (scope: string) => {
     if (!onExcludedScopesChange) return
@@ -50,7 +56,7 @@ export default function AttributeFilterPopover({
     }
   }
 
-  const hasOptions = hiddenCount > 0 || availableTags.length > 0 || showScopeFilter
+  const hasOptions = hiddenCount > 0 || availableTags.length > 0 || availableTypes.length > 0 || showScopeFilter
 
   return (
     <>
@@ -131,6 +137,33 @@ export default function AttributeFilterPopover({
                 onChange={(_, newValue) => onSelectedTagsChange(newValue)}
                 renderInput={(params) => (
                   <TextField {...params} placeholder={selectedTags.length === 0 ? "Select tags..." : ""} />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
+                  ))
+                }
+                sx={{ minWidth: 250 }}
+                slotProps={{
+                  popper: {
+                    sx: { zIndex: 1500 }
+                  }
+                }}
+              />
+            </>
+          )}
+
+          {availableTypes.length > 0 && onSelectedTypesChange && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, mt: 1.5 }}>Type</Typography>
+              <Autocomplete
+                multiple
+                size="small"
+                options={availableTypes}
+                value={selectedTypes}
+                onChange={(_, newValue) => onSelectedTypesChange(newValue)}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder={selectedTypes.length === 0 ? "Select types..." : ""} />
                 )}
                 renderTags={(value, getTagProps) =>
                   value.map((option, index) => (

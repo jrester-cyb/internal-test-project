@@ -26,6 +26,7 @@ export default function AssetDetailPage() {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Get all unique tags from attributes
@@ -35,6 +36,17 @@ export default function AssetDetailPage() {
       attr.tags?.forEach(tag => tagSet.add(tag))
     })
     return Array.from(tagSet).sort()
+  }, [attributes])
+
+  // Get all unique types from attributes
+  const availableTypes = useMemo(() => {
+    const typeSet = new Set<string>()
+    attributes.forEach(attr => {
+      if (attr.attributeType) {
+        typeSet.add(attr.attributeType)
+      }
+    })
+    return Array.from(typeSet).sort()
   }, [attributes])
 
   // Fetch related assets
@@ -218,8 +230,11 @@ export default function AssetDetailPage() {
                       onShowHiddenChange={setShowHidden}
                       selectedTags={selectedTags}
                       onSelectedTagsChange={setSelectedTags}
+                      selectedTypes={selectedTypes}
+                      onSelectedTypesChange={setSelectedTypes}
                       hiddenCount={hiddenCount}
                       availableTags={availableTags}
+                      availableTypes={availableTypes}
                     />
                   }
                 />
@@ -235,6 +250,13 @@ export default function AssetDetailPage() {
                       if (selectedTags.length > 0) {
                         displayAttributes = displayAttributes.filter(attr =>
                           attr.tags?.some(tag => selectedTags.includes(tag))
+                        )
+                      }
+
+                      // Filter by selected types (if any)
+                      if (selectedTypes.length > 0) {
+                        displayAttributes = displayAttributes.filter(attr =>
+                          attr.attributeType && selectedTypes.includes(attr.attributeType)
                         )
                       }
 

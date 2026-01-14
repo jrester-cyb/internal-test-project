@@ -13,6 +13,7 @@ import {
   IconButton,
   Chip,
   Button,
+  useTheme,
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
@@ -44,6 +45,8 @@ function TreeNode({
   initialExpanded = false,
   initialChildren,
 }: TreeNodeProps) {
+  const theme = useTheme()
+  const chipColor = theme.palette.mode === 'dark' ? 'secondary' : 'primary'
   const isCurrentAsset = asset.id === currentAssetId
 
   // If this is the current asset and we have pre-loaded children for it, use them
@@ -144,7 +147,7 @@ function TreeNode({
                   {asset.name}
                 </CopyableText>
                 {isCurrentAsset && (
-                  <Chip label="Current" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />
+                  <Chip label="Current" size="small" color={chipColor} sx={{ height: 18, fontSize: '0.65rem' }} />
                 )}
               </Box>
             }
