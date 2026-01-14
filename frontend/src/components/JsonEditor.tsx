@@ -22,13 +22,73 @@ interface HistoryEntry {
 }
 
 interface JsonEditorProps {
-  value: any
-  onChange: (value: any) => void
+  value: { json: any; rawJson?: string } | any
+  onChange: (value: { json: any; rawJson: string } | undefined) => void
   placeholder?: string
 }
 
-// Parse JSON error to get position
-const getJsonErrorPosition = (json: string): { position: number; line: number; message: string } | null => {
+// Strip JSONC comments (// and /* */) for parsing
+const stripJsonComments = (jsonc: string): string => {
+  let result = ''
+  let i = 0
+  let inString = false
+  let escaped = false
+
+  while (i < jsonc.length) {
+    const char = jsonc[i]
+    const nextChar = jsonc[i + 1]
+
+    // Handle string state
+    if (inString) {
+      result += char
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      i++
+      continue
+    }
+
+    // Start of string
+    if (char === '"') {
+      inString = true
+      result += char
+      i++
+      continue
+    }
+
+    // Single-line comment
+    if (char === '/' && nextChar === '/') {
+      // Skip until end of line
+      while (i < jsonc.length && jsonc[i] !== '\n') {
+        i++
+      }
+      continue
+    }
+
+    // Multi-line comment
+    if (char === '/' && nextChar === '*') {
+      i += 2 // Skip /*
+      while (i < jsonc.length && !(jsonc[i] === '*' && jsonc[i + 1] === '/')) {
+        i++
+      }
+      i += 2 // Skip */
+      continue
+    }
+
+    result += char
+    i++
+  }
+
+  return result
+}
+
+// Parse JSON error to get position (strips JSONC comments first)
+const getJsonErrorPosition = (jsonc: string): { position: number; line: number; message: string } | null => {
+  const json = stripJsonComments(jsonc)
   try {
     JSON.parse(json)
     return null
@@ -78,11 +138,18 @@ const highlightJson = (json: string, isDark: boolean, errorPos: number | null = 
   const escaped = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Theme-aware colors
   const colors = isDark
-    ? { key: '#9cdcfe', string: '#ce9178', number: '#b5cea8', keyword: '#569cd6' }
-    : { key: '#0451a5', string: '#a31515', number: '#098658', keyword: '#0000ff' }
+    ? { key: '#9cdcfe', string: '#ce9178', number: '#b5cea8', keyword: '#569cd6', comment: '#6a9955' }
+    : { key: '#0451a5', string: '#a31515', number: '#098658', keyword: '#0000ff', comment: '#008000' }
 
-  // Apply syntax highlighting
+  // First highlight comments (before other syntax to avoid conflicts)
   let highlighted = escaped
+    // Single-line comments
+    .replace(/(\/\/.*?)$/gm, `<span style="color: ${colors.comment}; font-style: italic">$1</span>`)
+    // Multi-line comments
+    .replace(/(\/\*[\s\S]*?\*\/)/g, `<span style="color: ${colors.comment}; font-style: italic">$1</span>`)
+
+  // Apply syntax highlighting (only to non-comment parts)
+  highlighted = highlighted
     .replace(/"([^"]+)":/g, `<span style="color: ${colors.key}">"$1"</span>:`)
     .replace(/: "([^"]*)"/g, `: <span style="color: ${colors.string}">"$1"</span>`)
     .replace(/: (-?\d+\.?\d*)/g, `: <span style="color: ${colors.number}">$1</span>`)
@@ -194,9 +261,15 @@ export default function JsonEditor({
   }, [historyState])
 
   // Local text state for editing - prevents reformatting while typing
-  const [localText, setLocalText] = useState(() =>
-    value ? (typeof value === 'string' ? value : JSON.stringify(value, null, 2)) : ''
-  )
+  const [localText, setLocalText] = useState(() => {
+    if (!value) return ''
+    // Support new { json, rawJson } format
+    if (value && typeof value === 'object' && 'rawJson' in value) {
+      return value.rawJson || ''
+    }
+    // Legacy format - plain value
+    return typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  })
 
   // Initialize history with initial value (including empty)
   useEffect(() => {
@@ -234,6 +307,22 @@ export default function JsonEditor({
     })
   }, [])
 
+  // Helper to emit changes in the new format
+  const emitChange = useCallback((rawJson: string) => {
+    if (!rawJson) {
+      onChange(undefined)
+      return
+    }
+    try {
+      const stripped = stripJsonComments(rawJson)
+      const json = JSON.parse(stripped)
+      onChange({ json, rawJson })
+    } catch {
+      // Invalid JSON - still emit with null json
+      onChange({ json: null, rawJson })
+    }
+  }, [onChange])
+
   const undo = useCallback(() => {
     const current = historyRef.current
     if (current.index > 0) {
@@ -268,14 +357,9 @@ export default function JsonEditor({
       pendingCursorRef.current = newCursor
       setHistoryState(prev => ({ ...prev, index: newIndex }))
 
-      try {
-        const parsed = JSON.parse(entry.text)
-        onChange(parsed)
-      } catch {
-        onChange(entry.text)
-      }
+      emitChange(entry.text)
     }
-  }, [onChange, localText])
+  }, [emitChange, localText])
 
   const redo = useCallback(() => {
     const current = historyRef.current
@@ -289,26 +373,35 @@ export default function JsonEditor({
       pendingCursorRef.current = clampedCursor
       setHistoryState(prev => ({ ...prev, index: newIndex }))
 
-      try {
-        const parsed = JSON.parse(entry.text)
-        onChange(parsed)
-      } catch {
-        onChange(entry.text)
-      }
+      emitChange(entry.text)
     }
-  }, [onChange])
+  }, [emitChange])
 
   const canUndo = historyState.index > 0
   const canRedo = historyState.index < historyState.entries.length - 1
 
   // Sync local text when external value changes (e.g., initial load)
   useEffect(() => {
-    const externalText = value ? (typeof value === 'string' ? value : JSON.stringify(value, null, 2)) : ''
+    // Support new { json, rawJson } format
+    let externalText: string
+    let externalJson: any
+    if (value && typeof value === 'object' && 'rawJson' in value) {
+      externalText = value.rawJson || ''
+      externalJson = value.json
+    } else if (!value) {
+      externalText = ''
+      externalJson = undefined
+    } else {
+      externalText = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+      externalJson = typeof value === 'object' ? value : undefined
+    }
+
     // Only update if significantly different (not just whitespace from our edits)
     if (externalText !== localText) {
       try {
-        const localParsed = JSON.parse(localText)
-        const externalParsed = typeof value === 'object' ? value : JSON.parse(externalText)
+        const localStripped = stripJsonComments(localText)
+        const localParsed = JSON.parse(localStripped)
+        const externalParsed = externalJson ?? JSON.parse(externalText)
         // If they parse to the same thing, keep local text to preserve cursor
         if (JSON.stringify(localParsed) === JSON.stringify(externalParsed)) {
           return
@@ -348,17 +441,7 @@ export default function JsonEditor({
   const handleTextChange = (newText: string, cursorPos?: number) => {
     setLocalText(newText)
     addToHistory(newText, cursorPos ?? newText.length)
-    if (!newText) {
-      onChange(undefined)
-      return
-    }
-    try {
-      const parsed = JSON.parse(newText)
-      onChange(parsed)
-    } catch {
-      // Store as string to indicate invalid JSON
-      onChange(newText)
-    }
+    emitChange(newText)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -375,6 +458,53 @@ export default function JsonEditor({
     if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
       e.preventDefault()
       redo()
+      return
+    }
+
+    // Handle toggle line comment with Ctrl+/
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault()
+      const target = e.target as HTMLTextAreaElement
+      const start = target.selectionStart
+      const end = target.selectionEnd
+      const currentValue = target.value
+
+      // Find all lines in selection
+      const lineStartIdx = currentValue.lastIndexOf('\n', start - 1) + 1
+      let lineEndIdx = currentValue.indexOf('\n', end)
+      if (lineEndIdx === -1) lineEndIdx = currentValue.length
+
+      const selectedText = currentValue.substring(lineStartIdx, lineEndIdx)
+      const lines = selectedText.split('\n')
+
+      // Check if all selected lines are commented
+      const allCommented = lines.every(line => line.trimStart().startsWith('//'))
+
+      let newLines: string[]
+      if (allCommented) {
+        // Uncomment: remove // from the start of each line
+        newLines = lines.map(line => {
+          const match = line.match(/^(\s*)\/\/\s?(.*)$/)
+          return match ? match[1] + match[2] : line
+        })
+      } else {
+        // Comment: add // at the start of each line (preserving indent)
+        newLines = lines.map(line => {
+          if (line.trim() === '') return line // Don't comment empty lines
+          const indent = line.match(/^(\s*)/)?.[1] || ''
+          return indent + '// ' + line.trimStart()
+        })
+      }
+
+      const newText = currentValue.substring(0, lineStartIdx) + newLines.join('\n') + currentValue.substring(lineEndIdx)
+      const lengthDiff = newLines.join('\n').length - selectedText.length
+      const newCursorPos = end + lengthDiff
+
+      setLocalText(newText)
+      addToHistory(newText, newCursorPos)
+      pendingCursorRef.current = newCursorPos
+
+      emitChange(newText)
       return
     }
 
@@ -414,14 +544,9 @@ export default function JsonEditor({
           addToHistory(newValue, newCursorPos)
           pendingCursorRef.current = newCursorPos
 
-          try {
-            const parsed = JSON.parse(newValue)
-            onChange(parsed)
-          } catch {
-            onChange(newValue)
-          }
+          emitChange(newValue)
         }
-        return
+        return;
       }
     }
 
@@ -509,12 +634,7 @@ export default function JsonEditor({
         addToHistory(newValue, newStart)
         pendingSelectionRef.current = { start: newStart, end: newEnd }
 
-        try {
-          const parsed = JSON.parse(newValue)
-          onChange(parsed)
-        } catch {
-          onChange(newValue)
-        }
+        emitChange(newValue)
       } else if (e.key === 'ArrowDown' && endLineIndex < lines.length - 1) {
         e.preventDefault()
         // Move the block of lines down
@@ -543,12 +663,7 @@ export default function JsonEditor({
         addToHistory(newValue, newStart)
         pendingSelectionRef.current = { start: newStart, end: newEnd }
 
-        try {
-          const parsed = JSON.parse(newValue)
-          onChange(parsed)
-        } catch {
-          onChange(newValue)
-        }
+        emitChange(newValue)
       }
       return
     }
@@ -605,12 +720,7 @@ export default function JsonEditor({
         // Keep selection on the block, adjusted for changed indentation
         pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
 
-        try {
-          const parsed = JSON.parse(newValue)
-          onChange(parsed)
-        } catch {
-          onChange(newValue)
-        }
+        emitChange(newValue)
       } else {
         // Single cursor or single line selection
         let newValue: string
@@ -651,12 +761,7 @@ export default function JsonEditor({
         addToHistory(newValue, newCursorPos)
         pendingCursorRef.current = newCursorPos
 
-        try {
-          const parsed = JSON.parse(newValue)
-          onChange(parsed)
-        } catch {
-          onChange(newValue)
-        }
+        emitChange(newValue)
       }
     }
   }
@@ -672,10 +777,11 @@ export default function JsonEditor({
     let pastedText = e.clipboardData.getData('text')
     pastedText = pastedText.replace(/\t/g, '  ')
 
-    // Try to format if it's valid JSON being pasted into an empty field
+    // Try to format if it's valid JSON/JSONC being pasted into an empty field
     if (!currentValue.trim() || (start === 0 && end === currentValue.length)) {
       try {
-        const parsed = JSON.parse(pastedText)
+        const stripped = stripJsonComments(pastedText)
+        const parsed = JSON.parse(stripped)
         pastedText = JSON.stringify(parsed, null, 2)
       } catch {
         // Not valid JSON, use as-is with tabs converted
@@ -688,13 +794,7 @@ export default function JsonEditor({
     addToHistory(newValue, newCursorPos)
     pendingCursorRef.current = newCursorPos
 
-    // Update parent
-    try {
-      const parsed = JSON.parse(newValue)
-      onChange(parsed)
-    } catch {
-      onChange(newValue)
-    }
+    emitChange(newValue)
   }
 
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -1106,7 +1206,8 @@ export default function JsonEditor({
           onClick={() => {
             handleCloseContextMenu()
             try {
-              const parsed = JSON.parse(localText)
+              const stripped = stripJsonComments(localText)
+              const parsed = JSON.parse(stripped)
               const formatted = JSON.stringify(parsed, null, 2)
               if (formatted !== localText) {
                 handleTextChange(formatted, 0)
@@ -1127,7 +1228,8 @@ export default function JsonEditor({
           onClick={() => {
             handleCloseContextMenu()
             try {
-              const parsed = JSON.parse(localText)
+              const stripped = stripJsonComments(localText)
+              const parsed = JSON.parse(stripped)
               const minified = JSON.stringify(parsed)
               if (minified !== localText) {
                 handleTextChange(minified, 0)
@@ -1148,7 +1250,8 @@ export default function JsonEditor({
           onClick={() => {
             handleCloseContextMenu()
             try {
-              const parsed = JSON.parse(localText)
+              const stripped = stripJsonComments(localText)
+              const parsed = JSON.parse(stripped)
               const sortKeys = (obj: any): any => {
                 if (Array.isArray(obj)) {
                   return obj.map(sortKeys)
