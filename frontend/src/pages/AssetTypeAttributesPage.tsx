@@ -59,6 +59,7 @@ export default function AssetTypeAttributesPage() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [excludedScopes, setExcludedScopes] = useState<string[]>([])
   const [globalDefinition, setGlobalDefinition] = useState<AssetTypeAttribute | null>(null)
   const [isLoadingGlobalDefinition, setIsLoadingGlobalDefinition] = useState(false)
@@ -86,12 +87,17 @@ export default function AssetTypeAttributesPage() {
 
   const closeConfirmDialog = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
-  // Filter attributes - only hidden filtering is client-side, scope/tags are server-side
+  // Filter attributes - hidden and type filtering are client-side, scope/tags are server-side
   const displayedAttributes = allAttributes.filter(attr => {
     // Filter by hidden status (client-side only)
     if (!includeHidden && attr.isHidden) return false
+    // Filter by type (client-side)
+    if (selectedTypes.length > 0 && !selectedTypes.includes(attr.attributeType)) return false
     return true
   })
+
+  // Available attribute types for the filter
+  const availableTypes = ['text', 'number', 'boolean', 'date', 'datetime', 'json', 'link']
 
   // Keep displayedCountRef in sync
   displayedCountRef.current = displayedAttributes.length
@@ -1440,11 +1446,14 @@ export default function AssetTypeAttributesPage() {
               onShowHiddenChange={setIncludeHidden}
               selectedTags={selectedTags}
               onSelectedTagsChange={setSelectedTags}
+              selectedTypes={selectedTypes}
+              onSelectedTypesChange={setSelectedTypes}
               excludedScopes={excludedScopes}
               onExcludedScopesChange={setExcludedScopes}
               showScopeFilter={true}
               hiddenCount={allAttributes.filter(a => a.isHidden).length}
               availableTags={availableTags}
+              availableTypes={availableTypes}
               isLoading={isRefetching}
             />
           </Stack>
