@@ -485,11 +485,21 @@ export default function JsonEditor({
       const end = target.selectionEnd
       const currentValue = target.value
 
-      const blockComment = '/*  */'
-      const cursorOffset = 3 // Position after "/* "
+      let newText: string
+      let newCursorPos: number
 
-      const newText = currentValue.substring(0, start) + blockComment + currentValue.substring(end)
-      const newCursorPos = start + cursorOffset
+      if (start !== end) {
+        // Wrap selection with block comment
+        const selection = currentValue.substring(start, end)
+        const wrapped = '/* ' + selection + ' */'
+        newText = currentValue.substring(0, start) + wrapped + currentValue.substring(end)
+        newCursorPos = start + wrapped.length
+      } else {
+        // Insert empty block comment with cursor in middle
+        const blockComment = '/*  */'
+        newText = currentValue.substring(0, start) + blockComment + currentValue.substring(end)
+        newCursorPos = start + 3 // Position after "/* "
+      }
 
       setLocalText(newText)
       addToHistory(newText, newCursorPos)
