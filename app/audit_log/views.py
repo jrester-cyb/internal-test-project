@@ -207,7 +207,9 @@ class AuditLogEntryListView(ListAPIView):
             "request_method": req.request_method,
             "request_path": req.request_path,
             "source": req.source,
-            "organization_id": str(req.organization_id) if req.organization_id else None,
+            "organization_id": (
+                str(req.organization_id) if req.organization_id else None
+            ),
             "organization_name": str(req.organization) if req.organization else None,
             "workspace_id": str(req.workspace_id) if req.workspace_id else None,
             "workspace_name": str(req.workspace) if req.workspace else None,

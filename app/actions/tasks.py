@@ -213,10 +213,20 @@ def build_entry_payload(entry):
             "user_repr": str(entry.request.user) if entry.request.user else None,
             "user_email": entry.request.user_email,
             "source": entry.request.source,
-            "organization_id": str(entry.request.organization_id) if entry.request.organization_id else None,
-            "organization_repr": str(entry.request.organization) if entry.request.organization else None,
-            "workspace_id": str(entry.request.workspace_id) if entry.request.workspace_id else None,
-            "workspace_repr": str(entry.request.workspace) if entry.request.workspace else None,
+            "organization_id": (
+                str(entry.request.organization_id)
+                if entry.request.organization_id
+                else None
+            ),
+            "organization_repr": (
+                str(entry.request.organization) if entry.request.organization else None
+            ),
+            "workspace_id": (
+                str(entry.request.workspace_id) if entry.request.workspace_id else None
+            ),
+            "workspace_repr": (
+                str(entry.request.workspace) if entry.request.workspace else None
+            ),
         }
 
     return payload
