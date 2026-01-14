@@ -192,7 +192,9 @@ export default function AssetTypeAttributesPage() {
     description: '',
     defaultValue: undefined as any,
     tags: [] as string[],
-    unit: undefined as string | undefined
+    unit: undefined as string | undefined,
+    cannotOverride: false,
+    lockedToGlobal: false
   })
   const [isApiKeyUnlocked, setIsApiKeyUnlocked] = useState(false)
   const [isApiKeyManuallyEdited, setIsApiKeyManuallyEdited] = useState(false)
@@ -460,7 +462,9 @@ export default function AssetTypeAttributesPage() {
       description: attr.description || '',
       defaultValue: attr.defaultValue,
       tags: attr.tags || [],
-      unit: attr.unit
+      unit: attr.unit,
+      cannotOverride: Boolean(attr.cannotOverride),
+      lockedToGlobal: Boolean(attr.lockedToGlobal)
     })
     setIsApiKeyUnlocked(false)
     setEditDialogOpen(true)
@@ -496,7 +500,9 @@ export default function AssetTypeAttributesPage() {
       description: '',
       defaultValue: undefined,
       tags: [],
-      unit: undefined
+      unit: undefined,
+      cannotOverride: false,
+      lockedToGlobal: false
     })
     setIsApiKeyUnlocked(false)
     setIsApiKeyManuallyEdited(false)
@@ -1650,6 +1656,30 @@ export default function AssetTypeAttributesPage() {
               }
               label="Required"
             />
+            {/* Cannot override - only available for global attributes */}
+            {(!workspaceId || workspaceId === 'global') && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.cannotOverride}
+                    onChange={(e) => setFormData({ ...formData, cannotOverride: e.target.checked, lockedToGlobal: e.target.checked ? formData.lockedToGlobal : false })}
+                  />
+                }
+                label="Cannot be overridden"
+              />
+            )}
+            {/* Values locked to global - only available for global attributes when cannot override is true */}
+            {(!workspaceId || workspaceId === 'global') && formData.cannotOverride && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.lockedToGlobal}
+                    onChange={(e) => setFormData({ ...formData, lockedToGlobal: e.target.checked })}
+                  />
+                }
+                label="Values locked to global"
+              />
+            )}
             <Autocomplete
               multiple
               freeSolo
