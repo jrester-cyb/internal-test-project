@@ -9,7 +9,7 @@ from assets.models import (
 )
 from workspaces.models import Workspace
 from django.contrib.gis.geos import Point, LineString, Polygon
-from audit_log import log_bulk_create, log_create
+from audit_log import log_bulk_create, log_create, audit_group
 import requests
 
 
@@ -102,21 +102,33 @@ class OSMImporter:
             defaults={"description": f"OpenStreetMap {osm_type} features"},
         )
         if created:
+            log_create(
+                asset_type,
+                message=f"Created asset type 'OSM {osm_type.title()}' for OSM import",
+                references=[(self.organization, "organization")],
+                metadata={"command": "import_osm_data", "osm_type": osm_type},
+                source="management_command",
+            )
             self.create_osm_attributes(asset_type)
 
         # Ensure asset type is linked to workspace
         if self.workspace:
-            work_asset_type, created = WorkspaceAssetType.objects.get_or_create(
+            work_asset_type, wat_created = WorkspaceAssetType.objects.get_or_create(
                 workspace=self.workspace,
                 asset_type=asset_type,
                 defaults={"is_owner": True},
             )
-            if created:
+            if wat_created:
                 log_create(
                     work_asset_type,
-                    message=f"Linked asset type '{asset_type.asset_type.name}' to workspace '{self.workspace.name}'",
-                    references=[asset_type, self.workspace, self.organization],
+                    message=f"Linked asset type 'OSM {osm_type.title()}' to workspace '{self.workspace.name}'",
+                    references=[
+                        (asset_type, "asset_type"),
+                        (self.workspace, "workspace"),
+                        (self.organization, "organization"),
+                    ],
                     metadata={"command": "import_osm_data"},
+                    source="management_command",
                 )
 
         return asset_type
@@ -142,8 +154,12 @@ class OSMImporter:
                 log_create(
                     instance,
                     message=f"Created OSM attribute '{name}' for asset type '{asset_type.name}'",
-                    references=[asset_type, self.organization],
+                    references=[
+                        (asset_type, "asset_type"),
+                        (self.organization, "organization"),
+                    ],
                     metadata={"command": "import_osm_data"},
+                    source="management_command",
                 )
 
     def import_osm_features(
@@ -381,50 +397,65 @@ class Command(BaseCommand):
         bbox = self.geocode_location(location)
         self.stdout.write(self.style.SUCCESS(f"Using bounding box: {bbox}"))
 
-        importer = OSMImporter(workspace=workspace)
+        # Wrap import in audit group for traceability
+        with audit_group(
+            f"OSM Import: {location}",
+            source_type="management_command",
+            source_name="import_osm_data",
+            metadata={
+                "location": location,
+                "workspace_id": str(workspace.id),
+                "workspace_name": workspace.name,
+                "organization_id": str(workspace.organization.id),
+                "bbox": list(bbox),
+            },
+        ):
+            importer = OSMImporter(workspace=workspace)
 
-        import_features = [
-            ("power", "line", limit, "Powerline"),
-            ("power", "generator", limit, "Generator"),
-            ("power", "plant", limit, "Plant"),
-            ("power", "substation", limit, "Substation"),
-            ("power", "structure", limit, "Structure"),
-            ("power", "transformer", limit, "Transformer"),
-            ("man_made", "pipeline", limit, "Pipeline"),
-            ("man_made", "tower", limit, "Tower"),
-            ("man_made", "water_works", limit, "Water Works"),
-            ("man_made", "storage_tank", limit, "Storage Tank"),
-        ]
+            import_features = [
+                ("power", "line", limit, "Powerline"),
+                ("power", "generator", limit, "Generator"),
+                ("power", "plant", limit, "Plant"),
+                ("power", "substation", limit, "Substation"),
+                ("power", "structure", limit, "Structure"),
+                ("power", "transformer", limit, "Transformer"),
+                ("man_made", "pipeline", limit, "Pipeline"),
+                ("man_made", "tower", limit, "Tower"),
+                ("man_made", "water_works", limit, "Water Works"),
+                ("man_made", "storage_tank", limit, "Storage Tank"),
+            ]
 
-        total_created = 0
-        all_created_assets = []
-        for feature_type, feature_value, feature_limit, label in import_features:
-            self.stdout.write(f"\n--- Importing {label} ---")
-            created, created_assets = importer.import_osm_features(
-                bbox=bbox,
-                feature_type=feature_type,
-                feature_value=feature_value,
-                limit=feature_limit,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-            )
-            total_created += created
-            all_created_assets.extend(created_assets)
+            total_created = 0
+            all_created_assets = []
+            for feature_type, feature_value, feature_limit, label in import_features:
+                self.stdout.write(f"\n--- Importing {label} ---")
+                created, created_assets = importer.import_osm_features(
+                    bbox=bbox,
+                    feature_type=feature_type,
+                    feature_value=feature_value,
+                    limit=feature_limit,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                )
+                total_created += created
+                all_created_assets.extend(created_assets)
 
-        # Log to audit log
-        if all_created_assets:
-            log_bulk_create(
-                all_created_assets,
-                message=f"Imported {total_created} assets from OSM for location '{location}'",
-                metadata={
-                    "command": "import_osm_data",
-                    "location": location,
-                    "bbox": list(bbox),
-                },
-                parent_references=[
-                    (workspace, "workspace"),
-                    (workspace.organization, "organization"),
-                ],
-            )
+            # Log bulk create for all assets
+            if all_created_assets:
+                log_bulk_create(
+                    all_created_assets,
+                    message=f"Imported {total_created} assets from OSM for location '{location}'",
+                    metadata={
+                        "command": "import_osm_data",
+                        "location": location,
+                        "bbox": list(bbox),
+                        "total_created": total_created,
+                    },
+                    parent_references=[
+                        (workspace, "workspace"),
+                        (workspace.organization, "organization"),
+                    ],
+                    source="management_command",
+                )
 
         self.stdout.write(self.style.SUCCESS("\n=== Import Complete ==="))

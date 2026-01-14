@@ -54,7 +54,14 @@ Usage:
 default_app_config = "audit_log.apps.AuditLogConfig"
 
 
-def audit_group(group_id: str = None):
+def audit_group(
+    description: str = None,
+    *,
+    group_id: str = None,
+    source_type: str = "",
+    source_name: str = "",
+    metadata: dict = None,
+):
     """
     Context manager for grouping audit log entries within a request.
 
@@ -66,22 +73,38 @@ def audit_group(group_id: str = None):
         from audit_log import audit_group, log_action
 
         # All logs in this block share the same group_id
-        with audit_group() as gid:
+        with audit_group("My operation") as gid:
             log_action(action="notify", message="Sent email")
             log_action(action="notify", message="Sent Slack message")
 
-        # This has no group_id
-        log_action(action="update", message="Updated record")
+        # With additional metadata
+        with audit_group(
+            "Import OSM data",
+            source_type="management_command",
+            source_name="import_osm_data",
+            metadata={"location": "Austin, TX"}
+        ) as group:
+            log_action(action="import", message="Imported assets")
 
     Args:
+        description: Human-readable description of what this group represents.
         group_id: Optional custom group ID. If not provided, one will be generated.
+        source_type: Type of source (e.g., 'management_command', 'celery_task').
+        source_name: Name of the source (e.g., 'startorganization').
+        metadata: Additional metadata dict.
 
     Yields:
         The group_id being used for this context.
     """
     from audit_log.logging import audit_group as _audit_group
 
-    return _audit_group(group_id)
+    return _audit_group(
+        description,
+        group_id=group_id,
+        source_type=source_type,
+        source_name=source_name,
+        metadata=metadata,
+    )
 
 
 # Legacy alias

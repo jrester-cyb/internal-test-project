@@ -17,6 +17,7 @@ def log_bulk_create(
     message: str = None,
     metadata: dict = None,
     parent_references: list = None,
+    source: str = None,
 ):
     """
     Log a bulk create operation as a single audit entry.
@@ -30,6 +31,7 @@ def log_bulk_create(
         message: Custom message (auto-generated if not provided)
         metadata: Additional metadata to store
         parent_references: Common parent objects (workspace, org, etc.)
+        source: Source of the action (api, management_command, celery_task, system)
     """
     objects_list = list(objects)
     if not objects_list:
@@ -74,6 +76,7 @@ def log_bulk_create(
         ),  # First object as primary target
         metadata=full_metadata,
         references=references,
+        source=source,
     )
 
 
@@ -85,6 +88,7 @@ def log_bulk_update(
     changes_by_object: dict = None,
     metadata: dict = None,
     parent_references: list = None,
+    source: str = None,
 ):
     """
     Log a bulk update operation as a single audit entry.
@@ -106,6 +110,7 @@ def log_bulk_update(
         changes_by_object: Dict mapping object IDs to their changes
         metadata: Additional metadata
         parent_references: Common parent objects
+        source: Source of the action (api, management_command, celery_task, system)
     """
     objects_list = list(objects)
     if not objects_list:
@@ -167,6 +172,7 @@ def log_bulk_update(
         changes=changes_summary,
         metadata=full_metadata,
         references=references,
+        source=source,
     )
 
 
@@ -180,6 +186,7 @@ def log_bulk_delete(
     message: str = None,
     metadata: dict = None,
     parent_references: list = None,
+    source: str = None,
 ):
     """
     Log a bulk delete operation.
@@ -211,6 +218,7 @@ def log_bulk_delete(
         message: Custom message
         metadata: Additional metadata
         parent_references: Common parent objects
+        source: Source of the action (api, management_command, celery_task, system)
     """
     if objects:
         objects_list = list(objects)
@@ -263,6 +271,7 @@ def log_bulk_delete(
         target=None,  # No single target for bulk delete
         metadata=full_metadata,
         references=references,
+        source=source,
     )
 
 
