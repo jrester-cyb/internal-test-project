@@ -32,6 +32,7 @@ from ..models import (
     BaseAssetTypeAttribute,
     BaseAttributeValue,
     WorkspaceAsset,
+    AssetType,
 )
 from ..serializers import (
     AssetTypeAttributeSerializer,
@@ -561,8 +562,9 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             # Log the creation
             AuditLogger.log(
                 action="create",
-                message=f"Created local attribute: {instance}",
+                message=f"Created local attribute '{instance.name}'",
                 target=instance,
+                references=[(instance.asset_type, "asset_type")],
                 action_detail="workspace_local",
             )
             # Invalidate cache
@@ -579,8 +581,9 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             # Log the creation
             AuditLogger.log(
                 action="create",
-                message=f"Created global attribute: {instance}",
+                message=f"Created global attribute '{instance.name}'",
                 target=instance,
+                references=[(instance.asset_type, "asset_type")],
                 action_detail="global",
             )
             return Response(
@@ -662,7 +665,10 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         message=f"Created override for global attribute: {override}",
                         target=override,
                         action_detail="workspace_override",
-                        references=[(global_attr, "base_attribute")],
+                        references=[
+                            (global_attr, "base_attribute"),
+                            (override.asset_type, "asset_type"),
+                        ],
                     )
                 else:
                     AuditLogger.log(
@@ -670,6 +676,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         message=f"Updated override attribute: {override}",
                         target=override,
                         action_detail="workspace_override",
+                        references=[(override.asset_type, "asset_type")],
                     )
 
                 # Invalidate cache
@@ -827,13 +834,14 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 message=f"Deleted override attribute: {override}",
                 target=override,
                 action_detail="workspace_override",
+                references=[(override.asset_type, "asset_type")],
             )
-            # Update the config to replace override UUID with global UUID
+            # Update the config to replace override UUID with base attribute UUID
             if workspace_pk:
-                global_attr_id = str(override.global_attribute_id)
+                base_attr_id = str(override.base_attribute_id)
                 override_id = str(override.id)
                 self._update_config_for_override(
-                    workspace_pk, assettype_pk, override_id, global_attr_id
+                    workspace_pk, assettype_pk, override_id, base_attr_id
                 )
             override.delete()
             # Invalidate cache
@@ -867,7 +875,6 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         summary="Hide attribute for this workspace",
     )
     @action(detail=True, methods=["post"], url_path="hide")
-    @audit_viewset_action(action="hide", message="Hid asset type attribute")
     def hide(self, request, pk=None, workspace_pk=None, assettype_pk=None):
         """Hide an attribute for this workspace."""
         if not workspace_pk:
@@ -912,6 +919,14 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 asset_type_id=assettype_pk,
             )
 
+        # Log the action with attribute name
+        AuditLogger.log(
+            action="hide",
+            message=f"Hidden attribute '{attr_to_hide.name}' from workspace",
+            target=attr_to_hide,
+            references=[(attr_to_hide.asset_type, "asset_type")],
+        )
+
         # Invalidate cache
         invalidate_attribute_list_cache(workspace_pk, assettype_pk)
 
@@ -925,7 +940,6 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         summary="Unhide attribute for this workspace",
     )
     @action(detail=True, methods=["post"], url_path="unhide")
-    @audit_viewset_action(action="unhide", message="Unhid asset type attribute")
     def unhide(self, request, pk=None, workspace_pk=None, assettype_pk=None):
         """Unhide an attribute for this workspace."""
         if not workspace_pk:
@@ -956,6 +970,14 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             hidden_attribute=attr_to_unhide,
             workspace_id=workspace_pk,
         ).force_delete()
+
+        # Log the action with attribute name
+        AuditLogger.log(
+            action="unhide",
+            message=f"Showed attribute '{attr_to_unhide.name}' in workspace",
+            target=attr_to_unhide,
+            references=[(attr_to_unhide.asset_type, "asset_type")],
+        )
 
         # Invalidate cache
         invalidate_attribute_list_cache(workspace_pk, assettype_pk)
@@ -1044,11 +1066,6 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         summary="Update attribute ordering",
     )
     @action(detail=False, methods=["post", "get"], url_path="reorder")
-    @audit_viewset_action(
-        action="reorder",
-        message="Reordered asset type attributes",
-        include_changes=True,
-    )
     def reorder(self, request, workspace_pk=None, assettype_pk=None):
         """
         Get or update attribute ordering.
@@ -1118,6 +1135,9 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         attribute_order = [str(item) for item in request.data]
 
+        # Get the asset type for logging
+        asset_type = get_object_or_404(AssetType, id=assettype_pk)
+
         with transaction.atomic():
             if workspace_pk:
                 # Simply save the order as provided - UI sends all attributes including hidden
@@ -1126,6 +1146,15 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     asset_type_id=assettype_pk,
                     defaults={"attribute_order": attribute_order},
                 )
+
+                # Log the reorder action
+                AuditLogger.log(
+                    action="reorder",
+                    message=f"Reordered attributes for '{asset_type.name}' in workspace",
+                    target=asset_type,
+                    references=[],
+                )
+
                 return Response(
                     WorkspaceAssetTypeConfigSerializer(config).data,
                     status=status.HTTP_200_OK,
@@ -1137,6 +1166,14 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         id=attr_id,
                         asset_type_id=assettype_pk,
                     ).update(order=index)
+
+                # Log the global reorder action
+                AuditLogger.log(
+                    action="reorder",
+                    message=f"Reordered global attributes for '{asset_type.name}'",
+                    target=asset_type,
+                    references=[],
+                )
 
                 return Response({"success": True})
 

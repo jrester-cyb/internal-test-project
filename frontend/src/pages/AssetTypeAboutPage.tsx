@@ -4,7 +4,7 @@ import { Box, Typography, Grid } from '@mui/material';
 import { AssetTypeAuditLogSection } from '../components/AssetAuditLogSection';
 
 export default function AssetTypeAboutPage() {
-  const { assetTypeId } = useParams<{ assetTypeId: string }>();
+  const { assetTypeId, workspaceId } = useParams<{ assetTypeId: string; workspaceId: string }>();
 
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
@@ -17,7 +17,7 @@ export default function AssetTypeAboutPage() {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 6 }}>
-          {assetTypeId && <AssetTypeAuditLogSection assetTypeId={assetTypeId} />}
+          {assetTypeId && workspaceId && <AssetTypeAuditLogSection assetTypeId={assetTypeId} workspaceId={workspaceId} />}
         </Grid>
       </Grid>
     </Box>

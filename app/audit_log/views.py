@@ -5,7 +5,7 @@ API views for audit logs.
 from collections import defaultdict
 
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from rest_framework import viewsets, status
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
@@ -130,7 +130,20 @@ class AuditLogEntryListView(ListAPIView):
         # Filter by workspace (via request)
         workspace_id = self.request.query_params.get("workspace_id")
         if workspace_id:
-            qs = qs.filter(request__workspace_id=workspace_id)
+            from workspaces.models import Workspace
+
+            workspace_ct = ContentType.objects.get_for_model(Workspace)
+
+            # Exclude entries that reference a DIFFERENT workspace
+            # This allows:
+            # - Entries from this workspace
+            # - Global entries (no workspace reference)
+            # But excludes:
+            # - Entries from other workspaces
+            qs = qs.exclude(
+                Q(references__content_type=workspace_ct, references__role="workspace")
+                & ~Q(references__object_id=workspace_id)
+            )
 
         # Filter by user (via request)
         user_id = self.request.query_params.get("user_id")
@@ -195,8 +208,6 @@ class AuditLogEntryListView(ListAPIView):
         )
 
         if object_id:
-            from django.db.models import Q
-
             # If object_type is specified, get the content type
             ct = None
             if object_type:

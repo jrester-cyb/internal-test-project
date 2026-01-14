@@ -121,10 +121,22 @@ export async function fetchAssetAuditLog(assetId: string, pageSize: number = 10)
   })
 }
 
-export async function fetchAssetTypeAuditLog(assetTypeId: string, pageSize: number = 10): Promise<AuditLogResponse> {
+export async function fetchAssetTypeAuditLog(assetTypeId: string, workspaceId?: string, pageSize: number = 10): Promise<AuditLogResponse> {
   return fetchAuditLogEntries({
     object_type: 'assets.assettype',
     object_id: assetTypeId,
+    workspace_id: workspaceId,
+    ordering: '-created_at',
+    page_size: pageSize,
+  })
+}
+
+export async function fetchAttributeAuditLog(attributeId: string, workspaceId?: string, pageSize: number = 10): Promise<AuditLogResponse> {
+  // Fetch entries where the attribute is either the target or referenced
+  // The attribute could be logged as any of the polymorphic subclasses
+  return fetchAuditLogEntries({
+    object_id: attributeId,
+    workspace_id: workspaceId,
     ordering: '-created_at',
     page_size: pageSize,
   })

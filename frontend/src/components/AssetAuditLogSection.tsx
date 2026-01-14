@@ -259,11 +259,11 @@ export function AssetAuditLogSection({ assetId }: { assetId: string }) {
   )
 }
 
-export function AssetTypeAuditLogSection({ assetTypeId }: { assetTypeId: string }) {
+export function AssetTypeAuditLogSection({ assetTypeId, workspaceId }: { assetTypeId: string; workspaceId: string }) {
   return (
     <AuditLogSection
       objectId={assetTypeId}
-      fetchFn={fetchAssetTypeAuditLog}
+      fetchFn={(id, pageSize) => fetchAssetTypeAuditLog(id, workspaceId, pageSize)}
       emptyMessage="No audit history found for this asset type."
     />
   )

@@ -6,11 +6,13 @@ import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import type { AssetTypeAttribute, UnitCategory } from '../types'
 import { useLoaderData, useParams, useSearchParams, useRouteLoaderData } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions, fetchUnitCategories } from '../api/assets'
+import { fetchAttributeAuditLog } from '../api/auditLog'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import AttributeChoicesSection from '../components/AttributeChoicesSection'
+import AuditLogSection from '../components/AssetAuditLogSection'
 import ConfirmDialog from '../components/ConfirmDialog'
 import CopyableText from '../components/CopyableText'
 import TruncatedText from '../components/TruncatedText'
@@ -160,7 +162,8 @@ export default function AssetTypeAttributesPage() {
     info: true,
     configuration: false,
     choices: false,
-    system: false
+    system: false,
+    audit: false
   })
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('attributeDetailsSectionOrder')
@@ -168,15 +171,15 @@ export default function AssetTypeAttributesPage() {
       try {
         const parsed = JSON.parse(saved)
         // Validate that it contains all expected sections
-        if (Array.isArray(parsed) && parsed.length === 4 &&
-          parsed.includes('info') && parsed.includes('configuration') && parsed.includes('choices') && parsed.includes('system')) {
+        if (Array.isArray(parsed) && parsed.length === 5 &&
+          parsed.includes('info') && parsed.includes('configuration') && parsed.includes('choices') && parsed.includes('system') && parsed.includes('audit')) {
           return parsed
         }
       } catch {
         // Invalid JSON, use default
       }
     }
-    return ['info', 'configuration', 'choices', 'system']
+    return ['info', 'configuration', 'choices', 'system', 'audit']
   })
 
   const toggleSection = (section: string) => {
@@ -1304,6 +1307,26 @@ export default function AssetTypeAttributesPage() {
                 </>
               )}
             </Box>
+          </DraggableSection>
+        )
+      case 'audit':
+        return (
+          <DraggableSection
+            key="audit"
+            id="audit"
+            title="Activity Log"
+            expanded={expandedSections.audit}
+            onToggle={() => toggleSection('audit')}
+          >
+            {displayedAttribute && workspaceId && (
+              <Box sx={{ mt: 1 }}>
+                <AuditLogSection
+                  objectId={displayedAttribute.id}
+                  fetchFn={(id: string, pageSize: number) => fetchAttributeAuditLog(id, workspaceId, pageSize)}
+                  emptyMessage="No activity history found for this attribute."
+                />
+              </Box>
+            )}
           </DraggableSection>
         )
       default:

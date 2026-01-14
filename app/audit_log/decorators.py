@@ -199,13 +199,15 @@ def audit_viewset_action(
                     if target:
                         log_message += f": {target}"
 
-                # Get references (workspace, organization if available)
+                # Get references (workspace, organization, asset_type if available)
                 references = []
                 if target:
                     if hasattr(target, "workspace") and target.workspace:
                         references.append((target.workspace, "workspace"))
                     if hasattr(target, "organization") and target.organization:
                         references.append((target.organization, "organization"))
+                    if hasattr(target, "asset_type") and target.asset_type:
+                        references.append((target.asset_type, "asset_type"))
 
                 AuditLogger.log(
                     action=log_action,
