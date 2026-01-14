@@ -39,7 +39,9 @@ class OrganizationMembership(SoftDeleteMixin):
         Organization, on_delete=models.CASCADE, related_name="memberships"
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="organization_memberships"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="organization_memberships",
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="member")
     joined_at = models.DateTimeField(auto_now_add=True)

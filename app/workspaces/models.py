@@ -52,7 +52,9 @@ class WorkspaceMembership(SoftDeleteMixin):
         Workspace, on_delete=models.CASCADE, related_name="memberships"
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="workspace_memberships"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="workspace_memberships",
     )
     permission = models.CharField(
         max_length=20, choices=PERMISSION_CHOICES, default="read"

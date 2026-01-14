@@ -177,14 +177,14 @@ class OSMImporter:
             )
             if created:
                 created_count += 1
-            
+
             # Link asset to workspace
             if self.workspace:
                 WorkspaceAsset.objects.get_or_create(
                     workspace=self.workspace,
                     asset=asset,
                 )
-            
+
             self.store_osm_attributes(asset, osm_id, osm_type, tags)
         print(f"Created {created_count} new assets")
         return created_count
