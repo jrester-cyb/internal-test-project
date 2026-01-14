@@ -1,5 +1,5 @@
 import { useState, useLayoutEffect, useRef } from 'react'
-import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, type TypographyProps } from '@mui/material'
+import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, useTheme, type TypographyProps } from '@mui/material'
 import { ContentCopy } from '@mui/icons-material'
 
 interface TruncatedTextProps extends Omit<TypographyProps, 'children'> {
@@ -13,6 +13,8 @@ export default function TruncatedText({ children, maxLines = 3, title = 'Full Te
   const textRef = useRef<HTMLSpanElement>(null)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const theme = useTheme()
+  const linkColor = theme.palette.mode === 'dark' ? 'secondary' : 'primary'
 
   useLayoutEffect(() => {
     const el = textRef.current
@@ -72,7 +74,7 @@ export default function TruncatedText({ children, maxLines = 3, title = 'Full Te
             component="span"
             onClick={() => setModalOpen(true)}
             sx={{
-              color: 'primary.main',
+              color: `${linkColor}.main`,
               cursor: 'pointer',
               fontSize: '0.875rem',
               '&:hover': { textDecoration: 'underline' },

@@ -280,8 +280,13 @@ export default function AssetDetailPage() {
                                     tags={attr.tags}
                                     maxVisible={2}
                                     label={`Tags for ${attr.name}`}
+                                    selectedTags={selectedTags}
                                     onTagClick={(tag) => {
-                                      if (!selectedTags.includes(tag)) {
+                                      if (selectedTags.includes(tag)) {
+                                        // Remove tag if already selected (toggle off)
+                                        setSelectedTags(selectedTags.filter(t => t !== tag))
+                                      } else {
+                                        // Add tag if not selected (toggle on)
                                         setSelectedTags([...selectedTags, tag])
                                       }
                                     }}
