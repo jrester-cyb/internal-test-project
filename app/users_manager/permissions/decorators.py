@@ -109,13 +109,13 @@ def requires_permission(
             # Check permission using request-level cache
             if request.user.is_superuser:
                 return func(self, request, *args, **kwargs)
-            
+
             perms = get_request_permissions(
                 request,
                 organization=scope_obj if check_scope == "organization" else None,
                 workspace=scope_obj if check_scope == "workspace" else None,
             )
-            
+
             if permission in perms:
                 return func(self, request, *args, **kwargs)
 

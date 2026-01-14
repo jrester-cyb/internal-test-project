@@ -9,7 +9,8 @@ class UsersManagerConfig(AppConfig):
     def ready(self):
         # Import signals to register them
         import users_manager.permissions.signals  # noqa: F401
-        
+
         # Connect m2m signals that need the actual model class
         from users_manager.permissions.signals import connect_m2m_signals
+
         connect_m2m_signals()
