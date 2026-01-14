@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Box, IconButton, Tooltip, Typography, Modal } from '@mui/material'
+import { Box, IconButton, Tooltip, Typography, Modal, useTheme } from '@mui/material'
 import UndoIcon from '@mui/icons-material/Undo'
 import RedoIcon from '@mui/icons-material/Redo'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
@@ -7,6 +7,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import CodeIcon from '@mui/icons-material/Code'
 import CodeOffIcon from '@mui/icons-material/CodeOff'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
 interface HistoryEntry {
   text: string
@@ -21,16 +22,20 @@ interface JsonEditorProps {
 }
 
 // Simple syntax highlighting for JSON
-const highlightJson = (json: string) => {
+const highlightJson = (json: string, isDark: boolean) => {
   // Escape HTML first
   const escaped = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Theme-aware colors
+  const colors = isDark
+    ? { key: '#9cdcfe', string: '#ce9178', number: '#b5cea8', keyword: '#569cd6' }
+    : { key: '#0451a5', string: '#a31515', number: '#098658', keyword: '#0000ff' }
   // Then apply syntax highlighting
   return escaped
-    .replace(/"([^"]+)":/g, '<span style="color: #9cdcfe">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span style="color: #ce9178">"$1"</span>')
-    .replace(/: (-?\d+\.?\d*)/g, ': <span style="color: #b5cea8">$1</span>')
-    .replace(/: (true|false)/g, ': <span style="color: #569cd6">$1</span>')
-    .replace(/: (null)/g, ': <span style="color: #569cd6">$1</span>')
+    .replace(/"([^"]+)":/g, `<span style="color: ${colors.key}">"$1"</span>:`)
+    .replace(/: "([^"]*)"/g, `: <span style="color: ${colors.string}">"$1"</span>`)
+    .replace(/: (-?\d+\.?\d*)/g, `: <span style="color: ${colors.number}">$1</span>`)
+    .replace(/: (true|false)/g, `: <span style="color: ${colors.keyword}">$1</span>`)
+    .replace(/: (null)/g, `: <span style="color: ${colors.keyword}">$1</span>`)
 }
 
 export default function JsonEditor({
@@ -38,6 +43,8 @@ export default function JsonEditor({
   onChange,
   placeholder = 'Enter JSON here...',
 }: JsonEditorProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [scrollPos, setScrollPos] = useState({ top: 0, left: 0 })
   const [fullscreenScrollPos, setFullscreenScrollPos] = useState({ top: 0, left: 0 })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -607,36 +614,36 @@ export default function JsonEditor({
       zIndex: 1,
       display: 'flex',
       gap: 0.5,
-      bgcolor: 'rgba(0,0,0,0.3)',
+      bgcolor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)',
       borderRadius: 1,
       p: 0.25,
     }}>
-      <Tooltip title="Undo (Ctrl+Z)">
+      <Tooltip title="Undo (Ctrl+Z)" arrow>
         <span>
           <IconButton
             size="small"
             onClick={undo}
             disabled={!canUndo}
-            sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
           >
             <UndoIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title="Redo (Ctrl+Y)">
+      <Tooltip title="Redo (Ctrl+Y)" arrow>
         <span>
           <IconButton
             size="small"
             onClick={redo}
             disabled={!canRedo}
-            sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
           >
             <RedoIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
-      <Box sx={{ width: 1, bgcolor: 'grey.700', mx: 0.25 }} />
-      <Tooltip title="Format JSON">
+      <Box sx={{ width: 1, bgcolor: 'divider', mx: 0.25 }} />
+      <Tooltip title="Format JSON" arrow>
         <span>
           <IconButton
             size="small"
@@ -653,26 +660,42 @@ export default function JsonEditor({
               }
             }}
             disabled={!isValid || !localText}
-            sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
           >
             <AutoFixHighIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"}>
+      <Tooltip title="Copy to clipboard" arrow>
+        <span>
+          <IconButton
+            size="small"
+            onClick={() => {
+              if (localText) {
+                navigator.clipboard.writeText(localText)
+              }
+            }}
+            disabled={!localText}
+            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+          >
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"} arrow>
         <IconButton
           size="small"
           onClick={() => setShowRawText(!showRawText)}
-          sx={{ color: showRawText ? 'primary.main' : 'grey.400', '&:hover': { color: 'grey.100' } }}
+          sx={{ color: showRawText ? (isDark ? 'secondary.main' : 'primary.main') : 'text.secondary', '&:hover': { color: 'text.primary' } }}
         >
           {showRawText ? <CodeOffIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
         </IconButton>
       </Tooltip>
-      <Tooltip title={inFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}>
+      <Tooltip title={inFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"} arrow>
         <IconButton
           size="small"
           onClick={() => setIsFullscreen(!isFullscreen)}
-          sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
         >
           {inFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
         </IconButton>
@@ -682,7 +705,15 @@ export default function JsonEditor({
 
   return (
     <>
-      <Box sx={{ position: 'relative', height: 300, overflow: 'hidden', bgcolor: 'grey.900', borderRadius: 1 }}>
+      <Box sx={{
+        position: 'relative',
+        height: 300,
+        overflow: 'hidden',
+        bgcolor: 'background.paper',
+        borderRadius: 1,
+        border: isDark ? 'none' : 1,
+        borderColor: 'divider',
+      }}>
         <Toolbar />
         {/* Syntax highlighted background - moves with textarea scroll */}
         {!showRawText && (
@@ -695,7 +726,7 @@ export default function JsonEditor({
               fontFamily: 'monospace',
               fontSize: '0.875rem',
               lineHeight: 1.5,
-              color: 'grey.100',
+              color: 'text.primary',
               p: 1.5,
               whiteSpace: 'pre',
               pointerEvents: 'none',
@@ -703,8 +734,8 @@ export default function JsonEditor({
             }}
             dangerouslySetInnerHTML={{
               __html: localText
-                ? highlightJson(localText)
-                : `<span style="color: #6a6a6a">${placeholder}</span>`
+                ? highlightJson(localText, isDark)
+                : `<span style="color: ${isDark ? '#6a6a6a' : '#a0a0a0'}">${placeholder}</span>`
             }}
           />
         )}
@@ -726,8 +757,8 @@ export default function JsonEditor({
             lineHeight: 1.5,
             padding: 12,
             background: 'transparent',
-            color: showRawText ? '#d4d4d4' : 'transparent',
-            caretColor: '#fff',
+            color: showRawText ? theme.palette.text.primary : 'transparent',
+            caretColor: theme.palette.text.primary,
             border: 'none',
             outline: 'none',
             resize: 'none',
@@ -751,12 +782,12 @@ export default function JsonEditor({
         <Box sx={{
           width: '100vw',
           height: '100vh',
-          bgcolor: 'grey.900',
+          bgcolor: 'background.paper',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'grey.900' }}>
+          <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'background.paper' }}>
             <Toolbar inFullscreen />
             {/* Syntax highlighted background - moves with textarea scroll */}
             {!showRawText && (
@@ -769,7 +800,7 @@ export default function JsonEditor({
                   fontFamily: 'monospace',
                   fontSize: '0.875rem',
                   lineHeight: 1.5,
-                  color: 'grey.100',
+                  color: 'text.primary',
                   p: 1.5,
                   whiteSpace: 'pre',
                   pointerEvents: 'none',
@@ -777,8 +808,8 @@ export default function JsonEditor({
                 }}
                 dangerouslySetInnerHTML={{
                   __html: localText
-                    ? highlightJson(localText)
-                    : `<span style="color: #6a6a6a">${placeholder}</span>`
+                    ? highlightJson(localText, isDark)
+                    : `<span style="color: ${isDark ? '#6a6a6a' : '#a0a0a0'}">${placeholder}</span>`
                 }}
               />
             )}
@@ -800,8 +831,8 @@ export default function JsonEditor({
                 lineHeight: 1.5,
                 padding: 12,
                 background: 'transparent',
-                color: showRawText ? '#d4d4d4' : 'transparent',
-                caretColor: '#fff',
+                color: showRawText ? theme.palette.text.primary : 'transparent',
+                caretColor: theme.palette.text.primary,
                 border: 'none',
                 outline: 'none',
                 resize: 'none',
