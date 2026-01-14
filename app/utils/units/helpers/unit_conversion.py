@@ -253,38 +253,82 @@ def get_unit_category_for_unit(unit_str: str) -> Optional[str]:
     return None
 
 
-def get_categories_for_api() -> list:
+def get_categories_for_api(search: Optional[str] = None) -> list:
     """
     Get unit categories formatted for API response.
     Used by endpoints that need to list available units.
 
+    Args:
+        search: Optional search term to filter by category name or unit name/code/symbol
+
     Returns:
         List of category dictionaries
     """
+    search_lower = search.lower().strip() if search else None
     categories_list = []
+
     for key, category in UNIT_CATEGORIES.items():
+        # Check if category matches search
+        category_matches = False
+        if search_lower:
+            category_matches = (
+                search_lower in key.lower() or search_lower in category["name"].lower()
+            )
+
         units_list = []
         for unit_str in category["units"]:
             try:
+                symbol = get_unit_symbol(unit_str)
+                name = get_unit_display_name(unit_str)
+
+                # If searching, check if unit matches
+                if search_lower and not category_matches:
+                    unit_matches = (
+                        search_lower in unit_str.lower()
+                        or search_lower in symbol.lower()
+                        or search_lower in name.lower()
+                    )
+                    if not unit_matches:
+                        continue
+
                 units_list.append(
                     {
                         "code": unit_str,
-                        "symbol": get_unit_symbol(unit_str),
-                        "name": get_unit_display_name(unit_str),
+                        "symbol": symbol,
+                        "name": name,
                         "is_base": unit_str == category["base_unit"],
                     }
                 )
             except (pint.UndefinedUnitError, pint.DimensionalityError):
                 continue
 
-        categories_list.append(
-            {
-                "key": key,
-                "name": category["name"],
-                "base_unit": category["base_unit"],
-                "units": units_list,
-            }
-        )
+        # Only include category if it has matching units or the category itself matches
+        if units_list or (category_matches and not search_lower):
+            # If category matches, include all units
+            if category_matches and not units_list:
+                # Re-fetch all units for this category
+                for unit_str in category["units"]:
+                    try:
+                        units_list.append(
+                            {
+                                "code": unit_str,
+                                "symbol": get_unit_symbol(unit_str),
+                                "name": get_unit_display_name(unit_str),
+                                "is_base": unit_str == category["base_unit"],
+                            }
+                        )
+                    except (pint.UndefinedUnitError, pint.DimensionalityError):
+                        continue
+
+            if units_list:
+                categories_list.append(
+                    {
+                        "key": key,
+                        "name": category["name"],
+                        "base_unit": category["base_unit"],
+                        "units": units_list,
+                    }
+                )
 
     return categories_list
 

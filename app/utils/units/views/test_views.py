@@ -55,6 +55,40 @@ class TestUnitCategoriesView(APITestCase):
         data = response.json()
         self.assertIsNotNone(data["next"])
 
+    def test_search_by_category_name(self):
+        """Search by category name filters results."""
+        response = self.client.get(reverse("unit-categories"), {"search": "mass"})
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "mass")
+
+    def test_search_by_unit_code(self):
+        """Search by unit code filters results."""
+        response = self.client.get(reverse("unit-categories"), {"search": "kg"})
+        data = response.json()
+        # Should return at least the mass category
+        self.assertGreaterEqual(data["count"], 1)
+        category_keys = [cat["key"] for cat in data["results"]]
+        self.assertIn("mass", category_keys)
+
+    def test_search_case_insensitive(self):
+        """Search should be case insensitive."""
+        response = self.client.get(
+            reverse("unit-categories"), {"search": "TEMPERATURE"}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "temperature")
+
+    def test_search_no_results(self):
+        """Search with no matches returns empty results."""
+        response = self.client.get(
+            reverse("unit-categories"), {"search": "xyznonexistent"}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["results"], [])
+
 
 class TestUnitConvertView(APITestCase):
     """Tests for UnitConvertView."""

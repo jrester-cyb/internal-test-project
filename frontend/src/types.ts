@@ -49,6 +49,7 @@ export interface UnitInfo {
 }
 
 export interface UnitCategory {
+  key: string
   name: string
   baseUnit: string
   units: UnitInfo[]

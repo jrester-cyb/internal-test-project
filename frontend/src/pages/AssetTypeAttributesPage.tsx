@@ -3,9 +3,9 @@ import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRo
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
-import type { AssetTypeAttribute } from '../types'
+import type { AssetTypeAttribute, UnitCategory } from '../types'
 import { useLoaderData, useParams, useSearchParams, useRouteLoaderData } from 'react-router-dom'
-import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions } from '../api/assets'
+import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions, fetchUnitCategories } from '../api/assets'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -190,13 +190,30 @@ export default function AssetTypeAttributesPage() {
     isRequired: false,
     description: '',
     defaultValue: undefined as any,
-    tags: [] as string[]
+    tags: [] as string[],
+    unit: undefined as string | undefined
   })
   const [isApiKeyUnlocked, setIsApiKeyUnlocked] = useState(false)
   const [isApiKeyManuallyEdited, setIsApiKeyManuallyEdited] = useState(false)
   const [typeChangeDialogOpen, setTypeChangeDialogOpen] = useState(false)
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [unitCategories, setUnitCategories] = useState<UnitCategory[]>([])
+  const [unitSearchInput, setUnitSearchInput] = useState('')
+  const [isLoadingUnits, setIsLoadingUnits] = useState(false)
+
+  // Fetch unit categories with debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setIsLoadingUnits(true)
+      fetchUnitCategories(unitSearchInput || undefined)
+        .then(categories => setUnitCategories(categories))
+        .catch(err => console.error('Failed to fetch unit categories:', err))
+        .finally(() => setIsLoadingUnits(false))
+    }, 300) // 300ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [unitSearchInput])
 
   // Fetch available tags on mount
   useEffect(() => {
@@ -449,7 +466,8 @@ export default function AssetTypeAttributesPage() {
       isRequired: attr.isRequired,
       description: attr.description || '',
       defaultValue: attr.defaultValue,
-      tags: attr.tags || []
+      tags: attr.tags || [],
+      unit: attr.unit
     })
     setIsApiKeyUnlocked(false)
     setEditDialogOpen(true)
@@ -484,7 +502,8 @@ export default function AssetTypeAttributesPage() {
       isRequired: false,
       description: '',
       defaultValue: undefined,
-      tags: []
+      tags: [],
+      unit: undefined
     })
     setIsApiKeyUnlocked(false)
     setIsApiKeyManuallyEdited(false)
@@ -1056,7 +1075,8 @@ export default function AssetTypeAttributesPage() {
                             isRequired: displayedAttribute.isRequired,
                             description: displayedAttribute.description || '',
                             defaultValue: displayedAttribute.defaultValue,
-                            tags: displayedAttribute.tags || []
+                            tags: displayedAttribute.tags || [],
+                            unit: displayedAttribute.unit
                           })
                           setPendingTypeChange(null)
                           setTypeChangeDialogOpen(true)
@@ -1097,6 +1117,19 @@ export default function AssetTypeAttributesPage() {
                       : 'No default value'}
                   </TableCell>
                 </TableRow>
+                {displayedAttribute.attributeType === 'number' && (
+                  <TableRow>
+                    <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Unit</TableCell>
+                    <TableCell sx={{ border: 0, py: 0.5, color: displayedAttribute.unit ? 'text.primary' : 'text.disabled', fontStyle: displayedAttribute.unit ? 'normal' : 'italic' }}>
+                      {displayedAttribute.unit ? (
+                        (() => {
+                          const unitInfo = unitCategories.flatMap(c => c.units).find(u => u.code === displayedAttribute.unit)
+                          return unitInfo ? `${unitInfo.name} (${unitInfo.symbol})` : displayedAttribute.unit
+                        })()
+                      ) : 'No unit specified'}
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </DraggableSection>
@@ -1538,6 +1571,54 @@ export default function AssetTypeAttributesPage() {
                 value={formData.defaultValue ?? ''}
                 onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value ? Number(e.target.value) : undefined })}
                 helperText="Optional default value for this attribute"
+              />
+            )}
+            {formData.attributeType === 'number' && (
+              <Autocomplete
+                options={unitCategories.flatMap(category =>
+                  category.units.map(unit => ({ ...unit, category: category.name }))
+                )}
+                groupBy={(option) => option.category}
+                getOptionLabel={(option) => `${option.name} (${option.symbol})`}
+                value={unitCategories.flatMap(c => c.units.map(u => ({ ...u, category: c.name }))).find(u => u.code === formData.unit) || null}
+                onChange={(_, newValue) => setFormData({ ...formData, unit: newValue?.code || undefined })}
+                onInputChange={(_, newInputValue, reason) => {
+                  if (reason === 'input') {
+                    setUnitSearchInput(newInputValue)
+                  }
+                }}
+                isOptionEqualToValue={(option, value) => option.code === value.code}
+                filterOptions={(x) => x} // Disable client-side filtering, server handles it
+                loading={isLoadingUnits}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Unit of Measurement"
+                    placeholder="Search units..."
+                    helperText="Optional unit for this numeric attribute"
+                    slotProps={{
+                      input: {
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {isLoadingUnits ? <CircularProgress color="inherit" size={20} /> : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      },
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.code}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                      <span>{option.name}</span>
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                        {option.symbol}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
               />
             )}
             {formData.attributeType === 'boolean' && (

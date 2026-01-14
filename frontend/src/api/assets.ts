@@ -1,10 +1,30 @@
-import type { SearchRequest } from '../types'
+import type { SearchRequest, UnitCategory } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
 
 // Helper to build workspace-scoped URLs
 function workspaceUrl(workspaceId: string, path: string) {
   return `${API_BASE}/workspaces/${workspaceId}/${path}`
+}
+
+// Unit Categories API - global endpoint (not workspace-scoped)
+export async function fetchUnitCategories(search?: string): Promise<UnitCategory[]> {
+  const allCategories: UnitCategory[] = []
+  const params = new URLSearchParams({ page_size: '100' })
+  if (search) {
+    params.append('search', search)
+  }
+  let url: string | null = `${API_BASE}/utils/units/?${params}`
+  
+  while (url) {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('Failed to fetch unit categories')
+    const data = await response.json()
+    allCategories.push(...data.results)
+    url = data.next
+  }
+  
+  return allCategories
 }
 
 export async function fetchWorkspaces() {

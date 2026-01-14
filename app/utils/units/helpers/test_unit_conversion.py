@@ -284,6 +284,69 @@ class TestGetCategoriesForApi:
         assert kg_unit["is_base"] is True
         assert lb_unit["is_base"] is False
 
+    def test_search_by_category_name(self):
+        """Search by category name returns that category with all units."""
+        result = get_categories_for_api(search="mass")
+        assert len(result) == 1
+        assert result[0]["key"] == "mass"
+        # Should have all units when category matches
+        assert len(result[0]["units"]) > 1
+
+    def test_search_by_category_key(self):
+        """Search by category key (e.g. 'temperature') returns that category."""
+        result = get_categories_for_api(search="temperature")
+        assert len(result) == 1
+        assert result[0]["key"] == "temperature"
+
+    def test_search_by_unit_code(self):
+        """Search by unit code returns categories containing matching units."""
+        result = get_categories_for_api(search="kg")
+        assert len(result) >= 1
+        mass_category = next((cat for cat in result if cat["key"] == "mass"), None)
+        assert mass_category is not None
+        # Should contain kg unit
+        unit_codes = [u["code"] for u in mass_category["units"]]
+        assert "kg" in unit_codes
+
+    def test_search_by_unit_name(self):
+        """Search by unit name returns matching units."""
+        result = get_categories_for_api(search="meter")
+        assert len(result) >= 1
+        # Should find length category
+        length_category = next((cat for cat in result if cat["key"] == "length"), None)
+        assert length_category is not None
+
+    def test_search_case_insensitive(self):
+        """Search should be case insensitive."""
+        result_lower = get_categories_for_api(search="mass")
+        result_upper = get_categories_for_api(search="MASS")
+        result_mixed = get_categories_for_api(search="Mass")
+        assert len(result_lower) == len(result_upper) == len(result_mixed)
+
+    def test_search_no_results(self):
+        """Search with no matches returns empty list."""
+        result = get_categories_for_api(search="xyznonexistent123")
+        assert result == []
+
+    def test_search_empty_string(self):
+        """Empty search string returns all categories."""
+        result_empty = get_categories_for_api(search="")
+        result_none = get_categories_for_api(search=None)
+        result_all = get_categories_for_api()
+        assert len(result_empty) == len(result_none) == len(result_all)
+
+    def test_search_partial_match(self):
+        """Partial search term should match."""
+        result = get_categories_for_api(search="kilo")
+        # Should find multiple categories with kilo- units
+        assert len(result) >= 1
+        # Check that we got categories with kilo- units
+        all_unit_names = []
+        for cat in result:
+            for unit in cat["units"]:
+                all_unit_names.append(unit["name"].lower())
+        assert any("kilo" in name for name in all_unit_names)
+
 
 class TestUnitCategories:
     """Tests for UNIT_CATEGORIES constant."""

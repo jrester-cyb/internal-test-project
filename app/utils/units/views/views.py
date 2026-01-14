@@ -16,13 +16,17 @@ from pint.errors import DimensionalityError
 class UnitCategoriesView(ListAPIView):
     """
     GET: List all available unit categories and their units.
+
+    Query Parameters:
+        search: Filter categories and units by name, code, or symbol
     """
 
     serializer_class = UnitCategorySerializer
 
     def get_queryset(self):
-        """Return unit categories as a list."""
-        return get_categories_for_api()
+        """Return unit categories as a list, optionally filtered by search term."""
+        search = self.request.query_params.get("search", None)
+        return get_categories_for_api(search=search)
 
 
 class UnitConvertView(APIView):
