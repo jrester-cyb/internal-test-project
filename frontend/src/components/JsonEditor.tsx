@@ -716,13 +716,11 @@ export default function JsonEditor({
       <Modal
         open={isFullscreen}
         onClose={() => setIsFullscreen(false)}
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         <Box sx={{
-          width: '90vw',
-          height: '90vh',
+          width: '100vw',
+          height: '100vh',
           bgcolor: 'grey.900',
-          borderRadius: 2,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
