@@ -52,7 +52,6 @@ export default function AssetTypeAttributesPage() {
   const rightColumnRef = useRef<HTMLDivElement>(null)
   const [leftColumnPixelWidth, setLeftColumnPixelWidth] = useState(500)
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
-  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden || false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -1068,7 +1067,7 @@ export default function AssetTypeAttributesPage() {
             expanded={expandedSections.configuration}
             onToggle={() => toggleSection('configuration')}
           >
-            <Table size="small" sx={{ mt: 1 }}>
+            <Table size="small" sx={{ mt: 1, tableLayout: 'fixed', width: '100%' }}>
               <TableBody>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', width: 100, verticalAlign: 'middle' }}>Type</TableCell>
@@ -1077,35 +1076,37 @@ export default function AssetTypeAttributesPage() {
                       {displayedAttribute.attributeType.charAt(0).toUpperCase() + displayedAttribute.attributeType.slice(1)}
                     </Box>
                     {!showingGlobalDefinition && (
-                      <Button
+                      <ActionButtons
+                        width={rightColumnActualWidth ? (rightColumnActualWidth - 200) / rightColumnActualWidth * 100 : 50}
+                        actualWidth={rightColumnActualWidth ? rightColumnActualWidth - 200 : undefined}
                         size="small"
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<CompareArrowsIcon />}
-                        onClick={() => {
-                          setEditingAttribute(selectedAttribute)
-                          setFormData({
-                            name: displayedAttribute.name,
-                            apiKey: displayedAttribute.apiKey,
-                            attributeType: displayedAttribute.attributeType,
-                            isRequired: displayedAttribute.isRequired,
-                            description: displayedAttribute.description || '',
-                            defaultValue: displayedAttribute.defaultValue,
-                            tags: displayedAttribute.tags || [],
-                            unit: displayedAttribute.unit,
-                            cannotOverride: Boolean(displayedAttribute.cannotOverride),
-                            lockedToGlobal: Boolean(displayedAttribute.lockedToGlobal)
-                          })
-                          setPendingTypeChange(null)
-                          setTypeChangeDialogOpen(true)
-                        }}
-                        sx={{
-                          textTransform: 'none',
-                          minWidth: 'auto'
-                        }}
-                      >
-                        Convert Type
-                      </Button>
+                        actions={[{
+                          label: selectedAttribute!.cannotOverride ? 'Protected Type' : 'Convert Type',
+                          icon: <CompareArrowsIcon />,
+                          onClick: () => {
+                            setEditingAttribute(selectedAttribute)
+                            setFormData({
+                              name: displayedAttribute.name,
+                              apiKey: displayedAttribute.apiKey,
+                              attributeType: displayedAttribute.attributeType,
+                              isRequired: displayedAttribute.isRequired,
+                              description: displayedAttribute.description || '',
+                              defaultValue: displayedAttribute.defaultValue,
+                              tags: displayedAttribute.tags || [],
+                              unit: displayedAttribute.unit,
+                              cannotOverride: Boolean(displayedAttribute.cannotOverride),
+                              lockedToGlobal: Boolean(displayedAttribute.lockedToGlobal)
+                            })
+                            setPendingTypeChange(null)
+                            setTypeChangeDialogOpen(true)
+                          },
+                          color: 'warning' as const,
+                          variant: 'outlined' as const,
+                          disabled: selectedAttribute!.cannotOverride,
+                          tooltip: selectedAttribute!.cannotOverride ? 'This attribute type cannot be changed because it is protected from overrides in workspaces' : undefined,
+                          minWidth: 55  // Collapse when less than 50% of available space
+                        }]}
+                      />
                     )}
                   </TableCell>
                 </TableRow>
@@ -1152,21 +1153,21 @@ export default function AssetTypeAttributesPage() {
                   <>
                     <TableRow>
                       <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Override Policy</TableCell>
-                      <TableCell sx={{ border: 0, py: 0.5 }}>
+                      <TableCell sx={{ border: 0, py: 0.5, overflow: 'hidden' }}>
                         {displayedAttribute.cannotOverride ? (
-                          <Chip label="Cannot be overridden" color="warning" size="small" />
+                          <Chip label="Cannot be overridden" color="warning" size="small" sx={{ maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
                         ) : (
-                          <Chip label="Can be overridden" variant="outlined" size="small" />
+                          <Chip label="Can be overridden" variant="outlined" size="small" sx={{ maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
                         )}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Value Policy</TableCell>
-                      <TableCell sx={{ border: 0, py: 0.5 }}>
+                      <TableCell sx={{ border: 0, py: 0.5, overflow: 'hidden' }}>
                         {displayedAttribute.lockedToGlobal ? (
-                          <Chip label="Values locked to global" color="error" size="small" />
+                          <Chip label="Values locked to global" color="error" size="small" sx={{ maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
                         ) : (
-                          <Chip label="Values can vary per workspace" variant="outlined" size="small" />
+                          <Chip label="Values can vary per workspace" variant="outlined" size="small" sx={{ maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
                         )}
                       </TableCell>
                     </TableRow>
@@ -1325,8 +1326,6 @@ export default function AssetTypeAttributesPage() {
                 minWidth: Infinity // Always in menu
               }] : [])
             ]}
-            menuAnchorEl={menuAnchorEl}
-            setMenuAnchorEl={setMenuAnchorEl}
           />
         )}
       </Stack>

@@ -1,4 +1,4 @@
-import { type ReactNode, Fragment } from 'react'
+import { type ReactNode, Fragment, useState } from 'react'
 import { Box, Button, Stack, IconButton, Menu, MenuItem, Collapse, Tooltip, Divider } from '@mui/material'
 import { MoreVert as MoreVertIcon } from '@mui/icons-material'
 
@@ -21,13 +21,9 @@ export interface ActionButtonConfig {
 interface ActionButtonsProps {
   actions: ActionButtonConfig[]
   // For responsive mode with collapsing buttons - the current container width (as percentage or pixels)
-  width?: number
+  width: number
   // Actual pixel width of the container (for better breakpoint calculations)
   actualWidth?: number
-  menuAnchorEl?: HTMLElement | null
-  setMenuAnchorEl?: (el: HTMLElement | null) => void
-  // For simple mode (always show all buttons)
-  simple?: boolean
   size?: 'small' | 'medium' | 'large'
   spacing?: number
   // When true, render as icon buttons with tooltips instead of full buttons
@@ -41,54 +37,17 @@ export default function ActionButtons({
   actions,
   width,
   actualWidth,
-  menuAnchorEl,
-  setMenuAnchorEl,
-  simple = false,
   size = 'small',
   spacing = 1,
   iconOnly = false,
   menuIcon = <MoreVertIcon />
 }: ActionButtonsProps) {
-  // Simple mode - just render all buttons
-  if (simple) {
-    return (
-      <Stack direction="row" spacing={spacing} sx={{ alignItems: 'center' }}>
-        {actions.map((action, index) => (
-          iconOnly && action.icon ? (
-            <Tooltip key={index} title={action.label}>
-              <IconButton
-                size={size}
-                color={action.color || 'primary'}
-                onClick={action.onClick}
-                disabled={action.disabled}
-              >
-                {action.icon}
-              </IconButton>
-            </Tooltip>
-          ) : (
-            <Button
-              key={index}
-              size={size}
-              variant={action.variant || 'outlined'}
-              color={action.color || 'primary'}
-              startIcon={action.icon}
-              onClick={action.onClick}
-              disabled={action.disabled}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              {action.label}
-            </Button>
-          )
-        ))}
-      </Stack>
-    )
-  }
+  // Internal menu state
+  const [internalMenuAnchor, setInternalMenuAnchor] = useState<HTMLElement | null>(null)
 
-  // Responsive mode with collapse
-  if (width === undefined || !setMenuAnchorEl) {
-    console.warn('ActionButtons: width and setMenuAnchorEl are required for responsive mode')
-    return null
-  }
+  // Always use internal menu state now
+  const currentMenuAnchor = internalMenuAnchor
+  const setCurrentMenuAnchor = setInternalMenuAnchor
 
   // Simple percentage-based breakpoint logic
   const isButtonVisible = (minWidth: number) => {
@@ -152,7 +111,7 @@ export default function ActionButtons({
       <IconButton
         size={size}
         color="inherit"
-        onClick={(e) => setMenuAnchorEl(e.currentTarget)}
+        onClick={(e) => setCurrentMenuAnchor(e.currentTarget)}
         sx={{
           opacity: isMenuVisible() ? 1 : 0,
           pointerEvents: isMenuVisible() ? 'auto' : 'none',
@@ -163,9 +122,9 @@ export default function ActionButtons({
         {menuIcon}
       </IconButton>
       <Menu
-        anchorEl={menuAnchorEl}
-        open={Boolean(menuAnchorEl)}
-        onClose={() => setMenuAnchorEl(null)}
+        anchorEl={currentMenuAnchor}
+        open={Boolean(currentMenuAnchor)}
+        onClose={() => setCurrentMenuAnchor(null)}
       >
         {actions.map((action, index) => {
           // Only show in menu if button is hidden
@@ -187,7 +146,7 @@ export default function ActionButtons({
               >
                 <span>
                   <MenuItem
-                    onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
+                    onClick={(e) => { action.onClick(e); setCurrentMenuAnchor(null); }}
                     disabled={action.disabled}
                   >
                     {action.icon && (
