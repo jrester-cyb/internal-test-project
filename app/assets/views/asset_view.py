@@ -349,7 +349,15 @@ class AssetViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve - values are annotated on prefetched attributes"""
         instance = self.get_object()
+
+        # Build api_key_map for this asset's type if not already set
         context = self.get_serializer_context()
+        if "_api_key_map" not in context:
+            api_key_map = self._get_api_key_map(
+                instance.asset_type_id, self.kwargs.get("workspace_pk")
+            )
+            context["_api_key_map"] = api_key_map
+
         serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
 

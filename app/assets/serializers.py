@@ -722,14 +722,14 @@ class AssetSerializer(serializers.ModelSerializer):
         Optimized for high attribute counts (100+):
         - Values are annotated directly on prefetched attributes (no separate query)
         - Single-pass dict comprehension for fast iteration
-        - Supports ?fields=... to exclude attributes from response
+        - Supports ?exclude_fields=attributes to exclude attributes from response
         """
-        # Check if attributes were excluded via ?fields= parameter
+        # Check if attributes were excluded via ?exclude_fields= parameter
         request = self.context.get("request")
         if request:
-            fields_param = request.query_params.get("fields", "")
-            if fields_param and "attributes" not in fields_param.split(","):
-                return None  # Skip attributes entirely when not requested
+            exclude_fields = request.query_params.get("exclude_fields", "")
+            if "attributes" in exclude_fields.split(","):
+                return None  # Skip attributes when explicitly excluded
 
         # Use prefetched attributes if available
         attributes = getattr(obj, "attributes", None)

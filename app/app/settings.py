@@ -169,6 +169,7 @@ REST_FRAMEWORK = {
 # Django Silk profiling settings
 SILKY_PYTHON_PROFILER = True
 SILKY_PYTHON_PROFILER_BINARY = True
+SILKY_PYTHON_PROFILER_RESULT_PATH = "silk/profiler/"
 SILKY_META = True
 
 # drf-spectacular settings

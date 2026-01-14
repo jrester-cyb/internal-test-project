@@ -253,7 +253,7 @@ export default function AssetDetailPage() {
                               '&:hover': { bgcolor: 'action.hover' }
                             }}
                           >
-                            <Box sx={{ width: '35%', fontWeight: 500, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ width: '35%', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
                               <Typography variant="body2" noWrap title={attr.name}>{attr.name}</Typography>
                             </Box>
@@ -272,20 +272,18 @@ export default function AssetDetailPage() {
                         )
                       }
 
-                      return (
-                        <AutoSizer>
-                          {({ height, width }: { height: number; width: number }) => (
-                            <List
-                              height={height}
-                              width={width}
-                              itemCount={displayAttributes.length}
-                              itemSize={40}
-                            >
-                              {AttributeRow}
-                            </List>
-                          )}
-                        </AutoSizer>
+                      const AttributeList = ({ height, width }: { height: number | undefined; width: number | undefined }) => (
+                        <List
+                          height={height || 300}
+                          width={width || 400}
+                          itemCount={displayAttributes.length}
+                          itemSize={40}
+                        >
+                          {AttributeRow}
+                        </List>
                       )
+
+                      return <AutoSizer ChildComponent={AttributeList} />
                     })()}
                   </Box>
                 </CardContent>
