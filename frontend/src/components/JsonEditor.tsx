@@ -44,6 +44,11 @@ export default function JsonEditor({
     entries: [],
     index: -1
   })
+  // Keep a ref synced with history state for undo/redo to avoid stale closures
+  const historyRef = useRef(historyState)
+  useEffect(() => {
+    historyRef.current = historyState
+  }, [historyState])
 
   // Local text state for editing - prevents reformatting while typing
   const [localText, setLocalText] = useState(() =>
@@ -68,19 +73,18 @@ export default function JsonEditor({
       const currentEntry = prev.entries[prev.index]
       if (currentEntry && currentEntry.text === text) return prev
 
-      // Remove any future history if we're not at the end (but keep current)
-      const newEntries = prev.index >= 0
-        ? prev.entries.slice(0, prev.index + 1)
-        : []
+      // Always truncate to current index - this removes any "future" entries
+      // that exist from undoing, so new changes become the new future
+      const newEntries = prev.entries.slice(0, Math.max(0, prev.index + 1))
 
       // Add new entry
       newEntries.push({ text, cursorPos, scrollTop: currentScrollTop })
-      let newIndex = newEntries.length - 1
+      const newIndex = newEntries.length - 1
 
       // Limit history size
       if (newEntries.length > 100) {
         newEntries.shift()
-        newIndex--
+        return { entries: newEntries, index: newIndex - 1 }
       }
 
       return { entries: newEntries, index: newIndex }
@@ -88,29 +92,36 @@ export default function JsonEditor({
   }, [])
 
   const undo = useCallback(() => {
-    if (historyState.index > 0) {
-      const newIndex = historyState.index - 1
-      const entry = historyState.entries[newIndex]
+    const current = historyRef.current
+    if (current.index > 0) {
+      const newIndex = current.index - 1
+      const entry = current.entries[newIndex]
       const currentText = localText
       const currentCursor = textareaRef.current?.selectionStart ?? 0
 
-      // Check if content was restored at the cursor position
       let newCursor = currentCursor
       const lengthDiff = entry.text.length - currentText.length
+
       if (lengthDiff > 0) {
-        // Text got longer - check if the restored content is at cursor position
-        // Compare the text before and after cursor to see if insertion happened there
+        // Text got longer (restoring deleted content)
+        // Check if the text before cursor is the same - meaning content was inserted at cursor
         const beforeCursor = currentText.substring(0, currentCursor)
-        const newBeforeCursor = entry.text.substring(0, currentCursor + lengthDiff)
-        // If the text before cursor in the new version starts with old text before cursor,
-        // and the difference is at the cursor position, move forward
-        if (newBeforeCursor.startsWith(beforeCursor) ||
-          entry.text.substring(0, currentCursor) === beforeCursor) {
-          // Content was inserted at or before cursor, move forward by the difference
-          newCursor = currentCursor + lengthDiff
+        if (entry.text.startsWith(beforeCursor)) {
+          // Content was inserted at or after cursor position - move cursor forward
+          // but only within the same line (don't cross newlines that aren't part of restored content)
+          const restoredContent = entry.text.substring(currentCursor, currentCursor + lengthDiff)
+          const newlineInRestored = restoredContent.indexOf('\n')
+          if (newlineInRestored === -1) {
+            // No newline in restored content - safe to move forward
+            newCursor = currentCursor + lengthDiff
+          } else {
+            // Restored content has newline - only move to that newline
+            newCursor = currentCursor + newlineInRestored
+          }
         }
       }
-      // Clamp to new text length
+
+      // Clamp to text length
       newCursor = Math.min(newCursor, entry.text.length)
 
       setLocalText(entry.text)
@@ -124,12 +135,13 @@ export default function JsonEditor({
         onChange(entry.text)
       }
     }
-  }, [onChange, historyState, localText])
+  }, [onChange, localText])
 
   const redo = useCallback(() => {
-    if (historyState.index < historyState.entries.length - 1) {
-      const newIndex = historyState.index + 1
-      const entry = historyState.entries[newIndex]
+    const current = historyRef.current
+    if (current.index < current.entries.length - 1) {
+      const newIndex = current.index + 1
+      const entry = current.entries[newIndex]
       // Keep cursor at current position (clamped to new text length)
       const currentCursor = textareaRef.current?.selectionStart ?? 0
       const clampedCursor = Math.min(currentCursor, entry.text.length)
@@ -144,7 +156,7 @@ export default function JsonEditor({
         onChange(entry.text)
       }
     }
-  }, [onChange, historyState])
+  }, [onChange])
 
   const canUndo = historyState.index > 0
   const canRedo = historyState.index < historyState.entries.length - 1
@@ -233,6 +245,181 @@ export default function JsonEditor({
       return
     }
 
+    // Handle cut/copy entire line when nothing selected
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'x' || e.key === 'c')) {
+      const target = e.target as HTMLTextAreaElement
+      const start = target.selectionStart
+      const end = target.selectionEnd
+
+      // Only handle when no selection (cursor is a point)
+      if (start === end) {
+        e.preventDefault()
+        const currentValue = target.value
+
+        // Find the start and end of the current line
+        const lineStart = currentValue.lastIndexOf('\n', start - 1) + 1
+        let lineEnd = currentValue.indexOf('\n', start)
+        if (lineEnd === -1) lineEnd = currentValue.length
+
+        // Get the line content (including the newline if not the last line)
+        const hasNewlineAfter = lineEnd < currentValue.length
+        const lineContent = currentValue.substring(lineStart, lineEnd + (hasNewlineAfter ? 1 : 0))
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(lineContent)
+
+        // If cutting, remove the line
+        if (e.key === 'x') {
+          // If it's the last line and there's content before, include the preceding newline
+          const deleteStart = lineStart === 0 ? 0 : (hasNewlineAfter ? lineStart : lineStart - 1)
+          const deleteEnd = hasNewlineAfter ? lineEnd + 1 : lineEnd
+
+          const newValue = currentValue.substring(0, deleteStart) + currentValue.substring(deleteEnd)
+          const newCursorPos = deleteStart
+
+          setLocalText(newValue)
+          addToHistory(newValue, newCursorPos)
+          pendingCursorRef.current = newCursorPos
+
+          try {
+            const parsed = JSON.parse(newValue)
+            onChange(parsed)
+          } catch {
+            onChange(newValue)
+          }
+        }
+        return
+      }
+    }
+
+    // Handle move line(s) up/down with Alt+Arrow
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const target = e.target as HTMLTextAreaElement
+      const start = target.selectionStart
+      const end = target.selectionEnd
+      const currentValue = target.value
+      const lines = currentValue.split('\n')
+
+      // Find which lines the selection spans
+      let charCount = 0
+      let startLineIndex = 0
+      let endLineIndex = 0
+
+      for (let i = 0; i < lines.length; i++) {
+        const lineLength = lines[i].length + 1 // +1 for newline
+        if (charCount + lineLength > start && startLineIndex === 0 && i > 0 || charCount + lines[i].length >= start) {
+          if (startLineIndex === 0 || charCount <= start) {
+            startLineIndex = i
+          }
+        }
+        if (charCount + lines[i].length >= end - 1 || i === lines.length - 1) {
+          endLineIndex = i
+          break
+        }
+        charCount += lineLength
+      }
+
+      // Recalculate properly
+      charCount = 0
+      for (let i = 0; i < lines.length; i++) {
+        const lineEnd = charCount + lines[i].length
+        if (start <= lineEnd) {
+          startLineIndex = i
+          break
+        }
+        charCount += lines[i].length + 1
+      }
+
+      charCount = 0
+      for (let i = 0; i < lines.length; i++) {
+        const lineEnd = charCount + lines[i].length
+        if (end <= lineEnd + 1) {
+          endLineIndex = i
+          break
+        }
+        charCount += lines[i].length + 1
+      }
+
+      // Calculate the start position of the first selected line
+      let firstLineStart = 0
+      for (let i = 0; i < startLineIndex; i++) {
+        firstLineStart += lines[i].length + 1
+      }
+      const offsetInFirstLine = start - firstLineStart
+      const selectionLength = end - start
+
+      if (e.key === 'ArrowUp' && startLineIndex > 0) {
+        e.preventDefault()
+        // Move the block of lines up
+        const lineAbove = lines[startLineIndex - 1]
+        const selectedLines = lines.slice(startLineIndex, endLineIndex + 1)
+
+        // Rebuild the lines array
+        const newLines = [
+          ...lines.slice(0, startLineIndex - 1),
+          ...selectedLines,
+          lineAbove,
+          ...lines.slice(endLineIndex + 1)
+        ]
+
+        const newValue = newLines.join('\n')
+
+        // Calculate new selection position
+        let newStart = 0
+        for (let i = 0; i < startLineIndex - 1; i++) {
+          newStart += newLines[i].length + 1
+        }
+        newStart += offsetInFirstLine
+        const newEnd = newStart + selectionLength
+
+        setLocalText(newValue)
+        addToHistory(newValue, newStart)
+        pendingSelectionRef.current = { start: newStart, end: newEnd }
+
+        try {
+          const parsed = JSON.parse(newValue)
+          onChange(parsed)
+        } catch {
+          onChange(newValue)
+        }
+      } else if (e.key === 'ArrowDown' && endLineIndex < lines.length - 1) {
+        e.preventDefault()
+        // Move the block of lines down
+        const lineBelow = lines[endLineIndex + 1]
+        const selectedLines = lines.slice(startLineIndex, endLineIndex + 1)
+
+        // Rebuild the lines array
+        const newLines = [
+          ...lines.slice(0, startLineIndex),
+          lineBelow,
+          ...selectedLines,
+          ...lines.slice(endLineIndex + 2)
+        ]
+
+        const newValue = newLines.join('\n')
+
+        // Calculate new selection position
+        let newStart = 0
+        for (let i = 0; i < startLineIndex + 1; i++) {
+          newStart += newLines[i].length + 1
+        }
+        newStart += offsetInFirstLine
+        const newEnd = newStart + selectionLength
+
+        setLocalText(newValue)
+        addToHistory(newValue, newStart)
+        pendingSelectionRef.current = { start: newStart, end: newEnd }
+
+        try {
+          const parsed = JSON.parse(newValue)
+          onChange(parsed)
+        } catch {
+          onChange(newValue)
+        }
+      }
+      return
+    }
+
     if (e.key === 'Tab') {
       e.preventDefault()
       const target = e.target as HTMLTextAreaElement
@@ -282,8 +469,13 @@ export default function JsonEditor({
         setLocalText(newValue)
         addToHistory(newValue, lineStart)
 
-        // Adjust selection to cover the same lines
-        pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
+        if (e.shiftKey) {
+          // Unindent: move cursor to start of the block
+          pendingCursorRef.current = lineStart
+        } else {
+          // Indent: keep selection, adjusted for added spaces
+          pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
+        }
 
         try {
           const parsed = JSON.parse(newValue)
