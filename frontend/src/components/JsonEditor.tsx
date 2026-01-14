@@ -28,7 +28,8 @@ interface JsonEditorProps {
 }
 
 // Strip JSONC comments (// and /* */) for parsing
-const stripJsonComments = (jsonc: string): string => {
+// Set preservePositions=true to replace comments with spaces (for error position mapping)
+const stripJsonComments = (jsonc: string, preservePositions = false): string => {
   let result = ''
   let i = 0
   let inString = false
@@ -62,8 +63,9 @@ const stripJsonComments = (jsonc: string): string => {
 
     // Single-line comment
     if (char === '/' && nextChar === '/') {
-      // Skip until end of line
+      // Replace with spaces until end of line (preserve newline)
       while (i < jsonc.length && jsonc[i] !== '\n') {
+        result += preservePositions ? ' ' : ''
         i++
       }
       continue
@@ -71,11 +73,18 @@ const stripJsonComments = (jsonc: string): string => {
 
     // Multi-line comment
     if (char === '/' && nextChar === '*') {
+      const startIdx = i
       i += 2 // Skip /*
       while (i < jsonc.length && !(jsonc[i] === '*' && jsonc[i + 1] === '/')) {
         i++
       }
       i += 2 // Skip */
+      // Replace with spaces/newlines to preserve positions
+      if (preservePositions) {
+        for (let j = startIdx; j < i; j++) {
+          result += jsonc[j] === '\n' ? '\n' : ' '
+        }
+      }
       continue
     }
 
@@ -88,7 +97,9 @@ const stripJsonComments = (jsonc: string): string => {
 
 // Parse JSON error to get position (strips JSONC comments first)
 const getJsonErrorPosition = (jsonc: string): { position: number; line: number; message: string } | null => {
-  const json = stripJsonComments(jsonc)
+  const json = stripJsonComments(jsonc, true) // Preserve positions for accurate error mapping
+  // If only comments/whitespace, it's valid (empty)
+  if (!json.trim()) return null
   try {
     JSON.parse(json)
     return null
@@ -313,8 +324,13 @@ export default function JsonEditor({
       onChange(undefined)
       return
     }
+    const stripped = stripJsonComments(rawJson)
+    // If only comments/whitespace, treat as empty
+    if (!stripped.trim()) {
+      onChange({ json: undefined, rawJson })
+      return
+    }
     try {
-      const stripped = stripJsonComments(rawJson)
       const json = JSON.parse(stripped)
       onChange({ json, rawJson })
     } catch {
@@ -461,7 +477,28 @@ export default function JsonEditor({
       return
     }
 
-    // Handle toggle line comment with Ctrl+/
+    // Handle block comment with Ctrl+Shift+/
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '/') {
+      e.preventDefault()
+      const target = e.target as HTMLTextAreaElement
+      const start = target.selectionStart
+      const end = target.selectionEnd
+      const currentValue = target.value
+
+      const blockComment = '/*  */'
+      const cursorOffset = 3 // Position after "/* "
+
+      const newText = currentValue.substring(0, start) + blockComment + currentValue.substring(end)
+      const newCursorPos = start + cursorOffset
+
+      setLocalText(newText)
+      addToHistory(newText, newCursorPos)
+      pendingCursorRef.current = newCursorPos
+      emitChange(newText)
+      return
+    }
+
+    // Handle comment with Ctrl+/
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault()
       const target = e.target as HTMLTextAreaElement
@@ -469,41 +506,72 @@ export default function JsonEditor({
       const end = target.selectionEnd
       const currentValue = target.value
 
-      // Find all lines in selection
+      // Find line boundaries
       const lineStartIdx = currentValue.lastIndexOf('\n', start - 1) + 1
       let lineEndIdx = currentValue.indexOf('\n', end)
       if (lineEndIdx === -1) lineEndIdx = currentValue.length
 
       const selectedText = currentValue.substring(lineStartIdx, lineEndIdx)
-      const lines = selectedText.split('\n')
+      const hasMultipleLines = selectedText.includes('\n')
+      const hasSelection = start !== end
 
-      // Check if all selected lines are commented
-      const allCommented = lines.every(line => line.trimStart().startsWith('//'))
-
-      let newLines: string[]
-      if (allCommented) {
-        // Uncomment: remove // from the start of each line
-        newLines = lines.map(line => {
-          const match = line.match(/^(\s*)\/\/\s?(.*)$/)
-          return match ? match[1] + match[2] : line
-        })
-      } else {
-        // Comment: add // at the start of each line (preserving indent)
-        newLines = lines.map(line => {
-          if (line.trim() === '') return line // Don't comment empty lines
-          const indent = line.match(/^(\s*)/)?.[1] || ''
-          return indent + '// ' + line.trimStart()
-        })
+      // If multiple lines selected, wrap with block comment
+      if (hasMultipleLines && hasSelection) {
+        const actualSelection = currentValue.substring(start, end)
+        // Check if already wrapped in block comment
+        if (actualSelection.startsWith('/*') && actualSelection.endsWith('*/')) {
+          // Unwrap block comment
+          const unwrapped = actualSelection.slice(2, -2).trim()
+          const newText = currentValue.substring(0, start) + unwrapped + currentValue.substring(end)
+          const newCursorPos = start + unwrapped.length
+          setLocalText(newText)
+          addToHistory(newText, newCursorPos)
+          pendingSelectionRef.current = { start, end: start + unwrapped.length }
+          emitChange(newText)
+        } else {
+          // Wrap with block comment
+          const wrapped = '/* ' + actualSelection + ' */'
+          const newText = currentValue.substring(0, start) + wrapped + currentValue.substring(end)
+          const newCursorPos = start + wrapped.length
+          setLocalText(newText)
+          addToHistory(newText, newCursorPos)
+          pendingSelectionRef.current = { start, end: start + wrapped.length }
+          emitChange(newText)
+        }
+        return
       }
 
-      const newText = currentValue.substring(0, lineStartIdx) + newLines.join('\n') + currentValue.substring(lineEndIdx)
-      const lengthDiff = newLines.join('\n').length - selectedText.length
-      const newCursorPos = end + lengthDiff
+      // Single line handling
+      const currentLine = currentValue.substring(lineStartIdx, lineEndIdx)
+      const isEmptyLine = currentLine.trim() === ''
+      const isCommented = currentLine.trimStart().startsWith('//')
+
+      let newText: string
+      let newCursorPos: number
+
+      if (isCommented) {
+        // Uncomment: remove //
+        const match = currentLine.match(/^(\s*)\/\/\s?(.*)$/)
+        const uncommented = match ? match[1] + match[2] : currentLine
+        newText = currentValue.substring(0, lineStartIdx) + uncommented + currentValue.substring(lineEndIdx)
+        newCursorPos = lineStartIdx + uncommented.length
+      } else if (isEmptyLine) {
+        // Empty line: add // and place cursor after
+        const indent = currentLine.match(/^(\s*)/)?.[1] || ''
+        const commented = indent + '// '
+        newText = currentValue.substring(0, lineStartIdx) + commented + currentValue.substring(lineEndIdx)
+        newCursorPos = lineStartIdx + commented.length
+      } else {
+        // Line with content: add // at start, cursor to end
+        const indent = currentLine.match(/^(\s*)/)?.[1] || ''
+        const commented = indent + '// ' + currentLine.trimStart()
+        newText = currentValue.substring(0, lineStartIdx) + commented + currentValue.substring(lineEndIdx)
+        newCursorPos = lineStartIdx + commented.length
+      }
 
       setLocalText(newText)
       addToHistory(newText, newCursorPos)
       pendingCursorRef.current = newCursorPos
-
       emitChange(newText)
       return
     }
