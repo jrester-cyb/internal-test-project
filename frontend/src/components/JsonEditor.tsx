@@ -24,21 +24,127 @@ interface JsonEditorProps {
   placeholder?: string
 }
 
-// Simple syntax highlighting for JSON
-const highlightJson = (json: string, isDark: boolean) => {
+// Parse JSON error to get position
+const getJsonErrorPosition = (json: string): { position: number; message: string } | null => {
+  try {
+    JSON.parse(json)
+    return null
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      const message = e.message
+      // Try to extract position from error message
+      // Chrome/V8: "Unexpected token x in JSON at position 123"
+      // Firefox: "JSON.parse: unexpected character at line 1 column 2"
+      const posMatch = message.match(/position\s+(\d+)/i)
+      if (posMatch) {
+        return { position: parseInt(posMatch[1], 10), message }
+      }
+      // Firefox format - convert line/column to position
+      const lineColMatch = message.match(/line\s+(\d+)\s+column\s+(\d+)/i)
+      if (lineColMatch) {
+        const line = parseInt(lineColMatch[1], 10)
+        const col = parseInt(lineColMatch[2], 10)
+        const lines = json.split('\n')
+        let pos = 0
+        for (let i = 0; i < line - 1 && i < lines.length; i++) {
+          pos += lines[i].length + 1
+        }
+        pos += col - 1
+        return { position: pos, message }
+      }
+      // If we can't find position, return end of string
+      return { position: json.length, message }
+    }
+    return null
+  }
+}
+
+// Simple syntax highlighting for JSON with optional error squiggle
+const highlightJson = (json: string, isDark: boolean, errorPos: number | null = null) => {
   // Escape HTML first
   const escaped = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Theme-aware colors
   const colors = isDark
     ? { key: '#9cdcfe', string: '#ce9178', number: '#b5cea8', keyword: '#569cd6' }
     : { key: '#0451a5', string: '#a31515', number: '#098658', keyword: '#0000ff' }
-  // Then apply syntax highlighting
-  return escaped
+
+  // Apply syntax highlighting
+  let highlighted = escaped
     .replace(/"([^"]+)":/g, `<span style="color: ${colors.key}">"$1"</span>:`)
     .replace(/: "([^"]*)"/g, `: <span style="color: ${colors.string}">"$1"</span>`)
     .replace(/: (-?\d+\.?\d*)/g, `: <span style="color: ${colors.number}">$1</span>`)
     .replace(/: (true|false)/g, `: <span style="color: ${colors.keyword}">$1</span>`)
     .replace(/: (null)/g, `: <span style="color: ${colors.keyword}">$1</span>`)
+
+  // Add error squiggle if there's an error position
+  if (errorPos !== null && errorPos >= 0) {
+    // Find the error range - highlight a few characters around the error
+    // We need to work with the original text positions but insert into highlighted
+    const errorColor = isDark ? '#f44336' : '#d32f2f'
+    const squiggleStyle = `text-decoration: wavy underline ${errorColor}; text-decoration-skip-ink: none;`
+
+    // Find start and end of the problematic token/area
+    let start = errorPos
+    let end = errorPos + 1
+
+    // Expand backwards to start of token
+    while (start > 0 && !/[\s,\[\]{}:]/.test(json[start - 1])) {
+      start--
+    }
+    // Expand forwards to end of token (or a few chars if at end)
+    while (end < json.length && !/[\s,\[\]{}:]/.test(json[end])) {
+      end++
+    }
+    // Ensure at least 1 character is highlighted
+    if (end <= start) {
+      end = Math.min(start + 1, json.length)
+    }
+
+    // Now we need to insert the span into the highlighted text
+    // The positions are based on original text, but we've added HTML tags
+    // Simpler approach: re-process from escaped text
+    const escapedChars = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    // Calculate new positions accounting for escape sequences
+    let escapedStart = 0
+    let escapedEnd = 0
+    let origIdx = 0
+    for (let i = 0; i < escapedChars.length && origIdx <= end; i++) {
+      if (origIdx === start) escapedStart = i
+      if (origIdx === end) {
+        escapedEnd = i
+        break
+      }
+      // Check if we're at an escape sequence
+      if (escapedChars.substring(i, i + 5) === '&amp;') {
+        origIdx++
+        i += 4
+      } else if (escapedChars.substring(i, i + 4) === '&lt;' || escapedChars.substring(i, i + 4) === '&gt;') {
+        origIdx++
+        i += 3
+      } else {
+        origIdx++
+      }
+    }
+    if (escapedEnd === 0) escapedEnd = escapedChars.length
+
+    // Insert squiggle span (before syntax highlighting to avoid breaking spans)
+    const beforeError = escapedChars.substring(0, escapedStart)
+    const errorText = escapedChars.substring(escapedStart, escapedEnd)
+    const afterError = escapedChars.substring(escapedEnd)
+
+    const withSquiggle = beforeError + `<span style="${squiggleStyle}">` + errorText + '</span>' + afterError
+
+    // Now apply syntax highlighting
+    highlighted = withSquiggle
+      .replace(/"([^"]+)":/g, `<span style="color: ${colors.key}">"$1"</span>:`)
+      .replace(/: "([^"]*)"/g, `: <span style="color: ${colors.string}">"$1"</span>`)
+      .replace(/: (-?\d+\.?\d*)/g, `: <span style="color: ${colors.number}">$1</span>`)
+      .replace(/: (true|false)/g, `: <span style="color: ${colors.keyword}">$1</span>`)
+      .replace(/: (null)/g, `: <span style="color: ${colors.keyword}">$1</span>`)
+  }
+
+  return highlighted
 }
 
 export default function JsonEditor({
@@ -221,16 +327,9 @@ export default function JsonEditor({
     }
   }, [localText])
 
-  // Determine if value is valid JSON
-  const isValid = (() => {
-    if (!localText) return true
-    try {
-      JSON.parse(localText)
-      return true
-    } catch {
-      return false
-    }
-  })()
+  // Determine if value is valid JSON and get error position
+  const jsonError = localText ? getJsonErrorPosition(localText) : null
+  const isValid = !jsonError
 
   const handleTextChange = (newText: string, cursorPos?: number) => {
     setLocalText(newText)
@@ -789,7 +888,7 @@ export default function JsonEditor({
             }}
             dangerouslySetInnerHTML={{
               __html: localText
-                ? highlightJson(localText, isDark)
+                ? highlightJson(localText, isDark, jsonError?.position ?? null)
                 : `<span style="color: ${isDark ? '#6a6a6a' : '#a0a0a0'}">${placeholder}</span>`
             }}
           />
@@ -864,7 +963,7 @@ export default function JsonEditor({
                 }}
                 dangerouslySetInnerHTML={{
                   __html: localText
-                    ? highlightJson(localText, isDark)
+                    ? highlightJson(localText, isDark, jsonError?.position ?? null)
                     : `<span style="color: ${isDark ? '#6a6a6a' : '#a0a0a0'}">${placeholder}</span>`
                 }}
               />
