@@ -8,6 +8,7 @@ import type { Asset, AssetTypeAttribute } from '../types'
 import ActionButtons from '../components/ActionButtons'
 import RelatedAssetsTree from '../components/RelatedAssetsTree'
 import CopyableText from '../components/CopyableText'
+import TruncatedText from '../components/TruncatedText'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
@@ -264,15 +265,28 @@ export default function AssetDetailPage() {
                               '&:hover': { bgcolor: 'action.hover' }
                             }}
                           >
-                            <Box sx={{ width: '35%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
+                            <Box sx={{ width: '35%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden', pr: 1 }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                 {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
                                 <Typography variant="body2" fontWeight={600} noWrap title={attr.name}>{attr.name}</Typography>
                               </Box>
+                              {attr.description && (
+                                <TruncatedText variant="caption" color="text.secondary" maxLines={2} title={attr.name}>
+                                  {attr.description}
+                                </TruncatedText>
+                              )}
                               {attr.tags && attr.tags.length > 0 && (
-                                <Typography variant="caption" color="text.secondary" noWrap title={attr.tags.join(', ')}>
-                                  {attr.tags.join(', ')}
-                                </Typography>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                  {attr.tags.map(tag => (
+                                    <Chip
+                                      key={tag}
+                                      label={tag}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
+                                    />
+                                  ))}
+                                </Box>
                               )}
                             </Box>
                             <Box sx={{ flex: 1, overflow: 'hidden' }}>
@@ -287,29 +301,36 @@ export default function AssetDetailPage() {
                         const attr = displayAttributes[index]
                         const value = asset.attributes?.[attr.apiKey]
                         const hasTags = attr.tags && attr.tags.length > 0
-                        const tagHeight = hasTags ? 18 : 0
+                        const hasDescription = !!attr.description
                         const padding = 16
 
-                        if (value === null || value === undefined) {
-                          return padding + 20 + tagHeight
+                        // Calculate left column height (name + description + tags)
+                        let leftHeight = 20 // name line
+                        if (hasDescription) {
+                          const descLines = Math.min(2, Math.ceil((attr.description?.length || 0) / 30))
+                          leftHeight += descLines * 16
+                        }
+                        if (hasTags) {
+                          leftHeight += 22 // tags row
                         }
 
-                        // JSON has different sizing due to formatted display with background
-                        if (attr.attributeType === 'json' || typeof value === 'object') {
-                          const formatted = JSON.stringify(value, null, 2)
-                          const lines = Math.min(3, formatted.split('\n').length)
-                          return padding + (lines * 18) + 24 + tagHeight // 24 for padding in json box
+                        // Calculate right column height based on value type
+                        let rightHeight = 20
+                        if (value !== null && value !== undefined) {
+                          if (attr.attributeType === 'json' || typeof value === 'object') {
+                            const formatted = JSON.stringify(value, null, 2)
+                            const lines = Math.min(3, formatted.split('\n').length)
+                            rightHeight = (lines * 18) + 24
+                          } else if (attr.attributeType === 'boolean') {
+                            rightHeight = 24
+                          } else {
+                            const strValue = String(value)
+                            const estimatedLines = Math.min(3, Math.ceil(strValue.length / 50))
+                            rightHeight = estimatedLines * 20
+                          }
                         }
 
-                        // Boolean uses chips - fixed height
-                        if (attr.attributeType === 'boolean') {
-                          return padding + 24 + tagHeight
-                        }
-
-                        // Text - estimate lines based on length
-                        const strValue = String(value)
-                        const estimatedLines = Math.min(3, Math.ceil(strValue.length / 50))
-                        return padding + (estimatedLines * 20) + tagHeight
+                        return padding + Math.max(leftHeight, rightHeight)
                       }
 
                       const AttributeList = ({ height, width }: { height: number | undefined; width: number | undefined }) => (
