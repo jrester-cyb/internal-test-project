@@ -41,6 +41,8 @@ export default function AssetTypeAttributesPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const fetchInProgressRef = useRef(false)
   const nextUrlRef = useRef<string | null>(initialNextUrl)
+  const displayedCountRef = useRef(0) // Track displayed count for stale closure fix
+  const lastVisibleStopIndexRef = useRef(0) // Track last visible index for re-checking
 
   const [allAttributes, setAllAttributes] = useState(initialData || [])
   const [nextUrl, setNextUrl] = useState<string | null>(initialNextUrl)
@@ -91,6 +93,9 @@ export default function AssetTypeAttributesPage() {
     return true
   })
 
+  // Keep displayedCountRef in sync
+  displayedCountRef.current = displayedAttributes.length
+
   // If selected attribute is filtered out, deselect it
   useEffect(() => {
     if (selectedAttribute && !displayedAttributes.some(attr => attr.id === selectedAttribute.id)) {
@@ -108,11 +113,20 @@ export default function AssetTypeAttributesPage() {
       JSON.stringify(prev.excludedScopes) !== JSON.stringify(excludedScopes) ||
       JSON.stringify(prev.selectedTags) !== JSON.stringify(selectedTags)
 
+    console.debug('[Filter Effect]', {
+      prevExcludedScopes: prev.excludedScopes,
+      currentExcludedScopes: excludedScopes,
+      prevSelectedTags: prev.selectedTags,
+      currentSelectedTags: selectedTags,
+      filtersChanged,
+    })
+
     prevFiltersRef.current = { excludedScopes, selectedTags }
 
     if (filtersChanged && workspaceId && assetTypeId) {
       const doRefetch = async () => {
         setIsRefetching(true)
+        console.debug('[Filter Effect] Refetching with filters:', { excludedScopes, selectedTags, searchTerm, includeHidden })
         try {
           const response = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId, 1, 25, {
             search: searchTerm || undefined,
@@ -120,6 +134,7 @@ export default function AssetTypeAttributesPage() {
             excludeScopes: excludedScopes.length > 0 ? excludedScopes : undefined,
             tags: selectedTags.length > 0 ? selectedTags : undefined,
           })
+          console.debug('[Filter Effect] Got', response.results?.length, 'results, next:', response.next)
           setAllAttributes(response.results || [])
           setNextUrl(response.next || null)
         } catch (error) {
@@ -255,6 +270,7 @@ export default function AssetTypeAttributesPage() {
 
   // Reset to loader data when it changes
   useEffect(() => {
+    console.debug('[Loader Effect] Setting initial data:', initialData?.length, 'attributes, nextUrl:', initialNextUrl)
     setAllAttributes(initialData || [])
     setNextUrl(initialNextUrl)
   }, [initialData, initialNextUrl])
@@ -304,19 +320,37 @@ export default function AssetTypeAttributesPage() {
 
   // Fetch more items when user scrolls near the end of the list
   const handleItemsRendered = ({ visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
+    // Track the last visible index for re-checking after load
+    lastVisibleStopIndexRef.current = visibleStopIndex
+    
     // Fetch more when we're within 5 items of the end
     const THRESHOLD = 5
-    const shouldFetch = visibleStopIndex >= displayedAttributes.length - THRESHOLD
-    // Check if there are more items using nextUrl
-    const hasMoreItems = !!nextUrl
+    // Use ref to get latest displayedCount (avoids stale closure issues)
+    const currentDisplayedCount = displayedCountRef.current
+    const shouldFetch = visibleStopIndex >= currentDisplayedCount - THRESHOLD
+    // Use ref to get latest nextUrl value (avoids stale closure issues)
+    const currentNextUrl = nextUrlRef.current
+    const hasMoreItems = !!currentNextUrl
+
+    console.debug('[handleItemsRendered]', {
+      visibleStopIndex,
+      displayedCount: currentDisplayedCount,
+      threshold: currentDisplayedCount - THRESHOLD,
+      shouldFetch,
+      hasMoreItems,
+      currentNextUrl,
+      fetchInProgress: fetchInProgressRef.current,
+    })
 
     if (shouldFetch && hasMoreItems && !fetchInProgressRef.current && workspaceId && assetTypeId) {
       // Set immediately and synchronously before any async work
       fetchInProgressRef.current = true
       setIsLoadingMore(true)
 
+      console.debug('[handleItemsRendered] Fetching next page:', currentNextUrl)
+
       // Use the nextUrl directly - it already has the correct page params
-      fetchAssetAttributeDefinitionsFromUrl(nextUrl)
+      fetchAssetAttributeDefinitionsFromUrl(currentNextUrl)
         .then(response => {
           const newAttributes = response.results || []
 
@@ -331,8 +365,10 @@ export default function AssetTypeAttributesPage() {
               return [...visible, ...hidden]
             })
             setNextUrl(response.next || null)
+            console.debug('[handleItemsRendered] Loaded', newAttributes.length, 'attributes, next:', response.next)
           } else {
             setNextUrl(null)
+            console.debug('[handleItemsRendered] No more attributes')
           }
         })
         .catch(error => {
@@ -344,6 +380,29 @@ export default function AssetTypeAttributesPage() {
         })
     }
   }
+
+  // Re-check if we need to load more after attributes change
+  // This handles the case where react-window doesn't call onItemsRendered again
+  useEffect(() => {
+    const visibleStopIndex = lastVisibleStopIndexRef.current
+    const THRESHOLD = 5
+    const shouldFetch = visibleStopIndex >= displayedAttributes.length - THRESHOLD
+    const hasMoreItems = !!nextUrl
+
+    console.debug('[Re-check Effect]', {
+      visibleStopIndex,
+      displayedCount: displayedAttributes.length,
+      shouldFetch,
+      hasMoreItems,
+      fetchInProgress: fetchInProgressRef.current,
+    })
+
+    if (shouldFetch && hasMoreItems && !fetchInProgressRef.current && !isLoadingMore && workspaceId && assetTypeId) {
+      console.debug('[Re-check Effect] Triggering fetch for next page')
+      // Simulate the handleItemsRendered call with current visible index
+      handleItemsRendered({ visibleStartIndex: 0, visibleStopIndex })
+    }
+  }, [displayedAttributes.length, nextUrl, isLoadingMore])
 
   // Fetch asset count when attribute is selected
   useEffect(() => {
