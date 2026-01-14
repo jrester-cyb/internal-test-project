@@ -44,16 +44,15 @@ export default function JsonEditor({
     entries: [],
     index: -1
   })
-  const isUndoRedoRef = useRef(false)
 
   // Local text state for editing - prevents reformatting while typing
   const [localText, setLocalText] = useState(() =>
     value ? (typeof value === 'string' ? value : JSON.stringify(value, null, 2)) : ''
   )
 
-  // Initialize history with initial value
+  // Initialize history with initial value (including empty)
   useEffect(() => {
-    if (historyState.entries.length === 0 && localText) {
+    if (historyState.entries.length === 0) {
       setHistoryState({
         entries: [{ text: localText, cursorPos: localText.length, scrollTop: 0 }],
         index: 0
@@ -63,19 +62,16 @@ export default function JsonEditor({
 
   // Add to history (debounced-like behavior - only add if text changed)
   const addToHistory = useCallback((text: string, cursorPos: number) => {
-    if (isUndoRedoRef.current) {
-      isUndoRedoRef.current = false
-      return
-    }
-
     const currentScrollTop = textareaRef.current?.scrollTop ?? 0
 
     setHistoryState(prev => {
       const currentEntry = prev.entries[prev.index]
       if (currentEntry && currentEntry.text === text) return prev
 
-      // Remove any future history if we're not at the end
-      const newEntries = prev.entries.slice(0, prev.index + 1)
+      // Remove any future history if we're not at the end (but keep current)
+      const newEntries = prev.index >= 0
+        ? prev.entries.slice(0, prev.index + 1)
+        : []
 
       // Add new entry
       newEntries.push({ text, cursorPos, scrollTop: currentScrollTop })
@@ -93,12 +89,32 @@ export default function JsonEditor({
 
   const undo = useCallback(() => {
     if (historyState.index > 0) {
-      isUndoRedoRef.current = true
       const newIndex = historyState.index - 1
       const entry = historyState.entries[newIndex]
+      const currentText = localText
+      const currentCursor = textareaRef.current?.selectionStart ?? 0
+
+      // Check if content was restored at the cursor position
+      let newCursor = currentCursor
+      const lengthDiff = entry.text.length - currentText.length
+      if (lengthDiff > 0) {
+        // Text got longer - check if the restored content is at cursor position
+        // Compare the text before and after cursor to see if insertion happened there
+        const beforeCursor = currentText.substring(0, currentCursor)
+        const newBeforeCursor = entry.text.substring(0, currentCursor + lengthDiff)
+        // If the text before cursor in the new version starts with old text before cursor,
+        // and the difference is at the cursor position, move forward
+        if (newBeforeCursor.startsWith(beforeCursor) ||
+          entry.text.substring(0, currentCursor) === beforeCursor) {
+          // Content was inserted at or before cursor, move forward by the difference
+          newCursor = currentCursor + lengthDiff
+        }
+      }
+      // Clamp to new text length
+      newCursor = Math.min(newCursor, entry.text.length)
+
       setLocalText(entry.text)
-      pendingCursorRef.current = entry.cursorPos
-      pendingScrollRef.current = entry.scrollTop
+      pendingCursorRef.current = newCursor
       setHistoryState(prev => ({ ...prev, index: newIndex }))
 
       try {
@@ -108,16 +124,17 @@ export default function JsonEditor({
         onChange(entry.text)
       }
     }
-  }, [onChange, historyState])
+  }, [onChange, historyState, localText])
 
   const redo = useCallback(() => {
     if (historyState.index < historyState.entries.length - 1) {
-      isUndoRedoRef.current = true
       const newIndex = historyState.index + 1
       const entry = historyState.entries[newIndex]
+      // Keep cursor at current position (clamped to new text length)
+      const currentCursor = textareaRef.current?.selectionStart ?? 0
+      const clampedCursor = Math.min(currentCursor, entry.text.length)
       setLocalText(entry.text)
-      pendingCursorRef.current = entry.cursorPos
-      pendingScrollRef.current = entry.scrollTop
+      pendingCursorRef.current = clampedCursor
       setHistoryState(prev => ({ ...prev, index: newIndex }))
 
       try {
