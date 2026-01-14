@@ -25,19 +25,28 @@ interface JsonEditorProps {
 }
 
 // Parse JSON error to get position
-const getJsonErrorPosition = (json: string): { position: number; message: string } | null => {
+const getJsonErrorPosition = (json: string): { position: number; line: number; message: string } | null => {
   try {
     JSON.parse(json)
     return null
   } catch (e) {
     if (e instanceof SyntaxError) {
       const message = e.message
+      // Helper to calculate line number from position
+      const getLineFromPos = (pos: number) => {
+        let line = 1
+        for (let i = 0; i < pos && i < json.length; i++) {
+          if (json[i] === '\n') line++
+        }
+        return line
+      }
       // Try to extract position from error message
       // Chrome/V8: "Unexpected token x in JSON at position 123"
       // Firefox: "JSON.parse: unexpected character at line 1 column 2"
       const posMatch = message.match(/position\s+(\d+)/i)
       if (posMatch) {
-        return { position: parseInt(posMatch[1], 10), message }
+        const position = parseInt(posMatch[1], 10)
+        return { position, line: getLineFromPos(position), message }
       }
       // Firefox format - convert line/column to position
       const lineColMatch = message.match(/line\s+(\d+)\s+column\s+(\d+)/i)
@@ -50,10 +59,11 @@ const getJsonErrorPosition = (json: string): { position: number; message: string
           pos += lines[i].length + 1
         }
         pos += col - 1
-        return { position: pos, message }
+        return { position: pos, line, message }
       }
       // If we can't find position, return end of string
-      return { position: json.length, message }
+      const position = json.length
+      return { position, line: getLineFromPos(position), message }
     }
     return null
   }
@@ -78,40 +88,41 @@ const highlightJson = (json: string, isDark: boolean, errorPos: number | null = 
 
   // Add error squiggle if there's an error position
   if (errorPos !== null && errorPos >= 0) {
-    // Find the error range - highlight a few characters around the error
-    // We need to work with the original text positions but insert into highlighted
     const errorColor = isDark ? '#f44336' : '#d32f2f'
     const squiggleStyle = `text-decoration: wavy underline ${errorColor}; text-decoration-skip-ink: none;`
 
-    // Find start and end of the problematic token/area
-    let start = errorPos
-    let end = errorPos + 1
+    // Find the line containing the error
+    const lines = json.split('\n')
+    let lineStart = 0
+    let errorLineIdx = 0
 
-    // Expand backwards to start of token
-    while (start > 0 && !/[\s,\[\]{}:]/.test(json[start - 1])) {
-      start--
-    }
-    // Expand forwards to end of token (or a few chars if at end)
-    while (end < json.length && !/[\s,\[\]{}:]/.test(json[end])) {
-      end++
-    }
-    // Ensure at least 1 character is highlighted
-    if (end <= start) {
-      end = Math.min(start + 1, json.length)
+    for (let i = 0; i < lines.length; i++) {
+      const lineEnd = lineStart + lines[i].length
+      if (errorPos <= lineEnd) {
+        errorLineIdx = i
+        break
+      }
+      lineStart += lines[i].length + 1 // +1 for newline
     }
 
-    // Now we need to insert the span into the highlighted text
-    // The positions are based on original text, but we've added HTML tags
-    // Simpler approach: re-process from escaped text
+    // Squiggle from error position to end of line
+    const start = errorPos
+    const end = lineStart + lines[errorLineIdx].length
+
+    // If error is at very end or past line, squiggle the whole line
+    const actualStart = (start >= end) ? lineStart : start
+    const actualEnd = Math.max(actualStart + 1, end)
+
+    // Re-process from escaped text to insert squiggle
     const escapedChars = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
     // Calculate new positions accounting for escape sequences
     let escapedStart = 0
     let escapedEnd = 0
     let origIdx = 0
-    for (let i = 0; i < escapedChars.length && origIdx <= end; i++) {
-      if (origIdx === start) escapedStart = i
-      if (origIdx === end) {
+    for (let i = 0; i < escapedChars.length && origIdx <= actualEnd; i++) {
+      if (origIdx === actualStart) escapedStart = i
+      if (origIdx === actualEnd) {
         escapedEnd = i
         break
       }
@@ -784,7 +795,7 @@ export default function JsonEditor({
       zIndex: 1,
       display: 'flex',
       gap: 0.5,
-      bgcolor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)',
+      bgcolor: isDark ? 'grey.900' : 'grey.100',
       borderRadius: 1,
       p: 0.25,
     }}>
@@ -857,6 +868,45 @@ export default function JsonEditor({
     </Box>
   )
 
+  // Calculate line count for line numbers
+  const lineCount = localText ? localText.split('\n').length : 1
+
+  // Line numbers component
+  const LineNumbers = ({ scrollTop }: { scrollTop: number }) => (
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: 40,
+        height: '100%',
+        bgcolor: isDark ? 'grey.900' : 'grey.100',
+        borderRight: 1,
+        borderColor: 'divider',
+        fontFamily: 'monospace',
+        fontSize: '0.875rem',
+        lineHeight: 1.5,
+        color: 'text.secondary',
+        userSelect: 'none',
+        overflow: 'hidden',
+        zIndex: 1,
+      }}
+    >
+      <Box
+        sx={{
+          pt: 1.5,
+          pr: 1,
+          textAlign: 'right',
+          transform: `translateY(${-scrollTop}px)`,
+        }}
+      >
+        {Array.from({ length: lineCount }, (_, i) => (
+          <div key={i + 1}>{i + 1}</div>
+        ))}
+      </Box>
+    </Box>
+  )
+
   return (
     <>
       <Box sx={{
@@ -869,13 +919,14 @@ export default function JsonEditor({
         borderColor: 'divider',
       }}>
         <Toolbar />
+        <LineNumbers scrollTop={scrollPos.top} />
         {/* Syntax highlighted background - moves with textarea scroll */}
         {!showRawText && (
           <Box
             sx={{
               position: 'absolute',
               top: 0,
-              left: 0,
+              left: 40,
               right: 0,
               fontFamily: 'monospace',
               fontSize: '0.875rem',
@@ -905,8 +956,9 @@ export default function JsonEditor({
           placeholder={showRawText ? placeholder : undefined}
           style={{
             position: 'relative',
-            width: '100%',
+            width: 'calc(100% - 40px)',
             height: '100%',
+            marginLeft: 40,
             fontFamily: 'monospace',
             fontSize: '0.875rem',
             lineHeight: 1.5,
@@ -922,12 +974,25 @@ export default function JsonEditor({
           }}
           spellCheck={false}
         />
+        {!isValid && jsonError && (
+          <Typography
+            variant="caption"
+            color="error"
+            sx={{
+              position: 'absolute',
+              bottom: 4,
+              right: 8,
+              bgcolor: isDark ? 'grey.900' : 'grey.50',
+              px: 1,
+              py: 0.25,
+              borderRadius: 0.5,
+              pointerEvents: 'none',
+            }}
+          >
+            Invalid JSON (line {jsonError.line})
+          </Typography>
+        )}
       </Box>
-      {!isValid && (
-        <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
-          Invalid JSON
-        </Typography>
-      )}
 
       {/* Fullscreen Modal */}
       <Modal
@@ -944,13 +1009,14 @@ export default function JsonEditor({
         }}>
           <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'background.paper' }}>
             <Toolbar inFullscreen />
+            <LineNumbers scrollTop={fullscreenScrollPos.top} />
             {/* Syntax highlighted background - moves with textarea scroll */}
             {!showRawText && (
               <Box
                 sx={{
                   position: 'absolute',
                   top: 0,
-                  left: 0,
+                  left: 40,
                   right: 0,
                   fontFamily: 'monospace',
                   fontSize: '0.875rem',
@@ -980,8 +1046,9 @@ export default function JsonEditor({
               placeholder={showRawText ? placeholder : undefined}
               style={{
                 position: 'relative',
-                width: '100%',
+                width: 'calc(100% - 40px)',
                 height: '100%',
+                marginLeft: 40,
                 fontFamily: 'monospace',
                 fontSize: '0.875rem',
                 lineHeight: 1.5,
@@ -997,12 +1064,25 @@ export default function JsonEditor({
               }}
               spellCheck={false}
             />
+            {!isValid && jsonError && (
+              <Typography
+                variant="caption"
+                color="error"
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: 16,
+                  bgcolor: isDark ? 'grey.900' : 'grey.50',
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 0.5,
+                  pointerEvents: 'none',
+                }}
+              >
+                Invalid JSON (line {jsonError.line})
+              </Typography>
+            )}
           </Box>
-          {!isValid && (
-            <Typography variant="caption" color="error" sx={{ position: 'absolute', bottom: 8, left: 12 }}>
-              Invalid JSON
-            </Typography>
-          )}
         </Box>
       </Modal>
 
