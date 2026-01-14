@@ -44,8 +44,9 @@ class AuditRequestContext:
     query_params: dict = field(default_factory=dict)
     ip_address: str = ""
     user_agent: str = ""
-    organization_id: str = None
-    workspace_id: str = None
+    organization_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+    source: str = "api"
     start_time: float = field(default_factory=time.time)
     entries: list = field(default_factory=list)  # List of (entry, group_id) tuples
 
@@ -120,6 +121,7 @@ class AuditRequestContext:
                 str(self.organization_id) if self.organization_id else None
             ),
             "workspace_id": str(self.workspace_id) if self.workspace_id else None,
+            "source": self.source,
             "duration_ms": int((time.time() - self.start_time) * 1000),
             "entries": entries_data,
         }
@@ -171,36 +173,59 @@ create_new_batch = create_group
 
 
 @contextmanager
-def audit_group(group_id: str = None):
+def audit_group(
+    description: str = None,
+    *,
+    group_id: str = None,
+    source_type: str = "",
+    source_name: str = "",
+    metadata: dict = None,
+):
     """
     Context manager for grouping audit log entries within a request.
 
-    All AuditLogger.log() calls within this context will share the same group_id.
+    All AuditLogger.log() calls within this context will share the same group.
     They still belong to the same HTTP request but are grouped for logical organization.
 
     Usage:
         from audit_log.logging import audit_group, AuditLogger
 
-        # All logs in this block share the same group_id
-        with audit_group() as gid:
-            AuditLogger.log(action="notify", message="Sent email")
-            AuditLogger.log(action="notify", message="Sent Slack message")
+        # All logs in this block share the same group with a description
+        with audit_group("Organization setup wizard") as group:
+            AuditLogger.log(action="create", message="Created organization")
+            AuditLogger.log(action="create", message="Created workspace")
 
-        # This has no group_id
-        AuditLogger.log(action="update", message="Updated record")
-
-        # You can also provide your own group_id
-        with audit_group(group_id="import-batch-123"):
-            AuditLogger.log(action="import", message="Imported row 1")
-            AuditLogger.log(action="import", message="Imported row 2")
+        # With additional metadata
+        with audit_group(
+            "Import OSM data",
+            source_type="management_command",
+            source_name="import_osm_data",
+            metadata={"location": "Austin, TX"}
+        ) as group:
+            AuditLogger.log(action="import", message="Imported assets")
 
     Args:
+        description: Human-readable description of what this group represents.
         group_id: Optional custom group ID. If not provided, one will be generated.
+        source_type: Type of source (e.g., 'management_command', 'celery_task').
+        source_name: Name of the source (e.g., 'startorganization').
+        metadata: Additional metadata dict.
 
     Yields:
-        The group_id being used for this context.
+        The group_id (UUID string) being used for this context.
     """
     gid = group_id or create_group()
+
+    # If a description is provided, create an AuditLogGroup record
+    if description:
+        from audit_log.models import AuditLogGroup
+        AuditLogGroup.objects.create(
+            id=gid,
+            description=description,
+            source_type=source_type,
+            source_name=source_name,
+            metadata=metadata or {},
+        )
 
     # Store the group_id in thread-local so AuditLogger.log can find it
     prev_context_group = getattr(_thread_locals, "_context_group_id", None)
@@ -258,7 +283,7 @@ class AuditLogger:
         metadata: dict = None,
         references: list = None,
         group_id: str = None,
-        batch_id: str = None,  # Legacy alias for group_id
+        source: str = None,
     ):
         """
         Log an audit action.
@@ -277,7 +302,8 @@ class AuditLogger:
             group_id: Optional group ID for grouping entries within a request.
                       Use create_group() to generate one. Also set automatically when
                       using the audit_group() context manager.
-            batch_id: Legacy alias for group_id (deprecated).
+            source: Source of the action (api, management_command, celery_task, system).
+                    Defaults to 'api' for HTTP requests, 'system' for standalone calls.
 
         If called within a request context (middleware active), the entry
         will be added to the request's audit context.
@@ -286,7 +312,7 @@ class AuditLogger:
         immediately as a standalone request.
         """
         # Check for context manager group_id (group_id param takes precedence over batch_id)
-        effective_group_id = group_id or batch_id or get_context_group_id()
+        effective_group_id = group_id or get_context_group_id()
 
         entry = AuditEntry(
             action=action,
@@ -308,14 +334,18 @@ class AuditLogger:
         # No request context - create standalone request and process immediately
         from audit_log.tasks import process_audit_request
 
+        # Determine source: use provided value, or default to 'system' for standalone calls
+        effective_source = source or "system"
+
         standalone_ctx = AuditRequestContext(
             request_id=str(uuid.uuid4()),
             user=user or (request.user if request else None),
             user_email=getattr(
                 user or (request.user if request else None), "email", ""
             ),
-            request_method=request.method if request else "MANUAL",
+            request_method=request.method if request else "SYSTEM",
             request_path=request.path if request else "",
+            source=effective_source,
         )
 
         standalone_ctx.add_entry(entry, group_id=effective_group_id)

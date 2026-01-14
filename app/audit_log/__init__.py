@@ -129,6 +129,7 @@ def log_action(
     metadata: dict = None,
     group_id: str = None,
     batch_id: str = None,  # Legacy alias for group_id
+    source: str = None,  # Source of the action (api, management_command, celery_task, system)
 ):
     """
     Log an audit action. Can be called from anywhere.
@@ -143,6 +144,8 @@ def log_action(
         metadata: Additional metadata to store
         group_id: Optional group ID to group related entries within a request.
         batch_id: Deprecated alias for group_id.
+        source: Source of the action (api, management_command, celery_task, system).
+                If not provided, defaults to 'api' for HTTP requests, 'system' otherwise.
     """
     from audit_log.logging import AuditLogger
 
@@ -155,6 +158,7 @@ def log_action(
         changes=changes or {},
         metadata=metadata or {},
         group_id=group_id or batch_id,
+        source=source,
     )
 
 

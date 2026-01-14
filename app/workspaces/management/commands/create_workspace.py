@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.core.exceptions import ValidationError
 from organizations.models import Organization
 from workspaces.models import Workspace
+from audit_log import log_action
 
 
 class Command(BaseCommand):
@@ -40,6 +41,15 @@ class Command(BaseCommand):
             organization=org,
             name=name,
             description=description,
+        )
+
+        # Log to audit log
+        log_action(
+            action="create",
+            message=f"Created workspace '{workspace.name}' in organization '{org.name}' via management command",
+            references=[workspace, org],
+            metadata={"command": "create_workspace"},
+            source="management_command",
         )
 
         self.stdout.write(

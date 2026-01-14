@@ -10,6 +10,7 @@ from assets.models import (
 )
 from workspaces.models import Workspace
 from django.contrib.gis.geos import Point, LineString, Polygon, MultiPolygon
+from audit_log import log_action
 import requests
 
 
@@ -365,9 +366,10 @@ class Command(BaseCommand):
             ("man_made", "storage_tank", limit, "Storage Tank"),
         ]
 
+        total_created = 0
         for feature_type, feature_value, feature_limit, label in import_features:
             self.stdout.write(f"\n--- Importing {label} ---")
-            importer.import_osm_features(
+            created = importer.import_osm_features(
                 bbox=bbox,
                 feature_type=feature_type,
                 feature_value=feature_value,
@@ -375,5 +377,20 @@ class Command(BaseCommand):
                 max_retries=max_retries,
                 retry_delay=retry_delay,
             )
+            total_created += created
+
+        # Log to audit log
+        log_action(
+            action="import",
+            message=f"Imported {total_created} assets from OSM for location '{location}'",
+            references=[workspace, workspace.organization],
+            metadata={
+                "command": "import_osm_data",
+                "location": location,
+                "assets_created": total_created,
+                "bbox": list(bbox),
+            },
+            source="management_command",
+        )
 
         self.stdout.write(self.style.SUCCESS("\n=== Import Complete ==="))

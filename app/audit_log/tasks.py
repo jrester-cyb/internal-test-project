@@ -86,6 +86,7 @@ def _process_request_impl(request_data: dict) -> str:
             user_agent=request_data.get("user_agent", ""),
             organization=organization,
             workspace=workspace,
+            source=request_data.get("source", "api"),
             duration_ms=request_data.get("duration_ms"),
         )
 

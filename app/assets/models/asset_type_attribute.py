@@ -228,6 +228,25 @@ class WorkspaceOverrideAssetTypeAttribute(BaseAssetTypeAttribute):
                     RETURN NEW;
                 """,
             ),
+            pgtrigger.Trigger(
+                name="prevent_override_of_global_locked_attributes",
+                operation=pgtrigger.Insert,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1 
+                        FROM public.assets_globalassettypeattribute gata
+                        JOIN public.assets_baseassettypeattribute base ON gata.baseassettypeattribute_ptr_id = base.id
+                        WHERE gata.id = NEW.base_attribute_id
+                        AND gata.locked_to_global = TRUE
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Cannot create override for attribute "%" as it is locked to global',
+                            (SELECT name FROM public.assets_globalassettypeattribute WHERE id = NEW.base_attribute_id);
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
         ]
 
     def __str__(self):

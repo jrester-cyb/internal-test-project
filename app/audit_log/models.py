@@ -14,6 +14,7 @@ from django.conf import settings
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+import pgtrigger
 
 
 class AuditLogRequest(models.Model):
@@ -24,7 +25,23 @@ class AuditLogRequest(models.Model):
     Contains request metadata that doesn't change between entries.
     """
 
+    class Source(models.TextChoices):
+        API = "api", "API Request"
+        MANAGEMENT_COMMAND = "management_command", "Management Command"
+        CELERY_TASK = "celery_task", "Celery Task"
+        SYSTEM = "system", "System"
+        MIGRATION = "migration", "Migration"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Source of the action
+    source = models.CharField(
+        max_length=50,
+        choices=Source.choices,
+        default=Source.API,
+        db_index=True,
+        help_text="Origin of the action (api, management_command, celery_task, system)",
+    )
 
     # Request correlation
     request_id = models.CharField(
@@ -88,9 +105,63 @@ class AuditLogRequest(models.Model):
             models.Index(fields=["workspace", "-created_at"]),
             models.Index(fields=["request_id"]),
         ]
+        triggers = [
+            pgtrigger.Protect(
+                name="append_only", operation=(pgtrigger.Update | pgtrigger.Delete)
+            )
+        ]
 
     def __str__(self):
         return f"{self.request_method} {self.request_path} ({self.id})"
+
+
+class AuditLogGroup(models.Model):
+    """
+    Optional metadata for a group of audit log entries.
+
+    Groups allow related entries to be tagged with a description
+    and linked together across requests.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Human-readable description of what this group represents
+    description = models.CharField(
+        max_length=255,
+        help_text="Description of what this group of actions represents",
+    )
+
+    # Optional: link to the source (e.g., management command name, task name)
+    source_type = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Type of source that created this group (e.g., 'management_command', 'celery_task')",
+    )
+    source_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Name of the source (e.g., 'startorganization', 'import_assets')",
+    )
+
+    # Metadata
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional metadata about the group",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        triggers = [
+            pgtrigger.Protect(
+                name="append_only", operation=(pgtrigger.Update | pgtrigger.Delete)
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.description} ({self.id})"
 
 
 class AuditLogEntry(models.Model):
@@ -125,12 +196,15 @@ class AuditLogEntry(models.Model):
         related_name="entries",
     )
 
-    # Optional grouping within a request (for custom batches)
-    group_id = models.UUIDField(
+    # Optional grouping (FK to AuditLogGroup for metadata)
+    group = models.ForeignKey(
+        AuditLogGroup,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        related_name="entries",
         db_index=True,
-        help_text="Optional group ID for custom batching within a request",
+        help_text="Optional group for linking related entries with a description",
     )
 
     # Action details
@@ -194,6 +268,11 @@ class AuditLogEntry(models.Model):
             models.Index(fields=["group_id"]),
             models.Index(fields=["action", "-created_at"]),
             models.Index(fields=["target_content_type", "target_object_id"]),
+        ]
+        triggers = [
+            pgtrigger.Protect(
+                name="append_only", operation=(pgtrigger.Update | pgtrigger.Delete)
+            )
         ]
 
     def __str__(self):
@@ -276,6 +355,11 @@ class AuditLogReference(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["content_type", "object_id"]),
+        ]
+        triggers = [
+            pgtrigger.Protect(
+                name="append_only", operation=(pgtrigger.Update | pgtrigger.Delete)
+            )
         ]
 
     def __str__(self):
