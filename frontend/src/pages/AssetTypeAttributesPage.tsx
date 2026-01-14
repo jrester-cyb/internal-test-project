@@ -16,6 +16,7 @@ import CopyableText from '../components/CopyableText'
 import TruncatedText from '../components/TruncatedText'
 import UnitAutocomplete from '../components/UnitAutocomplete'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
+import JsonEditor from '../components/JsonEditor'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -1724,28 +1725,13 @@ export default function AssetTypeAttributesPage() {
               </Box>
             )}
             {formData.attributeType === 'json' && (
-              <TextField
-                label="Default Value"
-                fullWidth
-                multiline
-                rows={4}
-                value={formData.defaultValue ? (typeof formData.defaultValue === 'string' ? formData.defaultValue : JSON.stringify(formData.defaultValue, null, 2)) : ''}
-                onChange={(e) => {
-                  try {
-                    const val = e.target.value
-                    if (!val) {
-                      setFormData({ ...formData, defaultValue: undefined })
-                    } else {
-                      const parsed = JSON.parse(val)
-                      setFormData({ ...formData, defaultValue: parsed })
-                    }
-                  } catch {
-                    setFormData({ ...formData, defaultValue: e.target.value })
-                  }
-                }}
-                helperText="Optional default value in JSON format"
-                error={formData.defaultValue && typeof formData.defaultValue === 'string'}
-              />
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Default Value</Typography>
+                <JsonEditor
+                  value={formData.defaultValue}
+                  onChange={(val) => setFormData({ ...formData, defaultValue: val })}
+                />
+              </Box>
             )}
             <FormControlLabel
               control={
