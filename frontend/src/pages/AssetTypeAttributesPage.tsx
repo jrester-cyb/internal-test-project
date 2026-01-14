@@ -457,7 +457,7 @@ export default function AssetTypeAttributesPage() {
 
   const handleEdit = (attr: AssetTypeAttribute) => {
     // Check if this is a global attribute - warn about creating an override
-    const isBaseAttribute = !attr.workspace && !attr.isOverride
+    const isBaseAttribute = attr.scope === 'global'
     if (isBaseAttribute) {
       setConfirmDialog({
         open: true,
@@ -762,7 +762,7 @@ export default function AssetTypeAttributesPage() {
             </TableCell>
             {showScopeColumn && (
               <TableCell sx={{ width: '100px' }}>
-                {attr.isOverride ? (
+                {attr.scope === 'override' ? (
                   <Chip
                     label="Override"
                     size="small"
@@ -770,7 +770,7 @@ export default function AssetTypeAttributesPage() {
                     variant="outlined"
                     sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
                   />
-                ) : attr.workspace ? (
+                ) : attr.scope === 'local' ? (
                   <Chip
                     label="Local"
                     size="small"
@@ -913,7 +913,7 @@ export default function AssetTypeAttributesPage() {
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Scope</TableCell>
                   <TableCell sx={{ border: 0, py: 0.5 }}>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      {displayedAttribute.isOverride ? (
+                      {displayedAttribute.scope === 'override' ? (
                         <>
                           <Chip
                             label="Override"
@@ -970,7 +970,7 @@ export default function AssetTypeAttributesPage() {
                             </Button>
                           )}
                         </>
-                      ) : displayedAttribute.workspace ? (
+                      ) : displayedAttribute.scope === 'local' ? (
                         <Chip
                           label="Local"
                           size="small"

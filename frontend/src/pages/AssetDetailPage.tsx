@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
 import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material'
+import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, Article as ArticleIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
 import type { Asset, AssetTypeAttribute } from '../types'
@@ -267,24 +267,32 @@ export default function AssetDetailPage() {
                       // Filter by excluded scopes (if any)
                       if (excludedScopes.length > 0) {
                         displayAttributes = displayAttributes.filter(attr => {
-                          // Determine the scope based on attribute properties
-                          let scope: string
-                          if (!attr.isExtension) {
-                            scope = 'global'
-                          } else if (attr.isOverride) {
-                            scope = 'override'
-                          } else {
-                            scope = 'local'
-                          }
+                          const scope = attr.scope || 'global'
                           return !excludedScopes.includes(scope)
                         })
                       }
 
                       if (displayAttributes.length === 0) {
+                        // Determine why there are no attributes to show a helpful message
+                        let message = 'No attributes'
+                        let icon = <ArticleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+
+                        if (attributes.length === 0) {
+                          message = 'No attributes'
+                          icon = <ArticleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                        } else if (attributes.every(attr => attr.isHidden) && !showHidden) {
+                          message = 'All attributes are hidden for this asset type'
+                          icon = <VisibilityOffIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                        } else if (selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0) {
+                          message = 'No attributes match the current filters'
+                          icon = <FilterIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                        }
+
                         return (
-                          <Box sx={{ p: 2 }}>
-                            <Typography color="text.secondary" variant="body2">
-                              No attributes
+                          <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                            <Typography color="text.secondary" variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+                              {icon}
+                              {message}
                             </Typography>
                           </Box>
                         )

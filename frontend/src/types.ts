@@ -30,8 +30,7 @@ export interface AssetTypeAttribute {
   workspace?: string | null
   workspaceName?: string | null
   organizationId?: string | null
-  isExtension?: boolean
-  isOverride?: boolean
+  scope?: 'global' | 'override' | 'local'
   baseAttributeId?: string | null
   isHidden?: boolean
 }

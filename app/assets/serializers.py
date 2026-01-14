@@ -170,6 +170,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
     organization_id = serializers.SerializerMethodField()
+    scope = serializers.SerializerMethodField()
     api_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -188,6 +189,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "asset_count_url",
             "is_hidden",
             "organization_id",
+            "scope",
             "api_url",
             "created_at",
             "updated_at",
@@ -224,6 +226,10 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Check if this attribute is hidden in the current workspace."""
         # Assumes _is_hidden is always annotated on the queryset
         return getattr(obj, "_is_hidden", False)
+
+    def get_scope(self, obj):
+        """Global attributes have scope 'global'."""
+        return "global"
 
     def get_organization_id(self, obj):
         """Get organization ID from annotation."""
@@ -329,16 +335,16 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
         # Build result with metadata first, then base data, then overrides
         result = {
             "id": str(instance.id),  # Override's own ID
-            "isOverride": True,
+            "scope": "override",
             "workspace": str(instance.workspace_id) if instance.workspace_id else None,
             "workspace_name": workspace_name,
             "organization_id": organization_id,
             "base_attribute_id": base_attr_id,
         }
 
-        # Add all base data (except id and organization_id which we already set from annotations)
+        # Add all base data (except id, organization_id, and scope which we already set)
         for key, value in base_data.items():
-            if key not in ("id", "organization_id"):
+            if key not in ("id", "organization_id", "scope"):
                 result[key] = value
 
         # Apply overrides (these will replace base values)
@@ -376,6 +382,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     organization_id = serializers.SerializerMethodField()
     asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
+    scope = serializers.SerializerMethodField()
     api_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -395,6 +402,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "tags",
             "asset_count_url",
             "is_hidden",
+            "scope",
             "api_url",
             "created_at",
             "updated_at",
@@ -433,6 +441,10 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Check if this attribute is hidden in its workspace."""
         # Use the _is_hidden annotation from the queryset
         return getattr(obj, "_is_hidden", False)
+
+    def get_scope(self, obj):
+        """Local attributes have scope 'local'."""
+        return "local"
 
     def get_api_url(self, obj):
         """Return the API URL for this attribute based on current request context."""
