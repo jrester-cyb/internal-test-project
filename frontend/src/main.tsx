@@ -179,22 +179,17 @@ const router = createBrowserRouter([
                       {
                         index: true,
                         element: <AssetListPage />,
-                        loader: async ({ params, request }) => {
-                          const url = new URL(request.url)
-                          const page = parseInt(url.searchParams.get('page') || '1')
-                          const pageSize = parseInt(url.searchParams.get('pageSize') || '25')
-
+                        loader: async ({ params }) => {
                           const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
 
-                          // Fetch paginated assets
-                          const response = await fetchAssetsByType(params.workspaceId!, params.assetTypeId!, page, pageSize)
+                          // Fetch first page using cursor pagination (faster - no COUNT query)
+                          const response = await fetchAssetsByType(params.workspaceId!, params.assetTypeId!, null, 50)
                           const assets = response.results || []
-                          const count = response.count || 0
 
                           // Fetch ALL asset type attributes (not paginated) to show all columns
                           const attributes = await fetchAllAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!)
 
-                          return { assets, attributes, count, page, pageSize, workspaceId: params.workspaceId };
+                          return { assets, attributes, nextCursor: response.next, workspaceId: params.workspaceId };
                         },
                       },
                       {

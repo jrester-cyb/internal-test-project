@@ -9,60 +9,54 @@ export default function AssetListPage() {
   const initialData = useLoaderData() as {
     assets: Asset[],
     attributes?: AssetTypeAttribute[],
-    count: number,
-    page: number,
-    pageSize: number,
+    nextCursor: string | null,
     workspaceId: string
   }
 
   const { assetTypeId } = useParams()
   const location = useLocation()
 
-  // State for infinite scroll
+  // State for infinite scroll with cursor pagination
   const [assets, setAssets] = useState<Asset[]>(initialData.assets || [])
   const [attributes] = useState<AssetTypeAttribute[]>(initialData.attributes || [])
-  const [page, setPage] = useState(initialData.page || 1)
-  const [hasMore, setHasMore] = useState((initialData.assets?.length || 0) < (initialData.count || 0))
+  const [nextCursor, setNextCursor] = useState<string | null>(initialData.nextCursor)
+  const [hasMore, setHasMore] = useState(!!initialData.nextCursor)
   const [isLoading, setIsLoading] = useState(false)
-  const [totalCount] = useState(initialData.count || 0)
 
-  const pageSize = 25
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLTableRowElement | null>(null)
 
   // Reset when route changes (different asset type)
   useEffect(() => {
     setAssets(initialData.assets || [])
-    setPage(initialData.page || 1)
-    setHasMore((initialData.assets?.length || 0) < (initialData.count || 0))
+    setNextCursor(initialData.nextCursor)
+    setHasMore(!!initialData.nextCursor)
   }, [initialData])
 
   const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore) return
+    if (isLoading || !hasMore || !nextCursor) return
 
     setIsLoading(true)
     try {
-      const nextPage = page + 1
+      // Use cursor URL directly - no need to track page numbers
       const response = await fetchAssetsByType(
         initialData.workspaceId,
         assetTypeId!,
-        nextPage,
-        pageSize
+        nextCursor
       )
 
       const newAssets = response.results || []
       setAssets(prev => [...prev, ...newAssets])
-      setPage(nextPage)
 
-      // Check if there are more pages
-      const totalLoaded = assets.length + newAssets.length
-      setHasMore(totalLoaded < response.count)
+      // Update cursor for next page
+      setNextCursor(response.next)
+      setHasMore(!!response.next)
     } catch (error) {
       console.error('Failed to load more assets:', error)
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, hasMore, page, initialData.workspaceId, assetTypeId, assets.length])
+  }, [isLoading, hasMore, nextCursor, initialData.workspaceId, assetTypeId])
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
@@ -138,7 +132,7 @@ export default function AssetListPage() {
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} sx={{ flexShrink: 0 }}>
           <Typography variant="h5" component="h2">Assets</Typography>
           <Typography color="text.secondary">
-            Showing {assets.length} of {totalCount}
+            {assets.length} loaded{hasMore ? '...' : ''}
           </Typography>
         </Stack>
         <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>

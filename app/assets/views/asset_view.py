@@ -1,7 +1,7 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import PageNumberPagination, CursorPagination
 from django.db.models import Q, Count, Prefetch
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
@@ -24,14 +24,47 @@ from ..models import Asset, BaseAttributeValue
 from ..serializers import AssetSerializer
 
 
-class AssetPagination(PageNumberPagination):
-    page_size = 100
+class AssetPageNumberPagination(PageNumberPagination):
+    """Standard page-number pagination with count query (slower for large tables)"""
+
+    page_size = 50  # Reduced for better performance with many attributes
     page_size_query_param = "page_size"
-    max_page_size = 10000
+    max_page_size = 500  # Cap max to prevent memory issues with 100+ attrs
+
+
+class AssetCursorPagination(CursorPagination):
+    """Cursor-based pagination - O(1) performance regardless of table size.
+
+    Use this for infinite scroll UIs or when you don't need page numbers.
+    No COUNT query = fast for millions of records.
+
+    To use: add ?cursor_pagination=true to request
+    """
+
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 500
+    ordering = "-created_at"  # Must have index on this field
+    cursor_query_param = "cursor"
+
+
+# Keep old name for backwards compatibility
+AssetPagination = AssetPageNumberPagination
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Assets"]),
+    list=extend_schema(
+        tags=["Assets"],
+        parameters=[
+            OpenApiParameter(
+                name="cursor_pagination",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Use cursor-based pagination for better performance with large datasets. "
+                "No page numbers, but O(1) performance regardless of table size.",
+            ),
+        ],
+    ),
     create=extend_schema(tags=["Assets"]),
     retrieve=extend_schema(tags=["Assets"]),
     update=extend_schema(tags=["Assets"]),
@@ -43,6 +76,10 @@ class AssetViewSet(viewsets.ModelViewSet):
     ViewSet for Asset model.
 
     Assets are instances of asset types with dynamic field values.
+
+    Pagination Options:
+    - Default (page number): ?page=1&page_size=50 - includes total count
+    - Cursor: ?cursor_pagination=true - faster for large tables, no count
     """
 
     serializer_class = AssetSerializer
@@ -56,6 +93,25 @@ class AssetViewSet(viewsets.ModelViewSet):
     filterset_fields = ["asset_type"]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+
+    @property
+    def paginator(self):
+        """Dynamically select pagination class based on request params.
+
+        Use ?cursor_pagination=true for large datasets to skip COUNT query.
+        """
+        if not hasattr(self, "_paginator"):
+            if (
+                self.request
+                and self.request.query_params.get("cursor_pagination", "").lower()
+                == "true"
+            ):
+                self._paginator = AssetCursorPagination()
+            elif self.pagination_class is not None:
+                self._paginator = self.pagination_class()
+            else:
+                self._paginator = None
+        return self._paginator
 
     def get_queryset(self):
         """Filter assets by workspace via WorkspaceAsset join table"""
@@ -80,13 +136,49 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Select related for asset_type and organization to avoid N+1 queries
         queryset = queryset.select_related("asset_type", "organization")
 
-        # Prefetch attributes using non_polymorphic() to avoid expensive polymorphic resolution
-        # We'll batch-fetch the actual values from concrete tables in the serializer
-        queryset = queryset.prefetch_related(
-            Prefetch(
-                "attributes",
-                queryset=BaseAttributeValue.objects.non_polymorphic(),
+        # Prefetch attributes with values annotated directly - no separate value_map query needed!
+        # Uses COALESCE with subqueries to fetch the typed value from whichever concrete table has it
+        from django.db.models import Subquery, OuterRef
+        from django.db.models.functions import Coalesce
+        from django.db.models import Func
+        from django.db.models import JSONField
+        from ..models import (
+            TextAttributeValue,
+            NumberAttributeValue,
+            BooleanAttributeValue,
+            DateAttributeValue,
+            DateTimeAttributeValue,
+            JSONAttributeValue,
+        )
+
+        # PostgreSQL to_jsonb function - preserves types
+        class ToJsonb(Func):
+            function = "to_jsonb"
+            output_field = JSONField()
+
+        # Build subqueries for each concrete type
+        def value_subquery(Model):
+            return Subquery(
+                Model.objects.filter(baseattributevalue_ptr_id=OuterRef("id"))
+                .annotate(json_val=ToJsonb("value"))
+                .values("json_val")[:1]
             )
+
+        # Annotate typed_value using COALESCE - first non-null wins
+        attr_queryset = BaseAttributeValue.objects.non_polymorphic().annotate(
+            typed_value=Coalesce(
+                value_subquery(TextAttributeValue),
+                value_subquery(NumberAttributeValue),
+                value_subquery(BooleanAttributeValue),
+                value_subquery(DateAttributeValue),
+                value_subquery(DateTimeAttributeValue),
+                value_subquery(JSONAttributeValue),
+                output_field=JSONField(),
+            )
+        )
+
+        queryset = queryset.prefetch_related(
+            Prefetch("attributes", queryset=attr_queryset)
         )
 
         return queryset.distinct()
@@ -108,6 +200,19 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Priority: workspace override > global (keyed by global ID since values point to global)
         assettype_pk = self.kwargs.get("assettype_pk")
         if assettype_pk:
+            api_key_map = self._get_api_key_map(assettype_pk, workspace_pk)
+            context["_api_key_map"] = api_key_map
+
+        return context
+
+    def _get_api_key_map(self, assettype_pk, workspace_pk=None):
+        """Get api_key map with Redis caching - cache key includes workspace for proper isolation"""
+        from django.core.cache import cache
+
+        cache_key = f"api_key_map:{assettype_pk}:{workspace_pk or 'global'}"
+        api_key_map = cache.get(cache_key)
+
+        if api_key_map is None:
             from ..models import (
                 GlobalAssetTypeAttribute,
                 WorkspaceOverrideAssetTypeAttribute,
@@ -140,12 +245,17 @@ class AssetViewSet(viewsets.ModelViewSet):
                 for la in local_attrs:
                     api_key_map[str(la["id"])] = la["api_key"]
 
-            context["_api_key_map"] = api_key_map
+            # Cache for 5 minutes - attribute definitions rarely change
+            cache.set(cache_key, api_key_map, timeout=300)
 
-        return context
+        return api_key_map
 
     def list(self, request, *args, **kwargs):
-        """Override list to batch-load attribute values for all assets"""
+        """Override list to provide serializer context.
+
+        Values are now annotated directly on prefetched attributes - no separate
+        _build_value_map call needed!
+        """
         with silk_profile(name="1. filter_queryset"):
             queryset = self.filter_queryset(self.get_queryset())
 
@@ -153,74 +263,27 @@ class AssetViewSet(viewsets.ModelViewSet):
             page = self.paginate_queryset(queryset)
 
         if page is not None:
-            with silk_profile(name="3. _build_value_map"):
-                value_map = self._build_value_map(page)
+            context = self.get_serializer_context()
 
-            with silk_profile(name="4. get_serializer_context"):
-                context = self.get_serializer_context()
-                context["_value_map"] = value_map
-
-            with silk_profile(name="5. serializer.data"):
+            with silk_profile(name="3. serializer.data"):
                 serializer = self.get_serializer(page, many=True, context=context)
                 data = serializer.data
 
-            with silk_profile(name="6. get_paginated_response"):
+            with silk_profile(name="4. get_paginated_response"):
                 return self.get_paginated_response(data)
 
         # Non-paginated response
         assets = list(queryset)
-        value_map = self._build_value_map(assets)
         context = self.get_serializer_context()
-        context["_value_map"] = value_map
         serializer = self.get_serializer(assets, many=True, context=context)
         return Response(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
-        """Override retrieve to batch-load attribute values for single asset"""
+        """Override retrieve - values are annotated on prefetched attributes"""
         instance = self.get_object()
-        value_map = self._build_value_map([instance])
         context = self.get_serializer_context()
-        context["_value_map"] = value_map
         serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
-
-    def _build_value_map(self, assets):
-        """Batch-fetch values from all concrete tables for given assets"""
-        from ..models import (
-            TextAttributeValue,
-            NumberAttributeValue,
-            BooleanAttributeValue,
-            DateAttributeValue,
-            DateTimeAttributeValue,
-            JSONAttributeValue,
-        )
-
-        # Collect all value IDs from prefetched attributes
-        value_ids = []
-        for asset in assets:
-            if hasattr(asset, "attributes"):
-                for attr in asset.attributes.all():
-                    value_ids.append(attr.id)
-
-        if not value_ids:
-            return {}
-
-        value_map = {}
-        # Query each concrete table once for all assets
-        for Model in [
-            TextAttributeValue,
-            NumberAttributeValue,
-            BooleanAttributeValue,
-            DateAttributeValue,
-            DateTimeAttributeValue,
-            JSONAttributeValue,
-        ]:
-            for row in Model.objects.filter(
-                baseattributevalue_ptr_id__in=value_ids
-            ).values("baseattributevalue_ptr_id", "value"):
-                value_map[str(row["baseattributevalue_ptr_id"])] = row["value"]
-
-        return value_map
 
     def perform_create(self, serializer):
         """Create asset owned by workspace's organization and link to workspace"""

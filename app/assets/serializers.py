@@ -716,32 +716,41 @@ class AssetSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(f"/api/assets/{obj.id}/")
         return None
 
-    @silk_profile(name="AssetSerializer.get_attributes")
     def get_attributes(self, obj):
-        """Get attributes as a dictionary using prefetched data"""
+        """Get attributes as a dictionary using prefetched data.
+
+        Optimized for high attribute counts (100+):
+        - Values are annotated directly on prefetched attributes (no separate query)
+        - Single-pass dict comprehension for fast iteration
+        - Supports ?fields=... to exclude attributes from response
+        """
+        # Check if attributes were excluded via ?fields= parameter
+        request = self.context.get("request")
+        if request:
+            fields_param = request.query_params.get("fields", "")
+            if fields_param and "attributes" not in fields_param.split(","):
+                return None  # Skip attributes entirely when not requested
+
         # Use prefetched attributes if available
         attributes = getattr(obj, "attributes", None)
         if not attributes:
             return {}
 
-        # Get all attribute values (these are prefetched as non-polymorphic base instances)
-        attr_values = list(attributes.all())
+        # Get all attribute values (these are prefetched with typed_value annotated)
+        attr_values = attributes.all()
         if not attr_values:
             return {}
 
-        # Use cached maps from context (set by view for batch optimization)
+        # Use cached api_key map from context
         api_key_map = self.context.get("_api_key_map", {})
-        value_map = self.context.get("_value_map", {})
 
-        values = {}
-        for field_value in attr_values:
-            attr_id = str(field_value.asset_type_attribute_id)
-            api_key = api_key_map.get(attr_id)
-            if api_key:
-                value = value_map.get(str(field_value.id))
-                if value is not None:
-                    values[api_key] = value
-        return values
+        # Values are now annotated directly on each attribute - no value_map needed!
+        return {
+            api_key_map[str(fv.asset_type_attribute_id)]: fv.typed_value
+            for fv in attr_values
+            if str(fv.asset_type_attribute_id) in api_key_map
+            and getattr(fv, "typed_value", None) is not None
+        }
 
     def create(self, validated_data):
         """Create asset and its attributes"""
