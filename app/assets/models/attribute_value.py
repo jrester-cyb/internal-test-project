@@ -74,6 +74,31 @@ class JSONAttributeValue(BaseAttributeValue):
     value = models.JSONField(null=True, blank=True)
 
 
+class LinkAttributeValue(BaseAttributeValue):
+    """Link/URL attribute value with optional display text"""
+
+    url = models.URLField(max_length=2000, blank=True)
+    display_text = models.CharField(max_length=500, blank=True)
+
+    @property
+    def value(self):
+        """Return link data as a dict"""
+        return {
+            "url": self.url,
+            "text": self.display_text or self.url,
+        }
+
+    @value.setter
+    def value(self, val):
+        """Accept either a string URL or a dict with url/text"""
+        if isinstance(val, dict):
+            self.url = val.get("url", "")
+            self.display_text = val.get("text", "")
+        else:
+            self.url = val or ""
+            self.display_text = ""
+
+
 class ChoiceAttributeValue(BaseAttributeValue):
     """Attribute value that references a choice - value comes from the linked choice"""
 

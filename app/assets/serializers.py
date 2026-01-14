@@ -21,6 +21,7 @@ from .models import (
     DateAttributeValue,
     DateTimeAttributeValue,
     JSONAttributeValue,
+    LinkAttributeValue,
     ChoiceAttributeValue,
 )
 
@@ -75,6 +76,7 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
             DateAttributeChoice,
             DateTimeAttributeChoice,
             JSONAttributeChoice,
+            LinkAttributeChoice,
         )
 
         asset_type_attribute = validated_data.pop("asset_type_attribute")
@@ -88,6 +90,7 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
             "date": DateAttributeChoice,
             "datetime": DateTimeAttributeChoice,
             "json": JSONAttributeChoice,
+            "link": LinkAttributeChoice,
         }.get(asset_type_attribute.attribute_type, TextAttributeChoice)
 
         return choice_model.objects.create(
@@ -800,6 +803,7 @@ class AssetSerializer(serializers.ModelSerializer):
                             "date": DateAttributeValue,
                             "datetime": DateTimeAttributeValue,
                             "json": JSONAttributeValue,
+                            "link": LinkAttributeValue,
                         }.get(field_def.attribute_type, TextAttributeValue)
 
                         model_class.objects.create(

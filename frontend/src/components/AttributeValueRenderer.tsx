@@ -133,24 +133,29 @@ function DateRenderer({ value, includeTime = false }: { value: string; includeTi
   )
 }
 
-// Link renderer (for future use)
-function LinkRenderer({ value, maxLines = 3 }: { value: string; maxLines?: number }) {
+// Link renderer - supports both string URLs and {url, text} objects
+function LinkRenderer({ value, maxLines = 3 }: { value: string | { url: string; text?: string }; maxLines?: number }) {
+  // Normalize value to always have url and text
+  const linkData = typeof value === 'string'
+    ? { url: value, text: value }
+    : { url: value.url, text: value.text || value.url }
+
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
       <TruncatedText
         variant="body2"
         maxLines={maxLines}
-        title="Link"
+        title={linkData.url}
         sx={{
           color: 'primary.main',
           cursor: 'pointer',
           '&:hover': { textDecoration: 'underline' },
         }}
-        onClick={() => window.open(value, '_blank')}
+        onClick={() => window.open(linkData.url, '_blank')}
       >
-        {value}
+        {linkData.text}
       </TruncatedText>
-      <IconButton size="small" href={value} target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0 }}>
+      <IconButton size="small" href={linkData.url} target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0 }}>
         <OpenInNewIcon sx={{ fontSize: 14 }} />
       </IconButton>
     </Box>
@@ -201,6 +206,9 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3 
 
     case 'number':
       return <NumberRenderer value={value} />
+
+    case 'link':
+      return <LinkRenderer value={value} maxLines={maxLines} />
 
     case 'text':
     default:

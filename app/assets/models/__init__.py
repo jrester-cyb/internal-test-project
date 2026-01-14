@@ -19,6 +19,7 @@ from .asset_type_attribute_choice import (
     DateAttributeChoice,
     DateTimeAttributeChoice,
     JSONAttributeChoice,
+    LinkAttributeChoice,
     # Workspace choice modifications
     BaseWorkspaceChoice,
     WorkspaceChoiceOverride,
@@ -31,6 +32,7 @@ from .asset_type_attribute_choice import (
     DateExtensionChoice,
     DateTimeExtensionChoice,
     JSONExtensionChoice,
+    LinkExtensionChoice,
 )
 from .asset import Asset, WorkspaceAsset
 from .attribute_value import (
@@ -41,6 +43,7 @@ from .attribute_value import (
     DateAttributeValue,
     DateTimeAttributeValue,
     JSONAttributeValue,
+    LinkAttributeValue,
     ChoiceAttributeValue,
 )
 
@@ -55,6 +58,7 @@ __all__ = [
     "DateAttributeChoice",
     "DateTimeAttributeChoice",
     "JSONAttributeChoice",
+    "LinkAttributeChoice",
     "Asset",
     "WorkspaceAsset",
     "BaseAttributeValue",
@@ -64,5 +68,6 @@ __all__ = [
     "DateAttributeValue",
     "DateTimeAttributeValue",
     "JSONAttributeValue",
+    "LinkAttributeValue",
     "ChoiceAttributeValue",
 ]

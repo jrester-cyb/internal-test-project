@@ -375,6 +375,31 @@ export default function FilterBuilder({
           </Box>
         )
 
+      case 'link':
+        return (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <FormControl size="small" sx={{ minWidth: 100 }}>
+              <Select
+                value={operator}
+                onChange={(e) => handleOperatorChange(e.target.value)}
+              >
+                <MenuItem value="exact">Exact</MenuItem>
+                <MenuItem value="icontains">Contains</MenuItem>
+                <MenuItem value="istartswith">Starts with</MenuItem>
+                <MenuItem value="iendswith">Ends with</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              type="url"
+              value={value}
+              onChange={(e) => handleValueChange(e.target.value)}
+              placeholder="Enter URL"
+            />
+          </Box>
+        )
+
       case 'date':
       case 'datetime':
         return (

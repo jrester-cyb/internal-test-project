@@ -13,11 +13,16 @@ export interface AssetTypeAttributeChoice {
   order: number
 }
 
+export interface LinkValue {
+  url: string
+  text: string
+}
+
 export interface AssetTypeAttribute {
   id: string
   name: string
   apiKey: string
-  attributeType: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json'
+  attributeType: 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'link'
   isRequired: boolean
   defaultValue?: any
   description?: string

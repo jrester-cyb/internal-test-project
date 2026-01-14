@@ -19,6 +19,7 @@ class BaseAssetTypeAttribute(PolymorphicSoftDeleteMixin, PolymorphicModel):
         ("date", "Date"),
         ("datetime", "DateTime"),
         ("json", "JSON"),
+        ("link", "Link"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

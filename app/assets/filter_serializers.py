@@ -26,6 +26,16 @@ class FilterGroupSerializer(serializers.Serializer):
         "date": ["exact", "lt", "lte", "gt", "gte", "range"],
         "datetime": ["exact", "lt", "lte", "gt", "gte", "range"],
         "json": ["exact", "contains"],
+        "link": [
+            "exact",
+            "contains",
+            "startswith",
+            "endswith",
+            "iexact",
+            "icontains",
+            "istartswith",
+            "iendswith",
+        ],
         "geometry": ["within", "intersects", "contains", "exact"],
         "h3_index": ["exact", "startswith"],
     }
@@ -36,6 +46,7 @@ class FilterGroupSerializer(serializers.Serializer):
         "date": "dateattributevalue__value",
         "datetime": "datetimeattributevalue__value",
         "json": "jsonattributevalue__value",
+        "link": "linkattributevalue__url",
     }
 
     inverse = serializers.BooleanField(default=False)
@@ -93,12 +104,31 @@ class FilterGroupSerializer(serializers.Serializer):
                 for attr in asset_attribute_type_qs:
                     attr_type = attr.attribute_type
 
-                    new_q = Q(
-                        **{
-                            "attributes__asset_type_attribute__api_key": api_key,
-                            f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": value,
-                        }
-                    )
+                    # Link type searches both url and display_text fields
+                    if attr_type == "link":
+                        new_q = Q(
+                            **{
+                                "attributes__asset_type_attribute__api_key": api_key,
+                            }
+                        ) & (
+                            Q(
+                                **{
+                                    f"attributes__linkattributevalue__url__{operator}": value
+                                }
+                            )
+                            | Q(
+                                **{
+                                    f"attributes__linkattributevalue__display_text__{operator}": value
+                                }
+                            )
+                        )
+                    else:
+                        new_q = Q(
+                            **{
+                                "attributes__asset_type_attribute__api_key": api_key,
+                                f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": value,
+                            }
+                        )
                     if q is None:
                         q = new_q
                     else:
