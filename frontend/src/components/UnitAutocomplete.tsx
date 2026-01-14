@@ -30,6 +30,7 @@ export default function UnitAutocomplete({
 }: UnitAutocompleteProps) {
   const [unitCategories, setUnitCategories] = useState<UnitCategory[]>([])
   const [searchInput, setSearchInput] = useState('')
+  const [categorySearchInput, setCategorySearchInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('')
 
@@ -37,7 +38,7 @@ export default function UnitAutocomplete({
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setIsLoading(true)
-      const search = layout === 'single' ? (searchInput || undefined) : undefined
+      const search = searchInput || undefined  // Allow search in both modes
       const category = layout === 'split' ? (selectedCategory || undefined) : undefined
       // Use 'units' mode when filtering by category in split layout for better performance
       const mode = (layout === 'split' && selectedCategory) ? 'units' : 'full'
@@ -51,15 +52,20 @@ export default function UnitAutocomplete({
     return () => clearTimeout(timeoutId)
   }, [searchInput, selectedCategory, layout])
 
-  // For split layout, also fetch all categories for the category dropdown
+  // For split layout, fetch categories with optional search
   const [allCategories, setAllCategories] = useState<UnitCategory[]>([])
   useEffect(() => {
     if (layout === 'split') {
-      fetchUnitCategories(undefined, undefined, 'categories') // mode = 'categories'
-        .then(categories => setAllCategories(categories))
-        .catch(err => console.error('Failed to fetch all categories:', err))
+      const timeoutId = setTimeout(() => {
+        const search = categorySearchInput || undefined
+        fetchUnitCategories(search, undefined, 'categories')
+          .then(categories => setAllCategories(categories))
+          .catch(err => console.error('Failed to fetch all categories:', err))
+      }, 300) // 300ms debounce for category search
+
+      return () => clearTimeout(timeoutId)
     }
-  }, [layout])
+  }, [layout, categorySearchInput])
 
   // Process unit categories into options - handle both nested and flat formats
   const options: UnitOption[] = useMemo(() => {
@@ -100,30 +106,38 @@ export default function UnitAutocomplete({
   if (layout === 'split') {
     return (
       <Stack spacing={2}>
-        <FormControl fullWidth>
-          <InputLabel>Category</InputLabel>
-          <Select
-            value={selectedCategory}
-            label="Category"
-            onChange={(e) => {
-              setSelectedCategory(e.target.value)
-              onChange(undefined) // Clear unit selection when category changes
-            }}
-          >
-            <MenuItem value=""><em>Select a category</em></MenuItem>
-            {allCategories.map((category) => (
-              <MenuItem key={category.key} value={category.key}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Autocomplete
+          options={allCategories}
+          getOptionLabel={(option) => option.name}
+          value={allCategories.find(cat => cat.key === selectedCategory) || null}
+          onChange={(_, newValue) => {
+            setSelectedCategory(newValue?.key || '')
+            onChange(undefined) // Clear unit selection when category changes
+          }}
+          inputValue={categorySearchInput}
+          onInputChange={(_, newInputValue) => setCategorySearchInput(newInputValue)}
+          isOptionEqualToValue={(option, val) => option.key === val.key}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Category"
+              placeholder="Search categories..."
+            />
+          )}
+          renderOption={(props, option) => (
+            <li {...props} key={option.key}>
+              {option.name}
+            </li>
+          )}
+        />
 
         <Autocomplete
           options={options}
           getOptionLabel={(option) => `${option.name} (${option.symbol})`}
           value={selectedValue}
           onChange={(_, newValue) => onChange(newValue?.code || undefined)}
+          inputValue={searchInput}
+          onInputChange={(_, newInputValue) => setSearchInput(newInputValue)}
           isOptionEqualToValue={(option, val) => option.code === val.code}
           disabled={!selectedCategory}
           loading={isLoading}
