@@ -10,6 +10,7 @@ export interface ActionButtonConfig {
   color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' | 'inherit'
   variant?: 'text' | 'outlined' | 'contained'
   disabled?: boolean
+  tooltip?: string // Custom tooltip text, falls back to label if not provided
   /** Minimum width required to show this button. Button shows when width >= this value.
    *  Use Infinity to always keep in menu, 0 to always show as button. */
   minWidth?: number
@@ -96,16 +97,34 @@ export default function ActionButtons({
       {actions.map((action, index) => (
         <Collapse key={index} in={isButtonVisible(action.minWidth ?? 0)} orientation="horizontal" timeout={250}>
           {iconOnly && action.icon ? (
-            <Tooltip title={action.label}>
-              <IconButton
-                size={size}
-                color={action.color || 'primary'}
-                onClick={action.onClick}
-                disabled={action.disabled}
-                sx={{ mr: 0.5 }}
-              >
-                {action.icon}
-              </IconButton>
+            <Tooltip title={action.tooltip || action.label} arrow>
+              <span>
+                <IconButton
+                  size={size}
+                  color={action.color || 'primary'}
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  sx={{ mr: 0.5 }}
+                >
+                  {action.icon}
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : action.tooltip && action.disabled ? (
+            <Tooltip title={action.tooltip} arrow>
+              <span>
+                <Button
+                  size={size}
+                  variant={action.variant || 'outlined'}
+                  color={action.color || 'primary'}
+                  startIcon={action.icon}
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  sx={{ whiteSpace: 'nowrap', mr: 1 }}
+                >
+                  {action.label}
+                </Button>
+              </span>
             </Tooltip>
           ) : (
             <Button

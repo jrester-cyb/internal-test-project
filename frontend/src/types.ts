@@ -29,6 +29,8 @@ export interface AssetTypeAttribute {
   tags?: string[]
   order: number
   unit?: string
+  cannotOverride?: boolean
+  lockedToGlobal?: boolean
   assetCountUrl?: string | null
   apiUrl?: string | null
   choices?: AssetTypeAttributeChoice[]

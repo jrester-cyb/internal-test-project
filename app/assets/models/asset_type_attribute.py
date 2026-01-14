@@ -57,6 +57,14 @@ class GlobalAssetTypeAttribute(BaseAssetTypeAttribute):
         blank=True,
         help_text="Unit for number attributes (e.g., 'kg', 'm', 'degC'). Uses Pint unit syntax.",
     )
+    cannot_override = models.BooleanField(
+        default=False,
+        help_text="If true, this attribute cannot be overridden by workspaces",
+    )
+    locked_to_global = models.BooleanField(
+        default=False,
+        help_text="If true, attribute values are locked to the global defaults and cannot be modified per workspace",
+    )
 
     class Meta:
         ordering = ["order", "name"]

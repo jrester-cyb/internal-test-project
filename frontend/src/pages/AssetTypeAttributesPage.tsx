@@ -1075,7 +1075,9 @@ export default function AssetTypeAttributesPage() {
                             description: displayedAttribute.description || '',
                             defaultValue: displayedAttribute.defaultValue,
                             tags: displayedAttribute.tags || [],
-                            unit: displayedAttribute.unit
+                            unit: displayedAttribute.unit,
+                            cannotOverride: Boolean(displayedAttribute.cannotOverride),
+                            lockedToGlobal: Boolean(displayedAttribute.lockedToGlobal)
                           })
                           setPendingTypeChange(null)
                           setTypeChangeDialogOpen(true)
@@ -1128,6 +1130,30 @@ export default function AssetTypeAttributesPage() {
                       ) : 'No unit specified'}
                     </TableCell>
                   </TableRow>
+                )}
+                {displayedAttribute.scope === 'global' && (
+                  <>
+                    <TableRow>
+                      <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Override Policy</TableCell>
+                      <TableCell sx={{ border: 0, py: 0.5 }}>
+                        {displayedAttribute.cannotOverride ? (
+                          <Chip label="Cannot be overridden" color="warning" size="small" />
+                        ) : (
+                          <Chip label="Can be overridden" variant="outlined" size="small" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'middle' }}>Value Policy</TableCell>
+                      <TableCell sx={{ border: 0, py: 0.5 }}>
+                        {displayedAttribute.lockedToGlobal ? (
+                          <Chip label="Values locked to global" color="error" size="small" />
+                        ) : (
+                          <Chip label="Values can vary per workspace" variant="outlined" size="small" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </>
                 )}
               </TableBody>
             </Table>
@@ -1234,12 +1260,14 @@ export default function AssetTypeAttributesPage() {
             width={isSmallScreen ? 0 : 100 - leftColumnWidth}
             actions={[
               ...(!selectedAttribute!.isHidden ? [{
-                label: 'Edit',
+                label: selectedAttribute!.cannotOverride ? 'Protected' : 'Edit',
                 icon: <EditIcon fontSize="small" />,
                 onClick: () => handleEdit(selectedAttribute!),
                 color: 'primary' as const,
                 variant: 'outlined' as const,
-                minWidth: 20 // Show when right panel >= 20%
+                disabled: selectedAttribute!.cannotOverride,
+                tooltip: selectedAttribute!.cannotOverride ? 'This attribute cannot be edited because it is protected from overrides in workspaces' : undefined,
+                minWidth: selectedAttribute!.cannotOverride ? 30 : 20 // Protected text needs more space
               }] : []),
               ...(selectedAttribute!.isHidden ? [{
                 label: 'Unhide',

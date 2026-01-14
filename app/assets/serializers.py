@@ -190,6 +190,8 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "tags",
             "order",
             "unit",
+            "cannot_override",
+            "locked_to_global",
             "asset_count_url",
             "is_hidden",
             "organization_id",
