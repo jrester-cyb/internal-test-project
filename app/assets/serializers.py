@@ -431,8 +431,8 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     def get_is_hidden(self, obj):
         """Check if this attribute is hidden in its workspace."""
-        # Local attributes can't be hidden currently (they're workspace-specific)
-        return False
+        # Use the _is_hidden annotation from the queryset
+        return getattr(obj, "_is_hidden", False)
 
     def get_api_url(self, obj):
         """Return the API URL for this attribute based on current request context."""

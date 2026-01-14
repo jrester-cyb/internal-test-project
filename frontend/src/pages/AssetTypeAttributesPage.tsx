@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Checkbox, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Drawer, useMediaQuery, useTheme } from '@mui/material'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Drawer, useMediaQuery, useTheme } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
@@ -712,13 +712,14 @@ export default function AssetTypeAttributesPage() {
         component={Table}
         ref={setNodeRef}
         style={combinedStyle}
-        sx={{ tableLayout: 'fixed', cursor: 'pointer' }}
+        sx={{ tableLayout: 'fixed', cursor: 'pointer', overflow: 'hidden', height: '100%' }}
         onClick={() => setSelectedAttribute(attr)}
       >
-        <TableBody>
+        <TableBody sx={{ height: '100%' }}>
           <TableRow
             hover
             selected={isSelected}
+            sx={{ height: '100%' }}
           >
             <TableCell sx={{ minWidth: '40px', padding: '8px', width: '40px' }}>
               <IconButton
@@ -737,7 +738,7 @@ export default function AssetTypeAttributesPage() {
             </TableCell>
             <TableCell sx={{ fontWeight: 600, maxWidth: 0 }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, overflow: 'hidden' }}>
-                <CopyableText sx={{ fontWeight: 600 }}>
+                <CopyableText sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   {attr.name}
                 </CopyableText>
                 {attr.isHidden && showHiddenChip && (
@@ -1367,7 +1368,7 @@ export default function AssetTypeAttributesPage() {
                       ref={listRef}
                       height={listHeight}
                       itemCount={displayedAttributes.length}
-                      itemSize={53}
+                      itemSize={56}
                       width="100%"
                       onItemsRendered={handleItemsRendered}
                     >
@@ -1604,7 +1605,7 @@ export default function AssetTypeAttributesPage() {
             )}
             <FormControlLabel
               control={
-                <Checkbox
+                <Switch
                   checked={formData.isRequired}
                   onChange={(e) => setFormData({ ...formData, isRequired: e.target.checked })}
                 />

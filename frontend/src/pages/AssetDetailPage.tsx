@@ -27,6 +27,7 @@ export default function AssetDetailPage() {
   const [showHidden, setShowHidden] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [excludedScopes, setExcludedScopes] = useState<string[]>([])
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Get all unique tags from attributes
@@ -232,6 +233,9 @@ export default function AssetDetailPage() {
                       onSelectedTagsChange={setSelectedTags}
                       selectedTypes={selectedTypes}
                       onSelectedTypesChange={setSelectedTypes}
+                      excludedScopes={excludedScopes}
+                      onExcludedScopesChange={setExcludedScopes}
+                      showScopeFilter={true}
                       hiddenCount={hiddenCount}
                       availableTags={availableTags}
                       availableTypes={availableTypes}
@@ -258,6 +262,22 @@ export default function AssetDetailPage() {
                         displayAttributes = displayAttributes.filter(attr =>
                           attr.attributeType && selectedTypes.includes(attr.attributeType)
                         )
+                      }
+
+                      // Filter by excluded scopes (if any)
+                      if (excludedScopes.length > 0) {
+                        displayAttributes = displayAttributes.filter(attr => {
+                          // Determine the scope based on attribute properties
+                          let scope: string
+                          if (!attr.isExtension) {
+                            scope = 'global'
+                          } else if (attr.isOverride) {
+                            scope = 'override'
+                          } else {
+                            scope = 'local'
+                          }
+                          return !excludedScopes.includes(scope)
+                        })
                       }
 
                       if (displayAttributes.length === 0) {

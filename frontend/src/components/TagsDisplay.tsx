@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Chip, Dialog, DialogTitle, DialogContent, useTheme } from '@mui/material'
+import { Box, Chip, Dialog, DialogTitle, DialogContent, useTheme, Tooltip } from '@mui/material'
 
 interface TagsDisplayProps {
   tags: string[]
@@ -57,17 +57,26 @@ export default function TagsDisplay({ tags, maxVisible = 2, label = 'Tags', size
   return (
     <>
       <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
-        {visibleTags.map(tag => (
-          <Chip
-            key={tag}
-            label={tag}
-            size={size}
-            variant={selectedTags.includes(tag) ? 'filled' : 'outlined'}
-            color={selectedTags.includes(tag) ? chipColor : 'default'}
-            onClick={onTagClick ? handleTagClick(tag) : undefined}
-            sx={getChipSx(tag)}
-          />
-        ))}
+        {visibleTags.map(tag => {
+          const isSelected = selectedTags.includes(tag)
+          return (
+            <Tooltip
+              key={tag}
+              title={onTagClick ? (isSelected ? "Click to unfilter" : "Click to filter") : ""}
+              arrow
+              placement="top"
+            >
+              <Chip
+                label={tag}
+                size={size}
+                variant={isSelected ? 'filled' : 'outlined'}
+                color={isSelected ? chipColor : 'default'}
+                onClick={onTagClick ? handleTagClick(tag) : undefined}
+                sx={getChipSx(tag)}
+              />
+            </Tooltip>
+          )
+        })}
         {remainingCount > 0 && (
           <Chip
             label={`+${remainingCount}`}
@@ -90,15 +99,21 @@ export default function TagsDisplay({ tags, maxVisible = 2, label = 'Tags', size
             {tags.map(tag => {
               const isSelected = selectedTags.includes(tag)
               return (
-                <Chip
+                <Tooltip
                   key={tag}
-                  label={tag}
-                  size="small"
-                  variant={isSelected ? 'filled' : 'outlined'}
-                  color={isSelected ? chipColor : 'default'}
-                  onClick={onTagClick ? handleTagClick(tag) : undefined}
-                  sx={onTagClick ? { cursor: 'pointer' } : undefined}
-                />
+                  title={onTagClick ? (isSelected ? "Click to unfilter" : "Click to filter") : ""}
+                  arrow
+                  placement="top"
+                >
+                  <Chip
+                    label={tag}
+                    size="small"
+                    variant={isSelected ? 'filled' : 'outlined'}
+                    color={isSelected ? chipColor : 'default'}
+                    onClick={onTagClick ? handleTagClick(tag) : undefined}
+                    sx={onTagClick ? { cursor: 'pointer' } : undefined}
+                  />
+                </Tooltip>
               )
             })}
           </Box>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Typography, Chip, IconButton, Popover, Checkbox, FormControlLabel, Autocomplete, TextField, Tooltip, Stack, CircularProgress } from '@mui/material'
+import { Box, Typography, Chip, IconButton, Popover, Switch, FormControlLabel, Autocomplete, TextField, Tooltip, Stack, CircularProgress } from '@mui/material'
 import { FilterList as FilterIcon } from '@mui/icons-material'
 
 export interface AttributeFilterOptions {
@@ -80,7 +80,7 @@ export default function AttributeFilterPopover({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <Box sx={{ p: 2, minWidth: 280 }}>
+        <Box sx={{ p: 2, minWidth: 280, maxWidth: 320 }}>
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
             <Typography variant="subtitle2">Filter Options</Typography>
             {isLoading && <CircularProgress size={14} />}
@@ -89,7 +89,7 @@ export default function AttributeFilterPopover({
           {hiddenCount > 0 && (
             <FormControlLabel
               control={
-                <Checkbox
+                <Switch
                   checked={showHidden}
                   onChange={() => onShowHiddenChange(!showHidden)}
                   size="small"
@@ -126,36 +126,9 @@ export default function AttributeFilterPopover({
             </>
           )}
 
-          {availableTags.length > 0 && (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Tags</Typography>
-              <Autocomplete
-                multiple
-                size="small"
-                options={availableTags}
-                value={selectedTags}
-                onChange={(_, newValue) => onSelectedTagsChange(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} placeholder={selectedTags.length === 0 ? "Select tags..." : ""} />
-                )}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
-                  ))
-                }
-                sx={{ minWidth: 250 }}
-                slotProps={{
-                  popper: {
-                    sx: { zIndex: 1500 }
-                  }
-                }}
-              />
-            </>
-          )}
-
           {availableTypes.length > 0 && onSelectedTypesChange && (
             <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, mt: 1.5 }}>Type</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Type</Typography>
               <Autocomplete
                 multiple
                 size="small"
@@ -170,7 +143,32 @@ export default function AttributeFilterPopover({
                     <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
                   ))
                 }
-                sx={{ minWidth: 250 }}
+                slotProps={{
+                  popper: {
+                    sx: { zIndex: 1500 }
+                  }
+                }}
+              />
+            </>
+          )}
+
+          {availableTags.length > 0 && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, mt: 1.5 }}>Tags</Typography>
+              <Autocomplete
+                multiple
+                size="small"
+                options={availableTags}
+                value={selectedTags}
+                onChange={(_, newValue) => onSelectedTagsChange(newValue)}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder={selectedTags.length === 0 ? "Select tags..." : ""} />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip {...getTagProps({ index })} label={option} size="small" key={option} />
+                  ))
+                }
                 slotProps={{
                   popper: {
                     sx: { zIndex: 1500 }
