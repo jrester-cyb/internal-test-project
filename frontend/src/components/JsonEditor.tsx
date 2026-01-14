@@ -98,13 +98,14 @@ const stripJsonComments = (jsonc: string, preservePositions = false): string => 
 // Format JSONC while preserving comments
 // Comments are extracted, JSON is formatted, then comments are re-inserted with proper indentation
 const formatJsonc = (jsonc: string): string => {
-  // Extract comments with their line context
+  // Extract comments with their context
   interface CommentInfo {
     type: 'line' | 'block'
     text: string
     lineIndex: number
     isStandalone: boolean // Comment on its own line vs inline
     precedingContent: string // Non-comment content before this on same line
+    followingJsonContent: string // The next JSON content after this comment (for standalone)
   }
 
   const lines = jsonc.split('\n')
@@ -118,9 +119,8 @@ const formatJsonc = (jsonc: string): string => {
     let inString = false
     let escaped = false
     let cleanPart = ''
-    let commentFound = false
 
-    while (i < line.length && !commentFound) {
+    while (i < line.length) {
       const char = line[i]
       const nextChar = line[i + 1]
 
@@ -150,30 +150,62 @@ const formatJsonc = (jsonc: string): string => {
         const precedingContent = cleanPart.trim()
         comments.push({
           type: 'line',
-          text: commentText,
+          text: commentText.trim(),
           lineIndex,
           isStandalone: precedingContent === '',
-          precedingContent
+          precedingContent,
+          followingJsonContent: '' // Will be filled in later
         })
-        commentFound = true
-        continue
+        break // Rest of line is comment
       }
 
-      // Block comment on single line
+      // Block comment
       if (char === '/' && nextChar === '*') {
         const endIdx = line.indexOf('*/', i + 2)
         if (endIdx !== -1) {
           const commentText = line.substring(i, endIdx + 2)
           const precedingContent = cleanPart.trim()
+          const followingContent = line.substring(endIdx + 2).trim()
           comments.push({
             type: 'block',
             text: commentText,
             lineIndex,
-            isStandalone: precedingContent === '' && line.substring(endIdx + 2).trim() === '',
-            precedingContent
+            isStandalone: precedingContent === '' && followingContent === '',
+            precedingContent,
+            followingJsonContent: ''
           })
           i = endIdx + 2
           continue
+        } else {
+          // Multi-line block comment - find closing across lines
+          let blockContent = line.substring(i)
+          let endLine = lineIndex
+          for (let j = lineIndex + 1; j < lines.length; j++) {
+            const closeIdx = lines[j].indexOf('*/')
+            if (closeIdx !== -1) {
+              blockContent += '\n' + lines[j].substring(0, closeIdx + 2)
+              endLine = j
+              break
+            } else {
+              blockContent += '\n' + lines[j]
+            }
+          }
+          const precedingContent = cleanPart.trim()
+          comments.push({
+            type: 'block',
+            text: blockContent,
+            lineIndex,
+            isStandalone: precedingContent === '',
+            precedingContent,
+            followingJsonContent: ''
+          })
+          // Skip lines consumed by block comment
+          for (let j = lineIndex; j < endLine; j++) {
+            cleanLines.push(cleanPart)
+            cleanPart = ''
+            lineIndex++
+          }
+          break
         }
       }
 
@@ -182,6 +214,24 @@ const formatJsonc = (jsonc: string): string => {
     }
 
     cleanLines.push(cleanPart)
+  }
+
+  // For standalone comments, find the next line with actual JSON content
+  for (const comment of comments) {
+    if (comment.isStandalone) {
+      // Look forward from this comment's line to find next JSON content
+      for (let j = comment.lineIndex + 1; j < lines.length; j++) {
+        const lineContent = stripJsonComments(lines[j]).trim()
+        if (lineContent && lineContent !== '{' && lineContent !== '[' && lineContent !== '}' && lineContent !== ']' && lineContent !== '},') {
+          // Extract the key or value identifier
+          const keyMatch = lineContent.match(/"([^"]+)"/)
+          if (keyMatch) {
+            comment.followingJsonContent = keyMatch[1]
+            break
+          }
+        }
+      }
+    }
   }
 
   // Join and parse the clean JSON
@@ -201,29 +251,88 @@ const formatJsonc = (jsonc: string): string => {
     return jsonc
   }
 
-  const formatted = JSON.stringify(parsed, null, 2)
-  const formattedLines = formatted.split('\n')
+  // Find the first JSON line in original
+  const firstJsonLineIdx = lines.findIndex(l => {
+    const trimmed = l.trim()
+    return trimmed.startsWith('{') || trimmed.startsWith('[')
+  })
 
-  // Separate standalone header comments (before any JSON content)
+  // Categorize comments
   const headerComments: CommentInfo[] = []
   const inlineComments: CommentInfo[] = []
+  const standaloneBodyComments: CommentInfo[] = []
 
   for (const comment of comments) {
-    if (comment.isStandalone && comment.lineIndex < lines.findIndex(l => l.trim().startsWith('{') || l.trim().startsWith('['))) {
+    if (comment.lineIndex < firstJsonLineIdx || firstJsonLineIdx === -1) {
       headerComments.push(comment)
-    } else if (!comment.isStandalone) {
+    } else if (comment.isStandalone) {
+      standaloneBodyComments.push(comment)
+    } else {
       inlineComments.push(comment)
     }
   }
 
-  // Build result with header comments
+  // Format JSON
+  const formatted = JSON.stringify(parsed, null, 2)
+  const formattedLines = formatted.split('\n')
+
+  // Build result
   const resultLines: string[] = []
+
+  // Add header comments
   for (const comment of headerComments) {
     resultLines.push(comment.text)
   }
 
-  // Add formatted JSON lines
-  resultLines.push(...formattedLines)
+  // Process formatted lines and insert comments
+  for (let i = 0; i < formattedLines.length; i++) {
+    const formattedLine = formattedLines[i]
+    const formattedTrimmed = formattedLine.trim()
+    const indent = formattedLine.match(/^(\s*)/)?.[1] || ''
+
+    // Check for standalone comments that should appear BEFORE this line
+    const standaloneToInsert = standaloneBodyComments.filter(c => {
+      if (!c.followingJsonContent) return false
+      // Check if this formatted line contains the key that follows the comment
+      return formattedTrimmed.includes('"' + c.followingJsonContent + '"')
+    })
+
+    for (const comment of standaloneToInsert) {
+      resultLines.push(indent + comment.text)
+      // Remove from array so we don't insert again
+      const idx = standaloneBodyComments.indexOf(comment)
+      standaloneBodyComments.splice(idx, 1)
+    }
+
+    // Find inline comments that match this content
+    const matchingInlineComment = inlineComments.find(c => {
+      // Match by preceding content (the JSON part before the comment)
+      const contentToMatch = c.precedingContent.replace(/,\s*$/, '').trim()
+      // Check if this formatted line contains similar content
+      return formattedTrimmed.includes(contentToMatch) && contentToMatch.length > 0
+    })
+
+    if (matchingInlineComment) {
+      // Remove from array so we don't match again
+      const idx = inlineComments.indexOf(matchingInlineComment)
+      inlineComments.splice(idx, 1)
+      // Add line with inline comment
+      resultLines.push(formattedLine + ' ' + matchingInlineComment.text)
+    } else {
+      resultLines.push(formattedLine)
+    }
+  }
+
+  // Add any remaining standalone body comments at the end (before closing bracket)
+  if (standaloneBodyComments.length > 0 && resultLines.length > 1) {
+    const lastLine = resultLines.pop()!
+    const lastIndent = lastLine.match(/^(\s*)/)?.[1] || ''
+    const commentIndent = lastIndent + '  '
+    for (const comment of standaloneBodyComments) {
+      resultLines.push(commentIndent + comment.text)
+    }
+    resultLines.push(lastLine)
+  }
 
   return resultLines.join('\n')
 }
@@ -649,17 +758,19 @@ export default function JsonEditor({
       const end = target.selectionEnd
       const currentValue = target.value
 
-      // Find line boundaries
-      const lineStartIdx = currentValue.lastIndexOf('\n', start - 1) + 1
-      let lineEndIdx = currentValue.indexOf('\n', end)
+      // Find line boundaries for the line containing the cursor start
+      // Special case: if start is 0, line starts at 0
+      const lineStartIdx = start === 0 ? 0 : currentValue.lastIndexOf('\n', start - 1) + 1
+      // For single line operations, find end of the line containing start
+      let lineEndIdx = currentValue.indexOf('\n', start)
       if (lineEndIdx === -1) lineEndIdx = currentValue.length
 
-      const selectedText = currentValue.substring(lineStartIdx, lineEndIdx)
-      const hasMultipleLines = selectedText.includes('\n')
       const hasSelection = start !== end
+      // Check if selection spans multiple lines
+      const selectionSpansLines = hasSelection && currentValue.substring(start, end).includes('\n')
 
-      // If multiple lines selected, wrap with block comment
-      if (hasMultipleLines && hasSelection) {
+      // If selection spans multiple lines, wrap with block comment
+      if (selectionSpansLines) {
         const actualSelection = currentValue.substring(start, end)
         // Check if already wrapped in block comment
         if (actualSelection.startsWith('/*') && actualSelection.endsWith('*/')) {
