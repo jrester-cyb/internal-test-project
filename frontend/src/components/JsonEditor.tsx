@@ -1,7 +1,11 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Box, IconButton, Tooltip, Typography } from '@mui/material'
+import { Box, IconButton, Tooltip, Typography, Modal } from '@mui/material'
 import UndoIcon from '@mui/icons-material/Undo'
 import RedoIcon from '@mui/icons-material/Redo'
+import FullscreenIcon from '@mui/icons-material/Fullscreen'
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
+import CodeIcon from '@mui/icons-material/Code'
+import CodeOffIcon from '@mui/icons-material/CodeOff'
 
 interface HistoryEntry {
   text: string
@@ -35,9 +39,14 @@ export default function JsonEditor({
 }: JsonEditorProps) {
   const [scrollPos, setScrollPos] = useState({ top: 0, left: 0 })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fullscreenTextareaRef = useRef<HTMLTextAreaElement>(null)
   const pendingCursorRef = useRef<number | null>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
   const pendingScrollRef = useRef<number | null>(null)
+
+  // UI state
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showRawText, setShowRawText] = useState(false)
 
   // History for undo/redo - use state to trigger re-renders for button states
   const [historyState, setHistoryState] = useState<{ entries: HistoryEntry[], index: number }>({
@@ -104,25 +113,22 @@ export default function JsonEditor({
 
       if (lengthDiff > 0) {
         // Text got longer (restoring deleted content)
-        // Check if the text before cursor is the same - meaning content was inserted at cursor
-        const beforeCursor = currentText.substring(0, currentCursor)
-        if (entry.text.startsWith(beforeCursor)) {
-          // Content was inserted at or after cursor position - move cursor forward
-          // but only within the same line (don't cross newlines that aren't part of restored content)
-          const restoredContent = entry.text.substring(currentCursor, currentCursor + lengthDiff)
-          const newlineInRestored = restoredContent.indexOf('\n')
-          if (newlineInRestored === -1) {
-            // No newline in restored content - safe to move forward
-            newCursor = currentCursor + lengthDiff
-          } else {
-            // Restored content has newline - only move to that newline
-            newCursor = currentCursor + newlineInRestored
-          }
-        }
+        // Move cursor forward by the restored amount
+        newCursor = currentCursor + lengthDiff
+      } else if (lengthDiff < 0) {
+        // Text got shorter (removing added content)
+        // Move cursor back by the removed amount
+        newCursor = Math.max(0, currentCursor + lengthDiff)
       }
 
       // Clamp to text length
       newCursor = Math.min(newCursor, entry.text.length)
+
+      // Avoid landing cursor directly on a newline (which shows cursor on next line)
+      // unless cursor was already at a newline position
+      if (newCursor > 0 && entry.text[newCursor] === '\n' && currentText[currentCursor] !== '\n') {
+        newCursor--
+      }
 
       setLocalText(entry.text)
       pendingCursorRef.current = newCursor
@@ -469,13 +475,8 @@ export default function JsonEditor({
         setLocalText(newValue)
         addToHistory(newValue, lineStart)
 
-        if (e.shiftKey) {
-          // Unindent: move cursor to start of the block
-          pendingCursorRef.current = lineStart
-        } else {
-          // Indent: keep selection, adjusted for added spaces
-          pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
-        }
+        // Keep selection on the block, adjusted for changed indentation
+        pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
 
         try {
           const parsed = JSON.parse(newValue)
@@ -576,69 +577,107 @@ export default function JsonEditor({
     })
   }
 
+  // Sync cursor position when switching between fullscreen modes
+  useEffect(() => {
+    if (isFullscreen && fullscreenTextareaRef.current) {
+      const mainTextarea = textareaRef.current
+      if (mainTextarea) {
+        fullscreenTextareaRef.current.selectionStart = mainTextarea.selectionStart
+        fullscreenTextareaRef.current.selectionEnd = mainTextarea.selectionEnd
+        fullscreenTextareaRef.current.scrollTop = mainTextarea.scrollTop
+        fullscreenTextareaRef.current.focus()
+      }
+    }
+  }, [isFullscreen])
+
+  // Toolbar component to avoid duplication
+  const Toolbar = ({ inFullscreen = false }: { inFullscreen?: boolean }) => (
+    <Box sx={{
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      zIndex: 1,
+      display: 'flex',
+      gap: 0.5,
+      bgcolor: 'rgba(0,0,0,0.3)',
+      borderRadius: 1,
+      p: 0.25,
+    }}>
+      <Tooltip title="Undo (Ctrl+Z)">
+        <span>
+          <IconButton
+            size="small"
+            onClick={undo}
+            disabled={!canUndo}
+            sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+          >
+            <UndoIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Redo (Ctrl+Y)">
+        <span>
+          <IconButton
+            size="small"
+            onClick={redo}
+            disabled={!canRedo}
+            sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+          >
+            <RedoIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Box sx={{ width: 1, bgcolor: 'grey.700', mx: 0.25 }} />
+      <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"}>
+        <IconButton
+          size="small"
+          onClick={() => setShowRawText(!showRawText)}
+          sx={{ color: showRawText ? 'primary.main' : 'grey.400', '&:hover': { color: 'grey.100' } }}
+        >
+          {showRawText ? <CodeOffIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={inFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}>
+        <IconButton
+          size="small"
+          onClick={() => setIsFullscreen(!isFullscreen)}
+          sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+        >
+          {inFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </Box>
+  )
+
   return (
     <>
       <Box sx={{ position: 'relative', height: 300, overflow: 'hidden', bgcolor: 'grey.900', borderRadius: 1 }}>
-        {/* Undo/Redo toolbar */}
-        <Box sx={{
-          position: 'absolute',
-          top: 4,
-          right: 4,
-          zIndex: 1,
-          display: 'flex',
-          gap: 0.5,
-          bgcolor: 'rgba(0,0,0,0.3)',
-          borderRadius: 1,
-          p: 0.25,
-        }}>
-          <Tooltip title="Undo (Ctrl+Z)">
-            <span>
-              <IconButton
-                size="small"
-                onClick={undo}
-                disabled={!canUndo}
-                sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
-              >
-                <UndoIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Redo (Ctrl+Y)">
-            <span>
-              <IconButton
-                size="small"
-                onClick={redo}
-                disabled={!canRedo}
-                sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
-              >
-                <RedoIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Box>
+        <Toolbar />
         {/* Syntax highlighted background - moves with textarea scroll */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            fontFamily: 'monospace',
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-            color: 'grey.100',
-            p: 1.5,
-            whiteSpace: 'pre',
-            pointerEvents: 'none',
-            transform: `translate(${-scrollPos.left}px, ${-scrollPos.top}px)`,
-          }}
-          dangerouslySetInnerHTML={{
-            __html: localText
-              ? highlightJson(localText)
-              : `<span style="color: #6a6a6a">${placeholder}</span>`
-          }}
-        />
-        {/* Transparent textarea for input */}
+        {!showRawText && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              lineHeight: 1.5,
+              color: 'grey.100',
+              p: 1.5,
+              whiteSpace: 'pre',
+              pointerEvents: 'none',
+              transform: `translate(${-scrollPos.left}px, ${-scrollPos.top}px)`,
+            }}
+            dangerouslySetInnerHTML={{
+              __html: localText
+                ? highlightJson(localText)
+                : `<span style="color: #6a6a6a">${placeholder}</span>`
+            }}
+          />
+        )}
+        {/* Textarea for input */}
         <textarea
           ref={textareaRef}
           value={localText}
@@ -646,6 +685,7 @@ export default function JsonEditor({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onScroll={handleScroll}
+          placeholder={showRawText ? placeholder : undefined}
           style={{
             position: 'relative',
             width: '100%',
@@ -655,7 +695,7 @@ export default function JsonEditor({
             lineHeight: 1.5,
             padding: 12,
             background: 'transparent',
-            color: 'transparent',
+            color: showRawText ? '#d4d4d4' : 'transparent',
             caretColor: '#fff',
             border: 'none',
             outline: 'none',
@@ -671,6 +711,79 @@ export default function JsonEditor({
           Invalid JSON
         </Typography>
       )}
+
+      {/* Fullscreen Modal */}
+      <Modal
+        open={isFullscreen}
+        onClose={() => setIsFullscreen(false)}
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Box sx={{
+          width: '90vw',
+          height: '90vh',
+          bgcolor: 'grey.900',
+          borderRadius: 2,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'grey.900' }}>
+            <Toolbar inFullscreen />
+            {/* Syntax highlighted background - moves with textarea scroll */}
+            {!showRawText && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.5,
+                  color: 'grey.100',
+                  p: 1.5,
+                  whiteSpace: 'pre',
+                  pointerEvents: 'none',
+                  transform: `translate(${-scrollPos.left}px, ${-scrollPos.top}px)`,
+                }}
+                dangerouslySetInnerHTML={{
+                  __html: localText
+                    ? highlightJson(localText)
+                    : `<span style="color: #6a6a6a">${placeholder}</span>`
+                }}
+              />
+            )}
+            {/* Textarea for input */}
+            <textarea
+              ref={fullscreenTextareaRef}
+              value={localText}
+              onChange={(e) => handleTextChange(e.target.value, e.target.selectionStart)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onScroll={handleScroll}
+              placeholder={showRawText ? placeholder : undefined}
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                lineHeight: 1.5,
+                padding: 12,
+                background: 'transparent',
+                color: showRawText ? '#d4d4d4' : 'transparent',
+                caretColor: '#fff',
+                border: 'none',
+                outline: 'none',
+                resize: 'none',
+                whiteSpace: 'pre',
+                overflow: 'auto',
+              }}
+              spellCheck={false}
+            />
+          </Box>
+        </Box>
+      </Modal>
     </>
   )
 }
