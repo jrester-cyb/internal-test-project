@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "assets",
     "files_manager",
     "pgtrigger",
+    "utils",
 ]
 
 MIDDLEWARE = [

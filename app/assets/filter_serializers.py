@@ -7,6 +7,7 @@ import json
 from datetime import date, datetime
 
 from assets.models import GlobalAssetTypeAttribute
+from utils.units.helpers.unit_conversion import convert_value, validate_unit
 
 
 class FilterGroupSerializer(serializers.Serializer):
@@ -53,6 +54,7 @@ class FilterGroupSerializer(serializers.Serializer):
     field = serializers.CharField(required=True)
     value = serializers.JSONField(required=True)
     operator = serializers.CharField(required=True)
+    unit = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_field(self, value: str) -> str:
         # Only allow non-alphanumeric characters ".", "_", no spaces
@@ -90,19 +92,30 @@ class FilterGroupSerializer(serializers.Serializer):
         field = self.validated_data["field"]
         operator = self.validated_data["operator"]
         value = self.validated_data["value"]
+        query_unit = self.validated_data.get("unit", "")
 
         if field.startswith("attributes.") or field.startswith("attributes__"):
             attr_prefix = field.replace(".", "__")
             parts = attr_prefix.split("__")
             if len(parts) == 2:
                 api_key = parts[1]
-                # Get the model type based on the api_key
+                # Get the model type and unit based on the api_key
                 asset_attribute_type_qs = GlobalAssetTypeAttribute.objects.filter(
                     api_key=api_key
-                ).only("attribute_type")
+                ).only("attribute_type", "unit")
                 q = None
                 for attr in asset_attribute_type_qs:
                     attr_type = attr.attribute_type
+                    filter_value = value
+
+                    # For number types with units, convert the query value to the stored unit
+                    if attr_type == "number" and query_unit and attr.unit:
+                        try:
+                            # Convert from query unit to the attribute's stored unit
+                            filter_value = convert_value(value, query_unit, attr.unit)
+                        except Exception:
+                            # If conversion fails, use the original value
+                            pass
 
                     # Link type searches both url and display_text fields
                     if attr_type == "link":
@@ -113,12 +126,12 @@ class FilterGroupSerializer(serializers.Serializer):
                         ) & (
                             Q(
                                 **{
-                                    f"attributes__linkattributevalue__url__{operator}": value
+                                    f"attributes__linkattributevalue__url__{operator}": filter_value
                                 }
                             )
                             | Q(
                                 **{
-                                    f"attributes__linkattributevalue__display_text__{operator}": value
+                                    f"attributes__linkattributevalue__display_text__{operator}": filter_value
                                 }
                             )
                         )
@@ -126,7 +139,7 @@ class FilterGroupSerializer(serializers.Serializer):
                         new_q = Q(
                             **{
                                 "attributes__asset_type_attribute__api_key": api_key,
-                                f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": value,
+                                f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": filter_value,
                             }
                         )
                     if q is None:

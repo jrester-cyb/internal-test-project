@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/", include("todos.urls")),
     path("api/", include("organizations.urls")),
     path("api/", include("workspaces.urls")),
+    path("api/utils/", include("utils.urls")),
     # Silk profiling dashboard
     path("silk/", include("silk.urls", namespace="silk")),
     # OpenAPI schema

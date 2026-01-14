@@ -162,15 +162,17 @@ function LinkRenderer({ value, maxLines = 3 }: { value: string | { url: string; 
   )
 }
 
-// Number renderer with formatting
-function NumberRenderer({ value }: { value: number }) {
+// Number renderer with formatting and optional unit
+function NumberRenderer({ value, unit }: { value: number; unit?: string }) {
   const formatted = typeof value === 'number' && !Number.isInteger(value)
     ? value.toLocaleString(undefined, { maximumFractionDigits: 6 })
     : value.toLocaleString()
 
+  const displayText = unit ? `${formatted} ${unit}` : formatted
+
   return (
     <TruncatedText variant="body2" maxLines={1} title="Number" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-      {formatted}
+      {displayText}
     </TruncatedText>
   )
 }
@@ -205,7 +207,7 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3 
       return <DateRenderer value={value} includeTime={true} />
 
     case 'number':
-      return <NumberRenderer value={value} />
+      return <NumberRenderer value={value} unit={attribute.unit} />
 
     case 'link':
       return <LinkRenderer value={value} maxLines={maxLines} />

@@ -30,6 +30,7 @@ export interface AttributeFilter {
   attributeType: string
   operator: string
   value: any
+  unit?: string  // Unit for number attributes (query in this unit, will be converted)
 }
 
 interface FilterBuilderProps {
@@ -347,6 +348,15 @@ export default function FilterBuilder({
               value={value}
               onChange={(e) => handleValueChange(e.target.value ? Number(e.target.value) : '')}
               placeholder="Enter value"
+              slotProps={{
+                input: {
+                  endAdornment: attr.unit ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5, whiteSpace: 'nowrap' }}>
+                      {attr.unit}
+                    </Typography>
+                  ) : undefined,
+                },
+              }}
             />
           </Box>
         )

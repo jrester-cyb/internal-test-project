@@ -189,6 +189,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "description",
             "tags",
             "order",
+            "unit",
             "asset_count_url",
             "is_hidden",
             "organization_id",
@@ -361,6 +362,8 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
             result["description"] = instance.description
         if instance.tags is not None:
             result["tags"] = instance.tags
+        if instance.unit is not None:
+            result["unit"] = instance.unit
 
         return result
 
@@ -403,6 +406,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "default_value",
             "description",
             "tags",
+            "unit",
             "asset_count_url",
             "is_hidden",
             "scope",

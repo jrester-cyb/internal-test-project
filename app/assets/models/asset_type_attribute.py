@@ -52,6 +52,11 @@ class GlobalAssetTypeAttribute(BaseAssetTypeAttribute):
         default=list, blank=True, help_text="List of tags for grouping attributes"
     )
     order = models.IntegerField(default=0)
+    unit = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Unit for number attributes (e.g., 'kg', 'm', 'degC'). Uses Pint unit syntax.",
+    )
 
     class Meta:
         ordering = ["order", "name"]
@@ -157,6 +162,12 @@ class WorkspaceOverrideAssetTypeAttribute(BaseAssetTypeAttribute):
     description = models.TextField(null=True, blank=True)
     tags = models.JSONField(null=True, blank=True)
     order = models.IntegerField(null=True, blank=True)
+    unit = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Override unit for number attributes. Null means use base value.",
+    )
 
     class Meta:
         constraints = [
@@ -317,6 +328,11 @@ class WorkspaceLocalAssetTypeAttribute(BaseAssetTypeAttribute):
         default=list, blank=True, help_text="List of tags for grouping attributes"
     )
     order = models.IntegerField(default=0)
+    unit = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Unit for number attributes (e.g., 'kg', 'm', 'degC'). Uses Pint unit syntax.",
+    )
 
     class Meta:
         ordering = ["workspace", "order", "name"]

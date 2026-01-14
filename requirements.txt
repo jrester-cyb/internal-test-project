@@ -16,3 +16,4 @@ pytest-django
 django-silk
 django-pgtrigger
 redis
+pint

@@ -28,6 +28,7 @@ export interface AssetTypeAttribute {
   description?: string
   tags?: string[]
   order: number
+  unit?: string
   assetCountUrl?: string | null
   apiUrl?: string | null
   choices?: AssetTypeAttributeChoice[]
@@ -38,6 +39,19 @@ export interface AssetTypeAttribute {
   scope?: 'global' | 'override' | 'local'
   baseAttributeId?: string | null
   isHidden?: boolean
+}
+
+export interface UnitInfo {
+  code: string
+  symbol: string
+  name: string
+  isBase: boolean
+}
+
+export interface UnitCategory {
+  name: string
+  baseUnit: string
+  units: UnitInfo[]
 }
 
 export interface Asset {
