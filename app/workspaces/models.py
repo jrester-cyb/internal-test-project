@@ -1,6 +1,6 @@
 import uuid
+from django.conf import settings
 from django.db import models
-from django.contrib.auth.models import User
 from core.models import SoftDeleteMixin
 
 
@@ -52,14 +52,14 @@ class WorkspaceMembership(SoftDeleteMixin):
         Workspace, on_delete=models.CASCADE, related_name="memberships"
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="workspace_memberships"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="workspace_memberships"
     )
     permission = models.CharField(
         max_length=20, choices=PERMISSION_CHOICES, default="read"
     )
     granted_at = models.DateTimeField(auto_now_add=True)
     granted_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         related_name="granted_workspace_accesses",

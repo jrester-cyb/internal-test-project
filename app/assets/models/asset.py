@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 import uuid
@@ -242,7 +243,7 @@ class WorkspaceAsset(models.Model):
     )
     added_at = models.DateTimeField(auto_now_add=True)
     added_by = models.ForeignKey(
-        "auth.User",
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

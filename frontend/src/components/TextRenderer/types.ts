@@ -168,5 +168,7 @@ export interface TextRendererProps {
   formatter: TextFormatter
   enableFullscreen?: boolean
   height?: number | string
+  /** Where to show line numbers: 'both' (default), 'inline', 'fullscreen', or 'none' */
+  lineNumbers?: 'both' | 'inline' | 'fullscreen' | 'none'
   children?: React.ReactNode
 }

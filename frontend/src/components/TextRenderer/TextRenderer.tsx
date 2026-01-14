@@ -16,10 +16,15 @@ export default function TextRenderer({
   formatter,
   enableFullscreen = true,
   height = 300,
+  lineNumbers = 'both',
   children,
 }: TextRendererProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+
+  // Compute whether to show line numbers in each view
+  const showInlineLineNumbers = lineNumbers === 'both' || lineNumbers === 'inline'
+  const showFullscreenLineNumbers = lineNumbers === 'both' || lineNumbers === 'fullscreen'
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -242,7 +247,7 @@ export default function TextRenderer({
         }}
       >
         {children || (showToolbar && <TextRendererToolbar enableFullscreen={enableFullscreen} />)}
-        <LineNumbers scrollTop={scrollPos.top} lineCount={lineCount} />
+        {showInlineLineNumbers && <LineNumbers scrollTop={scrollPos.top} lineCount={lineCount} />}
 
         {/* Syntax highlighted background */}
         {!showRawText && (
@@ -250,19 +255,26 @@ export default function TextRenderer({
             sx={{
               position: 'absolute',
               top: 0,
-              left: 28,
-              right: 0,
-              fontFamily: 'monospace',
-              fontSize: '0.875rem',
-              lineHeight: 1.5,
-              color: 'text.primary',
-              p: 1.5,
-              whiteSpace: 'pre',
-              pointerEvents: 'none',
-              transform: `translate(${-scrollPos.left}px, ${-scrollPos.top}px)`,
+              left: showInlineLineNumbers ? 28 : 0,
+              right: 17, // Account for scrollbar width
+              bottom: 0,
+              overflow: 'hidden',
             }}
-            dangerouslySetInnerHTML={{ __html: highlightedContent }}
-          />
+          >
+            <Box
+              sx={{
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                lineHeight: 1.5,
+                color: 'text.primary',
+                p: 1.5,
+                whiteSpace: 'pre',
+                pointerEvents: 'none',
+                transform: `translate(${-scrollPos.left}px, ${-scrollPos.top}px)`,
+              }}
+              dangerouslySetInnerHTML={{ __html: highlightedContent }}
+            />
+          </Box>
         )}
 
         {/* Textarea for input */}
@@ -276,9 +288,9 @@ export default function TextRenderer({
           readOnly={!isEditable}
           style={{
             position: 'relative',
-            width: 'calc(100% - 28px)',
+            width: showInlineLineNumbers ? 'calc(100% - 28px)' : '100%',
             height: '100%',
-            marginLeft: 28,
+            marginLeft: showInlineLineNumbers ? 28 : 0,
             fontFamily: 'monospace',
             fontSize: '0.875rem',
             lineHeight: 1.5,
@@ -335,26 +347,31 @@ export default function TextRenderer({
             }}>
               <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'background.paper' }}>
                 {children || <TextRendererToolbar enableFullscreen={enableFullscreen} />}
-                <LineNumbers scrollTop={fullscreenScrollPos.top} lineCount={lineCount} />
+                {showFullscreenLineNumbers && <LineNumbers scrollTop={fullscreenScrollPos.top} lineCount={lineCount} />}
 
                 {!showRawText && (
                   <Box
                     sx={{
                       position: 'absolute',
                       top: 0,
-                      left: 28,
-                      right: 0,
-                      fontFamily: 'monospace',
-                      fontSize: '0.875rem',
-                      lineHeight: 1.5,
-                      color: 'text.primary',
-                      p: 1.5,
-                      whiteSpace: 'pre',
-                      pointerEvents: 'none',
-                      transform: `translate(${-fullscreenScrollPos.left}px, ${-fullscreenScrollPos.top}px)`,
+                      left: showFullscreenLineNumbers ? 28 : 0,
+                      right: 17, // Account for scrollbar width
                     }}
-                    dangerouslySetInnerHTML={{ __html: highlightedContent }}
-                  />
+                  >
+                    <Box
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.875rem',
+                        lineHeight: 1.5,
+                        color: 'text.primary',
+                        p: 1.5,
+                        whiteSpace: 'pre',
+                        pointerEvents: 'none',
+                        transform: `translate(${-fullscreenScrollPos.left}px, ${-fullscreenScrollPos.top}px)`,
+                      }}
+                      dangerouslySetInnerHTML={{ __html: highlightedContent }}
+                    />
+                  </Box>
                 )}
 
                 <textarea
@@ -367,9 +384,9 @@ export default function TextRenderer({
                   readOnly={!isEditable}
                   style={{
                     position: 'relative',
-                    width: 'calc(100% - 28px)',
+                    width: showFullscreenLineNumbers ? 'calc(100% - 28px)' : '100%',
                     height: '100%',
-                    marginLeft: 28,
+                    marginLeft: showFullscreenLineNumbers ? 28 : 0,
                     fontFamily: 'monospace',
                     fontSize: '0.875rem',
                     lineHeight: 1.5,

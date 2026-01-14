@@ -9,10 +9,12 @@ interface AttributeValueRendererProps {
   attribute: AssetTypeAttribute
   value: any
   maxLines?: number
+  /** Where to show line numbers for JSON: 'both' (default), 'inline', 'fullscreen', or 'none' */
+  lineNumbers?: 'both' | 'inline' | 'fullscreen' | 'none'
 }
 
 // Format JSON with syntax highlighting using TextRenderer
-function JsonRenderer({ value, maxLines = 3 }: { value: any; maxLines?: number }) {
+function JsonRenderer({ value, maxLines = 3, lineNumbers = 'both' }: { value: any; maxLines?: number; lineNumbers?: 'both' | 'inline' | 'fullscreen' | 'none' }) {
   // Convert value to JSON string if it's not already a string
   const jsonText = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
 
@@ -46,6 +48,7 @@ function JsonRenderer({ value, maxLines = 3 }: { value: any; maxLines?: number }
         onChange={() => { }}
         formatter={JsonFormatter}
         height={previewHeight}
+        lineNumbers={lineNumbers}
         enableFullscreen={true}
       />
     </Box>
@@ -157,7 +160,7 @@ function SimpleTextRenderer({ value, maxLines = 3 }: { value: string; maxLines?:
   )
 }
 
-export default function AttributeValueRenderer({ attribute, value, maxLines = 3 }: AttributeValueRendererProps) {
+export default function AttributeValueRenderer({ attribute, value, maxLines = 3, lineNumbers = 'both' }: AttributeValueRendererProps) {
   // Handle null/undefined
   if (value === null || value === undefined) {
     return <Typography variant="body2" color="text.disabled">—</Typography>
@@ -166,7 +169,7 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3 
   // Render based on attribute type
   switch (attribute.attributeType) {
     case 'json':
-      return <JsonRenderer value={value.rawJson ?? value} maxLines={maxLines} />
+      return <JsonRenderer value={value.rawJson ?? value} maxLines={maxLines} lineNumbers={lineNumbers} />
 
     case 'boolean':
       return <BooleanRenderer value={Boolean(value)} />

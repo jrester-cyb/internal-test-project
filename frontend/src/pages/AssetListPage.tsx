@@ -4,6 +4,7 @@ import { useLoaderData, useLocation, useParams } from 'react-router-dom'
 import { Link as RouterLink } from 'react-router-dom'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { fetchAssetsByType } from '../api/assets'
+import AttributeValueRenderer from '../components/AttributeValueRenderer'
 
 export default function AssetListPage() {
   const initialData = useLoaderData() as {
@@ -107,16 +108,7 @@ export default function AssetListPage() {
   }
 
   const getAttributeValue = (asset: Asset, apiKey: string) => {
-    if (!asset?.attributes?.[apiKey]) {
-      return 'N/A'
-    }
-    const value = asset.attributes[apiKey]
-    if (value === null || value === undefined) return 'N/A'
-    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2)
-    }
-    return String(value)
+    return asset?.attributes?.[apiKey] ?? null
   }
 
   return (
@@ -198,14 +190,15 @@ export default function AssetListPage() {
                   {displayAttributes.map(attr => (
                     <TableCell key={attr.id} sx={{
                       minWidth: '120px',
-                      maxWidth: attr.attributeType === 'json' ? '300px' : 'auto',
-                      whiteSpace: attr.attributeType === 'json' ? 'pre-wrap' : 'normal',
-                      fontFamily: attr.attributeType === 'json' ? 'monospace' : 'inherit',
-                      fontSize: attr.attributeType === 'json' ? '0.75rem' : 'inherit',
-                      wordBreak: 'break-word',
+                      maxWidth: '300px',
                       opacity: attr.isHidden ? 0.5 : 1
                     }}>
-                      {getAttributeValue(asset, attr.apiKey)}
+                      <AttributeValueRenderer
+                        attribute={attr}
+                        value={getAttributeValue(asset, attr.apiKey)}
+                        maxLines={2}
+                        lineNumbers="fullscreen"
+                      />
                     </TableCell>
                   ))}
                 </TableRow>
