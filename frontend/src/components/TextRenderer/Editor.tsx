@@ -1,18 +1,28 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useTextRenderer } from './context'
-import type { HistoryEntry } from './types'
+import type { HistoryEntry, KeyboardShortcut } from './types'
+import { defaultShortcuts, matchesShortcut, buildShortcutContext } from './shortcuts'
 import TextRendererToolbar from './TextRendererToolbar'
+
+// Stable empty array to avoid re-renders when no custom shortcuts provided
+const EMPTY_SHORTCUTS: KeyboardShortcut[] = []
 
 interface EditorProps {
   enableFullscreen?: boolean
   showToolbar?: boolean
   inFullscreen?: boolean
+  /** Custom keyboard shortcuts (will be merged with defaults) */
+  shortcuts?: KeyboardShortcut[]
+  /** If true, only use provided shortcuts and skip defaults */
+  replaceDefaultShortcuts?: boolean
 }
 
 export default function Editor({
   enableFullscreen = true,
   showToolbar = true,
-  inFullscreen = false
+  inFullscreen = false,
+  shortcuts: customShortcuts,
+  replaceDefaultShortcuts = false,
 }: EditorProps) {
   const {
     localText,
@@ -23,7 +33,26 @@ export default function Editor({
     pendingSelectionRef,
     setIsEditable,
     setEditorHandlers,
+    handleTextChangeRef,
+    setCanUndo,
+    setCanRedo,
+    undoRef,
+    redoRef,
   } = useTextRenderer()
+
+  // Merge shortcuts: custom shortcuts override defaults with same id (memoized to prevent re-renders)
+  // Use stable empty array reference when no custom shortcuts provided
+  const shortcuts = customShortcuts ?? EMPTY_SHORTCUTS
+  const activeShortcuts = useMemo(() => {
+    return replaceDefaultShortcuts
+      ? shortcuts
+      : [
+        ...defaultShortcuts.filter(
+          ds => !shortcuts.some(cs => cs.id === ds.id)
+        ),
+        ...shortcuts,
+      ]
+  }, [shortcuts, replaceDefaultShortcuts])
 
   // History for undo/redo
   const [historyState, setHistoryState] = useState<{ entries: HistoryEntry[], index: number }>({
@@ -126,9 +155,18 @@ export default function Editor({
     onChange(newText)
   }, [addToHistory, onChange, setLocalText])
 
-  // Keyboard handler for undo/redo and tab
+  // Keyboard handler using configurable shortcuts
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Undo/redo
+    console.log('[TextRenderer] keydown detected:', {
+      key: e.key,
+      code: e.code,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      shiftKey: e.shiftKey,
+      altKey: e.altKey,
+    })
+
+    // Built-in undo/redo (always available)
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
       e.preventDefault()
       if (e.shiftKey) {
@@ -144,84 +182,41 @@ export default function Editor({
       return
     }
 
-    // Tab handling
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const target = e.target as HTMLTextAreaElement
-      const start = target.selectionStart
-      const end = target.selectionEnd
-      const currentValue = target.value
+    // Process configurable shortcuts
+    const target = e.target as HTMLTextAreaElement
+    const text = target.value
+    const selectionStart = target.selectionStart
+    const selectionEnd = target.selectionEnd
 
-      const selectedText = currentValue.substring(start, end)
-      const hasMultiLineSelection = selectedText.includes('\n')
+    console.log('[TextRenderer] checking shortcuts, activeShortcuts:', activeShortcuts.map(s => s.id))
 
-      if (hasMultiLineSelection) {
-        const lineStart = currentValue.lastIndexOf('\n', start - 1) + 1
-        let lineEnd = currentValue.indexOf('\n', end)
-        if (lineEnd === -1) lineEnd = currentValue.length
+    for (const shortcut of activeShortcuts) {
+      const matches = matchesShortcut(e, shortcut.shortcut)
+      console.log(`[TextRenderer] checking shortcut "${shortcut.id}" (${shortcut.shortcut}):`, matches)
+      if (matches) {
+        const context = buildShortcutContext(text, selectionStart, selectionEnd)
+        const result = shortcut.action(context)
 
-        const linesText = currentValue.substring(lineStart, lineEnd)
-        const lines = linesText.split('\n')
+        if (result) {
+          if (result.preventDefault !== false) {
+            e.preventDefault()
+          }
 
-        let modifiedLines: string[]
-        let totalChange = 0
+          if (result.text !== undefined) {
+            handleTextChangeWithHistory(result.text, result.cursorPos ?? selectionStart)
 
-        if (e.shiftKey) {
-          modifiedLines = lines.map(line => {
-            if (line.startsWith('  ')) {
-              totalChange -= 2
-              return line.substring(2)
-            } else if (line.startsWith(' ')) {
-              totalChange -= 1
-              return line.substring(1)
-            }
-            return line
-          })
-        } else {
-          modifiedLines = lines.map(line => {
-            totalChange += 2
-            return '  ' + line
-          })
-        }
-
-        const newValue = currentValue.substring(0, lineStart) + modifiedLines.join('\n') + currentValue.substring(lineEnd)
-        handleTextChangeWithHistory(newValue, lineStart)
-        pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
-      } else {
-        let newValue: string
-        let newCursorPos: number
-
-        if (e.shiftKey) {
-          const beforeCursor = currentValue.substring(0, start)
-          const charBeforeCursor = beforeCursor.slice(-1)
-
-          if (charBeforeCursor === ' ' || charBeforeCursor === '\t') {
-            const spacesToRemove = beforeCursor.endsWith('  ') ? 2 : 1
-            newValue = currentValue.substring(0, start - spacesToRemove) + currentValue.substring(end)
-            newCursorPos = start - spacesToRemove
-          } else {
-            const lineStart = currentValue.lastIndexOf('\n', start - 1) + 1
-            const lineContent = currentValue.substring(lineStart, start)
-            const spacesAtLineStart = lineContent.startsWith('  ') ? 2 : lineContent.startsWith(' ') ? 1 : 0
-
-            if (spacesAtLineStart > 0) {
-              newValue = currentValue.substring(0, lineStart) + currentValue.substring(lineStart + spacesAtLineStart)
-              newCursorPos = start - spacesAtLineStart
-            } else {
-              newValue = currentValue
-              newCursorPos = start
+            if (result.selection) {
+              pendingSelectionRef.current = result.selection
+            } else if (result.cursorPos !== undefined) {
+              pendingCursorRef.current = result.cursorPos
             }
           }
-        } else {
-          newValue = currentValue.substring(0, start) + '  ' + currentValue.substring(end)
-          newCursorPos = start + 2
         }
 
-        handleTextChangeWithHistory(newValue, newCursorPos)
-        pendingCursorRef.current = newCursorPos
+        return
       }
     }
-  }, [undo, redo, handleTextChangeWithHistory, pendingCursorRef, pendingSelectionRef])
+  }, [undo, redo, handleTextChangeWithHistory, pendingCursorRef, pendingSelectionRef, activeShortcuts])
 
   // Input handler
   const handleInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
@@ -237,6 +232,19 @@ export default function Editor({
     })
     return () => setEditorHandlers({})
   }, [setEditorHandlers, handleInput, handleKeyDown])
+
+  // Register edit functions with parent context (via refs to avoid infinite loops)
+  useEffect(() => {
+    handleTextChangeRef.current = handleTextChangeWithHistory
+    undoRef.current = undo
+    redoRef.current = redo
+  }, [handleTextChangeRef, undoRef, redoRef, handleTextChangeWithHistory, undo, redo])
+
+  // Update canUndo/canRedo when history changes
+  useEffect(() => {
+    setCanUndo(historyState.index > 0)
+    setCanRedo(historyState.index < historyState.entries.length - 1)
+  }, [historyState, setCanUndo, setCanRedo])
 
   // Render toolbar if enabled
   if (!showToolbar) return null

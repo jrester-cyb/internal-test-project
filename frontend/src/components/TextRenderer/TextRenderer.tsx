@@ -47,6 +47,20 @@ export default function TextRenderer({
     onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
   }>({})
 
+  // Edit functions - use refs to avoid infinite loops with function state
+  const handleTextChangeRef = useRef<(text: string, cursorPos?: number) => void>(() => { })
+  const undoRef = useRef<() => void>(() => { })
+  const redoRef = useRef<() => void>(() => { })
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
+
+  // Stable wrapper functions that read from refs
+  const handleTextChange = useCallback((text: string, cursorPos?: number) => {
+    handleTextChangeRef.current(text, cursorPos)
+  }, [])
+  const undo = useCallback(() => { undoRef.current() }, [])
+  const redo = useCallback(() => { redoRef.current() }, [])
+
   // Local text state
   const [localText, setLocalText] = useState(value)
 
@@ -100,6 +114,12 @@ export default function TextRenderer({
 
   // Keyboard handler (for escape in fullscreen, delegate to editor handlers)
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    console.log('[TextRenderer:handleKeyDown] event received:', {
+      key: e.key,
+      code: e.code,
+      ctrlKey: e.ctrlKey,
+      hasEditorHandler: !!editorHandlers.onKeyDown,
+    })
     // Escape to exit fullscreen
     if (e.key === 'Escape' && isFullscreen) {
       exitFullscreen()
@@ -162,6 +182,16 @@ export default function TextRenderer({
     setIsEditable,
     editorHandlers,
     setEditorHandlers,
+    handleTextChange,
+    handleTextChangeRef,
+    canUndo,
+    setCanUndo,
+    canRedo,
+    setCanRedo,
+    undo,
+    undoRef,
+    redo,
+    redoRef,
     isFullscreen,
     setIsFullscreen,
     enterFullscreen,

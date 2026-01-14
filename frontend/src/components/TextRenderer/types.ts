@@ -4,6 +4,67 @@ export interface HistoryEntry {
   scrollTop: number
 }
 
+/**
+ * Context passed to keyboard shortcut actions
+ */
+export interface ShortcutContext {
+  /** Current text content */
+  text: string
+  /** Start of selection (or cursor position if no selection) */
+  selectionStart: number
+  /** End of selection (same as start if no selection) */
+  selectionEnd: number
+  /** Whether there is an active selection */
+  hasSelection: boolean
+  /** The selected text (empty string if no selection) */
+  selectedText: string
+  /** Start position of the current line */
+  lineStart: number
+  /** End position of the current line */
+  lineEnd: number
+  /** Content of the current line */
+  currentLine: string
+  /** All lines as an array */
+  lines: string[]
+  /** Index of the line containing the cursor */
+  currentLineIndex: number
+}
+
+/**
+ * Result returned from a keyboard shortcut action
+ */
+export interface ShortcutResult {
+  /** New text content (if changed) */
+  text?: string
+  /** New cursor position */
+  cursorPos?: number
+  /** New selection range (if setting a selection) */
+  selection?: { start: number; end: number }
+  /** If true, prevent default browser behavior */
+  preventDefault?: boolean
+}
+
+/**
+ * Keyboard shortcut definition
+ */
+export interface KeyboardShortcut {
+  /** Unique identifier for this shortcut */
+  id: string
+  /** 
+   * Shortcut pattern, e.g., "Ctrl+/", "Ctrl+Shift+/", "Alt+ArrowUp"
+   * Supports: Ctrl, Alt, Shift, Meta (Cmd on Mac)
+   * Use "Mod" for Ctrl on Windows/Linux or Meta on Mac
+   */
+  shortcut: string
+  /** Description for tooltips/documentation */
+  description?: string
+  /** 
+   * Action to perform when shortcut is triggered
+   * Return a ShortcutResult to update text/cursor, or void to do nothing
+   */
+  action: (context: ShortcutContext) => ShortcutResult | void
+}
+
 export interface TextFormatter {
   /** Unique identifier for the formatter */
   id: string
@@ -57,6 +118,18 @@ export interface TextRendererContextValue {
     onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
   }
   setEditorHandlers: (handlers: TextRendererContextValue['editorHandlers']) => void
+  
+  // Edit functions (set by Editor component via refs)
+  handleTextChange: (text: string, cursorPos?: number) => void
+  handleTextChangeRef: React.MutableRefObject<(text: string, cursorPos?: number) => void>
+  canUndo: boolean
+  setCanUndo: (value: boolean) => void
+  canRedo: boolean
+  setCanRedo: (value: boolean) => void
+  undo: () => void
+  undoRef: React.MutableRefObject<() => void>
+  redo: () => void
+  redoRef: React.MutableRefObject<() => void>
   
   // UI state
   isFullscreen: boolean
