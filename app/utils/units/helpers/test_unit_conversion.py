@@ -347,6 +347,32 @@ class TestGetCategoriesForApi:
                 all_unit_names.append(unit["name"].lower())
         assert any("kilo" in name for name in all_unit_names)
 
+    def test_filter_by_category(self):
+        """Filter by category returns only that category."""
+        result = get_categories_for_api(category="mass")
+        assert len(result) == 1
+        assert result[0]["key"] == "mass"
+
+    def test_filter_by_category_case_insensitive(self):
+        """Category filter should be case insensitive."""
+        result = get_categories_for_api(category="MASS")
+        assert len(result) == 1
+        assert result[0]["key"] == "mass"
+
+    def test_filter_by_category_invalid(self):
+        """Invalid category returns empty list."""
+        result = get_categories_for_api(category="nonexistent")
+        assert result == []
+
+    def test_filter_by_category_with_search(self):
+        """Category filter combined with search."""
+        result = get_categories_for_api(category="mass", search="kilo")
+        assert len(result) == 1
+        assert result[0]["key"] == "mass"
+        # Should only have units matching 'kilo'
+        unit_names = [u["name"].lower() for u in result[0]["units"]]
+        assert all("kilo" in name for name in unit_names)
+
 
 class TestUnitCategories:
     """Tests for UNIT_CATEGORIES constant."""

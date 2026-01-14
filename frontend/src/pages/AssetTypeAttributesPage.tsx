@@ -14,6 +14,7 @@ import AttributeChoicesSection from '../components/AttributeChoicesSection'
 import ConfirmDialog from '../components/ConfirmDialog'
 import CopyableText from '../components/CopyableText'
 import TruncatedText from '../components/TruncatedText'
+import UnitAutocomplete from '../components/UnitAutocomplete'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -199,21 +200,13 @@ export default function AssetTypeAttributesPage() {
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [unitCategories, setUnitCategories] = useState<UnitCategory[]>([])
-  const [unitSearchInput, setUnitSearchInput] = useState('')
-  const [isLoadingUnits, setIsLoadingUnits] = useState(false)
 
-  // Fetch unit categories with debounced search
+  // Fetch unit categories on mount (for details panel display)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setIsLoadingUnits(true)
-      fetchUnitCategories(unitSearchInput || undefined)
-        .then(categories => setUnitCategories(categories))
-        .catch(err => console.error('Failed to fetch unit categories:', err))
-        .finally(() => setIsLoadingUnits(false))
-    }, 300) // 300ms debounce
-
-    return () => clearTimeout(timeoutId)
-  }, [unitSearchInput])
+    fetchUnitCategories()
+      .then(categories => setUnitCategories(categories))
+      .catch(err => console.error('Failed to fetch unit categories:', err))
+  }, [])
 
   // Fetch available tags on mount
   useEffect(() => {
@@ -1574,51 +1567,9 @@ export default function AssetTypeAttributesPage() {
               />
             )}
             {formData.attributeType === 'number' && (
-              <Autocomplete
-                options={unitCategories.flatMap(category =>
-                  category.units.map(unit => ({ ...unit, category: category.name }))
-                )}
-                groupBy={(option) => option.category}
-                getOptionLabel={(option) => `${option.name} (${option.symbol})`}
-                value={unitCategories.flatMap(c => c.units.map(u => ({ ...u, category: c.name }))).find(u => u.code === formData.unit) || null}
-                onChange={(_, newValue) => setFormData({ ...formData, unit: newValue?.code || undefined })}
-                onInputChange={(_, newInputValue, reason) => {
-                  if (reason === 'input') {
-                    setUnitSearchInput(newInputValue)
-                  }
-                }}
-                isOptionEqualToValue={(option, value) => option.code === value.code}
-                filterOptions={(x) => x} // Disable client-side filtering, server handles it
-                loading={isLoadingUnits}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Unit of Measurement"
-                    placeholder="Search units..."
-                    helperText="Optional unit for this numeric attribute"
-                    slotProps={{
-                      input: {
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {isLoadingUnits ? <CircularProgress color="inherit" size={20} /> : null}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      },
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.code}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <span>{option.name}</span>
-                      <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                        {option.symbol}
-                      </Typography>
-                    </Box>
-                  </li>
-                )}
+              <UnitAutocomplete
+                value={formData.unit}
+                onChange={(unitCode) => setFormData({ ...formData, unit: unitCode })}
               />
             )}
             {formData.attributeType === 'boolean' && (

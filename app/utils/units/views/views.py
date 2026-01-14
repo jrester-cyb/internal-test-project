@@ -19,14 +19,16 @@ class UnitCategoriesView(ListAPIView):
 
     Query Parameters:
         search: Filter categories and units by name, code, or symbol
+        category: Filter by category key (e.g., 'mass', 'length', 'temperature')
     """
 
     serializer_class = UnitCategorySerializer
 
     def get_queryset(self):
-        """Return unit categories as a list, optionally filtered by search term."""
+        """Return unit categories as a list, optionally filtered by search term or category."""
         search = self.request.query_params.get("search", None)
-        return get_categories_for_api(search=search)
+        category = self.request.query_params.get("category", None)
+        return get_categories_for_api(search=search, category=category)
 
 
 class UnitConvertView(APIView):

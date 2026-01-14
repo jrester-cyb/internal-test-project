@@ -89,6 +89,41 @@ class TestUnitCategoriesView(APITestCase):
         self.assertEqual(data["count"], 0)
         self.assertEqual(data["results"], [])
 
+    def test_filter_by_category(self):
+        """Filter by category key returns only that category."""
+        response = self.client.get(reverse("unit-categories"), {"category": "mass"})
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "mass")
+
+    def test_filter_by_category_case_insensitive(self):
+        """Category filter should be case insensitive."""
+        response = self.client.get(reverse("unit-categories"), {"category": "MASS"})
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "mass")
+
+    def test_filter_by_category_invalid(self):
+        """Invalid category returns empty results."""
+        response = self.client.get(
+            reverse("unit-categories"), {"category": "nonexistent"}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["results"], [])
+
+    def test_filter_by_category_with_search(self):
+        """Category filter combined with search."""
+        response = self.client.get(
+            reverse("unit-categories"), {"category": "mass", "search": "kilo"}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "mass")
+        # Should only have units matching 'kilo'
+        unit_names = [u["name"].lower() for u in data["results"][0]["units"]]
+        self.assertTrue(all("kilo" in name for name in unit_names))
+
 
 class TestUnitConvertView(APITestCase):
     """Tests for UnitConvertView."""
