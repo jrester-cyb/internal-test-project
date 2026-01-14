@@ -110,7 +110,7 @@ export default function TextRenderer({
     })
   }, [])
 
-  // Track cursor position when exiting fullscreen and restore it
+  // Handle focus when entering fullscreen
   useEffect(() => {
     if (isFullscreen) {
       setFullscreenScrollPos({ top: 0, left: 0 })
@@ -119,17 +119,17 @@ export default function TextRenderer({
         fullscreenTextareaRef.current.scrollLeft = 0
         fullscreenTextareaRef.current.focus()
       }
-    } else {
-      // Restore cursor position to main textarea after modal closes
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus()
-          textareaRef.current.selectionStart = exitCursorRef.current.start
-          textareaRef.current.selectionEnd = exitCursorRef.current.end
-        }
-      }, 50)
     }
   }, [isFullscreen])
+
+  // Restore focus after fullscreen modal exit animation completes
+  const handleFullscreenExited = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+      textareaRef.current.selectionStart = exitCursorRef.current.start
+      textareaRef.current.selectionEnd = exitCursorRef.current.end
+    }
+  }, [])
 
   // Line count for line numbers
   const lineCount = localText ? localText.split('\n').length : 1
@@ -270,8 +270,9 @@ export default function TextRenderer({
         <Modal
           open={isFullscreen}
           onClose={exitFullscreen}
+          closeAfterTransition
         >
-          <Grow in={isFullscreen} timeout={200}>
+          <Grow in={isFullscreen} timeout={200} onExited={handleFullscreenExited}>
             <Box sx={{
               width: '100vw',
               height: '100vh',
