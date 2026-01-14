@@ -1,5 +1,5 @@
 """
-Async tasks for processing audit logs.
+Tasks for processing audit logs.
 
 Uses Celery if available and enabled, otherwise processes synchronously.
 
@@ -9,6 +9,7 @@ Settings:
 """
 
 import logging
+import uuid
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
@@ -35,9 +36,11 @@ def _process_batch_impl(batch_data: dict) -> str:
     """
     Core implementation for processing audit batch.
 
-    This is the actual logic, called by both sync and async paths.
+    Creates flattened AuditLogEntry records with full request context.
     """
-    from audit_log.models import AuditLogBatch, AuditLogEntry, AuditLogReference
+    from audit_log.models import AuditLogEntry, AuditLogReference
+
+    batch_id = batch_data.get("batch_id") or str(uuid.uuid4())
 
     with transaction.atomic():
         # Get user if we have a user_id
@@ -51,21 +54,21 @@ def _process_batch_impl(batch_data: dict) -> str:
             except User.DoesNotExist:
                 pass
 
-        # Create the batch
-        batch = AuditLogBatch.objects.create(
-            user=user,
-            user_email=batch_data.get("user_email", ""),
-            request_id=batch_data.get("request_id", ""),
-            request_method=batch_data.get("request_method", ""),
-            request_path=batch_data.get("request_path", ""),
-            request_query_params=batch_data.get("query_params", {}),
-            ip_address=batch_data.get("ip_address") or None,
-            user_agent=batch_data.get("user_agent", ""),
-            organization_id=batch_data.get("organization_id"),
-            workspace_id=batch_data.get("workspace_id"),
-            duration_ms=batch_data.get("duration_ms"),
-            entry_count=len(batch_data.get("entries", [])),
-        )
+        # Common fields for all entries in this batch
+        common_fields = {
+            "batch_id": batch_id,
+            "user": user,
+            "user_email": batch_data.get("user_email", ""),
+            "request_id": batch_data.get("request_id", ""),
+            "request_method": batch_data.get("request_method", ""),
+            "request_path": batch_data.get("request_path", ""),
+            "request_query_params": batch_data.get("query_params", {}),
+            "ip_address": batch_data.get("ip_address") or None,
+            "user_agent": batch_data.get("user_agent", ""),
+            "organization_id": batch_data.get("organization_id"),
+            "workspace_id": batch_data.get("workspace_id"),
+            "duration_ms": batch_data.get("duration_ms"),
+        }
 
         # Create entries
         entries_data = batch_data.get("entries", [])
@@ -78,14 +81,17 @@ def _process_batch_impl(batch_data: dict) -> str:
             target_repr = ""
 
             if entry_data.get("target"):
-                target_ct = ContentType.objects.get(
-                    pk=entry_data["target"]["content_type_id"]
-                )
-                target_object_id = entry_data["target"]["object_id"]
-                target_repr = entry_data["target"]["repr"]
+                try:
+                    target_ct = ContentType.objects.get(
+                        pk=entry_data["target"]["content_type_id"]
+                    )
+                    target_object_id = entry_data["target"]["object_id"]
+                    target_repr = entry_data["target"]["repr"]
+                except ContentType.DoesNotExist:
+                    pass
 
             entry = AuditLogEntry.objects.create(
-                batch=batch,
+                **common_fields,
                 action=entry_data["action"],
                 action_detail=entry_data.get("action_detail", ""),
                 message=entry_data["message"],
@@ -98,12 +104,70 @@ def _process_batch_impl(batch_data: dict) -> str:
             )
             entry_objects.append((entry, entry_data))
 
+        # Get workspace and organization for automatic references
+        workspace = None
+        organization = None
+        workspace_ct = None
+        organization_ct = None
+
+        if batch_data.get("workspace_id"):
+            try:
+                from workspaces.models import Workspace
+
+                workspace = Workspace.objects.get(pk=batch_data["workspace_id"])
+                workspace_ct = ContentType.objects.get_for_model(Workspace)
+            except Exception:
+                pass
+
+        if batch_data.get("organization_id"):
+            try:
+                from organizations.models import Organization
+
+                organization = Organization.objects.get(pk=batch_data["organization_id"])
+                organization_ct = ContentType.objects.get_for_model(Organization)
+            except Exception:
+                pass
+
         # Create references
         for entry, entry_data in entry_objects:
+            # Auto-add workspace reference if available
+            if workspace and workspace_ct:
+                AuditLogReference.objects.create(
+                    entry=entry,
+                    content_type=workspace_ct,
+                    object_id=str(workspace.pk),
+                    object_repr=str(workspace)[:255],
+                    role="workspace",
+                )
+
+            # Auto-add organization reference if available
+            if organization and organization_ct:
+                AuditLogReference.objects.create(
+                    entry=entry,
+                    content_type=organization_ct,
+                    object_id=str(organization.pk),
+                    object_repr=str(organization)[:255],
+                    role="organization",
+                )
+
+            # Add explicit references from entry data
             refs_data = entry_data.get("references", [])
             for ref_data in refs_data:
                 try:
                     ref_ct = ContentType.objects.get(pk=ref_data["content_type_id"])
+                    # Skip if it's the same as auto-added workspace/org
+                    if (
+                        workspace_ct
+                        and ref_ct.id == workspace_ct.id
+                        and ref_data["object_id"] == str(workspace.pk)
+                    ):
+                        continue
+                    if (
+                        organization_ct
+                        and ref_ct.id == organization_ct.id
+                        and ref_data["object_id"] == str(organization.pk)
+                    ):
+                        continue
                     AuditLogReference.objects.create(
                         entry=entry,
                         content_type=ref_ct,
@@ -114,22 +178,8 @@ def _process_batch_impl(batch_data: dict) -> str:
                 except Exception as e:
                     logger.warning(f"Failed to create audit reference: {e}")
 
-        # Generate summary
-        if entries_data:
-            actions = [e["action"] for e in entries_data]
-            action_counts = {}
-            for a in actions:
-                action_counts[a] = action_counts.get(a, 0) + 1
-            summary_parts = [
-                f"{count} {action}(s)" for action, count in action_counts.items()
-            ]
-            batch.summary = "; ".join(summary_parts)
-            batch.save(update_fields=["summary"])
-
-        logger.info(
-            f"Processed audit batch {batch.id} with {len(entries_data)} entries"
-        )
-        return str(batch.id)
+        logger.info(f"Processed audit batch {batch_id} with {len(entries_data)} entries")
+        return batch_id
 
 
 class ProcessAuditBatch:
@@ -211,15 +261,15 @@ def cleanup_old_audit_logs(days: int = None):
 
     Respects AUDIT_LOG_RETENTION_DAYS setting (default: 365 days).
     """
-    from audit_log.models import AuditLogBatch, AuditLogPendingBatch
+    from audit_log.models import AuditLogEntry, AuditLogPendingBatch
     from datetime import timedelta
 
     retention_days = days or getattr(settings, "AUDIT_LOG_RETENTION_DAYS", 365)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
-    # Delete old batches (cascades to entries and references)
-    deleted_count, _ = AuditLogBatch.objects.filter(created_at__lt=cutoff).delete()
-    logger.info(f"Deleted {deleted_count} old audit batches")
+    # Delete old entries (cascades to references)
+    deleted_count, _ = AuditLogEntry.objects.filter(created_at__lt=cutoff).delete()
+    logger.info(f"Deleted {deleted_count} old audit entries")
 
     # Also clean up processed pending batches older than 7 days
     pending_cutoff = timezone.now() - timedelta(days=7)

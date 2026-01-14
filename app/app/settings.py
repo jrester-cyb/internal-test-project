@@ -198,6 +198,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Audit Log settings
+AUDIT_LOG_ASYNC = False  # Set to True to use Celery for async processing
 AUDIT_LOG_EXCLUDED_PATHS = [
     "/health/",
     "/api/health/",

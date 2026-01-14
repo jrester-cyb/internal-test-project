@@ -1,5 +1,8 @@
 """
 Audit log models for tracking API actions.
+
+Flattened structure - each entry contains full request context,
+with batch_id to group entries from the same request.
 """
 
 import uuid
@@ -9,23 +12,45 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
 
-class AuditLogBatch(models.Model):
+class AuditLogEntry(models.Model):
     """
-    Groups multiple audit entries from a single request.
+    Audit log entry representing a single action with full request context.
 
-    A batch represents all actions taken within a single API request,
-    allowing us to see the full context of what happened together.
+    Each entry contains all the information about the request and the action,
+    making it queryable without joins. Entries from the same request share
+    a batch_id for grouping.
     """
+
+    class ActionType(models.TextChoices):
+        CREATE = "create", "Created"
+        READ = "read", "Read"
+        UPDATE = "update", "Updated"
+        DELETE = "delete", "Deleted"
+        DESTROY = "destroy", "Destroyed"
+        LIST = "list", "Listed"
+        RETRIEVE = "retrieve", "Retrieved"
+        EXPORT = "export", "Exported"
+        IMPORT = "import", "Imported"
+        LOGIN = "login", "Logged In"
+        LOGOUT = "logout", "Logged Out"
+        PERMISSION = "permission", "Permission Changed"
+        CUSTOM = "custom", "Custom Action"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # Request info
+    # Batch grouping - entries from the same request share this ID
+    batch_id = models.UUIDField(
+        db_index=True,
+        help_text="Groups entries from the same request",
+    )
+
+    # User info
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="audit_batches",
+        related_name="audit_entries",
     )
     user_email = models.EmailField(
         blank=True,
@@ -39,70 +64,17 @@ class AuditLogBatch(models.Model):
         db_index=True,
         help_text="Unique request identifier for correlation",
     )
-    request_method = models.CharField(max_length=10)
-    request_path = models.CharField(max_length=500)
+    request_method = models.CharField(max_length=10, blank=True)
+    request_path = models.CharField(max_length=500, blank=True)
     request_query_params = models.JSONField(default=dict, blank=True)
 
-    # Context
+    # Network context
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
 
     # Organization/Workspace context (for filtering)
     organization_id = models.UUIDField(null=True, blank=True, db_index=True)
     workspace_id = models.UUIDField(null=True, blank=True, db_index=True)
-
-    # Timing
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    duration_ms = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="Request duration in milliseconds",
-    )
-
-    # Summary
-    entry_count = models.IntegerField(default=0)
-    summary = models.TextField(
-        blank=True,
-        help_text="Human-readable summary of all actions in this batch",
-    )
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["user", "-created_at"]),
-            models.Index(fields=["organization_id", "-created_at"]),
-            models.Index(fields=["workspace_id", "-created_at"]),
-        ]
-
-    def __str__(self):
-        return f"{self.request_method} {self.request_path} by {self.user_email or 'anonymous'}"
-
-
-class AuditLogEntry(models.Model):
-    """
-    Individual audit log entry representing a single action.
-
-    Multiple entries can belong to a single batch (request).
-    """
-
-    class ActionType(models.TextChoices):
-        CREATE = "create", "Created"
-        READ = "read", "Read"
-        UPDATE = "update", "Updated"
-        DELETE = "delete", "Deleted"
-        EXPORT = "export", "Exported"
-        IMPORT = "import", "Imported"
-        LOGIN = "login", "Logged In"
-        LOGOUT = "logout", "Logged Out"
-        PERMISSION = "permission", "Permission Changed"
-        CUSTOM = "custom", "Custom Action"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    batch = models.ForeignKey(
-        AuditLogBatch,
-        on_delete=models.CASCADE,
-        related_name="entries",
-    )
 
     # Action details
     action = models.CharField(
@@ -113,7 +85,7 @@ class AuditLogEntry(models.Model):
     action_detail = models.CharField(
         max_length=100,
         blank=True,
-        help_text="More specific action, e.g., 'attribute_updated', 'status_changed'",
+        help_text="More specific action, e.g., 'workspace_local', 'global'",
     )
 
     # Human-readable message
@@ -152,28 +124,44 @@ class AuditLogEntry(models.Model):
     )
 
     # Timing
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    duration_ms = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Request duration in milliseconds",
+    )
     order = models.IntegerField(
         default=0,
         help_text="Order within the batch",
     )
 
     class Meta:
-        ordering = ["batch", "order"]
+        ordering = ["-created_at", "order"]
         indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["organization_id", "-created_at"]),
+            models.Index(fields=["workspace_id", "-created_at"]),
             models.Index(fields=["action", "-created_at"]),
             models.Index(fields=["target_content_type", "target_object_id"]),
+            models.Index(fields=["batch_id", "order"]),
         ]
 
     def __str__(self):
         return f"{self.action}: {self.message[:50]}"
+
+    @property
+    def target_type(self) -> str:
+        """Return the model name of the target."""
+        if self.target_content_type:
+            return self.target_content_type.model
+        return ""
 
 
 class AuditLogReference(models.Model):
     """
     References to all models affected by an audit entry.
 
-    This allows us to track down all changes related to a specific object,
+    This allows tracking all changes related to a specific object,
     even if it wasn't the primary target of the action.
     """
 
@@ -203,7 +191,7 @@ class AuditLogReference(models.Model):
     role = models.CharField(
         max_length=50,
         default="affected",
-        help_text="Role of this object: 'target', 'parent', 'workspace', 'organization', etc.",
+        help_text="Role: 'target', 'parent', 'workspace', 'organization', etc.",
     )
 
     class Meta:
@@ -217,15 +205,14 @@ class AuditLogReference(models.Model):
 
 class AuditLogPendingBatch(models.Model):
     """
-    Temporary storage for pending audit batches before async processing.
+    Temporary storage for pending audit batches before processing.
 
-    This table is used to minimize impact on API response time by storing
-    minimal data synchronously, then processing asynchronously.
+    Used as fallback if async processing fails.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     data = models.JSONField(
-        help_text="Serialized batch data for async processing",
+        help_text="Serialized batch data for processing",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     processed = models.BooleanField(default=False, db_index=True)

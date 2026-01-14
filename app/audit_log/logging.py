@@ -36,6 +36,7 @@ class AuditBatchContext:
     """Context for a batch of audit entries within a request."""
 
     request_id: str
+    batch_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     user: Any = None
     user_email: str = ""
     request_method: str = ""
@@ -104,6 +105,7 @@ class AuditBatchContext:
             )
 
         return {
+            "batch_id": self.batch_id,
             "request_id": self.request_id,
             "user_id": (
                 str(self.user.pk) if self.user and self.user.is_authenticated else None
