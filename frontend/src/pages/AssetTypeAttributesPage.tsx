@@ -48,6 +48,8 @@ export default function AssetTypeAttributesPage() {
   const [selectedAttributeAssetCount, setSelectedAttributeAssetCount] = useState<number | null>(null)
   const [isLoadingCount, setIsLoadingCount] = useState(false)
   const [leftColumnWidth, setLeftColumnWidth] = useState(50) // percentage
+  const [rightColumnActualWidth, setRightColumnActualWidth] = useState<number | undefined>()
+  const rightColumnRef = useRef<HTMLDivElement>(null)
   const [leftColumnPixelWidth, setLeftColumnPixelWidth] = useState(500)
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null)
@@ -202,6 +204,21 @@ export default function AssetTypeAttributesPage() {
   const [pendingTypeChange, setPendingTypeChange] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [unitCategories, setUnitCategories] = useState<UnitCategory[]>([])
+
+  // Measure actual pixel width of right column for better ActionButtons breakpoints
+  useEffect(() => {
+    if (!rightColumnRef.current) return
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) {
+        setRightColumnActualWidth(entry.contentRect.width)
+      }
+    })
+
+    resizeObserver.observe(rightColumnRef.current)
+    return () => resizeObserver.disconnect()
+  }, [])
 
   // Fetch unit categories on mount (for details panel display)
   useEffect(() => {
@@ -1258,6 +1275,7 @@ export default function AssetTypeAttributesPage() {
         ) : (
           <ActionButtons
             width={isSmallScreen ? 0 : 100 - leftColumnWidth}
+            actualWidth={rightColumnActualWidth}
             actions={[
               ...(!selectedAttribute!.isHidden ? [{
                 label: selectedAttribute!.cannotOverride ? 'Protected' : 'Edit',
@@ -1267,7 +1285,7 @@ export default function AssetTypeAttributesPage() {
                 variant: 'outlined' as const,
                 disabled: selectedAttribute!.cannotOverride,
                 tooltip: selectedAttribute!.cannotOverride ? 'This attribute cannot be edited because it is protected from overrides in workspaces' : undefined,
-                minWidth: selectedAttribute!.cannotOverride ? 30 : 20 // Protected text needs more space
+                minWidth: selectedAttribute!.cannotOverride ? 30 : 20 // Protected collapses at 30% vs Edit at 20%
               }] : []),
               ...(selectedAttribute!.isHidden ? [{
                 label: 'Unhide',
@@ -1275,14 +1293,14 @@ export default function AssetTypeAttributesPage() {
                 onClick: () => handleUnhide(selectedAttribute!),
                 color: 'success' as const,
                 variant: 'outlined' as const,
-                minWidth: 30 // Show when right panel >= 30%
+                minWidth: 25 // Unhide collapses at 25%
               }] : [{
                 label: 'Hide',
                 icon: <HideIcon fontSize="small" />,
                 onClick: () => handleHide(selectedAttribute!),
                 color: 'warning' as const,
                 variant: 'outlined' as const,
-                minWidth: 30 // Show when right panel >= 30%
+                minWidth: 40 // Hide collapses first at 40%
               }]),
               // Share - always in menu
               {
@@ -1482,7 +1500,7 @@ export default function AssetTypeAttributesPage() {
 
         {/* Right Column - Details Panel - hidden on small screens */}
         {!isSmallScreen && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
+          <Box ref={rightColumnRef} sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `${100 - leftColumnWidth}%`, bgcolor: 'background.paper', borderRadius: 1 }}>
             {detailsPanelContent}
           </Box>
         )}

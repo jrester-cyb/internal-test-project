@@ -12,15 +12,18 @@ export interface ActionButtonConfig {
   disabled?: boolean
   tooltip?: string // Custom tooltip text, falls back to label if not provided
   /** Minimum width required to show this button. Button shows when width >= this value.
-   *  Use Infinity to always keep in menu, 0 to always show as button. */
+   *  Use Infinity to always keep in menu, 0 to always show as button.
+   *  For responsive mode: if < 100, treated as percentage; if >= 100, treated as pixels */
   minWidth?: number
   dividerBefore?: boolean // Show a divider before this item in the menu
 }
 
 interface ActionButtonsProps {
   actions: ActionButtonConfig[]
-  // For responsive mode with collapsing buttons - the current container width
+  // For responsive mode with collapsing buttons - the current container width (as percentage or pixels)
   width?: number
+  // Actual pixel width of the container (for better breakpoint calculations)
+  actualWidth?: number
   menuAnchorEl?: HTMLElement | null
   setMenuAnchorEl?: (el: HTMLElement | null) => void
   // For simple mode (always show all buttons)
@@ -37,6 +40,7 @@ interface ActionButtonsProps {
 export default function ActionButtons({
   actions,
   width,
+  actualWidth,
   menuAnchorEl,
   setMenuAnchorEl,
   simple = false,
@@ -86,8 +90,12 @@ export default function ActionButtons({
     return null
   }
 
-  // Button shows when width >= minWidth (simple, consistent logic)
-  const isButtonVisible = (minWidth: number) => width >= minWidth
+  // Simple percentage-based breakpoint logic
+  const isButtonVisible = (minWidth: number) => {
+    if (minWidth === 0) return true
+    if (minWidth === Infinity) return false
+    return width >= minWidth
+  }
 
   // Menu shows when any button is hidden
   const isMenuVisible = () => actions.some(a => !isButtonVisible(a.minWidth ?? 0))
@@ -169,17 +177,28 @@ export default function ActionButtons({
           return (
             <Fragment key={index}>
               {hasVisibleItemAbove && <Divider />}
-              <MenuItem
-                onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
-                disabled={action.disabled}
+              <Tooltip
+                title={action.tooltip && action.disabled ? action.tooltip : ''}
+                arrow
+                placement="left"
+                disableHoverListener={!action.tooltip || !action.disabled}
+                enterDelay={0}
+                leaveDelay={200}
               >
-                {action.icon && (
-                  <Box component="span" sx={{ mr: 1, display: 'flex', alignItems: 'center', fontSize: 'small' }}>
-                    {action.icon}
-                  </Box>
-                )}
-                {action.label}
-              </MenuItem>
+                <span>
+                  <MenuItem
+                    onClick={(e) => { action.onClick(e); setMenuAnchorEl(null); }}
+                    disabled={action.disabled}
+                  >
+                    {action.icon && (
+                      <Box component="span" sx={{ mr: 1, display: 'flex', alignItems: 'center', fontSize: 'small' }}>
+                        {action.icon}
+                      </Box>
+                    )}
+                    {action.label}
+                  </MenuItem>
+                </span>
+              </Tooltip>
             </Fragment>
           )
         })}
