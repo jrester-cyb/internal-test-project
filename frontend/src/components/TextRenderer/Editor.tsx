@@ -39,7 +39,7 @@ export default function Editor({
   // Enable editing mode when Editor mounts
   useEffect(() => {
     setIsEditable(true)
-    return () => setIsEditable(false)
+    // Don't reset isEditable on unmount - it causes issues when modal closes
   }, [setIsEditable])
 
   // Initialize history
@@ -241,5 +241,5 @@ export default function Editor({
   // Render toolbar if enabled
   if (!showToolbar) return null
 
-  return <TextRendererToolbar enableFullscreen={enableFullscreen} inFullscreen={inFullscreen} />
+  return <TextRendererToolbar enableFullscreen={enableFullscreen} />
 }

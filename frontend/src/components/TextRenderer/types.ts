@@ -61,6 +61,7 @@ export interface TextRendererContextValue {
   // UI state
   isFullscreen: boolean
   setIsFullscreen: (value: boolean) => void
+  enterFullscreen: () => void
   exitFullscreen: () => void
   showRawText: boolean
   setShowRawText: (value: boolean) => void

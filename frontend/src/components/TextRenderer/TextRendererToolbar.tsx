@@ -15,7 +15,7 @@ export default function TextRendererToolbar({ enableFullscreen = true }: Readonl
   const {
     localText,
     isFullscreen,
-    setIsFullscreen,
+    enterFullscreen,
     exitFullscreen,
     onCopy
   } = useTextRenderer()
@@ -30,7 +30,7 @@ export default function TextRendererToolbar({ enableFullscreen = true }: Readonl
     if (isFullscreen) {
       exitFullscreen()
     } else {
-      setIsFullscreen(true)
+      enterFullscreen()
     }
   }
 

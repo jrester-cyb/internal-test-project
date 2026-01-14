@@ -26,7 +26,8 @@ export default function TextRenderer({
   const fullscreenTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const pendingCursorRef = useRef<number | null>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
-  const exitCursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 })
+  const fullscreenCursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 })
+  const isExitingFullscreenRef = useRef(false)
 
   // Scroll state
   const [scrollPos, setScrollPos] = useState({ top: 0, left: 0 })
@@ -74,14 +75,26 @@ export default function TextRenderer({
   const errorInfo = useMemo(() => formatter.getErrorPosition(localText), [localText, formatter])
   const isValid = !errorInfo
 
+  // Helper to enter fullscreen while preserving cursor
+  const enterFullscreen = useCallback(() => {
+    if (textareaRef.current) {
+      fullscreenCursorRef.current = {
+        start: textareaRef.current.selectionStart,
+        end: textareaRef.current.selectionEnd,
+      }
+    }
+    setIsFullscreen(true)
+  }, [])
+
   // Helper to exit fullscreen while preserving cursor
   const exitFullscreen = useCallback(() => {
     if (fullscreenTextareaRef.current) {
-      exitCursorRef.current = {
+      fullscreenCursorRef.current = {
         start: fullscreenTextareaRef.current.selectionStart,
         end: fullscreenTextareaRef.current.selectionEnd,
       }
     }
+    isExitingFullscreenRef.current = true
     setIsFullscreen(false)
   }, [])
 
@@ -110,25 +123,31 @@ export default function TextRenderer({
     })
   }, [])
 
-  // Handle focus when entering fullscreen
-  useEffect(() => {
-    if (isFullscreen) {
-      setFullscreenScrollPos({ top: 0, left: 0 })
-      if (fullscreenTextareaRef.current) {
-        fullscreenTextareaRef.current.scrollTop = 0
-        fullscreenTextareaRef.current.scrollLeft = 0
-        fullscreenTextareaRef.current.focus()
-      }
+  // Handle focus when entering fullscreen (after animation completes)
+  const handleFullscreenEntered = useCallback(() => {
+    setFullscreenScrollPos({ top: 0, left: 0 })
+    if (fullscreenTextareaRef.current) {
+      fullscreenTextareaRef.current.scrollTop = 0
+      fullscreenTextareaRef.current.scrollLeft = 0
+      fullscreenTextareaRef.current.focus()
+      fullscreenTextareaRef.current.selectionStart = fullscreenCursorRef.current.start
+      fullscreenTextareaRef.current.selectionEnd = fullscreenCursorRef.current.end
     }
-  }, [isFullscreen])
+  }, [])
 
   // Restore focus after fullscreen modal exit animation completes
   const handleFullscreenExited = useCallback(() => {
-    if (textareaRef.current) {
-      textareaRef.current.focus()
-      textareaRef.current.selectionStart = exitCursorRef.current.start
-      textareaRef.current.selectionEnd = exitCursorRef.current.end
-    }
+    // Use double RAF to ensure we're after React's render cycle and DOM updates
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+          textareaRef.current.selectionStart = fullscreenCursorRef.current.start
+          textareaRef.current.selectionEnd = fullscreenCursorRef.current.end
+        }
+        isExitingFullscreenRef.current = false
+      })
+    })
   }, [])
 
   // Line count for line numbers
@@ -145,6 +164,7 @@ export default function TextRenderer({
     setEditorHandlers,
     isFullscreen,
     setIsFullscreen,
+    enterFullscreen,
     exitFullscreen,
     showRawText,
     setShowRawText,
@@ -183,6 +203,8 @@ export default function TextRenderer({
         onMouseLeave={() => setShowToolbar(false)}
         onFocus={() => setShowToolbar(true)}
         onBlur={(e) => {
+          // Ignore blur events during fullscreen exit transition
+          if (isExitingFullscreenRef.current) return
           // Only hide if focus moves outside this container
           if (!e.currentTarget.contains(e.relatedTarget)) {
             setShowToolbar(false)
@@ -272,7 +294,7 @@ export default function TextRenderer({
           onClose={exitFullscreen}
           closeAfterTransition
         >
-          <Grow in={isFullscreen} timeout={200} onExited={handleFullscreenExited}>
+          <Grow in={isFullscreen} timeout={200} onEntered={handleFullscreenEntered} onExited={handleFullscreenExited}>
             <Box sx={{
               width: '100vw',
               height: '100vh',

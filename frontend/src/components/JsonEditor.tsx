@@ -33,7 +33,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
     showRawText,
     setShowRawText,
     isFullscreen,
-    setIsFullscreen,
+    enterFullscreen,
     exitFullscreen,
     isDark,
     localText,
@@ -143,7 +143,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
       <Tooltip title={inFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"} arrow>
         <IconButton
           size="small"
-          onClick={() => inFullscreen ? exitFullscreen() : setIsFullscreen(true)}
+          onClick={() => inFullscreen ? exitFullscreen() : enterFullscreen()}
           sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
         >
           {inFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
