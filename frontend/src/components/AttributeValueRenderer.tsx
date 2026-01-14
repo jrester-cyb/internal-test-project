@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Box, Typography, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material'
-import { OpenInNew as OpenInNewIcon, DataObject as JsonIcon } from '@mui/icons-material'
+import { Box, Typography, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, Tooltip } from '@mui/material'
+import { OpenInNew as OpenInNewIcon, DataObject as JsonIcon, ContentCopy as CopyIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
 import TruncatedText from './TruncatedText'
 
@@ -84,13 +84,38 @@ function JsonRenderer({ value, maxLines = 3 }: { value: any; maxLines?: number }
 // Boolean renderer with chip
 function BooleanRenderer({ value }: { value: boolean }) {
   return (
-    <Chip
-      label={value ? 'Yes' : 'No'}
-      size="small"
-      color={value ? 'success' : 'default'}
-      variant="outlined"
-      sx={{ height: 22 }}
-    />
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.5,
+        '& .copy-button': { opacity: 0 },
+        '&:hover .copy-button': { opacity: 0.7 },
+      }}
+    >
+      <Chip
+        label={value ? 'Yes' : 'No'}
+        size="small"
+        color={value ? 'success' : 'default'}
+        variant="outlined"
+        sx={{ height: 22 }}
+      />
+      <Tooltip title="Copy" arrow>
+        <IconButton
+          className="copy-button"
+          size="small"
+          onClick={() => navigator.clipboard.writeText(value ? 'True' : 'False')}
+          sx={{
+            p: 0.25,
+            flexShrink: 0,
+            color: 'inherit',
+            '&:hover': { opacity: 1 },
+          }}
+        >
+          <CopyIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </Box>
   )
 }
 
