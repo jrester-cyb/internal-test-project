@@ -15,6 +15,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import CopyableText from '../components/CopyableText'
 import TruncatedText from '../components/TruncatedText'
 import UnitAutocomplete from '../components/UnitAutocomplete'
+import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 
@@ -1128,12 +1129,8 @@ export default function AssetTypeAttributesPage() {
                 </TableRow>
                 <TableRow>
                   <TableCell sx={{ border: 0, pl: 0, py: 0.5, color: 'text.secondary', verticalAlign: 'top' }}>Default</TableCell>
-                  <TableCell sx={{ border: 0, py: 0.5, color: displayedAttribute.defaultValue !== undefined && displayedAttribute.defaultValue !== null ? 'text.primary' : 'text.disabled', fontStyle: displayedAttribute.defaultValue !== undefined && displayedAttribute.defaultValue !== null ? 'normal' : 'italic' }}>
-                    {displayedAttribute.defaultValue !== undefined && displayedAttribute.defaultValue !== null
-                      ? (typeof displayedAttribute.defaultValue === 'object'
-                        ? JSON.stringify(displayedAttribute.defaultValue, null, 2)
-                        : String(displayedAttribute.defaultValue))
-                      : 'No default value'}
+                  <TableCell sx={{ border: 0, py: 0.5 }}>
+                    <AttributeValueRenderer attribute={displayedAttribute} value={displayedAttribute.defaultValue} maxLines={2} />
                   </TableCell>
                 </TableRow>
                 {displayedAttribute.attributeType === 'number' && (
@@ -1591,6 +1588,7 @@ export default function AssetTypeAttributesPage() {
                   <MenuItem value="boolean">Boolean</MenuItem>
                   <MenuItem value="date">Date</MenuItem>
                   <MenuItem value="datetime">DateTime</MenuItem>
+                  <MenuItem value="link">Link</MenuItem>
                   <MenuItem value="json">JSON</MenuItem>
                 </Select>
                 {editingAttribute && (
@@ -1627,6 +1625,18 @@ export default function AssetTypeAttributesPage() {
                 value={formData.defaultValue ?? ''}
                 onChange={(e) => setFormData({ ...formData, defaultValue: e.target.value ? Number(e.target.value) : undefined })}
                 helperText="Optional default value for this attribute"
+                slotProps={{
+                  input: formData.unit ? {
+                    endAdornment: (
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: 1, whiteSpace: 'nowrap' }}>
+                        {(() => {
+                          const unitInfo = unitCategories.flatMap(c => c.units).find(u => u.code === formData.unit)
+                          return unitInfo?.symbol || formData.unit
+                        })()}
+                      </Typography>
+                    )
+                  } : undefined
+                }}
               />
             )}
             {formData.attributeType === 'boolean' && (
@@ -1667,6 +1677,51 @@ export default function AssetTypeAttributesPage() {
                 InputLabelProps={{ shrink: true }}
                 helperText="Optional default value for this attribute"
               />
+            )}
+            {formData.attributeType === 'link' && (
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Default Value</Typography>
+                <Stack spacing={2}>
+                  <TextField
+                    label="URL"
+                    fullWidth
+                    type="url"
+                    value={typeof formData.defaultValue === 'object' ? formData.defaultValue?.url || '' : formData.defaultValue || ''}
+                    onChange={(e) => {
+                      const url = e.target.value
+                      if (!url) {
+                        setFormData({ ...formData, defaultValue: undefined })
+                      } else {
+                        const currentText = typeof formData.defaultValue === 'object' ? formData.defaultValue?.text : undefined
+                        setFormData({ ...formData, defaultValue: currentText ? { url, text: currentText } : url })
+                      }
+                    }}
+                    helperText="The URL this link points to"
+                    placeholder="https://example.com"
+                    size="small"
+                  />
+                  <TextField
+                    label="Display Text (optional)"
+                    fullWidth
+                    value={typeof formData.defaultValue === 'object' ? formData.defaultValue?.text || '' : ''}
+                    onChange={(e) => {
+                      const text = e.target.value
+                      const currentUrl = typeof formData.defaultValue === 'object' ? formData.defaultValue?.url : formData.defaultValue
+                      if (!currentUrl) return // Don't set text without a URL
+                      if (!text) {
+                        // Clear text, revert to just URL string
+                        setFormData({ ...formData, defaultValue: currentUrl })
+                      } else {
+                        setFormData({ ...formData, defaultValue: { url: currentUrl, text } })
+                      }
+                    }}
+                    helperText="Text to display instead of the URL"
+                    placeholder="Click here"
+                    disabled={!formData.defaultValue}
+                    size="small"
+                  />
+                </Stack>
+              </Box>
             )}
             {formData.attributeType === 'json' && (
               <TextField
@@ -1788,6 +1843,7 @@ export default function AssetTypeAttributesPage() {
               <MenuItem value="boolean">Boolean</MenuItem>
               <MenuItem value="date">Date</MenuItem>
               <MenuItem value="datetime">DateTime</MenuItem>
+              <MenuItem value="link">Link</MenuItem>
               <MenuItem value="json">JSON</MenuItem>
             </Select>
           </FormControl>
