@@ -4,6 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.cache import cache
+import hashlib
 from django.db.models import (
     Q,
     Subquery,
@@ -36,6 +38,19 @@ from ..serializers import (
 )
 from ..filters import PolymorphicSearchFilter, ScopeFilter, TagsFilter, HiddenFilter
 from app.pagination import CustomPageNumberPagination
+
+
+def invalidate_attribute_list_cache(workspace_id, assettype_id):
+    """Invalidate cached attribute list responses for a workspace/asset_type.
+
+    Called on attribute create/update/delete.
+    """
+    version_key = f"attr_list_version:{workspace_id}:{assettype_id}"
+    try:
+        cache.incr(version_key)
+    except ValueError:
+        # Key doesn't exist, set it to 1
+        cache.set(version_key, 1, timeout=None)
 
 
 @extend_schema_view(
@@ -306,6 +321,48 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             )
         ).order_by("effective_order", "created_at")
 
+    def _get_cache_key(self, request):
+        """Build cache key for attribute list response."""
+        workspace_pk = self.kwargs.get("workspace_pk", "")
+        assettype_pk = self.kwargs.get("assettype_pk", "")
+        organization_pk = self.kwargs.get("organization_pk", "")
+
+        # Get current version
+        version_key = (
+            f"attr_list_version:{workspace_pk or organization_pk}:{assettype_pk}"
+        )
+        version = cache.get(version_key, 0)
+
+        # Include all query params in cache key
+        params = request.query_params.urlencode()
+        params_hash = hashlib.md5(params.encode()).hexdigest()[:12]
+
+        return f"attr_list:{workspace_pk or organization_pk}:{assettype_pk}:v{version}:{params_hash}"
+
+    def list(self, request, *args, **kwargs):
+        """List attributes with response caching (60s TTL)."""
+        cache_key = self._get_cache_key(request)
+
+        # Try to get cached response
+        cached_response = cache.get(cache_key)
+        if cached_response is not None:
+            return Response(cached_response)
+
+        # Standard DRF list logic
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+            cache.set(cache_key, response.data, timeout=60)
+            return response
+
+        serializer = self.get_serializer(queryset, many=True)
+        response_data = serializer.data
+        cache.set(cache_key, response_data, timeout=60)
+        return Response(response_data)
+
     def _update_config_for_override(self, workspace_pk, assettype_pk, old_id, new_id):
         """Update WorkspaceAssetTypeConfig to replace old attribute ID with new override ID."""
         try:
@@ -479,6 +536,8 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 asset_type_id=assettype_pk,
                 workspace_id=workspace_pk,
             )
+            # Invalidate cache
+            invalidate_attribute_list_cache(workspace_pk, assettype_pk)
             return Response(
                 AssetTypeAttributeSerializer(instance).data,
                 status=status.HTTP_201_CREATED,
@@ -558,6 +617,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                         setattr(override, field, request.data[field])
                 override.save()
 
+                # Invalidate cache
+                invalidate_attribute_list_cache(workspace_pk, assettype_pk)
+
                 return Response(
                     AssetTypeAttributeSerializer(
                         override, context={"request": request}
@@ -599,6 +661,10 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     setattr(override, field, request.data[field])
             override.save()
 
+            # Invalidate cache
+            if workspace_pk:
+                invalidate_attribute_list_cache(workspace_pk, assettype_pk)
+
             return Response(
                 AssetTypeAttributeSerializer(
                     override, context={"request": request}
@@ -621,6 +687,10 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             extension.refresh_from_db()
+
+            # Invalidate cache
+            if workspace_pk:
+                invalidate_attribute_list_cache(workspace_pk, assettype_pk)
 
             return Response(
                 AssetTypeAttributeSerializer(
@@ -676,6 +746,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                     workspace_pk, assettype_pk, override_id, global_attr_id
                 )
             override.delete()
+            # Invalidate cache
+            if workspace_pk:
+                invalidate_attribute_list_cache(workspace_pk, assettype_pk)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         # Check if it's an extension
@@ -685,6 +758,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
 
         if extension:
             extension.delete()
+            # Invalidate cache
+            if workspace_pk:
+                invalidate_attribute_list_cache(workspace_pk, assettype_pk)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -738,6 +814,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
                 asset_type_id=assettype_pk,
             )
 
+        # Invalidate cache
+        invalidate_attribute_list_cache(workspace_pk, assettype_pk)
+
         return Response(
             data=AssetTypeAttributeSerializer(attr_to_hide).data,
             status=status.HTTP_200_OK,
@@ -778,6 +857,9 @@ class AssetTypeAttributeViewSet(viewsets.ModelViewSet):
             hidden_attribute=attr_to_unhide,
             workspace_id=workspace_pk,
         ).force_delete()
+
+        # Invalidate cache
+        invalidate_attribute_list_cache(workspace_pk, assettype_pk)
 
         # Return the actual instance that was unhidden (override, not base attribute)
         return Response(

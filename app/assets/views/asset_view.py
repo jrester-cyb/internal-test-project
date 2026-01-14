@@ -7,6 +7,7 @@ from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Centroid
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.cache import cache
 from silk.profiling.profiler import silk_profile
 from drf_spectacular.utils import (
     extend_schema,
@@ -18,10 +19,38 @@ from ..filter_serializers import FilterSerializer
 from ..renderers import AssetCamelCaseJSONRenderer, AssetCamelCaseBrowsableAPIRenderer
 import re
 import json
+import hashlib
 import boto3
 import os
 from ..models import Asset, BaseAttributeValue
 from ..serializers import AssetSerializer
+
+
+def invalidate_asset_list_cache(asset):
+    """Invalidate all cached asset list responses for this asset's workspaces.
+
+    Called on asset create/update/delete via signals.
+    """
+    # Get all workspaces this asset belongs to
+    workspace_ids = list(
+        asset.workspace_memberships.values_list("workspace_id", flat=True)
+    )
+
+    # Invalidate cache for each workspace + asset_type combination
+    for workspace_id in workspace_ids:
+        # Increment version key to invalidate all cached pages
+        version_key = f"asset_list_version:{workspace_id}:{asset.asset_type_id}"
+        try:
+            cache.incr(version_key)
+        except ValueError:
+            cache.set(version_key, 1, timeout=None)
+
+        # Also invalidate workspace-level list (without asset_type filter)
+        workspace_version_key = f"asset_list_version:{workspace_id}:all"
+        try:
+            cache.incr(workspace_version_key)
+        except ValueError:
+            cache.set(workspace_version_key, 1, timeout=None)
 
 
 class AssetPageNumberPagination(PageNumberPagination):
@@ -136,13 +165,13 @@ class AssetViewSet(viewsets.ModelViewSet):
         # Select related for asset_type and organization to avoid N+1 queries
         queryset = queryset.select_related("asset_type", "organization")
 
-        # Prefetch attributes with values annotated directly - no separate value_map query needed!
-        # Uses COALESCE with subqueries to fetch the typed value from whichever concrete table has it
-        from django.db.models import Subquery, OuterRef
-        from django.db.models.functions import Coalesce
-        from django.db.models import Func
+        # Prefetch attributes with values - use subquery approach (CASE WHEN is actually optimal here)
+        # PostgreSQL's query planner only evaluates the matching WHEN branch per row
+        from django.db.models.expressions import RawSQL
         from django.db.models import JSONField
+        from django.contrib.contenttypes.models import ContentType
         from ..models import (
+            BaseAttributeValue,
             TextAttributeValue,
             NumberAttributeValue,
             BooleanAttributeValue,
@@ -151,30 +180,38 @@ class AssetViewSet(viewsets.ModelViewSet):
             JSONAttributeValue,
         )
 
-        # PostgreSQL to_jsonb function - preserves types
-        class ToJsonb(Func):
-            function = "to_jsonb"
-            output_field = JSONField()
+        # Get content type IDs dynamically - cached by Django's ContentType framework
+        ct_text = ContentType.objects.get_for_model(TextAttributeValue).id
+        ct_number = ContentType.objects.get_for_model(NumberAttributeValue).id
+        ct_boolean = ContentType.objects.get_for_model(BooleanAttributeValue).id
+        ct_date = ContentType.objects.get_for_model(DateAttributeValue).id
+        ct_datetime = ContentType.objects.get_for_model(DateTimeAttributeValue).id
+        ct_json = ContentType.objects.get_for_model(JSONAttributeValue).id
 
-        # Build subqueries for each concrete type
-        def value_subquery(Model):
-            return Subquery(
-                Model.objects.filter(baseattributevalue_ptr_id=OuterRef("id"))
-                .annotate(json_val=ToJsonb("value"))
-                .values("json_val")[:1]
-            )
+        # CASE WHEN based on polymorphic_ctype_id - only evaluates 1 subquery per row
+        typed_value_sql = RawSQL(
+            f"""
+            CASE assets_baseattributevalue.polymorphic_ctype_id
+                WHEN {ct_text} THEN (SELECT to_jsonb(tv.value) FROM assets_textattributevalue tv 
+                              WHERE tv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_number} THEN (SELECT to_jsonb(nv.value) FROM assets_numberattributevalue nv 
+                              WHERE nv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_boolean} THEN (SELECT to_jsonb(bv.value) FROM assets_booleanattributevalue bv 
+                              WHERE bv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_date} THEN (SELECT to_jsonb(dv.value) FROM assets_dateattributevalue dv 
+                              WHERE dv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_datetime} THEN (SELECT to_jsonb(dtv.value) FROM assets_datetimeattributevalue dtv 
+                              WHERE dtv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_json} THEN (SELECT jv.value FROM assets_jsonattributevalue jv 
+                              WHERE jv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+            END
+            """,
+            [],
+            output_field=JSONField(),
+        )
 
-        # Annotate typed_value using COALESCE - first non-null wins
         attr_queryset = BaseAttributeValue.objects.non_polymorphic().annotate(
-            typed_value=Coalesce(
-                value_subquery(TextAttributeValue),
-                value_subquery(NumberAttributeValue),
-                value_subquery(BooleanAttributeValue),
-                value_subquery(DateAttributeValue),
-                value_subquery(DateTimeAttributeValue),
-                value_subquery(JSONAttributeValue),
-                output_field=JSONField(),
-            )
+            typed_value=typed_value_sql
         )
 
         queryset = queryset.prefetch_related(
@@ -250,12 +287,38 @@ class AssetViewSet(viewsets.ModelViewSet):
 
         return api_key_map
 
-    def list(self, request, *args, **kwargs):
-        """Override list to provide serializer context.
+    def _get_cache_key(self, request):
+        """Build cache key for asset list response.
 
-        Values are now annotated directly on prefetched attributes - no separate
-        _build_value_map call needed!
+        Includes workspace, asset_type, and all query params for uniqueness.
+        Uses a version key that gets incremented on asset changes.
         """
+        workspace_pk = self.kwargs.get("workspace_pk", "")
+        assettype_pk = self.kwargs.get("assettype_pk", "all")
+
+        # Get current version (incremented on asset changes)
+        version_key = f"asset_list_version:{workspace_pk}:{assettype_pk}"
+        version = cache.get(version_key, 0)
+
+        # Include all query params in cache key
+        params = request.query_params.urlencode()
+        params_hash = hashlib.md5(params.encode()).hexdigest()[:12]
+
+        return f"asset_list:{workspace_pk}:{assettype_pk}:v{version}:{params_hash}"
+
+    def list(self, request, *args, **kwargs):
+        """Override list with response caching.
+
+        Caches the JSON response for 60 seconds. Cache is invalidated
+        when any asset in the workspace/asset_type is created, updated, or deleted.
+        """
+        cache_key = self._get_cache_key(request)
+
+        # Try to get cached response
+        cached_response = cache.get(cache_key)
+        if cached_response is not None:
+            return Response(cached_response)
+
         with silk_profile(name="1. filter_queryset"):
             queryset = self.filter_queryset(self.get_queryset())
 
@@ -270,13 +333,18 @@ class AssetViewSet(viewsets.ModelViewSet):
                 data = serializer.data
 
             with silk_profile(name="4. get_paginated_response"):
-                return self.get_paginated_response(data)
+                response = self.get_paginated_response(data)
+                # Cache the response data for 60 seconds
+                cache.set(cache_key, response.data, timeout=60)
+                return response
 
         # Non-paginated response
         assets = list(queryset)
         context = self.get_serializer_context()
         serializer = self.get_serializer(assets, many=True, context=context)
-        return Response(serializer.data)
+        response_data = serializer.data
+        cache.set(cache_key, response_data, timeout=60)
+        return Response(response_data)
 
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve - values are annotated on prefetched attributes"""
