@@ -6,6 +6,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import CodeIcon from '@mui/icons-material/Code'
 import CodeOffIcon from '@mui/icons-material/CodeOff'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 
 interface HistoryEntry {
   text: string
@@ -38,6 +39,7 @@ export default function JsonEditor({
   placeholder = 'Enter JSON here...',
 }: JsonEditorProps) {
   const [scrollPos, setScrollPos] = useState({ top: 0, left: 0 })
+  const [fullscreenScrollPos, setFullscreenScrollPos] = useState({ top: 0, left: 0 })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fullscreenTextareaRef = useRef<HTMLTextAreaElement>(null)
   const pendingCursorRef = useRef<number | null>(null)
@@ -577,14 +579,20 @@ export default function JsonEditor({
     })
   }
 
-  // Sync cursor position when switching between fullscreen modes
+  const handleFullscreenScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    setFullscreenScrollPos({
+      top: e.currentTarget.scrollTop,
+      left: e.currentTarget.scrollLeft
+    })
+  }
+
+  // Reset fullscreen scroll when opening
   useEffect(() => {
-    if (isFullscreen && fullscreenTextareaRef.current) {
-      const mainTextarea = textareaRef.current
-      if (mainTextarea) {
-        fullscreenTextareaRef.current.selectionStart = mainTextarea.selectionStart
-        fullscreenTextareaRef.current.selectionEnd = mainTextarea.selectionEnd
-        fullscreenTextareaRef.current.scrollTop = mainTextarea.scrollTop
+    if (isFullscreen) {
+      setFullscreenScrollPos({ top: 0, left: 0 })
+      if (fullscreenTextareaRef.current) {
+        fullscreenTextareaRef.current.scrollTop = 0
+        fullscreenTextareaRef.current.scrollLeft = 0
         fullscreenTextareaRef.current.focus()
       }
     }
@@ -628,6 +636,29 @@ export default function JsonEditor({
         </span>
       </Tooltip>
       <Box sx={{ width: 1, bgcolor: 'grey.700', mx: 0.25 }} />
+      <Tooltip title="Format JSON">
+        <span>
+          <IconButton
+            size="small"
+            onClick={() => {
+              try {
+                const parsed = JSON.parse(localText)
+                const formatted = JSON.stringify(parsed, null, 2)
+                if (formatted !== localText) {
+                  handleTextChange(formatted, 0)
+                  pendingCursorRef.current = 0
+                }
+              } catch {
+                // Invalid JSON, can't format
+              }
+            }}
+            disabled={!isValid || !localText}
+            sx={{ color: 'grey.400', '&:hover': { color: 'grey.100' } }}
+          >
+            <AutoFixHighIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
       <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"}>
         <IconButton
           size="small"
@@ -742,7 +773,7 @@ export default function JsonEditor({
                   p: 1.5,
                   whiteSpace: 'pre',
                   pointerEvents: 'none',
-                  transform: `translate(${-scrollPos.left}px, ${-scrollPos.top}px)`,
+                  transform: `translate(${-fullscreenScrollPos.left}px, ${-fullscreenScrollPos.top}px)`,
                 }}
                 dangerouslySetInnerHTML={{
                   __html: localText
@@ -758,7 +789,7 @@ export default function JsonEditor({
               onChange={(e) => handleTextChange(e.target.value, e.target.selectionStart)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              onScroll={handleScroll}
+              onScroll={handleFullscreenScroll}
               placeholder={showRawText ? placeholder : undefined}
               style={{
                 position: 'relative',
