@@ -114,7 +114,7 @@ export default function TextRenderer({
 
   // Keyboard handler (for escape in fullscreen, delegate to editor handlers)
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    console.log('[TextRenderer:handleKeyDown] event received:', {
+    console.debug('[TextRenderer:handleKeyDown] event received:', {
       key: e.key,
       code: e.code,
       ctrlKey: e.ctrlKey,

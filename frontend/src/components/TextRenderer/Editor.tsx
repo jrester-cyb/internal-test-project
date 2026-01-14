@@ -157,7 +157,7 @@ export default function Editor({
 
   // Keyboard handler using configurable shortcuts
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    console.log('[TextRenderer] keydown detected:', {
+    console.debug('[TextRenderer] keydown detected:', {
       key: e.key,
       code: e.code,
       ctrlKey: e.ctrlKey,
@@ -188,11 +188,11 @@ export default function Editor({
     const selectionStart = target.selectionStart
     const selectionEnd = target.selectionEnd
 
-    console.log('[TextRenderer] checking shortcuts, activeShortcuts:', activeShortcuts.map(s => s.id))
+    console.debug('[TextRenderer] checking shortcuts, activeShortcuts:', activeShortcuts.map(s => s.id))
 
     for (const shortcut of activeShortcuts) {
       const matches = matchesShortcut(e, shortcut.shortcut)
-      console.log(`[TextRenderer] checking shortcut "${shortcut.id}" (${shortcut.shortcut}):`, matches)
+      console.debug(`[TextRenderer] checking shortcut "${shortcut.id}" (${shortcut.shortcut}):`, matches)
       if (matches) {
         const context = buildShortcutContext(text, selectionStart, selectionEnd)
         const result = shortcut.action(context)

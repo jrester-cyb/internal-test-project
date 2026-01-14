@@ -105,7 +105,7 @@ export function matchesShortcut(
   
   // Debug logging for shortcut matching
   if (e.ctrlKey || e.metaKey || e.altKey) {
-    console.log('[matchesShortcut] checking:', shortcut, {
+    console.debug('[matchesShortcut] checking:', shortcut, {
       parsed,
       isMac,
       eventKey: e.key.toLowerCase(),

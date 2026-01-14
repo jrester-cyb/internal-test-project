@@ -80,18 +80,18 @@ export default function AssetDetailPage() {
 
   const handleEdit = () => {
     // TODO: Implement edit functionality
-    console.log('Edit asset:', asset.id)
+    console.debug('Edit asset:', asset.id)
   }
 
   const handleViewOnMap = () => {
     // TODO: Implement view on map functionality
-    console.log('View on map:', asset.id)
+    console.debug('View on map:', asset.id)
   }
 
   const handleShare = () => {
     // TODO: Implement share functionality
     navigator.clipboard.writeText(window.location.href)
-    console.log('Share asset:', asset.id)
+    console.debug('Share asset:', asset.id)
   }
 
   const handleDownload = () => {
@@ -144,7 +144,7 @@ export default function AssetDetailPage() {
       icon: <CloneIcon fontSize="small" />,
       onClick: () => {
         // TODO: Implement clone functionality
-        console.log('Clone asset:', asset.id)
+        console.debug('Clone asset:', asset.id)
       },
       color: 'inherit' as const,
       variant: 'outlined' as const,
