@@ -2,14 +2,9 @@
 URL configuration for audit log API.
 """
 
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import AuditLogRequestViewSet, AuditLogEntryViewSet
-
-router = DefaultRouter()
-router.register(r"requests", AuditLogRequestViewSet, basename="audit-log-request")
-router.register(r"entries", AuditLogEntryViewSet, basename="audit-log-entry")
+from django.urls import path
+from .views import AuditLogEntryListView
 
 urlpatterns = [
-    path("", include(router.urls)),
+    path("entries/", AuditLogEntryListView.as_view(), name="audit-log-entries"),
 ]
