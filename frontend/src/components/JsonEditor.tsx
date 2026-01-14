@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react'
 import { Box, IconButton, Tooltip, Typography } from '@mui/material'
 import UndoIcon from '@mui/icons-material/Undo'
 import RedoIcon from '@mui/icons-material/Redo'
@@ -152,7 +152,8 @@ export default function JsonEditor({
   }, [value])
 
   // Set cursor position or selection after render if pending
-  useEffect(() => {
+  // Use useLayoutEffect to set cursor before browser paint, preventing flicker
+  useLayoutEffect(() => {
     if (pendingSelectionRef.current !== null && textareaRef.current) {
       textareaRef.current.focus({ preventScroll: true })
       textareaRef.current.selectionStart = pendingSelectionRef.current.start
