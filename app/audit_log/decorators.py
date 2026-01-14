@@ -111,6 +111,7 @@ def audit_viewset_action(
     message: str = None,
     action_detail: str = "",
     include_changes: bool = True,
+    include_metadata: bool = True,
 ):
     """
     Decorator for ViewSet action methods with automatic target detection.
@@ -172,6 +173,22 @@ def audit_viewset_action(
                                 "new": str(new_val) if new_val else None,
                             }
 
+                # Build metadata
+                metadata = {}
+                if include_metadata:
+                    # Add view kwargs (workspace_pk, organization_pk, etc.)
+                    if hasattr(self, "kwargs"):
+                        metadata["view_kwargs"] = {
+                            k: str(v) for k, v in self.kwargs.items()
+                        }
+                    # Add result count for list actions
+                    if log_action == "list" and hasattr(response, "data"):
+                        data = response.data
+                        if isinstance(data, dict) and "count" in data:
+                            metadata["result_count"] = data["count"]
+                        elif isinstance(data, list):
+                            metadata["result_count"] = len(data)
+
                 # Build message
                 log_message = message
                 if not log_message:
@@ -196,6 +213,7 @@ def audit_viewset_action(
                     target=target,
                     action_detail=action_detail,
                     changes=changes,
+                    metadata=metadata,
                     references=references,
                 )
 

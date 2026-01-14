@@ -124,6 +124,8 @@ class OSMImporter:
         feature_type: str,
         feature_value: str = None,
         limit: int = 100,
+        max_retries: int = 3,
+        retry_delay: int = 10,
     ) -> int:
         south, west, north, east = bbox
         if feature_value:
@@ -151,7 +153,9 @@ class OSMImporter:
             + (f"={feature_value}" if feature_value else "")
         )
         print(f"Bounding box: {bbox}")
-        data = self.query_overpass(query)
+        data = self.query_overpass(
+            query, max_retries=max_retries, retry_delay=retry_delay
+        )
         elements = data.get("elements", [])
         print(f"Found {len(elements)} elements")
         asset_type = self.get_or_create_asset_type(feature_type)
@@ -296,6 +300,15 @@ class Command(BaseCommand):
         parser.add_argument(
             "--workspace-id", type=str, required=True, help="Workspace ID (UUID)"
         )
+        parser.add_argument(
+            "--retry-delay",
+            type=int,
+            default=10,
+            help="Delay between retries on timeout",
+        )
+        parser.add_argument(
+            "--max-retries", type=int, default=3, help="Max retries on timeout"
+        )
 
     def geocode_location(self, location_name: str) -> tuple:
         url = "https://nominatim.openstreetmap.org/search"
@@ -318,6 +331,8 @@ class Command(BaseCommand):
         location = options["location"]
         limit = options["limit"]
         workspace_id = options["workspace_id"]
+        max_retries = options["max_retries"]
+        retry_delay = options["retry_delay"]
 
         # Look up workspace
         try:
@@ -357,6 +372,8 @@ class Command(BaseCommand):
                 feature_type=feature_type,
                 feature_value=feature_value,
                 limit=feature_limit,
+                max_retries=max_retries,
+                retry_delay=retry_delay,
             )
 
         self.stdout.write(self.style.SUCCESS("\n=== Import Complete ==="))

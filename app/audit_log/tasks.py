@@ -32,46 +32,65 @@ except ImportError:
     celery_shared_task = None
 
 
-def _process_batch_impl(batch_data: dict) -> str:
+def _process_request_impl(request_data: dict) -> str:
     """
-    Core implementation for processing audit batch.
+    Core implementation for processing audit request data.
 
-    Creates flattened AuditLogEntry records with full request context.
+    Creates AuditLogRequest and AuditLogEntry records.
     """
-    from audit_log.models import AuditLogEntry, AuditLogReference
-
-    batch_id = batch_data.get("batch_id") or str(uuid.uuid4())
+    from audit_log.models import AuditLogRequest, AuditLogEntry, AuditLogReference
 
     with transaction.atomic():
         # Get user if we have a user_id
         user = None
-        if batch_data.get("user_id"):
+        if request_data.get("user_id"):
             from django.contrib.auth import get_user_model
 
             User = get_user_model()
             try:
-                user = User.objects.get(pk=batch_data["user_id"])
+                user = User.objects.get(pk=request_data["user_id"])
             except User.DoesNotExist:
                 pass
 
-        # Common fields for all entries in this batch
-        common_fields = {
-            "batch_id": batch_id,
-            "user": user,
-            "user_email": batch_data.get("user_email", ""),
-            "request_id": batch_data.get("request_id", ""),
-            "request_method": batch_data.get("request_method", ""),
-            "request_path": batch_data.get("request_path", ""),
-            "request_query_params": batch_data.get("query_params", {}),
-            "ip_address": batch_data.get("ip_address") or None,
-            "user_agent": batch_data.get("user_agent", ""),
-            "organization_id": batch_data.get("organization_id"),
-            "workspace_id": batch_data.get("workspace_id"),
-            "duration_ms": batch_data.get("duration_ms"),
-        }
+        # Get organization and workspace FKs
+        organization = None
+        workspace = None
+
+        if request_data.get("organization_id"):
+            try:
+                from organizations.models import Organization
+
+                organization = Organization.objects.get(
+                    pk=request_data["organization_id"]
+                )
+            except Exception:
+                pass
+
+        if request_data.get("workspace_id"):
+            try:
+                from workspaces.models import Workspace
+
+                workspace = Workspace.objects.get(pk=request_data["workspace_id"])
+            except Exception:
+                pass
+
+        # Create the request record
+        audit_request = AuditLogRequest.objects.create(
+            request_id=request_data.get("request_id", ""),
+            user=user,
+            user_email=request_data.get("user_email", ""),
+            request_method=request_data.get("request_method", ""),
+            request_path=request_data.get("request_path", ""),
+            request_query_params=request_data.get("query_params", {}),
+            ip_address=request_data.get("ip_address") or None,
+            user_agent=request_data.get("user_agent", ""),
+            organization=organization,
+            workspace=workspace,
+            duration_ms=request_data.get("duration_ms"),
+        )
 
         # Create entries
-        entries_data = batch_data.get("entries", [])
+        entries_data = request_data.get("entries", [])
         entry_objects = []
 
         for entry_data in entries_data:
@@ -90,8 +109,17 @@ def _process_batch_impl(batch_data: dict) -> str:
                 except ContentType.DoesNotExist:
                     pass
 
+            # Parse group_id if present
+            group_id = None
+            if entry_data.get("group_id"):
+                try:
+                    group_id = uuid.UUID(entry_data["group_id"])
+                except (ValueError, TypeError):
+                    group_id = None
+
             entry = AuditLogEntry.objects.create(
-                **common_fields,
+                request=audit_request,
+                group_id=group_id,
                 action=entry_data["action"],
                 action_detail=entry_data.get("action_detail", ""),
                 message=entry_data["message"],
@@ -104,26 +132,22 @@ def _process_batch_impl(batch_data: dict) -> str:
             )
             entry_objects.append((entry, entry_data))
 
-        # Get workspace and organization for automatic references
-        workspace = None
-        organization = None
+        # Get workspace and organization content types for auto-references
         workspace_ct = None
         organization_ct = None
 
-        if batch_data.get("workspace_id"):
+        if workspace:
             try:
                 from workspaces.models import Workspace
 
-                workspace = Workspace.objects.get(pk=batch_data["workspace_id"])
                 workspace_ct = ContentType.objects.get_for_model(Workspace)
             except Exception:
                 pass
 
-        if batch_data.get("organization_id"):
+        if organization:
             try:
                 from organizations.models import Organization
 
-                organization = Organization.objects.get(pk=batch_data["organization_id"])
                 organization_ct = ContentType.objects.get_for_model(Organization)
             except Exception:
                 pass
@@ -178,41 +202,46 @@ def _process_batch_impl(batch_data: dict) -> str:
                 except Exception as e:
                     logger.warning(f"Failed to create audit reference: {e}")
 
-        logger.info(f"Processed audit batch {batch_id} with {len(entries_data)} entries")
-        return batch_id
+        logger.info(
+            f"Processed audit request {audit_request.id} with {len(entries_data)} entries"
+        )
+        return str(audit_request.id)
 
 
-class ProcessAuditBatch:
+class ProcessAuditRequest:
     """
     Callable class that handles both sync and async processing.
 
     Usage:
-        process_audit_batch(batch_data)  # Sync call
-        process_audit_batch.delay(batch_data)  # Async call (if Celery available)
+        process_audit_request(request_data)  # Sync call
+        process_audit_request.delay(request_data)  # Async call (if Celery available)
     """
 
-    def __call__(self, batch_data: dict) -> str:
+    def __call__(self, request_data: dict) -> str:
         """Process synchronously."""
         try:
-            return _process_batch_impl(batch_data)
+            return _process_request_impl(request_data)
         except Exception as e:
-            logger.error(f"Failed to process audit batch: {e}")
+            logger.error(f"Failed to process audit request: {e}")
             raise
 
-    def delay(self, batch_data: dict):
+    def delay(self, request_data: dict):
         """
         Process asynchronously if possible, otherwise sync.
         """
         if AUDIT_LOG_ASYNC and CELERY_AVAILABLE:
             # Use Celery
-            return _process_audit_batch_celery.delay(batch_data)
+            return _process_audit_request_celery.delay(request_data)
         else:
             # Run synchronously
-            return self(batch_data)
+            return self(request_data)
 
 
 # Create the callable instance
-process_audit_batch = ProcessAuditBatch()
+process_audit_request = ProcessAuditRequest()
+
+# Legacy alias
+process_audit_batch = process_audit_request
 
 
 # Only define Celery task if available
@@ -225,9 +254,9 @@ if CELERY_AVAILABLE:
         autoretry_for=(Exception,),
         retry_backoff=True,
     )
-    def _process_audit_batch_celery(self, batch_data: dict):
+    def _process_audit_request_celery(self, request_data: dict):
         """Celery task wrapper."""
-        return _process_batch_impl(batch_data)
+        return _process_request_impl(request_data)
 
 
 def process_pending_batches():
@@ -245,7 +274,7 @@ def process_pending_batches():
 
     for batch in pending:
         try:
-            _process_batch_impl(batch.data)
+            _process_request_impl(batch.data)
             batch.processed = True
             batch.processed_at = timezone.now()
             batch.save()
@@ -261,15 +290,15 @@ def cleanup_old_audit_logs(days: int = None):
 
     Respects AUDIT_LOG_RETENTION_DAYS setting (default: 365 days).
     """
-    from audit_log.models import AuditLogEntry, AuditLogPendingBatch
+    from audit_log.models import AuditLogRequest, AuditLogPendingBatch
     from datetime import timedelta
 
     retention_days = days or getattr(settings, "AUDIT_LOG_RETENTION_DAYS", 365)
     cutoff = timezone.now() - timedelta(days=retention_days)
 
-    # Delete old entries (cascades to references)
-    deleted_count, _ = AuditLogEntry.objects.filter(created_at__lt=cutoff).delete()
-    logger.info(f"Deleted {deleted_count} old audit entries")
+    # Delete old requests (cascades to entries and references)
+    deleted_count, _ = AuditLogRequest.objects.filter(created_at__lt=cutoff).delete()
+    logger.info(f"Deleted {deleted_count} old audit requests")
 
     # Also clean up processed pending batches older than 7 days
     pending_cutoff = timezone.now() - timedelta(days=7)

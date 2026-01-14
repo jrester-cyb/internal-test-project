@@ -7,6 +7,7 @@ Provides thread-local request context and the main logging interface.
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from typing import Any, Optional
 from dataclasses import dataclass, field
 from django.contrib.contenttypes.models import ContentType
@@ -32,11 +33,10 @@ class AuditEntry:
 
 
 @dataclass
-class AuditBatchContext:
-    """Context for a batch of audit entries within a request."""
+class AuditRequestContext:
+    """Context for an HTTP request containing audit entries."""
 
     request_id: str
-    batch_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     user: Any = None
     user_email: str = ""
     request_method: str = ""
@@ -47,17 +47,17 @@ class AuditBatchContext:
     organization_id: str = None
     workspace_id: str = None
     start_time: float = field(default_factory=time.time)
-    entries: list = field(default_factory=list)
+    entries: list = field(default_factory=list)  # List of (entry, group_id) tuples
 
-    def add_entry(self, entry: AuditEntry):
-        """Add an entry to this batch."""
+    def add_entry(self, entry: AuditEntry, group_id: str = None):
+        """Add an entry to this request context."""
         entry.order = len(self.entries)
-        self.entries.append(entry)
+        self.entries.append((entry, group_id))
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for async processing."""
         entries_data = []
-        for entry in self.entries:
+        for entry, group_id in self.entries:
             # Serialize target
             target_data = None
             if entry.target:
@@ -101,11 +101,11 @@ class AuditBatchContext:
                     "metadata": entry.metadata,
                     "references": refs_data,
                     "order": entry.order,
+                    "group_id": group_id,
                 }
             )
 
         return {
-            "batch_id": self.batch_id,
             "request_id": self.request_id,
             "user_id": (
                 str(self.user.pk) if self.user and self.user.is_authenticated else None
@@ -125,20 +125,108 @@ class AuditBatchContext:
         }
 
 
-def get_current_batch() -> Optional[AuditBatchContext]:
-    """Get the current request's audit batch context."""
-    return getattr(_thread_locals, "audit_batch", None)
+def get_current_request_context() -> Optional[AuditRequestContext]:
+    """Get the current request's audit context."""
+    return getattr(_thread_locals, "audit_request", None)
 
 
-def set_current_batch(batch: Optional[AuditBatchContext]):
-    """Set the current request's audit batch context."""
-    _thread_locals.audit_batch = batch
+def set_current_request_context(ctx: Optional[AuditRequestContext]):
+    """Set the current request's audit context."""
+    _thread_locals.audit_request = ctx
 
 
-def clear_current_batch():
-    """Clear the current request's audit batch context."""
-    if hasattr(_thread_locals, "audit_batch"):
-        del _thread_locals.audit_batch
+def clear_current_request_context():
+    """Clear the current request's audit context."""
+    if hasattr(_thread_locals, "audit_request"):
+        del _thread_locals.audit_request
+
+
+# Legacy aliases for backwards compatibility
+get_current_batch = get_current_request_context
+set_current_batch = set_current_request_context
+clear_current_batch = clear_current_request_context
+AuditBatchContext = AuditRequestContext
+
+
+def create_group() -> str:
+    """
+    Generate a new group ID for grouping audit log entries within a request.
+
+    Use this when you want to group related entries together.
+
+    Usage:
+        # Log entries with a custom group
+        my_group = create_group()
+        AuditLogger.log(action="notify", message="...", group_id=my_group)
+        AuditLogger.log(action="email", message="...", group_id=my_group)
+
+        # These go to the request without a group
+        AuditLogger.log(action="update", message="...")
+    """
+    return str(uuid.uuid4())
+
+
+# Legacy alias
+create_new_batch = create_group
+
+
+@contextmanager
+def audit_group(group_id: str = None):
+    """
+    Context manager for grouping audit log entries within a request.
+
+    All AuditLogger.log() calls within this context will share the same group_id.
+    They still belong to the same HTTP request but are grouped for logical organization.
+
+    Usage:
+        from audit_log.logging import audit_group, AuditLogger
+
+        # All logs in this block share the same group_id
+        with audit_group() as gid:
+            AuditLogger.log(action="notify", message="Sent email")
+            AuditLogger.log(action="notify", message="Sent Slack message")
+
+        # This has no group_id
+        AuditLogger.log(action="update", message="Updated record")
+
+        # You can also provide your own group_id
+        with audit_group(group_id="import-batch-123"):
+            AuditLogger.log(action="import", message="Imported row 1")
+            AuditLogger.log(action="import", message="Imported row 2")
+
+    Args:
+        group_id: Optional custom group ID. If not provided, one will be generated.
+
+    Yields:
+        The group_id being used for this context.
+    """
+    gid = group_id or create_group()
+
+    # Store the group_id in thread-local so AuditLogger.log can find it
+    prev_context_group = getattr(_thread_locals, "_context_group_id", None)
+    _thread_locals._context_group_id = gid
+
+    try:
+        yield gid
+    finally:
+        # Restore previous context (for nested contexts)
+        if prev_context_group is not None:
+            _thread_locals._context_group_id = prev_context_group
+        elif hasattr(_thread_locals, "_context_group_id"):
+            del _thread_locals._context_group_id
+
+
+# Legacy alias
+audit_batch = audit_group
+
+
+def get_context_group_id() -> Optional[str]:
+    """Get the current context manager's group_id, if any."""
+    return getattr(_thread_locals, "_context_group_id", None)
+
+
+# Legacy alias
+get_context_batch_id = get_context_group_id
 
 
 class AuditLogger:
@@ -169,16 +257,37 @@ class AuditLogger:
         changes: dict = None,
         metadata: dict = None,
         references: list = None,
+        group_id: str = None,
+        batch_id: str = None,  # Legacy alias for group_id
     ):
         """
         Log an audit action.
 
+        Args:
+            action: The action type (create, update, delete, etc.)
+            message: Human-readable description of the action
+            request: Optional request object for context
+            user: Optional user object (uses request.user if not provided)
+            target: The object being acted upon
+            target_repr: String representation of target (auto-generated if not provided)
+            action_detail: Additional detail about the action (e.g., "workspace_local")
+            changes: Dict of field changes {field: {old: x, new: y}}
+            metadata: Additional metadata dict
+            references: List of related objects [(obj, role), ...]
+            group_id: Optional group ID for grouping entries within a request.
+                      Use create_group() to generate one. Also set automatically when
+                      using the audit_group() context manager.
+            batch_id: Legacy alias for group_id (deprecated).
+
         If called within a request context (middleware active), the entry
-        will be batched with other entries from the same request.
+        will be added to the request's audit context.
 
         If called outside a request context, the entry will be logged
-        immediately as a standalone batch.
+        immediately as a standalone request.
         """
+        # Check for context manager group_id (group_id param takes precedence over batch_id)
+        effective_group_id = group_id or batch_id or get_context_group_id()
+
         entry = AuditEntry(
             action=action,
             message=message,
@@ -190,16 +299,16 @@ class AuditLogger:
             references=references or [],
         )
 
-        # Try to add to current batch
-        batch = get_current_batch()
-        if batch:
-            batch.add_entry(entry)
+        # Try to add to current request context
+        current_ctx = get_current_request_context()
+        if current_ctx:
+            current_ctx.add_entry(entry, group_id=effective_group_id)
             return
 
-        # No batch context - create standalone batch and process immediately
-        from audit_log.tasks import process_audit_batch
+        # No request context - create standalone request and process immediately
+        from audit_log.tasks import process_audit_request
 
-        standalone_batch = AuditBatchContext(
+        standalone_ctx = AuditRequestContext(
             request_id=str(uuid.uuid4()),
             user=user or (request.user if request else None),
             user_email=getattr(
@@ -208,10 +317,17 @@ class AuditLogger:
             request_method=request.method if request else "MANUAL",
             request_path=request.path if request else "",
         )
-        standalone_batch.add_entry(entry)
 
-        # Process async
-        process_audit_batch.delay(standalone_batch.to_dict())
+        standalone_ctx.add_entry(entry, group_id=effective_group_id)
+        process_audit_request.delay(standalone_ctx.to_dict())
+
+    @classmethod
+    def flush_custom_batches(cls):
+        """
+        Legacy method - no longer needed since all entries go to request context.
+        Kept for backwards compatibility.
+        """
+        pass
 
     @classmethod
     def log_create(cls, target, message: str = None, **kwargs):

@@ -1047,7 +1047,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @audit_viewset_action(
         action="reorder",
         message="Reordered asset type attributes",
-        include_changes=False,
+        include_changes=True,
     )
     def reorder(self, request, workspace_pk=None, assettype_pk=None):
         """

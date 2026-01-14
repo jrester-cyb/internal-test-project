@@ -8,10 +8,10 @@ from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
 
 from .logging import (
-    AuditBatchContext,
-    set_current_batch,
-    get_current_batch,
-    clear_current_batch,
+    AuditRequestContext,
+    set_current_request_context,
+    get_current_request_context,
+    clear_current_request_context,
 )
 
 
@@ -89,27 +89,21 @@ class AuditLogMiddleware(MiddlewareMixin):
     # Whether to log read operations
     LOG_READS = getattr(settings, "AUDIT_LOG_READS", False)
 
-    def should_audit(self, request) -> bool:
-        """Determine if this request should be audited."""
-        # Check excluded paths
+    def should_skip_path(self, request) -> bool:
+        """Check if this path should be completely skipped."""
         for path in self.EXCLUDED_PATHS:
             if request.path.startswith(path):
-                return False
-
-        # Check excluded methods
-        if request.method in self.EXCLUDED_METHODS:
-            return False
-
-        # By default, only audit state-changing methods unless LOG_READS is True
-        if not self.LOG_READS and request.method in ("GET", "HEAD", "OPTIONS"):
-            return False
-
-        return True
+                return True
+        return False
 
     def process_request(self, request):
-        """Initialize audit batch context for this request."""
-        if not self.should_audit(request):
+        """Initialize audit request context for this request."""
+        # Skip excluded paths entirely
+        if self.should_skip_path(request):
             return None
+
+        # Always create request context - individual views may want to log
+        # even if global LOG_READS is False (via audit_log_reads = True on ViewSet)
 
         # Generate request ID
         request_id = request.META.get("HTTP_X_REQUEST_ID") or str(uuid.uuid4())
@@ -118,8 +112,8 @@ class AuditLogMiddleware(MiddlewareMixin):
         # Extract context IDs (may not be available yet before URL resolution)
         organization_id, workspace_id = extract_context_ids(request)
 
-        # Create batch context
-        batch = AuditBatchContext(
+        # Create request context
+        ctx = AuditRequestContext(
             request_id=request_id,
             user=(
                 request.user
@@ -139,55 +133,55 @@ class AuditLogMiddleware(MiddlewareMixin):
             start_time=time.time(),
         )
 
-        set_current_batch(batch)
+        set_current_request_context(ctx)
         return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         """Update context with resolved URL parameters."""
-        batch = get_current_batch()
-        if batch:
+        ctx = get_current_request_context()
+        if ctx:
             # Update organization/workspace IDs now that URL is resolved
-            if not batch.organization_id:
-                batch.organization_id = view_kwargs.get(
+            if not ctx.organization_id:
+                ctx.organization_id = view_kwargs.get(
                     "organization_pk"
                 ) or view_kwargs.get("organization_id")
-            if not batch.workspace_id:
-                batch.workspace_id = view_kwargs.get("workspace_pk") or view_kwargs.get(
+            if not ctx.workspace_id:
+                ctx.workspace_id = view_kwargs.get("workspace_pk") or view_kwargs.get(
                     "workspace_id"
                 )
 
             # Update user info (authentication middleware runs before us)
             if hasattr(request, "user") and request.user.is_authenticated:
-                batch.user = request.user
-                batch.user_email = getattr(request.user, "email", "")
+                ctx.user = request.user
+                ctx.user_email = getattr(request.user, "email", "")
 
         return None
 
     def process_response(self, request, response):
-        """Submit audit batch for async processing."""
-        batch = get_current_batch()
+        """Submit audit request for processing."""
+        ctx = get_current_request_context()
 
-        if batch and batch.entries:
-            from .tasks import process_audit_batch
+        if ctx and ctx.entries:
+            from .tasks import process_audit_request
 
             # Calculate duration
-            batch_data = batch.to_dict()
+            request_data = ctx.to_dict()
 
-            # Submit for async processing
+            # Submit for processing
             try:
-                process_audit_batch.delay(batch_data)
+                process_audit_request.delay(request_data)
             except Exception:
                 # If Celery is not available, queue for later processing
                 from .models import AuditLogPendingBatch
 
-                AuditLogPendingBatch.objects.create(data=batch_data)
+                AuditLogPendingBatch.objects.create(data=request_data)
 
         # Clean up
-        clear_current_batch()
+        clear_current_request_context()
 
         return response
 
     def process_exception(self, request, exception):
         """Clean up on exception."""
-        clear_current_batch()
+        clear_current_request_context()
         return None

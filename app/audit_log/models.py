@@ -1,8 +1,12 @@
 """
 Audit log models for tracking API actions.
 
-Flattened structure - each entry contains full request context,
-with batch_id to group entries from the same request.
+Normalized structure:
+- AuditLogRequest: HTTP request context (one per request)
+- AuditLogEntry: Action-level data (multiple per request)
+- AuditLogReference: Related objects for each entry
+
+Entries can be grouped within a request using group_id for custom batching.
 """
 
 import uuid
@@ -12,13 +16,89 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
 
+class AuditLogRequest(models.Model):
+    """
+    HTTP request context for audit log entries.
+
+    All entries from the same HTTP request share an AuditLogRequest.
+    Contains request metadata that doesn't change between entries.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Request correlation
+    request_id = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="Unique request identifier for correlation (e.g., X-Request-ID header)",
+    )
+
+    # User info
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_requests",
+    )
+    user_email = models.EmailField(
+        blank=True,
+        help_text="Stored separately in case user is deleted",
+    )
+
+    # Request metadata
+    request_method = models.CharField(max_length=10, blank=True)
+    request_path = models.CharField(max_length=500, blank=True)
+    request_query_params = models.JSONField(default=dict, blank=True)
+
+    # Network context
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    # Organization/Workspace context (nullable FKs for filtering)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_requests",
+    )
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_requests",
+    )
+
+    # Timing
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    duration_ms = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Request duration in milliseconds",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["organization", "-created_at"]),
+            models.Index(fields=["workspace", "-created_at"]),
+            models.Index(fields=["request_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.request_method} {self.request_path} ({self.id})"
+
+
 class AuditLogEntry(models.Model):
     """
-    Audit log entry representing a single action with full request context.
+    Audit log entry representing a single action within a request.
 
-    Each entry contains all the information about the request and the action,
-    making it queryable without joins. Entries from the same request share
-    a batch_id for grouping.
+    Contains action-specific data. Request context is on the request record.
+    Entries can be grouped within a request using group_id.
     """
 
     class ActionType(models.TextChoices):
@@ -38,43 +118,20 @@ class AuditLogEntry(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # Batch grouping - entries from the same request share this ID
-    batch_id = models.UUIDField(
-        db_index=True,
-        help_text="Groups entries from the same request",
+    # Link to request context
+    request = models.ForeignKey(
+        AuditLogRequest,
+        on_delete=models.CASCADE,
+        related_name="entries",
     )
 
-    # User info
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+    # Optional grouping within a request (for custom batches)
+    group_id = models.UUIDField(
         null=True,
         blank=True,
-        related_name="audit_entries",
-    )
-    user_email = models.EmailField(
-        blank=True,
-        help_text="Stored separately in case user is deleted",
-    )
-
-    # Request metadata
-    request_id = models.CharField(
-        max_length=100,
-        blank=True,
         db_index=True,
-        help_text="Unique request identifier for correlation",
+        help_text="Optional group ID for custom batching within a request",
     )
-    request_method = models.CharField(max_length=10, blank=True)
-    request_path = models.CharField(max_length=500, blank=True)
-    request_query_params = models.JSONField(default=dict, blank=True)
-
-    # Network context
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
-
-    # Organization/Workspace context (for filtering)
-    organization_id = models.UUIDField(null=True, blank=True, db_index=True)
-    workspace_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     # Action details
     action = models.CharField(
@@ -123,13 +180,8 @@ class AuditLogEntry(models.Model):
         help_text="Additional context data",
     )
 
-    # Timing
+    # Timing and ordering
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    duration_ms = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="Request duration in milliseconds",
-    )
     order = models.IntegerField(
         default=0,
         help_text="Order within the batch",
@@ -138,12 +190,10 @@ class AuditLogEntry(models.Model):
     class Meta:
         ordering = ["-created_at", "order"]
         indexes = [
-            models.Index(fields=["user", "-created_at"]),
-            models.Index(fields=["organization_id", "-created_at"]),
-            models.Index(fields=["workspace_id", "-created_at"]),
+            models.Index(fields=["request", "order"]),
+            models.Index(fields=["group_id"]),
             models.Index(fields=["action", "-created_at"]),
             models.Index(fields=["target_content_type", "target_object_id"]),
-            models.Index(fields=["batch_id", "order"]),
         ]
 
     def __str__(self):
@@ -155,6 +205,35 @@ class AuditLogEntry(models.Model):
         if self.target_content_type:
             return self.target_content_type.model
         return ""
+
+    # Convenience accessors to request data
+    @property
+    def user(self):
+        return self.request.user
+
+    @property
+    def user_email(self):
+        return self.request.user_email
+
+    @property
+    def request_method(self):
+        return self.request.request_method
+
+    @property
+    def request_path(self):
+        return self.request.request_path
+
+    @property
+    def ip_address(self):
+        return self.request.ip_address
+
+    @property
+    def organization(self):
+        return self.request.organization
+
+    @property
+    def workspace(self):
+        return self.request.workspace
 
 
 class AuditLogReference(models.Model):

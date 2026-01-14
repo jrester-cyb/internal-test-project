@@ -25,42 +25,32 @@ class AuditLogReferenceInline(admin.TabularInline):
 class AuditLogEntryAdmin(admin.ModelAdmin):
     list_display = [
         "created_at",
-        "batch_id_short",
-        "user_email",
-        "request_method",
+        "get_batch_id_short",
+        "get_user_email",
+        "get_request_method",
         "request_path_short",
         "action",
         "message_short",
         "target_repr",
-        "organization_id",
-        "workspace_id",
+        "get_organization_id",
+        "get_workspace_id",
     ]
     list_filter = [
         "action",
-        "request_method",
         "created_at",
     ]
     search_fields = [
-        "user_email",
-        "request_path",
-        "request_id",
-        "batch_id",
+        "request__user_email",
+        "request__request_path",
+        "request__request_id",
+        "request__batch_id",
         "message",
         "target_repr",
     ]
     readonly_fields = [
         "id",
-        "batch_id",
-        "user",
-        "user_email",
-        "request_id",
-        "request_method",
-        "request_path",
-        "request_query_params",
-        "ip_address",
-        "user_agent",
-        "organization_id",
-        "workspace_id",
+        "request",
+        "group_id",
         "action",
         "action_detail",
         "message",
@@ -70,22 +60,27 @@ class AuditLogEntryAdmin(admin.ModelAdmin):
         "changes",
         "metadata",
         "created_at",
-        "duration_ms",
         "order",
     ]
     inlines = [AuditLogReferenceInline]
     date_hierarchy = "created_at"
     ordering = ["-created_at"]
 
-    def batch_id_short(self, obj):
+    def get_batch_id_short(self, obj):
         """Show first 8 chars of batch_id."""
-        return str(obj.batch_id)[:8]
+        return str(obj.request.batch_id)[:8] if obj.request else ""
 
-    batch_id_short.short_description = "Batch"
+    get_batch_id_short.short_description = "Batch"
+
+    def get_user_email(self, obj):
+        """Get user email from related request."""
+        return obj.request.user_email if obj.request else ""
+
+    get_user_email.short_description = "User"
 
     def request_path_short(self, obj):
         """Truncate long paths."""
-        path = obj.request_path
+        path = obj.request.request_path if obj.request else ""
         return path[:50] + "..." if len(path) > 50 else path
 
     request_path_short.short_description = "Path"
@@ -96,6 +91,24 @@ class AuditLogEntryAdmin(admin.ModelAdmin):
         return msg[:50] + "..." if len(msg) > 50 else msg
 
     message_short.short_description = "Message"
+
+    def get_request_method(self, obj):
+        """Get request method from related request."""
+        return obj.request.request_method if obj.request else ""
+
+    get_request_method.short_description = "Method"
+
+    def get_organization_id(self, obj):
+        """Get organization ID from related request."""
+        return obj.request.organization_id if obj.request else None
+
+    get_organization_id.short_description = "Org ID"
+
+    def get_workspace_id(self, obj):
+        """Get workspace ID from related request."""
+        return obj.request.workspace_id if obj.request else None
+
+    get_workspace_id.short_description = "Workspace ID"
 
     def has_add_permission(self, request):
         return False
