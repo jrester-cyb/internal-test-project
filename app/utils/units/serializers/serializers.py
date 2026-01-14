@@ -11,6 +11,17 @@ class UnitSerializer(serializers.Serializer):
     is_base = serializers.BooleanField()
 
 
+class UnitWithCategorySerializer(serializers.Serializer):
+    """Serializer for a unit with category metadata (for units-only mode)."""
+
+    code = serializers.CharField()
+    symbol = serializers.CharField()
+    name = serializers.CharField()
+    is_base = serializers.BooleanField()
+    category_key = serializers.CharField()
+    category_name = serializers.CharField()
+
+
 class UnitCategorySerializer(serializers.Serializer):
     """Serializer for a unit category with its units."""
 

@@ -124,6 +124,82 @@ class TestUnitCategoriesView(APITestCase):
         unit_names = [u["name"].lower() for u in data["results"][0]["units"]]
         self.assertTrue(all("kilo" in name for name in unit_names))
 
+    def test_categories_only_mode(self):
+        """Categories only mode returns categories without units."""
+        response = self.client.get(reverse("unit-categories"), {"mode": "categories"})
+        data = response.json()
+        self.assertGreater(data["count"], 0)
+        for category in data["results"]:
+            self.assertIn("key", category)
+            self.assertIn("name", category)
+            self.assertIn("baseUnit", category)  # camelCase from DRF
+            self.assertIn("units", category)
+            self.assertEqual(category["units"], [])  # Should be empty
+
+    def test_categories_only_with_search(self):
+        """Categories only mode with search filters categories."""
+        response = self.client.get(
+            reverse("unit-categories"), {"mode": "categories", "search": "mass"}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "mass")
+        self.assertEqual(data["results"][0]["units"], [])
+
+    def test_categories_only_false(self):
+        """Categories only false returns categories with units."""
+        response = self.client.get(
+            reverse("unit-categories"), {"mode": "full", "category": "mass"}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["key"], "mass")
+        self.assertGreater(len(data["results"][0]["units"]), 0)  # Should have units
+
+    def test_units_only_mode(self):
+        """Units only mode returns flat list of units."""
+        response = self.client.get(reverse("unit-categories"), {"mode": "units"})
+        data = response.json()
+        self.assertGreater(data["count"], 0)
+        # Should be flat list of unit objects, not categories
+        for unit in data["results"]:
+            self.assertIn("code", unit)
+            self.assertIn("symbol", unit)
+            self.assertIn("name", unit)
+            self.assertIn("isBase", unit)  # camelCase from DRF
+            self.assertIn("categoryKey", unit)  # camelCase from DRF
+            self.assertIn("categoryName", unit)  # camelCase from DRF
+            # Should not have category structure
+            self.assertNotIn("units", unit)
+
+    def test_units_only_with_search(self):
+        """Units only mode with search filters units."""
+        response = self.client.get(
+            reverse("unit-categories"), {"mode": "units", "search": "kilo"}
+        )
+        data = response.json()
+        self.assertGreater(data["count"], 0)
+        # All units should contain 'kilo' somewhere
+        for unit in data["results"]:
+            has_kilo = (
+                "kilo" in unit["name"].lower()
+                or "kilo" in unit["code"].lower()
+                or "kilo" in unit["symbol"].lower()
+                or "kilo" in unit["categoryName"].lower()
+            )
+            self.assertTrue(has_kilo)
+
+    def test_units_only_with_category_filter(self):
+        """Units only mode with category filter."""
+        response = self.client.get(
+            reverse("unit-categories"), {"mode": "units", "category": "mass"}
+        )
+        data = response.json()
+        self.assertGreater(data["count"], 0)
+        # All units should be from mass category
+        for unit in data["results"]:
+            self.assertEqual(unit["categoryKey"], "mass")
+
 
 class TestUnitConvertView(APITestCase):
     """Tests for UnitConvertView."""

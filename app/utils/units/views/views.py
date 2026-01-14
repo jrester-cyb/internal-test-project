@@ -4,7 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework import status
-from ..serializers import UnitCategorySerializer, UnitConvertSerializer
+from rest_framework.exceptions import ValidationError
+from ..serializers import UnitCategorySerializer, UnitConvertSerializer, UnitWithCategorySerializer
 
 from ..helpers.unit_conversion import (
     get_categories_for_api,
@@ -20,15 +21,40 @@ class UnitCategoriesView(ListAPIView):
     Query Parameters:
         search: Filter categories and units by name, code, or symbol
         category: Filter by category key (e.g., 'mass', 'length', 'temperature')
+        mode: Response mode - 'full' (default), 'categories', or 'units'
+              - 'full': Full category and unit data
+              - 'categories': Only category information without units
+              - 'units': Flat list of units with category metadata
     """
 
     serializer_class = UnitCategorySerializer
 
+    def get_serializer_class(self):
+        """Return appropriate serializer based on mode parameter."""
+        mode = self.request.query_params.get('mode', 'full')
+        if mode == 'units':
+            return UnitWithCategorySerializer
+        return UnitCategorySerializer
+
     def get_queryset(self):
-        """Return unit categories as a list, optionally filtered by search term or category."""
-        search = self.request.query_params.get("search", None)
-        category = self.request.query_params.get("category", None)
-        return get_categories_for_api(search=search, category=category)
+        """Return unit categories as a list."""
+        # Extract query parameters
+        search = self.request.query_params.get('search', None)
+        category = self.request.query_params.get('category', None)
+        mode = self.request.query_params.get('mode', 'full')
+        
+        # Validate mode parameter
+        valid_modes = ['full', 'categories', 'units']
+        if mode not in valid_modes:
+            raise ValidationError({
+                'mode': f'Invalid mode. Must be one of: {", ".join(valid_modes)}'
+            })
+        
+        return get_categories_for_api(
+            search=search,
+            category=category,
+            mode=mode
+        )
 
 
 class UnitConvertView(APIView):

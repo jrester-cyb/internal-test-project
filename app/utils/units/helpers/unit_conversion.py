@@ -254,7 +254,7 @@ def get_unit_category_for_unit(unit_str: str) -> Optional[str]:
 
 
 def get_categories_for_api(
-    search: Optional[str] = None, category: Optional[str] = None
+    search: Optional[str] = None, category: Optional[str] = None, mode: str = "full"
 ) -> list:
     """
     Get unit categories formatted for API response.
@@ -263,19 +263,81 @@ def get_categories_for_api(
     Args:
         search: Optional search term to filter by category name or unit name/code/symbol
         category: Optional category key to filter by (e.g., 'mass', 'length')
+        mode: Response mode - 'full', 'categories', or 'units'
+              - 'full': Full category and unit data (default)
+              - 'categories': Only category info without units
+              - 'units': Flat list of units without category grouping
 
     Returns:
-        List of category dictionaries
+        List of category dictionaries or unit dictionaries (if mode='units')
     """
     search_lower = search.lower().strip() if search else None
     category_filter = category.lower().strip() if category else None
     categories_list = []
+    units_list = []
 
     for key, cat in UNIT_CATEGORIES.items():
         # If category filter specified, skip non-matching categories
         if category_filter and key.lower() != category_filter:
             continue
 
+        # For categories mode, skip search filtering on units
+        if mode == "categories":
+            # Only filter by category name/key if searching
+            if search_lower:
+                category_matches = (
+                    search_lower in key.lower() or search_lower in cat["name"].lower()
+                )
+                if not category_matches:
+                    continue
+
+            # Add category without units
+            categories_list.append(
+                {
+                    "key": key,
+                    "name": cat["name"],
+                    "base_unit": cat["base_unit"],
+                    "units": [],  # Empty units array
+                }
+            )
+            continue
+
+        # For units mode, collect all units in a flat list
+        if mode == "units":
+            for unit_str in cat["units"]:
+                try:
+                    symbol = get_unit_symbol(unit_str)
+                    name = get_unit_display_name(unit_str)
+
+                    # If searching, check if unit matches or category matches
+                    if search_lower:
+                        category_matches = (
+                            search_lower in key.lower()
+                            or search_lower in cat["name"].lower()
+                        )
+                        unit_matches = (
+                            search_lower in unit_str.lower()
+                            or search_lower in symbol.lower()
+                            or search_lower in name.lower()
+                        )
+                        if not (category_matches or unit_matches):
+                            continue
+
+                    units_list.append(
+                        {
+                            "code": unit_str,
+                            "symbol": symbol,
+                            "name": name,
+                            "is_base": unit_str == cat["base_unit"],
+                            "category_key": key,
+                            "category_name": cat["name"],
+                        }
+                    )
+                except (pint.UndefinedUnitError, pint.DimensionalityError):
+                    continue
+            continue
+
+        # Original logic for full categories with units
         # Check if category matches search
         category_matches = False
         if search_lower:
@@ -283,7 +345,7 @@ def get_categories_for_api(
                 search_lower in key.lower() or search_lower in cat["name"].lower()
             )
 
-        units_list = []
+        cat_units_list = []
         for unit_str in cat["units"]:
             try:
                 symbol = get_unit_symbol(unit_str)
@@ -299,7 +361,7 @@ def get_categories_for_api(
                     if not unit_matches:
                         continue
 
-                units_list.append(
+                cat_units_list.append(
                     {
                         "code": unit_str,
                         "symbol": symbol,
@@ -311,13 +373,13 @@ def get_categories_for_api(
                 continue
 
         # Only include category if it has matching units or the category itself matches
-        if units_list or (category_matches and not search_lower):
+        if cat_units_list or (category_matches and not search_lower):
             # If category matches, include all units
-            if category_matches and not units_list:
+            if category_matches and not cat_units_list:
                 # Re-fetch all units for this category
                 for unit_str in cat["units"]:
                     try:
-                        units_list.append(
+                        cat_units_list.append(
                             {
                                 "code": unit_str,
                                 "symbol": get_unit_symbol(unit_str),
@@ -328,16 +390,19 @@ def get_categories_for_api(
                     except (pint.UndefinedUnitError, pint.DimensionalityError):
                         continue
 
-            if units_list:
+            if cat_units_list:
                 categories_list.append(
                     {
                         "key": key,
                         "name": cat["name"],
                         "base_unit": cat["base_unit"],
-                        "units": units_list,
+                        "units": cat_units_list,
                     }
                 )
 
+    # Return appropriate result based on mode
+    if mode == "units":
+        return units_list
     return categories_list
 
 

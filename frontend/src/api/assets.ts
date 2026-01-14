@@ -8,7 +8,7 @@ function workspaceUrl(workspaceId: string, path: string) {
 }
 
 // Unit Categories API - global endpoint (not workspace-scoped)
-export async function fetchUnitCategories(search?: string, category?: string): Promise<UnitCategory[]> {
+export async function fetchUnitCategories(search?: string, category?: string, mode?: 'full' | 'categories' | 'units'): Promise<UnitCategory[]> {
   const allCategories: UnitCategory[] = []
   const params = new URLSearchParams({ page_size: '100' })
   if (search) {
@@ -16,6 +16,9 @@ export async function fetchUnitCategories(search?: string, category?: string): P
   }
   if (category) {
     params.append('category', category)
+  }
+  if (mode && mode !== 'full') {
+    params.append('mode', mode)
   }
   let url: string | null = `${API_BASE}/utils/units/?${params}`
   

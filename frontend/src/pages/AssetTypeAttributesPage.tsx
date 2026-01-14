@@ -1570,6 +1570,7 @@ export default function AssetTypeAttributesPage() {
               <UnitAutocomplete
                 value={formData.unit}
                 onChange={(unitCode) => setFormData({ ...formData, unit: unitCode })}
+                layout="split"
               />
             )}
             {formData.attributeType === 'boolean' && (

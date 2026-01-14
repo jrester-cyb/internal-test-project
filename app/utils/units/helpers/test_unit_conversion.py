@@ -373,6 +373,68 @@ class TestGetCategoriesForApi:
         unit_names = [u["name"].lower() for u in result[0]["units"]]
         assert all("kilo" in name for name in unit_names)
 
+    def test_categories_only_mode(self):
+        """Categories only mode returns categories without units."""
+        result = get_categories_for_api(categories_only=True)
+        assert len(result) > 0
+        for category in result:
+            assert "key" in category
+            assert "name" in category
+            assert "base_unit" in category
+            assert "units" in category
+            assert category["units"] == []  # Should be empty
+
+    def test_categories_only_with_search(self):
+        """Categories only mode with search filters categories."""
+        result = get_categories_for_api(search="mass", categories_only=True)
+        assert len(result) == 1
+        assert result[0]["key"] == "mass"
+        assert result[0]["units"] == []
+
+    def test_categories_only_with_category_filter(self):
+        """Categories only mode with category filter."""
+        result = get_categories_for_api(category="temperature", categories_only=True)
+        assert len(result) == 1
+        assert result[0]["key"] == "temperature"
+        assert result[0]["units"] == []
+
+    def test_units_only_mode(self):
+        """Units only mode returns flat list of units."""
+        result = get_categories_for_api(units_only=True)
+        assert len(result) > 0
+        # Should be a flat list of unit objects, not categories
+        for unit in result:
+            assert "code" in unit
+            assert "symbol" in unit
+            assert "name" in unit
+            assert "is_base" in unit
+            assert "category_key" in unit
+            assert "category_name" in unit
+            # Should not have category structure
+            assert "units" not in unit
+
+    def test_units_only_with_search(self):
+        """Units only mode with search filters units."""
+        result = get_categories_for_api(search="kilo", units_only=True)
+        assert len(result) > 0
+        # All units should contain 'kilo' in name, code, symbol, or category
+        for unit in result:
+            has_kilo = (
+                "kilo" in unit["name"].lower()
+                or "kilo" in unit["code"].lower()
+                or "kilo" in unit["symbol"].lower()
+                or "kilo" in unit["category_name"].lower()
+            )
+            assert has_kilo
+
+    def test_units_only_with_category_filter(self):
+        """Units only mode with category filter."""
+        result = get_categories_for_api(category="mass", units_only=True)
+        assert len(result) > 0
+        # All units should be from mass category
+        for unit in result:
+            assert unit["category_key"] == "mass"
+
 
 class TestUnitCategories:
     """Tests for UNIT_CATEGORIES constant."""
