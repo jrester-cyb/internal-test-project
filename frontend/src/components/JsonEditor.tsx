@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Box, IconButton, Tooltip, Typography, Modal, useTheme } from '@mui/material'
+import { Box, IconButton, Tooltip, Typography, Modal, useTheme, Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material'
 import UndoIcon from '@mui/icons-material/Undo'
 import RedoIcon from '@mui/icons-material/Redo'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
@@ -8,6 +8,9 @@ import CodeIcon from '@mui/icons-material/Code'
 import CodeOffIcon from '@mui/icons-material/CodeOff'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import ContentCutIcon from '@mui/icons-material/ContentCut'
+import ContentPasteIcon from '@mui/icons-material/ContentPaste'
+import SelectAllIcon from '@mui/icons-material/SelectAll'
 
 interface HistoryEntry {
   text: string
@@ -56,6 +59,8 @@ export default function JsonEditor({
   // UI state
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showRawText, setShowRawText] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null)
+  const [hasSelection, setHasSelection] = useState(false)
 
   // History for undo/redo - use state to trigger re-renders for button states
   const [historyState, setHistoryState] = useState<{ entries: HistoryEntry[], index: number }>({
@@ -593,6 +598,72 @@ export default function JsonEditor({
     })
   }
 
+  // Context menu handlers
+  const handleContextMenu = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const textarea = e.currentTarget
+    setHasSelection(textarea.selectionStart !== textarea.selectionEnd)
+    setContextMenu({ mouseX: e.clientX, mouseY: e.clientY })
+  }
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null)
+  }
+
+  const getActiveTextarea = () => {
+    return isFullscreen ? fullscreenTextareaRef.current : textareaRef.current
+  }
+
+  const handleSelectAll = () => {
+    const textarea = getActiveTextarea()
+    if (textarea) {
+      textarea.select()
+      textarea.focus()
+    }
+    handleCloseContextMenu()
+  }
+
+  const handleCopy = async () => {
+    const textarea = getActiveTextarea()
+    if (textarea) {
+      const selectedText = localText.substring(textarea.selectionStart, textarea.selectionEnd)
+      if (selectedText) {
+        await navigator.clipboard.writeText(selectedText)
+      }
+    }
+    handleCloseContextMenu()
+  }
+
+  const handleCut = async () => {
+    const textarea = getActiveTextarea()
+    if (textarea) {
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const selectedText = localText.substring(start, end)
+      if (selectedText) {
+        await navigator.clipboard.writeText(selectedText)
+        const newText = localText.substring(0, start) + localText.substring(end)
+        handleTextChange(newText, start)
+        pendingCursorRef.current = start
+      }
+    }
+    handleCloseContextMenu()
+  }
+
+  const handlePasteFromMenu = async () => {
+    const textarea = getActiveTextarea()
+    if (textarea) {
+      const clipboardText = await navigator.clipboard.readText()
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const newText = localText.substring(0, start) + clipboardText + localText.substring(end)
+      const newCursorPos = start + clipboardText.length
+      handleTextChange(newText, newCursorPos)
+      pendingCursorRef.current = newCursorPos
+    }
+    handleCloseContextMenu()
+  }
+
   // Reset fullscreen scroll when opening
   useEffect(() => {
     if (isFullscreen) {
@@ -666,22 +737,6 @@ export default function JsonEditor({
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title="Copy to clipboard" arrow>
-        <span>
-          <IconButton
-            size="small"
-            onClick={() => {
-              if (localText) {
-                navigator.clipboard.writeText(localText)
-              }
-            }}
-            disabled={!localText}
-            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-          >
-            <ContentCopyIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
       <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"} arrow>
         <IconButton
           size="small"
@@ -747,6 +802,7 @@ export default function JsonEditor({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onScroll={handleScroll}
+          onContextMenu={handleContextMenu}
           placeholder={showRawText ? placeholder : undefined}
           style={{
             position: 'relative',
@@ -821,6 +877,7 @@ export default function JsonEditor({
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onScroll={handleFullscreenScroll}
+              onContextMenu={handleContextMenu}
               placeholder={showRawText ? placeholder : undefined}
               style={{
                 position: 'relative',
@@ -844,6 +901,43 @@ export default function JsonEditor({
           </Box>
         </Box>
       </Modal>
+
+      {/* Context Menu */}
+      <Menu
+        open={contextMenu !== null}
+        onClose={handleCloseContextMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          contextMenu !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+      >
+        <MenuItem onClick={handleSelectAll}>
+          <ListItemIcon>
+            <SelectAllIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Select All</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleCopy} disabled={!hasSelection}>
+          <ListItemIcon>
+            <ContentCopyIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Copy</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleCut} disabled={!hasSelection}>
+          <ListItemIcon>
+            <ContentCutIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Cut</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handlePasteFromMenu}>
+          <ListItemIcon>
+            <ContentPasteIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Paste</ListItemText>
+        </MenuItem>
+      </Menu>
     </>
   )
 }
