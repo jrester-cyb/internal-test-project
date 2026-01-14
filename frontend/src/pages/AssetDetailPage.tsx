@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider, Dialog, DialogTitle, DialogContent } from '@mui/material'
+import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
@@ -11,6 +11,7 @@ import CopyableText from '../components/CopyableText'
 import TruncatedText from '../components/TruncatedText'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
+import TagsDisplay from '../components/TagsDisplay'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
@@ -25,7 +26,6 @@ export default function AssetDetailPage() {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [tagsDialogAttr, setTagsDialogAttr] = useState<AssetTypeAttribute | null>(null)
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Get all unique tags from attributes
@@ -274,42 +274,20 @@ export default function AssetDetailPage() {
                                   {attr.description}
                                 </TruncatedText>
                               )}
-                              {attr.tags && attr.tags.length > 0 && (() => {
-                                const maxVisible = 2
-                                const visibleTags = attr.tags.slice(0, maxVisible)
-                                const remainingCount = attr.tags.length - maxVisible
-                                return (
-                                  <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, mt: 0.5, overflow: 'hidden' }}>
-                                    {visibleTags.map(tag => (
-                                      <Chip
-                                        key={tag}
-                                        label={tag}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{
-                                          height: 18,
-                                          fontSize: '0.65rem',
-                                          maxWidth: 80,
-                                          '& .MuiChip-label': { px: 0.75, overflow: 'hidden', textOverflow: 'ellipsis' }
-                                        }}
-                                      />
-                                    ))}
-                                    {remainingCount > 0 && (
-                                      <Chip
-                                        label={`+${remainingCount}`}
-                                        size="small"
-                                        variant="outlined"
-                                        color="primary"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setTagsDialogAttr(attr)
-                                        }}
-                                        sx={{ height: 18, fontSize: '0.65rem', cursor: 'pointer', flexShrink: 0, '& .MuiChip-label': { px: 0.75 } }}
-                                      />
-                                    )}
-                                  </Box>
-                                )
-                              })()}
+                              {attr.tags && attr.tags.length > 0 && (
+                                <Box sx={{ mt: 0.5 }}>
+                                  <TagsDisplay
+                                    tags={attr.tags}
+                                    maxVisible={2}
+                                    label={`Tags for ${attr.name}`}
+                                    onTagClick={(tag) => {
+                                      if (!selectedTags.includes(tag)) {
+                                        setSelectedTags([...selectedTags, tag])
+                                      }
+                                    }}
+                                  />
+                                </Box>
+                              )}
                             </Box>
                             <Box sx={{ flex: 1, overflow: 'hidden' }}>
                               <AttributeValueRenderer attribute={attr} value={value} maxLines={3} />
@@ -518,23 +496,6 @@ export default function AssetDetailPage() {
           </Table>
         </Box>
       </Drawer>
-
-      {/* Tags Dialog */}
-      <Dialog open={!!tagsDialogAttr} onClose={() => setTagsDialogAttr(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Tags for {tagsDialogAttr?.name}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, pt: 1 }}>
-            {tagsDialogAttr?.tags?.map(tag => (
-              <Chip
-                key={tag}
-                label={tag}
-                size="small"
-                variant="outlined"
-              />
-            ))}
-          </Box>
-        </DialogContent>
-      </Dialog>
     </Box>
   )
 }
