@@ -322,7 +322,7 @@ export default function AssetTypeAttributesPage() {
   const handleItemsRendered = ({ visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
     // Track the last visible index for re-checking after load
     lastVisibleStopIndexRef.current = visibleStopIndex
-    
+
     // Fetch more when we're within 5 items of the end
     const THRESHOLD = 5
     // Use ref to get latest displayedCount (avoids stale closure issues)
