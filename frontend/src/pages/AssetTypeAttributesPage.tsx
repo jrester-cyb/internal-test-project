@@ -96,9 +96,6 @@ export default function AssetTypeAttributesPage() {
     return true
   })
 
-  // Available attribute types for the filter
-  const availableTypes = ['text', 'number', 'boolean', 'date', 'datetime', 'json', 'link']
-
   // Keep displayedCountRef in sync
   displayedCountRef.current = displayedAttributes.length
 
@@ -364,11 +361,9 @@ export default function AssetTypeAttributesPage() {
             setAllAttributes(prev => {
               const existingIds = new Set(prev.map(attr => attr.id))
               const uniqueNewAttributes = newAttributes.filter((attr: AssetTypeAttribute) => !existingIds.has(attr.id))
-              // Keep hidden items at the end
+              // Combine and sort by order
               const combined = [...prev, ...uniqueNewAttributes]
-              const visible = combined.filter(attr => !attr.isHidden)
-              const hidden = combined.filter(attr => attr.isHidden)
-              return [...visible, ...hidden]
+              return combined.sort((a, b) => a.order - b.order)
             })
             setNextUrl(response.next || null)
             console.debug('[handleItemsRendered] Loaded', newAttributes.length, 'attributes, next:', response.next)
@@ -1453,7 +1448,7 @@ export default function AssetTypeAttributesPage() {
               showScopeFilter={true}
               hiddenCount={allAttributes.filter(a => a.isHidden).length}
               availableTags={availableTags}
-              availableTypes={availableTypes}
+              showTypeFilter={true}
               isLoading={isRefetching}
             />
           </Stack>
