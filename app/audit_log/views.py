@@ -187,6 +187,72 @@ class AuditLogEntryListView(ListAPIView):
         if target_id:
             qs = qs.filter(target_object_id=target_id)
 
+        # Filter by object ID (searches both target and references by default)
+        object_id = self.request.query_params.get("object_id")
+        object_type = self.request.query_params.get("object_type")
+        target_only = (
+            self.request.query_params.get("target_only", "false").lower() == "true"
+        )
+
+        if object_id:
+            from django.db.models import Q
+
+            # If object_type is specified, get the content type
+            ct = None
+            if object_type:
+                try:
+                    if "." in object_type:
+                        app_label, model = object_type.split(".")
+                        ct = ContentType.objects.get(
+                            app_label=app_label, model=model.lower()
+                        )
+                    else:
+                        ct = ContentType.objects.get(model=object_type.lower())
+                except ContentType.DoesNotExist:
+                    # Invalid content type - return no results
+                    qs = qs.none()
+                    ct = None
+
+            if ct is not None or not object_type:
+                if target_only:
+                    # Only match entries where this object is the direct target
+                    if ct:
+                        qs = qs.filter(
+                            target_object_id=object_id, target_content_type=ct
+                        )
+                    else:
+                        qs = qs.filter(target_object_id=object_id)
+                else:
+                    # Roles to include when searching references
+                    # Exclude 'workspace' and 'organization' as they're auto-added to all entries
+                    # Include domain-specific roles like asset_type, parent, created, etc.
+                    relevant_ref_roles = [
+                        "target",
+                        "affected",
+                        "parent",
+                        "child",
+                        "asset_type",
+                        "created",
+                    ]
+
+                    # Match entries where:
+                    # 1. Target is this object with this type, OR
+                    # 2. References include this object with this type and a relevant role
+                    if ct:
+                        q_filter = Q(
+                            target_object_id=object_id, target_content_type=ct
+                        ) | Q(
+                            references__object_id=object_id,
+                            references__content_type=ct,
+                            references__role__in=relevant_ref_roles,
+                        )
+                    else:
+                        q_filter = Q(target_object_id=object_id) | Q(
+                            references__object_id=object_id,
+                            references__role__in=relevant_ref_roles,
+                        )
+                    qs = qs.filter(q_filter).distinct()
+
         # Filter by date range
         start_date = self.request.query_params.get("start_date")
         if start_date:
@@ -195,6 +261,13 @@ class AuditLogEntryListView(ListAPIView):
         end_date = self.request.query_params.get("end_date")
         if end_date:
             qs = qs.filter(created_at__lte=end_date)
+
+        # Apply ordering
+        ordering = self.request.query_params.get("ordering", "-created_at")
+        # Validate ordering field to prevent injection
+        allowed_orderings = ["created_at", "-created_at", "action", "-action"]
+        if ordering in allowed_orderings:
+            return qs.order_by(ordering)
 
         return qs.order_by("-created_at")
 
@@ -294,6 +367,10 @@ class AuditLogEntryListView(ListAPIView):
         page = self.paginate_queryset(queryset)
         entries_to_process = page if page is not None else queryset
 
+        # Get the set of entry IDs that matched the filter
+        # This is important for groups - we only want to show matched entries
+        matched_entry_ids = set(entry.id for entry in entries_to_process)
+
         # Group entries by their group_id
         groups_seen = set()
         groups_with_entries = defaultdict(list)
@@ -301,19 +378,25 @@ class AuditLogEntryListView(ListAPIView):
 
         for entry in entries_to_process:
             if entry.group:
-                group_entries = list(entry.group.entries.all())
-                if len(group_entries) >= 2:
-                    # This is a multi-entry group
-                    if entry.group.id not in groups_seen:
-                        groups_seen.add(entry.group.id)
+                # Only count entries from the group that matched the filter
+                if entry.group.id not in groups_seen:
+                    groups_seen.add(entry.group.id)
+                    # Collect all matched entries for this group
+                    matched_group_entries = [
+                        e
+                        for e in entries_to_process
+                        if e.group and e.group.id == entry.group.id
+                    ]
+                    if len(matched_group_entries) >= 2:
+                        # Multiple matched entries in this group - show as group
                         groups_with_entries[entry.group.id] = {
                             "group": entry.group,
-                            "entries": group_entries,
+                            "entries": matched_group_entries,
                             "created_at": entry.group.created_at,
                         }
-                else:
-                    # Single entry in group - treat as standalone
-                    standalone_entries.append(entry)
+                    else:
+                        # Only one matched entry in the group - treat as standalone
+                        standalone_entries.append(entry)
             else:
                 standalone_entries.append(entry)
 

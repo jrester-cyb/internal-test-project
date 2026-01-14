@@ -12,6 +12,7 @@ import TruncatedText from '../components/TruncatedText'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import TagsDisplay from '../components/TagsDisplay'
+import { AssetAuditLogSection } from '../components/AssetAuditLogSection'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
@@ -444,16 +445,9 @@ export default function AssetDetailPage() {
               </Card>
             </Grid>
 
-            {/* Third Row: Timeline */}
+            {/* Third Row: Audit History */}
             <Grid size={{ xs: 12 }}>
-              <Card sx={{ height: '100%' }}>
-                <CardHeader title="Timeline" />
-                <CardContent>
-                  <Typography color="text.secondary" variant="body2">
-                    No activity yet
-                  </Typography>
-                </CardContent>
-              </Card>
+              <AssetAuditLogSection assetId={asset.id} />
             </Grid>
           </Grid>
         </Container>
