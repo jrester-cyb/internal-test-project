@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
 import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material'
-import { FixedSizeList as List } from 'react-window'
+import { VariableSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
 import type { Asset, AssetTypeAttribute } from '../types'
 import ActionButtons from '../components/ActionButtons'
 import RelatedAssetsTree from '../components/RelatedAssetsTree'
 import CopyableText from '../components/CopyableText'
+import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
@@ -255,10 +256,11 @@ export default function AssetDetailPage() {
                             style={style}
                             sx={{
                               display: 'flex',
-                              alignItems: 'center',
+                              alignItems: 'flex-start',
                               borderBottom: '1px solid',
                               borderColor: 'divider',
                               px: 2,
+                              py: 1,
                               '&:hover': { bgcolor: 'action.hover' }
                             }}
                           >
@@ -274,18 +276,40 @@ export default function AssetDetailPage() {
                               )}
                             </Box>
                             <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                              {value !== null && value !== undefined
-                                ? (typeof value === 'object' ? (
-                                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }} noWrap title={JSON.stringify(value)}>
-                                    {JSON.stringify(value)}
-                                  </Typography>
-                                ) : (
-                                  <Typography variant="body2" noWrap title={String(value)}>{String(value)}</Typography>
-                                ))
-                                : <Typography variant="body2" color="text.disabled">—</Typography>}
+                              <AttributeValueRenderer attribute={attr} value={value} maxLines={3} />
                             </Box>
                           </Box>
                         )
+                      }
+
+                      // Calculate row height based on content and attribute type
+                      const getRowHeight = (index: number) => {
+                        const attr = displayAttributes[index]
+                        const value = asset.attributes?.[attr.apiKey]
+                        const hasTags = attr.tags && attr.tags.length > 0
+                        const tagHeight = hasTags ? 18 : 0
+                        const padding = 16
+
+                        if (value === null || value === undefined) {
+                          return padding + 20 + tagHeight
+                        }
+
+                        // JSON has different sizing due to formatted display with background
+                        if (attr.attributeType === 'json' || typeof value === 'object') {
+                          const formatted = JSON.stringify(value, null, 2)
+                          const lines = Math.min(3, formatted.split('\n').length)
+                          return padding + (lines * 18) + 24 + tagHeight // 24 for padding in json box
+                        }
+
+                        // Boolean uses chips - fixed height
+                        if (attr.attributeType === 'boolean') {
+                          return padding + 24 + tagHeight
+                        }
+
+                        // Text - estimate lines based on length
+                        const strValue = String(value)
+                        const estimatedLines = Math.min(3, Math.ceil(strValue.length / 50))
+                        return padding + (estimatedLines * 20) + tagHeight
                       }
 
                       const AttributeList = ({ height, width }: { height: number | undefined; width: number | undefined }) => (
@@ -293,7 +317,7 @@ export default function AssetDetailPage() {
                           height={height || 300}
                           width={width || 400}
                           itemCount={displayAttributes.length}
-                          itemSize={40}
+                          itemSize={getRowHeight}
                         >
                           {AttributeRow}
                         </List>
