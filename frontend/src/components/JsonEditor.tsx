@@ -14,7 +14,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import ContentCutIcon from '@mui/icons-material/ContentCut'
 import ContentPasteIcon from '@mui/icons-material/ContentPaste'
 import SelectAllIcon from '@mui/icons-material/SelectAll'
-import { TextRenderer, useTextRenderer } from './TextRenderer'
+import { Editor, TextRenderer, useTextRenderer } from './TextRenderer'
 import { JsonFormatter, stripJsonComments, formatJsonc } from './JsonFormatter'
 
 interface JsonEditorProps {
@@ -34,6 +34,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
     setShowRawText,
     isFullscreen,
     setIsFullscreen,
+    exitFullscreen,
     isDark,
     localText,
     handleTextChange,
@@ -78,7 +79,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
         </span>
       </Tooltip>
       <Box sx={{ width: 1, bgcolor: 'divider', mx: 0.25 }} />
-      
+
       {/* JSON-specific: Format button */}
       <Tooltip title="Format JSON" arrow>
         <span>
@@ -102,7 +103,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
           </IconButton>
         </span>
       </Tooltip>
-      
+
       {/* JSON-specific: Minify button */}
       <Tooltip title="Minify JSON" arrow>
         <span>
@@ -128,7 +129,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
           </IconButton>
         </span>
       </Tooltip>
-      
+
       <Box sx={{ width: 1, bgcolor: 'divider', mx: 0.25 }} />
       <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"} arrow>
         <IconButton
@@ -142,7 +143,7 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
       <Tooltip title={inFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"} arrow>
         <IconButton
           size="small"
-          onClick={() => setIsFullscreen(!isFullscreen)}
+          onClick={() => inFullscreen ? exitFullscreen() : setIsFullscreen(true)}
           sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
         >
           {inFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
@@ -153,11 +154,11 @@ function JsonEditorToolbar({ inFullscreen = false }: { inFullscreen?: boolean })
 }
 
 // Context menu component for JSON operations
-function JsonContextMenu({ 
-  contextMenu, 
-  onClose, 
-  hasSelection 
-}: { 
+function JsonContextMenu({
+  contextMenu,
+  onClose,
+  hasSelection
+}: {
   contextMenu: { mouseX: number; mouseY: number } | null
   onClose: () => void
   hasSelection: boolean
@@ -369,17 +370,17 @@ function JsonEditorInner() {
   useEffect(() => {
     const textarea = textareaRef.current
     const fullscreenTextarea = fullscreenTextareaRef.current
-    
+
     const handler = (e: MouseEvent) => {
       e.preventDefault()
       const target = e.target as HTMLTextAreaElement
       setHasSelection(target.selectionStart !== target.selectionEnd)
       setContextMenu({ mouseX: e.clientX, mouseY: e.clientY })
     }
-    
+
     textarea?.addEventListener('contextmenu', handler)
     fullscreenTextarea?.addEventListener('contextmenu', handler)
-    
+
     return () => {
       textarea?.removeEventListener('contextmenu', handler)
       fullscreenTextarea?.removeEventListener('contextmenu', handler)
@@ -388,12 +389,7 @@ function JsonEditorInner() {
 
   return (
     <>
-      <JsonEditorToolbar />
-      <JsonContextMenu
-        contextMenu={contextMenu}
-        onClose={() => setContextMenu(null)}
-        hasSelection={hasSelection}
-      />
+      <Editor />
     </>
   )
 }

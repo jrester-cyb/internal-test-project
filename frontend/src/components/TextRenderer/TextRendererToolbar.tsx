@@ -1,84 +1,79 @@
-import { Box, IconButton, Tooltip } from '@mui/material'
-import UndoIcon from '@mui/icons-material/Undo'
-import RedoIcon from '@mui/icons-material/Redo'
+import { useState } from 'react'
+import { Box, IconButton, Tooltip, alpha, useTheme } from '@mui/material'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import CheckIcon from '@mui/icons-material/Check'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
-import CodeIcon from '@mui/icons-material/Code'
-import CodeOffIcon from '@mui/icons-material/CodeOff'
 import { useTextRenderer } from './context'
 
 interface TextRendererToolbarProps {
-  inFullscreen?: boolean
+  enableFullscreen?: boolean
 }
 
-export default function TextRendererToolbar({ inFullscreen = false }: TextRendererToolbarProps) {
+export default function TextRendererToolbar({ enableFullscreen = true }: Readonly<TextRendererToolbarProps>) {
+  const theme = useTheme()
   const {
-    canUndo,
-    canRedo,
-    undo,
-    redo,
-    showRawText,
-    setShowRawText,
+    localText,
     isFullscreen,
     setIsFullscreen,
-    isDark,
+    exitFullscreen,
+    onCopy
   } = useTextRenderer()
+
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(localText)
+    onCopy?.(localText);
+  }
+
+  const handleFullscreenToggle = () => {
+    if (isFullscreen) {
+      exitFullscreen()
+    } else {
+      setIsFullscreen(true)
+    }
+  }
 
   return (
     <Box sx={{
       position: 'absolute',
-      top: 4,
-      right: 4,
-      zIndex: 1,
+      top: 2,
+      right: 2,
+      zIndex: 2,
       display: 'flex',
-      gap: 0.5,
-      bgcolor: isDark ? 'grey.900' : 'grey.100',
-      borderRadius: 1,
-      p: 0.25,
+      gap: 0.25,
+      bgcolor: alpha(theme.palette.background.paper, 0.9),
+      borderRadius: 0.5,
+      p: 0.125,
     }}>
-      <Tooltip title="Undo (Ctrl+Z)" arrow>
-        <span>
-          <IconButton
-            size="small"
-            onClick={undo}
-            disabled={!canUndo}
-            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-          >
-            <UndoIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="Redo (Ctrl+Y)" arrow>
-        <span>
-          <IconButton
-            size="small"
-            onClick={redo}
-            disabled={!canRedo}
-            sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-          >
-            <RedoIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Box sx={{ width: 1, bgcolor: 'divider', mx: 0.25 }} />
-      <Tooltip title={showRawText ? "Show syntax highlighting" : "Show raw text"} arrow>
+      <Tooltip title="Copy" arrow>
         <IconButton
           size="small"
-          onClick={() => setShowRawText(!showRawText)}
-          sx={{ color: showRawText ? (isDark ? 'secondary.main' : 'primary.main') : 'text.secondary', '&:hover': { color: 'text.primary' } }}
+          onClick={handleCopy}
+          sx={{
+            color: 'text.secondary',
+            '&:hover': { color: 'text.primary' },
+            p: 0.25,
+          }}
         >
-          {showRawText ? <CodeOffIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
+          <ContentCopyIcon sx={{ fontSize: 14 }} />
         </IconButton>
       </Tooltip>
-      <Tooltip title={inFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"} arrow>
-        <IconButton
-          size="small"
-          onClick={() => setIsFullscreen(!isFullscreen)}
-          sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-        >
-          {inFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
-        </IconButton>
-      </Tooltip>
+      {enableFullscreen && (
+        <Tooltip title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"} arrow placement="bottom">
+          <IconButton
+            size="small"
+            onClick={handleFullscreenToggle}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': { color: 'text.primary' },
+              p: 0.25,
+            }}
+          >
+            {isFullscreen ? <FullscreenExitIcon sx={{ fontSize: 14 }} /> : <FullscreenIcon sx={{ fontSize: 14 }} />}
+          </IconButton>
+        </Tooltip>
+      )}
     </Box>
   )
 }

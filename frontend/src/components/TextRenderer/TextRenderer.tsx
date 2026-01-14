@@ -1,10 +1,9 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
-import { Box, Typography, Modal, useTheme } from '@mui/material'
+import { Box, Typography, Modal, useTheme, alpha } from '@mui/material'
 import { TextRendererContext } from './context'
 import type {
   TextRendererProps,
   TextRendererContextValue,
-  HistoryEntry,
 } from './types'
 import TextRendererToolbar from './TextRendererToolbar'
 
@@ -12,6 +11,7 @@ export default function TextRenderer({
   value,
   onChange,
   placeholder = 'Enter text here...',
+  onCopy,
   formatter,
   enableFullscreen = true,
   height = 300,
@@ -21,11 +21,11 @@ export default function TextRenderer({
   const isDark = theme.palette.mode === 'dark'
 
   // Refs
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fullscreenTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const fullscreenTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const pendingCursorRef = useRef<number | null>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
-  const pendingScrollRef = useRef<number | null>(null)
+  const exitCursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 })
 
   // Scroll state
   const [scrollPos, setScrollPos] = useState({ top: 0, left: 0 })
@@ -34,29 +34,19 @@ export default function TextRenderer({
   // UI state
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showRawText, setShowRawText] = useState(false)
+  const [showToolbar, setShowToolbar] = useState(false)
 
-  // History for undo/redo
-  const [historyState, setHistoryState] = useState<{ entries: HistoryEntry[], index: number }>({
-    entries: [],
-    index: -1
-  })
-  const historyRef = useRef(historyState)
-  useEffect(() => {
-    historyRef.current = historyState
-  }, [historyState])
+  // Edit mode - readonly by default unless Editor child is present
+  const [isEditable, setIsEditable] = useState(false)
+
+  // Editor handlers - set by Editor component when mounted
+  const [editorHandlers, setEditorHandlers] = useState<{
+    onInput?: (e: React.FormEvent<HTMLTextAreaElement>) => void
+    onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  }>({})
 
   // Local text state
   const [localText, setLocalText] = useState(value)
-
-  // Initialize history
-  useEffect(() => {
-    if (historyState.entries.length === 0) {
-      setHistoryState({
-        entries: [{ text: localText, cursorPos: localText.length, scrollTop: 0 }],
-        index: 0
-      })
-    }
-  }, [])
 
   // Sync local text when external value changes
   useEffect(() => {
@@ -64,75 +54,6 @@ export default function TextRenderer({
       setLocalText(value)
     }
   }, [value])
-
-  // Add to history
-  const addToHistory = useCallback((text: string, cursorPos: number) => {
-    const currentScrollTop = textareaRef.current?.scrollTop ?? 0
-
-    setHistoryState(prev => {
-      const currentEntry = prev.entries[prev.index]
-      if (currentEntry && currentEntry.text === text) return prev
-
-      const newEntries = prev.entries.slice(0, Math.max(0, prev.index + 1))
-      newEntries.push({ text, cursorPos, scrollTop: currentScrollTop })
-      const newIndex = newEntries.length - 1
-
-      if (newEntries.length > 100) {
-        newEntries.shift()
-        return { entries: newEntries, index: newIndex - 1 }
-      }
-
-      return { entries: newEntries, index: newIndex }
-    })
-  }, [])
-
-  // Undo/Redo
-  const undo = useCallback(() => {
-    const current = historyRef.current
-    if (current.index > 0) {
-      const newIndex = current.index - 1
-      const entry = current.entries[newIndex]
-      const currentText = localText
-      const currentCursor = textareaRef.current?.selectionStart ?? 0
-
-      let newCursor = currentCursor
-      const lengthDiff = entry.text.length - currentText.length
-
-      if (lengthDiff > 0) {
-        newCursor = currentCursor + lengthDiff
-      } else if (lengthDiff < 0) {
-        newCursor = Math.max(0, currentCursor + lengthDiff)
-      }
-
-      newCursor = Math.min(newCursor, entry.text.length)
-
-      if (newCursor > 0 && entry.text[newCursor] === '\n' && currentText[currentCursor] !== '\n') {
-        newCursor--
-      }
-
-      setLocalText(entry.text)
-      pendingCursorRef.current = newCursor
-      setHistoryState(prev => ({ ...prev, index: newIndex }))
-      onChange(entry.text)
-    }
-  }, [localText, onChange])
-
-  const redo = useCallback(() => {
-    const current = historyRef.current
-    if (current.index < current.entries.length - 1) {
-      const newIndex = current.index + 1
-      const entry = current.entries[newIndex]
-      const currentCursor = textareaRef.current?.selectionStart ?? 0
-      const clampedCursor = Math.min(currentCursor, entry.text.length)
-      setLocalText(entry.text)
-      pendingCursorRef.current = clampedCursor
-      setHistoryState(prev => ({ ...prev, index: newIndex }))
-      onChange(entry.text)
-    }
-  }, [onChange])
-
-  const canUndo = historyState.index > 0
-  const canRedo = historyState.index < historyState.entries.length - 1
 
   // Set cursor position after render
   useLayoutEffect(() => {
@@ -146,127 +67,34 @@ export default function TextRenderer({
       textareaRef.current.selectionStart = textareaRef.current.selectionEnd = pendingCursorRef.current
       pendingCursorRef.current = null
     }
-    if (pendingScrollRef.current !== null && textareaRef.current) {
-      textareaRef.current.scrollTop = pendingScrollRef.current
-      setScrollPos(prev => ({ ...prev, top: pendingScrollRef.current! }))
-      pendingScrollRef.current = null
-    }
   }, [localText])
 
   // Validation
   const errorInfo = useMemo(() => formatter.getErrorPosition(localText), [localText, formatter])
   const isValid = !errorInfo
 
-  // Handle text change
-  const handleTextChange = useCallback((newText: string, cursorPos?: number) => {
-    setLocalText(newText)
-    addToHistory(newText, cursorPos ?? newText.length)
-    onChange(newText)
-  }, [addToHistory, onChange])
+  // Helper to exit fullscreen while preserving cursor
+  const exitFullscreen = useCallback(() => {
+    if (fullscreenTextareaRef.current) {
+      exitCursorRef.current = {
+        start: fullscreenTextareaRef.current.selectionStart,
+        end: fullscreenTextareaRef.current.selectionEnd,
+      }
+    }
+    setIsFullscreen(false)
+  }, [])
 
-  // Keyboard handler
+  // Keyboard handler (for escape in fullscreen, delegate to editor handlers)
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Undo/redo
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-      e.preventDefault()
-      if (e.shiftKey) {
-        redo()
-      } else {
-        undo()
-      }
-      return
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-      e.preventDefault()
-      redo()
-      return
-    }
-
-    // Tab handling
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const target = e.target as HTMLTextAreaElement
-      const start = target.selectionStart
-      const end = target.selectionEnd
-      const currentValue = target.value
-
-      const selectedText = currentValue.substring(start, end)
-      const hasMultiLineSelection = selectedText.includes('\n')
-
-      if (hasMultiLineSelection) {
-        const lineStart = currentValue.lastIndexOf('\n', start - 1) + 1
-        let lineEnd = currentValue.indexOf('\n', end)
-        if (lineEnd === -1) lineEnd = currentValue.length
-
-        const linesText = currentValue.substring(lineStart, lineEnd)
-        const lines = linesText.split('\n')
-
-        let modifiedLines: string[]
-        let totalChange = 0
-
-        if (e.shiftKey) {
-          modifiedLines = lines.map(line => {
-            if (line.startsWith('  ')) {
-              totalChange -= 2
-              return line.substring(2)
-            } else if (line.startsWith(' ')) {
-              totalChange -= 1
-              return line.substring(1)
-            }
-            return line
-          })
-        } else {
-          modifiedLines = lines.map(line => {
-            totalChange += 2
-            return '  ' + line
-          })
-        }
-
-        const newValue = currentValue.substring(0, lineStart) + modifiedLines.join('\n') + currentValue.substring(lineEnd)
-        handleTextChange(newValue, lineStart)
-        pendingSelectionRef.current = { start: lineStart, end: lineEnd + totalChange }
-      } else {
-        let newValue: string
-        let newCursorPos: number
-
-        if (e.shiftKey) {
-          const beforeCursor = currentValue.substring(0, start)
-          const charBeforeCursor = beforeCursor.slice(-1)
-
-          if (charBeforeCursor === ' ' || charBeforeCursor === '\t') {
-            const spacesToRemove = beforeCursor.endsWith('  ') ? 2 : 1
-            newValue = currentValue.substring(0, start - spacesToRemove) + currentValue.substring(end)
-            newCursorPos = start - spacesToRemove
-          } else {
-            const lineStart = currentValue.lastIndexOf('\n', start - 1) + 1
-            const lineContent = currentValue.substring(lineStart, start)
-            const spacesAtLineStart = lineContent.startsWith('  ') ? 2 : lineContent.startsWith(' ') ? 1 : 0
-
-            if (spacesAtLineStart > 0) {
-              newValue = currentValue.substring(0, lineStart) + currentValue.substring(lineStart + spacesAtLineStart)
-              newCursorPos = start - spacesAtLineStart
-            } else {
-              newValue = currentValue
-              newCursorPos = start
-            }
-          }
-        } else {
-          newValue = currentValue.substring(0, start) + '  ' + currentValue.substring(end)
-          newCursorPos = start + 2
-        }
-
-        handleTextChange(newValue, newCursorPos)
-        pendingCursorRef.current = newCursorPos
-      }
-    }
-
     // Escape to exit fullscreen
     if (e.key === 'Escape' && isFullscreen) {
-      setIsFullscreen(false)
+      exitFullscreen()
+      return
     }
-  }, [undo, redo, handleTextChange, isFullscreen])
+    // Delegate to editor handlers if present
+    editorHandlers.onKeyDown?.(e)
+  }, [isFullscreen, editorHandlers, exitFullscreen])
 
-  // Scroll handlers
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     setScrollPos({
       top: e.currentTarget.scrollTop,
@@ -281,7 +109,7 @@ export default function TextRenderer({
     })
   }, [])
 
-  // Reset fullscreen scroll when opening
+  // Track cursor position when exiting fullscreen and restore it
   useEffect(() => {
     if (isFullscreen) {
       setFullscreenScrollPos({ top: 0, left: 0 })
@@ -290,6 +118,15 @@ export default function TextRenderer({
         fullscreenTextareaRef.current.scrollLeft = 0
         fullscreenTextareaRef.current.focus()
       }
+    } else {
+      // Restore cursor position to main textarea after modal closes
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+          textareaRef.current.selectionStart = exitCursorRef.current.start
+          textareaRef.current.selectionEnd = exitCursorRef.current.end
+        }
+      }, 50)
     }
   }, [isFullscreen])
 
@@ -303,9 +140,9 @@ export default function TextRenderer({
         position: 'absolute',
         top: 0,
         left: 0,
-        width: 40,
+        width: 28,
         height: '100%',
-        bgcolor: isDark ? 'grey.900' : 'grey.100',
+        bgcolor: alpha(theme.palette.background.default, 0.8),
         borderRight: 1,
         borderColor: 'divider',
         fontFamily: 'monospace',
@@ -320,13 +157,22 @@ export default function TextRenderer({
       <Box
         sx={{
           pt: 1.5,
-          pr: 1,
+          px: 0.5,
           textAlign: 'right',
           transform: `translateY(${-scrollTop}px)`,
         }}
       >
         {Array.from({ length: lineCount }, (_, i) => (
-          <div key={i + 1}>{i + 1}</div>
+          <div
+            key={i + 1}
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {i + 1}
+          </div>
         ))}
       </Box>
     </Box>
@@ -336,13 +182,14 @@ export default function TextRenderer({
   const contextValue: TextRendererContextValue = {
     localText,
     setLocalText,
-    handleTextChange,
-    canUndo,
-    canRedo,
-    undo,
-    redo,
+    onChange,
+    isEditable,
+    setIsEditable,
+    editorHandlers,
+    setEditorHandlers,
     isFullscreen,
     setIsFullscreen,
+    exitFullscreen,
     showRawText,
     setShowRawText,
     isDark,
@@ -352,10 +199,12 @@ export default function TextRenderer({
     textareaRef,
     fullscreenTextareaRef,
     pendingCursorRef,
+    pendingSelectionRef,
     scrollPos,
     setScrollPos,
     fullscreenScrollPos,
     setFullscreenScrollPos,
+    onCopy,
   }
 
   const highlightedContent = localText
@@ -364,16 +213,27 @@ export default function TextRenderer({
 
   return (
     <TextRendererContext.Provider value={contextValue}>
-      <Box sx={{
-        position: 'relative',
-        height,
-        overflow: 'hidden',
-        bgcolor: 'background.paper',
-        borderRadius: 1,
-        border: isDark ? 'none' : 1,
-        borderColor: 'divider',
-      }}>
-        {children || <TextRendererToolbar />}
+      <Box
+        sx={{
+          position: 'relative',
+          height,
+          overflow: 'hidden',
+          bgcolor: 'background.paper',
+          borderRadius: 1,
+          border: isDark ? 'none' : 1,
+          borderColor: 'divider',
+        }}
+        onMouseEnter={() => setShowToolbar(true)}
+        onMouseLeave={() => setShowToolbar(false)}
+        onFocus={() => setShowToolbar(true)}
+        onBlur={(e) => {
+          // Only hide if focus moves outside this container
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setShowToolbar(false)
+          }
+        }}
+      >
+        {children || (showToolbar && <TextRendererToolbar enableFullscreen={enableFullscreen} />)}
         <LineNumbers scrollTop={scrollPos.top} />
 
         {/* Syntax highlighted background */}
@@ -382,7 +242,7 @@ export default function TextRenderer({
             sx={{
               position: 'absolute',
               top: 0,
-              left: 40,
+              left: 28,
               right: 0,
               fontFamily: 'monospace',
               fontSize: '0.875rem',
@@ -401,27 +261,29 @@ export default function TextRenderer({
         <textarea
           ref={textareaRef}
           value={localText}
-          onChange={(e) => handleTextChange(e.target.value, e.target.selectionStart)}
+          onInput={editorHandlers.onInput}
           onKeyDown={handleKeyDown}
           onScroll={handleScroll}
           placeholder={showRawText ? placeholder : undefined}
+          readOnly={!isEditable}
           style={{
             position: 'relative',
-            width: 'calc(100% - 40px)',
+            width: 'calc(100% - 28px)',
             height: '100%',
-            marginLeft: 40,
+            marginLeft: 28,
             fontFamily: 'monospace',
             fontSize: '0.875rem',
             lineHeight: 1.5,
             padding: 12,
             background: 'transparent',
             color: showRawText ? theme.palette.text.primary : 'transparent',
-            caretColor: theme.palette.text.primary,
+            caretColor: isEditable ? theme.palette.text.primary : 'transparent',
             border: 'none',
             outline: 'none',
             resize: 'none',
             whiteSpace: 'pre',
             overflow: 'auto',
+            cursor: isEditable ? 'text' : 'default',
           }}
           spellCheck={false}
         />
@@ -451,7 +313,10 @@ export default function TextRenderer({
       {enableFullscreen && (
         <Modal
           open={isFullscreen}
-          onClose={() => setIsFullscreen(false)}
+          onClose={exitFullscreen}
+          disableRestoreFocus
+          disableEnforceFocus
+          disableAutoFocus
         >
           <Box sx={{
             width: '100vw',
@@ -462,7 +327,7 @@ export default function TextRenderer({
             flexDirection: 'column',
           }}>
             <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: 'background.paper' }}>
-              {children || <TextRendererToolbar inFullscreen />}
+              {children || <TextRendererToolbar enableFullscreen={enableFullscreen} />}
               <LineNumbers scrollTop={fullscreenScrollPos.top} />
 
               {!showRawText && (
@@ -470,7 +335,7 @@ export default function TextRenderer({
                   sx={{
                     position: 'absolute',
                     top: 0,
-                    left: 40,
+                    left: 28,
                     right: 0,
                     fontFamily: 'monospace',
                     fontSize: '0.875rem',
@@ -488,27 +353,29 @@ export default function TextRenderer({
               <textarea
                 ref={fullscreenTextareaRef}
                 value={localText}
-                onChange={(e) => handleTextChange(e.target.value, e.target.selectionStart)}
+                onInput={editorHandlers.onInput}
                 onKeyDown={handleKeyDown}
                 onScroll={handleFullscreenScroll}
                 placeholder={showRawText ? placeholder : undefined}
+                readOnly={!isEditable}
                 style={{
                   position: 'relative',
-                  width: 'calc(100% - 40px)',
+                  width: 'calc(100% - 28px)',
                   height: '100%',
-                  marginLeft: 40,
+                  marginLeft: 28,
                   fontFamily: 'monospace',
                   fontSize: '0.875rem',
                   lineHeight: 1.5,
                   padding: 12,
                   background: 'transparent',
                   color: showRawText ? theme.palette.text.primary : 'transparent',
-                  caretColor: theme.palette.text.primary,
+                  caretColor: isEditable ? theme.palette.text.primary : 'transparent',
                   border: 'none',
                   outline: 'none',
                   resize: 'none',
                   whiteSpace: 'pre',
                   overflow: 'auto',
+                  cursor: isEditable ? 'text' : 'default',
                 }}
                 spellCheck={false}
               />
