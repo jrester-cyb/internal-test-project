@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
+import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider, Dialog, DialogTitle, DialogContent } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
@@ -25,8 +25,7 @@ export default function AssetDetailPage() {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-
-  // Count hidden attributes
+  const [tagsDialogAttr, setTagsDialogAttr] = useState<AssetTypeAttribute | null>(null)
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Get all unique tags from attributes
@@ -257,7 +256,7 @@ export default function AssetDetailPage() {
                             style={style}
                             sx={{
                               display: 'flex',
-                              alignItems: 'flex-start',
+                              alignItems: 'center',
                               borderBottom: '1px solid',
                               borderColor: 'divider',
                               px: 2,
@@ -265,29 +264,52 @@ export default function AssetDetailPage() {
                               '&:hover': { bgcolor: 'action.hover' }
                             }}
                           >
-                            <Box sx={{ width: '35%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden', pr: 1 }}>
+                            <Box sx={{ width: '35%', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden', pr: 3 }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                 {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
                                 <Typography variant="body2" fontWeight={600} noWrap title={attr.name}>{attr.name}</Typography>
                               </Box>
                               {attr.description && (
-                                <TruncatedText variant="caption" color="text.secondary" maxLines={2} title={attr.name}>
+                                <TruncatedText variant="caption" color="text.secondary" maxLines={1} title={attr.name} showCopy={false}>
                                   {attr.description}
                                 </TruncatedText>
                               )}
-                              {attr.tags && attr.tags.length > 0 && (
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                                  {attr.tags.map(tag => (
-                                    <Chip
-                                      key={tag}
-                                      label={tag}
-                                      size="small"
-                                      variant="outlined"
-                                      sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
-                                    />
-                                  ))}
-                                </Box>
-                              )}
+                              {attr.tags && attr.tags.length > 0 && (() => {
+                                const maxVisible = 2
+                                const visibleTags = attr.tags.slice(0, maxVisible)
+                                const remainingCount = attr.tags.length - maxVisible
+                                return (
+                                  <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, mt: 0.5, overflow: 'hidden' }}>
+                                    {visibleTags.map(tag => (
+                                      <Chip
+                                        key={tag}
+                                        label={tag}
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{
+                                          height: 18,
+                                          fontSize: '0.65rem',
+                                          maxWidth: 80,
+                                          '& .MuiChip-label': { px: 0.75, overflow: 'hidden', textOverflow: 'ellipsis' }
+                                        }}
+                                      />
+                                    ))}
+                                    {remainingCount > 0 && (
+                                      <Chip
+                                        label={`+${remainingCount}`}
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setTagsDialogAttr(attr)
+                                        }}
+                                        sx={{ height: 18, fontSize: '0.65rem', cursor: 'pointer', flexShrink: 0, '& .MuiChip-label': { px: 0.75 } }}
+                                      />
+                                    )}
+                                  </Box>
+                                )
+                              })()}
                             </Box>
                             <Box sx={{ flex: 1, overflow: 'hidden' }}>
                               <AttributeValueRenderer attribute={attr} value={value} maxLines={3} />
@@ -302,31 +324,35 @@ export default function AssetDetailPage() {
                         const value = asset.attributes?.[attr.apiKey]
                         const hasTags = attr.tags && attr.tags.length > 0
                         const hasDescription = !!attr.description
-                        const padding = 16
+                        const padding = 18
 
                         // Calculate left column height (name + description + tags)
-                        let leftHeight = 20 // name line
+                        let leftHeight = 24 // name line
                         if (hasDescription) {
-                          const descLines = Math.min(2, Math.ceil((attr.description?.length || 0) / 30))
-                          leftHeight += descLines * 16
+                          leftHeight += 36 // single line description + "see full text" link
                         }
-                        if (hasTags) {
-                          leftHeight += 22 // tags row
+                        if (hasTags && attr.tags) {
+                          leftHeight += 26 // single row of tags
                         }
 
                         // Calculate right column height based on value type
-                        let rightHeight = 20
+                        // Add extra height for TruncatedText "see full text" link when content is long
+                        let rightHeight = 24
                         if (value !== null && value !== undefined) {
                           if (attr.attributeType === 'json' || typeof value === 'object') {
                             const formatted = JSON.stringify(value, null, 2)
                             const lines = Math.min(3, formatted.split('\n').length)
-                            rightHeight = (lines * 18) + 24
+                            rightHeight = (lines * 22) + 28
                           } else if (attr.attributeType === 'boolean') {
-                            rightHeight = 24
+                            rightHeight = 28
                           } else {
                             const strValue = String(value)
                             const estimatedLines = Math.min(3, Math.ceil(strValue.length / 50))
-                            rightHeight = estimatedLines * 20
+                            rightHeight = estimatedLines * 22
+                            // Add space for "see full text" if content is likely truncated
+                            if (strValue.length > 100) {
+                              rightHeight += 18
+                            }
                           }
                         }
 
@@ -492,6 +518,23 @@ export default function AssetDetailPage() {
           </Table>
         </Box>
       </Drawer>
+
+      {/* Tags Dialog */}
+      <Dialog open={!!tagsDialogAttr} onClose={() => setTagsDialogAttr(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Tags for {tagsDialogAttr?.name}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, pt: 1 }}>
+            {tagsDialogAttr?.tags?.map(tag => (
+              <Chip
+                key={tag}
+                label={tag}
+                size="small"
+                variant="outlined"
+              />
+            ))}
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }

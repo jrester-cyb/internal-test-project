@@ -6,9 +6,10 @@ interface TruncatedTextProps extends Omit<TypographyProps, 'children'> {
   children: string
   maxLines?: number
   title?: string
+  showCopy?: boolean
 }
 
-export default function TruncatedText({ children, maxLines = 3, title = 'Full Text', sx, ...typographyProps }: TruncatedTextProps) {
+export default function TruncatedText({ children, maxLines = 3, title = 'Full Text', showCopy = true, sx, ...typographyProps }: TruncatedTextProps) {
   const textRef = useRef<HTMLSpanElement>(null)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -45,24 +46,26 @@ export default function TruncatedText({ children, maxLines = 3, title = 'Full Te
           >
             {children}
           </Typography>
-          <Tooltip title="Copy" arrow>
-            <IconButton
-              className="copy-button"
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigator.clipboard.writeText(children)
-              }}
-              sx={{
-                p: 0.25,
-                flexShrink: 0,
-                color: 'inherit',
-                '&:hover': { opacity: 1 },
-              }}
-            >
-              <ContentCopy fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {showCopy && (
+            <Tooltip title="Copy" arrow>
+              <IconButton
+                className="copy-button"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigator.clipboard.writeText(children)
+                }}
+                sx={{
+                  p: 0.25,
+                  flexShrink: 0,
+                  color: 'inherit',
+                  '&:hover': { opacity: 1 },
+                }}
+              >
+                <ContentCopy fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
         {isOverflowing && (
           <Typography
