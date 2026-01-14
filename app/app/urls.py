@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/utils/", include("utils.urls")),
     path("api/attribute-types/", get_attribute_types, name="attribute-types"),
     path("api/audit/", include("audit_log.urls")),
+    path("api/actions/", include("actions.urls")),
     # Silk profiling dashboard
     path("silk/", include("silk.urls", namespace="silk")),
     # OpenAPI schema

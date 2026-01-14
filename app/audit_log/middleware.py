@@ -56,6 +56,8 @@ def extract_context_ids(request):
 
     return organization_id, workspace_id
 
+    return organization, workspace
+
 
 class AuditLogMiddleware(MiddlewareMixin):
     """
@@ -145,6 +147,7 @@ class AuditLogMiddleware(MiddlewareMixin):
                 ctx.organization_id = view_kwargs.get(
                     "organization_pk"
                 ) or view_kwargs.get("organization_id")
+
             if not ctx.workspace_id:
                 ctx.workspace_id = view_kwargs.get("workspace_pk") or view_kwargs.get(
                     "workspace_id"

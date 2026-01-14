@@ -66,12 +66,8 @@ class AuditLogEntrySerializer(serializers.ModelSerializer):
         source="target_content_type.model", read_only=True, allow_null=True
     )
     # Request context from related AuditLogRequest
-    username = serializers.CharField(
-        source="request.user.username", read_only=True, allow_null=True
-    )
-    user_id = serializers.UUIDField(
-        source="request.user_id", read_only=True, allow_null=True
-    )
+    username = serializers.SerializerMethodField()
+    user_id = serializers.SerializerMethodField()
     user_email = serializers.EmailField(source="request.user_email", read_only=True)
     request_id = serializers.CharField(source="request.request_id", read_only=True)
     request_method = serializers.CharField(
@@ -84,16 +80,44 @@ class AuditLogEntrySerializer(serializers.ModelSerializer):
     ip_address = serializers.IPAddressField(
         source="request.ip_address", read_only=True, allow_null=True
     )
-    organization_id = serializers.UUIDField(
-        source="request.organization_id", read_only=True, allow_null=True
-    )
-    workspace_id = serializers.UUIDField(
-        source="request.workspace_id", read_only=True, allow_null=True
-    )
+    organization_id = serializers.SerializerMethodField()
+    organization_name = serializers.SerializerMethodField()
+    workspace_id = serializers.SerializerMethodField()
+    workspace_name = serializers.SerializerMethodField()
     source = serializers.CharField(source="request.source", read_only=True)
     duration_ms = serializers.IntegerField(
         source="request.duration_ms", read_only=True, allow_null=True
     )
+
+    def get_username(self, obj):
+        if obj.request and obj.request.user:
+            return str(obj.request.user)
+        return None
+
+    def get_user_id(self, obj):
+        if obj.request and obj.request.user:
+            return str(obj.request.user.pk)
+        return None
+
+    def get_organization_id(self, obj):
+        if obj.request and obj.request.organization:
+            return str(obj.request.organization.pk)
+        return None
+
+    def get_organization_name(self, obj):
+        if obj.request and obj.request.organization:
+            return str(obj.request.organization)
+        return None
+
+    def get_workspace_id(self, obj):
+        if obj.request and obj.request.workspace:
+            return str(obj.request.workspace.pk)
+        return None
+
+    def get_workspace_name(self, obj):
+        if obj.request and obj.request.workspace:
+            return str(obj.request.workspace)
+        return None
 
     class Meta:
         model = AuditLogEntry
@@ -113,7 +137,9 @@ class AuditLogEntrySerializer(serializers.ModelSerializer):
             "source",
             # Context (from request)
             "organization_id",
+            "organization_name",
             "workspace_id",
+            "workspace_name",
             # Action
             "action",
             "action_detail",
@@ -141,21 +167,30 @@ class AuditLogEntrySummarySerializer(serializers.ModelSerializer):
     target_type = serializers.CharField(
         source="target_content_type.model", read_only=True, allow_null=True
     )
-    username = serializers.CharField(
-        source="request.user.username", read_only=True, allow_null=True
-    )
+    username = serializers.SerializerMethodField()
     user_email = serializers.EmailField(source="request.user_email", read_only=True)
     request_method = serializers.CharField(
         source="request.request_method", read_only=True
     )
     request_path = serializers.CharField(source="request.request_path", read_only=True)
     source = serializers.CharField(source="request.source", read_only=True)
-    organization_id = serializers.UUIDField(
-        source="request.organization_id", read_only=True, allow_null=True
-    )
-    workspace_id = serializers.UUIDField(
-        source="request.workspace_id", read_only=True, allow_null=True
-    )
+    organization_id = serializers.SerializerMethodField()
+    workspace_id = serializers.SerializerMethodField()
+
+    def get_username(self, obj):
+        if obj.request and obj.request.user:
+            return str(obj.request.user)
+        return None
+
+    def get_organization_id(self, obj):
+        if obj.request and obj.request.organization:
+            return str(obj.request.organization.pk)
+        return None
+
+    def get_workspace_id(self, obj):
+        if obj.request and obj.request.workspace:
+            return str(obj.request.workspace.pk)
+        return None
 
     class Meta:
         model = AuditLogEntry
@@ -184,7 +219,7 @@ class AuditLogRequestSerializer(serializers.ModelSerializer):
 
     entries = AuditLogEntrySummarySerializer(many=True, read_only=True)
     username = serializers.CharField(
-        source="user.username", read_only=True, allow_null=True
+        source="user_repr", read_only=True, allow_null=True
     )
     entry_count = serializers.SerializerMethodField()
 
@@ -194,7 +229,7 @@ class AuditLogRequestSerializer(serializers.ModelSerializer):
             "id",
             "request_id",
             # User
-            "user",
+            "user_object_id",
             "username",
             "user_email",
             # Request metadata
@@ -204,8 +239,10 @@ class AuditLogRequestSerializer(serializers.ModelSerializer):
             "ip_address",
             "user_agent",
             # Context
-            "organization",
-            "workspace",
+            "organization_object_id",
+            "organization_repr",
+            "workspace_object_id",
+            "workspace_repr",
             # Timing
             "created_at",
             "duration_ms",

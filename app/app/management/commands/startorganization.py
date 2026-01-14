@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from audit_log.logging import audit_group
 from organizations.models import Organization
 from workspaces.models import Workspace
-from audit_log import log_create
+from audit_log import log_action
 
 DEFAULT_WORKSPACE_NAME = "Default Workspace"
 DEFAULT_WORKSPACE_DESCRIPTION = ""
@@ -141,9 +141,10 @@ class Command(BaseCommand):
                 description=org_description,
             )
 
-            log_create(
-                org,
+            log_action(
+                action="create",
                 message=f"Created organization '{org.name}' via setup wizard",
+                references=[org],
                 metadata={"command": "startorganization"},
                 source="management_command",
             )
@@ -177,10 +178,10 @@ class Command(BaseCommand):
                         description=ws_description,
                     )
 
-                    log_create(
-                        workspace,
+                    log_action(
+                        action="create",
                         message=f"Created workspace '{workspace.name}' via setup wizard",
-                        references=[(org, "parent")],
+                        references=[workspace, org],
                         metadata={"command": "startorganization"},
                         source="management_command",
                     )
@@ -215,9 +216,10 @@ class Command(BaseCommand):
                 description=options.get("org_description", ""),
             )
 
-            log_create(
-                org,
+            log_action(
+                action="create",
                 message=f"Created organization '{org.name}' via management command",
+                references=[org],
                 metadata={"command": "startorganization"},
                 source="management_command",
             )
@@ -235,10 +237,10 @@ class Command(BaseCommand):
                     ),
                 )
 
-                log_create(
-                    workspace,
+                log_action(
+                    action="create",
                     message=f"Created workspace '{workspace.name}' via management command",
-                    references=[(org, "parent")],
+                    references=[workspace, org],
                     metadata={"command": "startorganization"},
                     source="management_command",
                 )

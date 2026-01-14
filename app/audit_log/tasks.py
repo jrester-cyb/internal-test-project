@@ -38,6 +38,7 @@ def _process_request_impl(request_data: dict) -> str:
 
     Creates AuditLogRequest and AuditLogEntry records.
     """
+    from django.contrib.contenttypes.models import ContentType
     from audit_log.models import AuditLogRequest, AuditLogEntry, AuditLogReference
 
     with transaction.atomic():
@@ -52,10 +53,8 @@ def _process_request_impl(request_data: dict) -> str:
             except User.DoesNotExist:
                 pass
 
-        # Get organization and workspace FKs
+        # Get organization if we have an organization_id
         organization = None
-        workspace = None
-
         if request_data.get("organization_id"):
             try:
                 from organizations.models import Organization
@@ -66,6 +65,8 @@ def _process_request_impl(request_data: dict) -> str:
             except Exception:
                 pass
 
+        # Get workspace if we have a workspace_id
+        workspace = None
         if request_data.get("workspace_id"):
             try:
                 from workspaces.models import Workspace

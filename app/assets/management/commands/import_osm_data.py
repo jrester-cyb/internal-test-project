@@ -4,13 +4,12 @@ from assets.models import (
     Asset,
     AssetType,
     GlobalAssetTypeAttribute,
-    JSONAttributeValue,
     WorkspaceAssetType,
     WorkspaceAsset,
 )
 from workspaces.models import Workspace
-from django.contrib.gis.geos import Point, LineString, Polygon, MultiPolygon
-from audit_log import log_action
+from django.contrib.gis.geos import Point, LineString, Polygon
+from audit_log import log_bulk_create, log_create
 import requests
 
 
@@ -26,44 +25,58 @@ class OSMImporter:
         self.organization = workspace.organization if workspace else None
 
     def query_overpass(
-        self, query: str, max_retries: int = 3, retry_delay: int = 10
+        self, query: str, max_retries: int = 5, retry_delay: int = 10
     ) -> dict:
+        import time
+
         attempt = 0
         while attempt < max_retries:
             try:
                 response = self.session.post(
                     self.OVERPASS_URL, data={"data": query}, timeout=60
                 )
+                # Handle rate limiting (429)
+                if response.status_code == 429:
+                    attempt += 1
+                    # Exponential backoff: 10, 20, 40, 80, 160 seconds
+                    wait_time = retry_delay * (2 ** (attempt - 1))
+                    print(
+                        f"429 Rate Limited by Overpass API (attempt {attempt}/{max_retries}), waiting {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                # Handle gateway timeout (504)
                 if response.status_code == 504:
                     attempt += 1
                     print(
                         f"504 Gateway Timeout from Overpass API (attempt {attempt}/{max_retries}), retrying in {retry_delay}s..."
                     )
-                    import time
-
                     time.sleep(retry_delay)
                     continue
                 response.raise_for_status()
                 return response.json()
             except requests.exceptions.RequestException as e:
-                print(f"Error querying Overpass API: {e}")
-                if (
-                    hasattr(e, "response")
-                    and getattr(e.response, "status_code", None) == 504
-                ):
+                status_code = getattr(getattr(e, "response", None), "status_code", None)
+                if status_code in (429, 504):
                     attempt += 1
-                    print(
-                        f"504 Gateway Timeout from Overpass API (attempt {attempt}/{max_retries}), retrying in {retry_delay}s..."
-                    )
-                    import time
-
-                    time.sleep(retry_delay)
+                    if status_code == 429:
+                        wait_time = retry_delay * (2 ** (attempt - 1))
+                        print(
+                            f"429 Rate Limited by Overpass API (attempt {attempt}/{max_retries}), waiting {wait_time}s..."
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        print(
+                            f"504 Gateway Timeout from Overpass API (attempt {attempt}/{max_retries}), retrying in {retry_delay}s..."
+                        )
+                        time.sleep(retry_delay)
                     continue
+                print(f"Error querying Overpass API: {e}")
                 raise
         print(
-            f"Failed after {max_retries} attempts due to repeated 504 Gateway Timeout errors."
+            f"Failed after {max_retries} attempts due to repeated errors from Overpass API."
         )
-        raise Exception("Overpass API 504 Gateway Timeout after retries")
+        raise Exception("Overpass API failed after retries")
 
     def build_geometry(self, element: dict) -> object:
         element_type = element.get("type")
@@ -93,11 +106,18 @@ class OSMImporter:
 
         # Ensure asset type is linked to workspace
         if self.workspace:
-            WorkspaceAssetType.objects.get_or_create(
+            work_asset_type, created = WorkspaceAssetType.objects.get_or_create(
                 workspace=self.workspace,
                 asset_type=asset_type,
                 defaults={"is_owner": True},
             )
+            if created:
+                log_create(
+                    work_asset_type,
+                    message=f"Linked asset type '{asset_type.asset_type.name}' to workspace '{self.workspace.name}'",
+                    references=[asset_type, self.workspace, self.organization],
+                    metadata={"command": "import_osm_data"},
+                )
 
         return asset_type
 
@@ -108,7 +128,7 @@ class OSMImporter:
             ("tags", "tags", "json", "All OSM tags"),
         ]
         for order, (name, api_key, attr_type, description) in enumerate(attributes):
-            GlobalAssetTypeAttribute.objects.get_or_create(
+            instance, created = GlobalAssetTypeAttribute.objects.get_or_create(
                 asset_type=asset_type,
                 name=name,
                 defaults={
@@ -118,6 +138,13 @@ class OSMImporter:
                     "order": order,
                 },
             )
+            if created:
+                log_create(
+                    instance,
+                    message=f"Created OSM attribute '{name}' for asset type '{asset_type.name}'",
+                    references=[asset_type, self.organization],
+                    metadata={"command": "import_osm_data"},
+                )
 
     def import_osm_features(
         self,
@@ -127,7 +154,8 @@ class OSMImporter:
         limit: int = 100,
         max_retries: int = 3,
         retry_delay: int = 10,
-    ) -> int:
+    ) -> tuple:
+        """Import OSM features and return (created_count, created_assets)."""
         south, west, north, east = bbox
         if feature_value:
             query = f"""
@@ -161,6 +189,7 @@ class OSMImporter:
         print(f"Found {len(elements)} elements")
         asset_type = self.get_or_create_asset_type(feature_type)
         created_count = 0
+        created_assets = []
         for element in elements:
             osm_id = element.get("id")
             osm_type = element.get("type")
@@ -182,6 +211,7 @@ class OSMImporter:
             )
             if created:
                 created_count += 1
+                created_assets.append(asset)
 
             # Link asset to workspace
             if self.workspace:
@@ -192,7 +222,7 @@ class OSMImporter:
 
             self.store_osm_attributes(asset, osm_id, osm_type, tags)
         print(f"Created {created_count} new assets")
-        return created_count
+        return created_count, created_assets
 
     def sanitize_text(self, text: str) -> str:
         if not text:
@@ -367,9 +397,10 @@ class Command(BaseCommand):
         ]
 
         total_created = 0
+        all_created_assets = []
         for feature_type, feature_value, feature_limit, label in import_features:
             self.stdout.write(f"\n--- Importing {label} ---")
-            created = importer.import_osm_features(
+            created, created_assets = importer.import_osm_features(
                 bbox=bbox,
                 feature_type=feature_type,
                 feature_value=feature_value,
@@ -378,19 +409,22 @@ class Command(BaseCommand):
                 retry_delay=retry_delay,
             )
             total_created += created
+            all_created_assets.extend(created_assets)
 
         # Log to audit log
-        log_action(
-            action="import",
-            message=f"Imported {total_created} assets from OSM for location '{location}'",
-            references=[workspace, workspace.organization],
-            metadata={
-                "command": "import_osm_data",
-                "location": location,
-                "assets_created": total_created,
-                "bbox": list(bbox),
-            },
-            source="management_command",
-        )
+        if all_created_assets:
+            log_bulk_create(
+                all_created_assets,
+                message=f"Imported {total_created} assets from OSM for location '{location}'",
+                metadata={
+                    "command": "import_osm_data",
+                    "location": location,
+                    "bbox": list(bbox),
+                },
+                parent_references=[
+                    (workspace, "workspace"),
+                    (workspace.organization, "organization"),
+                ],
+            )
 
         self.stdout.write(self.style.SUCCESS("\n=== Import Complete ==="))

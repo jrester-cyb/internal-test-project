@@ -120,9 +120,7 @@ class AuditLogEntryListView(ListAPIView):
                     )
                 ),
             ),
-        ).select_related(
-            "request", "request__user", "request__organization", "request__workspace"
-        )
+        ).select_related("request")
 
         # Filter by organization (via request)
         org_id = self.request.query_params.get("organization_id")
@@ -204,15 +202,15 @@ class AuditLogEntryListView(ListAPIView):
         """Extract request metadata from an AuditLogRequest."""
         return {
             "user_id": str(req.user_id) if req.user_id else None,
-            "username": req.user.username if req.user else None,
+            "username": str(req.user) if req.user else None,
             "user_email": req.user_email,
             "request_method": req.request_method,
             "request_path": req.request_path,
             "source": req.source,
-            "organization_id": (
-                str(req.organization_id) if req.organization_id else None
-            ),
+            "organization_id": str(req.organization_id) if req.organization_id else None,
+            "organization_name": str(req.organization) if req.organization else None,
             "workspace_id": str(req.workspace_id) if req.workspace_id else None,
+            "workspace_name": str(req.workspace) if req.workspace else None,
         }
 
     def _serialize_entry(self, entry):

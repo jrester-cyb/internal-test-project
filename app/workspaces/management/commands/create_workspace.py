@@ -46,6 +46,7 @@ class Command(BaseCommand):
         # Log to audit log
         log_action(
             action="create",
+            target=workspace,
             message=f"Created workspace '{workspace.name}' in organization '{org.name}' via management command",
             references=[workspace, org],
             metadata={"command": "create_workspace"},

@@ -116,11 +116,20 @@ def merge_triggers(*trigger_lists):
 class SoftDeleteQuerySet(models.QuerySet):
     """QuerySet that returns proper counts for soft delete operations."""
 
-    def delete(self):
+    def delete(self, skip_count=False):
         """
         Soft delete all objects in this queryset.
         Returns proper count even though trigger prevents actual deletion.
+
+        Args:
+            skip_count: If True, skip counting logic for performance.
+                       Returns (0, {}) instead of actual counts.
         """
+        if skip_count:
+            # Fast path - just do the delete without counting
+            super().delete()
+            return 0, {}
+
         # Count objects before deletion
         count = self.count()
 
@@ -177,11 +186,20 @@ class AllObjectsManager(models.Manager):
 class PolymorphicSoftDeleteQuerySet(PolymorphicQuerySet):
     """Polymorphic QuerySet that returns proper counts for soft delete operations."""
 
-    def delete(self):
+    def delete(self, skip_count=False):
         """
         Soft delete all polymorphic objects in this queryset.
         Returns proper count even though trigger prevents actual deletion.
+
+        Args:
+            skip_count: If True, skip counting logic for performance.
+                       Returns (0, {}) instead of actual counts.
         """
+        if skip_count:
+            # Fast path - just do the delete without counting
+            super().delete()
+            return 0, {}
+
         # Count objects before deletion
         count = self.count()
 

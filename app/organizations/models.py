@@ -18,6 +18,13 @@ class Organization(SoftDeleteMixin):
 
     class Meta(SoftDeleteMixin.Meta):
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name"],
+                name="unique_organization_name",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
 
     def __str__(self):
         return self.name

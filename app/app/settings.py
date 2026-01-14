@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "utils",
     "users_manager",
     "audit_log",
+    "actions",
 ]
 
 # Custom User Model

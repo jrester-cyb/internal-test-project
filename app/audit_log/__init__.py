@@ -122,13 +122,17 @@ def log_action(
     *,
     request=None,
     user=None,
+    organization=None,
+    workspace=None,
     action: str,
     message: str,
+    target=None,
+    target_repr: str = "",
+    action_detail: str = "",
     references: list = None,
     changes: dict = None,
     metadata: dict = None,
     group_id: str = None,
-    batch_id: str = None,  # Legacy alias for group_id
     source: str = None,  # Source of the action (api, management_command, celery_task, system)
 ):
     """
@@ -137,13 +141,17 @@ def log_action(
     Args:
         request: The current request (optional, will use thread-local if not provided)
         user: The user performing the action (optional, will use request.user)
-        action: Action type (e.g., 'created', 'updated', 'deleted')
+        organization: The organization context for this action (optional)
+        workspace: The workspace context for this action (optional)
+        action: Action type (e.g., 'create', 'update', 'delete', 'read')
         message: Human-readable message describing the action
-        references: List of model instances that were affected
+        target: The object being acted upon (required for CRUD actions)
+        target_repr: String representation of target (auto-generated if not provided)
+        action_detail: Additional detail about the action (e.g., "workspace_local")
+        references: List of related objects - either model instances or (obj, role) tuples
         changes: Dict of changes made (e.g., {'field': {'old': x, 'new': y}})
         metadata: Additional metadata to store
         group_id: Optional group ID to group related entries within a request.
-        batch_id: Deprecated alias for group_id.
         source: Source of the action (api, management_command, celery_task, system).
                 If not provided, defaults to 'api' for HTTP requests, 'system' otherwise.
     """
@@ -152,12 +160,213 @@ def log_action(
     return AuditLogger.log(
         request=request,
         user=user,
+        organization=organization,
+        workspace=workspace,
         action=action,
         message=message,
+        target=target,
+        target_repr=target_repr,
+        action_detail=action_detail,
         references=references or [],
         changes=changes or {},
         metadata=metadata or {},
-        group_id=group_id or batch_id,
+        group_id=group_id,
+        source=source,
+    )
+
+
+def log_create(
+    target,
+    *,
+    message: str = None,
+    request=None,
+    user=None,
+    organization=None,
+    workspace=None,
+    action_detail: str = "",
+    references: list = None,
+    metadata: dict = None,
+    group_id: str = None,
+    source: str = None,
+):
+    """
+    Log a create action.
+
+    Args:
+        target: The object that was created (required)
+        message: Human-readable message (auto-generated if not provided)
+        request: The current request (optional)
+        user: The user performing the action (optional)
+        organization: The organization context for this action (optional)
+        workspace: The workspace context for this action (optional)
+        action_detail: Additional detail about the action
+        references: List of related objects - either model instances or (obj, role) tuples
+        metadata: Additional metadata to store
+        group_id: Optional group ID to group related entries
+        source: Source of the action (api, management_command, celery_task, system)
+    """
+    if not message:
+        message = f"Created {target.__class__.__name__}: {target}"
+    return log_action(
+        action="create",
+        message=message,
+        target=target,
+        request=request,
+        user=user,
+        organization=organization,
+        workspace=workspace,
+        action_detail=action_detail,
+        references=references,
+        metadata=metadata,
+        group_id=group_id,
+        source=source,
+    )
+
+
+def log_update(
+    target,
+    changes: dict,
+    *,
+    message: str = None,
+    request=None,
+    user=None,
+    organization=None,
+    workspace=None,
+    action_detail: str = "",
+    references: list = None,
+    metadata: dict = None,
+    group_id: str = None,
+    source: str = None,
+):
+    """
+    Log an update action.
+
+    Args:
+        target: The object that was updated (required)
+        changes: Dict of changes {field: {old: x, new: y}} (required)
+        message: Human-readable message (auto-generated if not provided)
+        request: The current request (optional)
+        user: The user performing the action (optional)
+        organization: The organization context for this action (optional)
+        workspace: The workspace context for this action (optional)
+        action_detail: Additional detail about the action
+        references: List of related objects - either model instances or (obj, role) tuples
+        metadata: Additional metadata to store
+        group_id: Optional group ID to group related entries
+        source: Source of the action (api, management_command, celery_task, system)
+    """
+    if not message:
+        changed_fields = ", ".join(changes.keys())
+        message = f"Updated {target.__class__.__name__} {target}: {changed_fields}"
+    return log_action(
+        action="update",
+        message=message,
+        target=target,
+        changes=changes,
+        request=request,
+        user=user,
+        organization=organization,
+        workspace=workspace,
+        action_detail=action_detail,
+        references=references,
+        metadata=metadata,
+        group_id=group_id,
+        source=source,
+    )
+
+
+def log_delete(
+    target,
+    *,
+    message: str = None,
+    request=None,
+    user=None,
+    organization=None,
+    workspace=None,
+    action_detail: str = "",
+    references: list = None,
+    metadata: dict = None,
+    group_id: str = None,
+    source: str = None,
+):
+    """
+    Log a delete action.
+
+    Args:
+        target: The object that was deleted (required)
+        message: Human-readable message (auto-generated if not provided)
+        request: The current request (optional)
+        user: The user performing the action (optional)
+        organization: The organization context for this action (optional)
+        workspace: The workspace context for this action (optional)
+        action_detail: Additional detail about the action
+        references: List of related objects - either model instances or (obj, role) tuples
+        metadata: Additional metadata to store
+        group_id: Optional group ID to group related entries
+        source: Source of the action (api, management_command, celery_task, system)
+    """
+    if not message:
+        message = f"Deleted {target.__class__.__name__}: {target}"
+    return log_action(
+        action="delete",
+        message=message,
+        target=target,
+        request=request,
+        user=user,
+        organization=organization,
+        workspace=workspace,
+        action_detail=action_detail,
+        references=references,
+        metadata=metadata,
+        group_id=group_id,
+        source=source,
+    )
+
+
+def log_read(
+    target,
+    *,
+    message: str = None,
+    request=None,
+    user=None,
+    organization=None,
+    workspace=None,
+    action_detail: str = "",
+    references: list = None,
+    metadata: dict = None,
+    group_id: str = None,
+    source: str = None,
+):
+    """
+    Log a read action.
+
+    Args:
+        target: The object that was read (required)
+        message: Human-readable message (auto-generated if not provided)
+        request: The current request (optional)
+        user: The user performing the action (optional)
+        organization: The organization context for this action (optional)
+        workspace: The workspace context for this action (optional)
+        action_detail: Additional detail about the action
+        references: List of related objects - either model instances or (obj, role) tuples
+        metadata: Additional metadata to store
+        group_id: Optional group ID to group related entries
+        source: Source of the action (api, management_command, celery_task, system)
+    """
+    if not message:
+        message = f"Read {target.__class__.__name__}: {target}"
+    return log_action(
+        action="read",
+        message=message,
+        target=target,
+        request=request,
+        user=user,
+        organization=organization,
+        workspace=workspace,
+        action_detail=action_detail,
+        references=references,
+        metadata=metadata,
+        group_id=group_id,
         source=source,
     )
 

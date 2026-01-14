@@ -117,9 +117,7 @@ class AuditRequestContext:
             "query_params": self.query_params,
             "ip_address": self.ip_address,
             "user_agent": self.user_agent,
-            "organization_id": (
-                str(self.organization_id) if self.organization_id else None
-            ),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
             "workspace_id": str(self.workspace_id) if self.workspace_id else None,
             "source": self.source,
             "duration_ms": int((time.time() - self.start_time) * 1000),
@@ -276,6 +274,8 @@ class AuditLogger:
         message: str,
         request=None,
         user=None,
+        organization=None,
+        workspace=None,
         target=None,
         target_repr: str = "",
         action_detail: str = "",
@@ -293,6 +293,8 @@ class AuditLogger:
             message: Human-readable description of the action
             request: Optional request object for context
             user: Optional user object (uses request.user if not provided)
+            organization: Optional organization object for context
+            workspace: Optional workspace object for context
             target: The object being acted upon
             target_repr: String representation of target (auto-generated if not provided)
             action_detail: Additional detail about the action (e.g., "workspace_local")
@@ -311,6 +313,14 @@ class AuditLogger:
         If called outside a request context, the entry will be logged
         immediately as a standalone request.
         """
+        # CRUD actions require a target
+        crud_actions = {"create", "update", "delete", "read"}
+        if action in crud_actions and target is None:
+            raise ValueError(
+                f"Action '{action}' requires a target object. "
+                f"Use target=obj to specify what was {action}d."
+            )
+
         # Check for context manager group_id (group_id param takes precedence over batch_id)
         effective_group_id = group_id or get_context_group_id()
 
@@ -345,6 +355,8 @@ class AuditLogger:
             ),
             request_method=request.method if request else "SYSTEM",
             request_path=request.path if request else "",
+            organization_id=str(organization.pk) if organization else None,
+            workspace_id=str(workspace.pk) if workspace else None,
             source=effective_source,
         )
 
