@@ -72,6 +72,9 @@ export default function MapView({
 
   const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
   const strokeColor = isDarkMode ? theme.palette.secondary.main : "black"
+  const polygonFillColor = isDarkMode ? theme.palette.primary.light : theme.palette.secondary.main
+  const polygonStrokeColor = isDarkMode ? theme.palette.primary.light : theme.palette.secondary.main
+  const polylineColor = isDarkMode ? "white" : theme.palette.primary.main
 
   const markerIcon = useMemo(() => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
@@ -144,7 +147,7 @@ export default function MapView({
                 eventHandlers={{
                   click: () => handleAssetClick(asset)
                 }}
-                pathOptions={{ color: strokeColor, fillColor: fillColor, weight: 2, fillOpacity: 0.2 }}
+                pathOptions={{ color: polygonStrokeColor, fillColor: polygonFillColor, weight: 2, fillOpacity: 0.2 }}
               />
             ) : asset.geometry && asset.geometry.type === "LineString" && Array.isArray(asset.geometry.coordinates) ? (
               <Polyline
@@ -153,7 +156,7 @@ export default function MapView({
                 eventHandlers={{
                   click: () => handleAssetClick(asset)
                 }}
-                pathOptions={{ color: 'red', weight: 3 }}
+                pathOptions={{ color: polylineColor, weight: 3 }}
               />
             ) : null
           ))}
