@@ -2,15 +2,19 @@ import { Box, List, Drawer, IconButton, Divider, Typography } from '@mui/materia
 import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, FolderCopy as LibraryIcon, Business as BusinessIcon, Folder as FolderIcon } from '@mui/icons-material'
 import { useParams } from 'react-router-dom'
 import SidebarNavItem from './SidebarNavItem'
+import { useSidebar } from '../contexts/SidebarContext'
 
 interface SidebarProps {
   isOpen: boolean
   onToggle: (open: boolean) => void
+  variant?: 'permanent' | 'temporary'
+  onClose?: () => void
 }
 
-export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export default function Sidebar({ isOpen, onToggle, variant = 'permanent', onClose }: SidebarProps) {
+  const { isMobile } = useSidebar()
   const { organizationId, workspaceId } = useParams()
-  const drawerWidth = isOpen ? 240 : 64
+  const drawerWidth = variant === 'temporary' ? 240 : (isOpen ? 240 : 64)
 
   // Build paths
   const workspacePath = organizationId && workspaceId ? `/organizations/${organizationId}/workspaces/${workspaceId}` : ''
@@ -19,7 +23,10 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   return (
     <>
       <Drawer
-        variant="permanent"
+        variant={variant}
+        anchor={variant === 'temporary' ? 'left' : undefined}
+        open={isOpen}
+        onClose={onClose}
         sx={{
           width: drawerWidth,
           flexShrink: 0,
@@ -37,18 +44,20 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         }}
       >
         <Box sx={{ overflow: 'auto', mt: 8 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
-            <IconButton
-              onClick={() => onToggle(!isOpen)}
-              sx={{ color: 'white' }}
-            >
-              {isOpen ? <ChevronLeftIcon /> : <MenuIcon />}
-            </IconButton>
-          </Box>
+          {variant !== 'temporary' && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+              <IconButton
+                onClick={() => onToggle(!isOpen)}
+                sx={{ color: 'white' }}
+              >
+                {isOpen ? <ChevronLeftIcon /> : <MenuIcon />}
+              </IconButton>
+            </Box>
+          )}
           <List>
             {organizationId && !workspaceId && (
               <>
-                {isOpen && (
+                {(isMobile || isOpen) && (
                   <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
                     ORGANIZATION
                   </Typography>
@@ -57,25 +66,22 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   to={`${orgPath}/map`}
                   icon={<MapIcon />}
                   label="Map"
-                  isOpen={isOpen}
                 />
                 <SidebarNavItem
                   to={`${orgPath}/asset-types`}
                   icon={<AssetsIcon />}
                   label="Assets"
-                  isOpen={isOpen}
                 />
                 <SidebarNavItem
                   to={`${orgPath}/library`}
                   icon={<LibraryIcon />}
                   label="Library"
-                  isOpen={isOpen}
                 />
               </>
             )}
             {workspaceId && (
               <>
-                {isOpen && (
+                {(isMobile || isOpen) && (
                   <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
                     WORKSPACE
                   </Typography>
@@ -84,19 +90,16 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   to={`${workspacePath}/map`}
                   icon={<MapIcon />}
                   label="Map"
-                  isOpen={isOpen}
                 />
                 <SidebarNavItem
                   to={`${workspacePath}/asset-types`}
                   icon={<AssetsIcon />}
                   label="Assets"
-                  isOpen={isOpen}
                 />
                 <SidebarNavItem
                   to={`${workspacePath}/library`}
                   icon={<LibraryIcon />}
                   label="Library"
-                  isOpen={isOpen}
                 />
               </>
             )}
@@ -105,9 +108,4 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       </Drawer>
     </>
   )
-}
-
-export function useSidebarWidth() {
-  // This is a workaround - ideally use context
-  return 240 // Will be updated dynamically in App.tsx
 }

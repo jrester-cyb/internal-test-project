@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Navigate, RouterProvider, type Params } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { OrganizationProvider } from './contexts/OrganizationContext'
+import { SidebarProvider } from './contexts/SidebarContext'
 import './index.css'
 import App from './App.tsx'
 
@@ -300,7 +301,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <OrganizationProvider>
-        <RouterProvider router={router} />
+        <SidebarProvider>
+          <RouterProvider router={router} />
+        </SidebarProvider>
       </OrganizationProvider>
     </ThemeProvider>
   </StrictMode>,

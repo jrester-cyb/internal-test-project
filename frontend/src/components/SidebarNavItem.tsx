@@ -1,15 +1,16 @@
 import { ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import { NavLink } from 'react-router-dom'
 import { type ReactElement, useEffect, useState } from 'react'
+import { useSidebar } from '../contexts/SidebarContext'
 
 interface SidebarNavItemProps {
   to: string
   icon: ReactElement
   label: string
-  isOpen: boolean
 }
 
-export default function SidebarNavItem({ to, icon, label, isOpen }: SidebarNavItemProps) {
+export default function SidebarNavItem({ to, icon, label }: SidebarNavItemProps) {
+  const { isOpen, isMobile } = useSidebar()
   return (
     <ListItem disablePadding>
       <ListItemButton
@@ -19,7 +20,7 @@ export default function SidebarNavItem({ to, icon, label, isOpen }: SidebarNavIt
           color: 'inherit',
           minHeight: 48,
           display: 'flex',
-          flexDirection: isOpen ? 'row' : 'column',
+          flexDirection: isMobile ? 'row' : (isOpen ? 'row' : 'column'),
           justifyContent: 'center',
           alignItems: 'center',
           px: 2.5,

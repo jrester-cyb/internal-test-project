@@ -1,13 +1,14 @@
 import { Suspense, useState, useEffect } from 'react'
 import { Outlet, useNavigation, useNavigate, useParams, useMatches } from 'react-router-dom'
-import { AppBar, Toolbar, Box, Typography, CircularProgress, LinearProgress, Button } from '@mui/material'
-import { Help as HelpIcon, Person as PersonIcon, AccountCircle as AccountCircleIcon, SwapHoriz as SwapHorizIcon, DarkMode as DarkModeIcon, LightMode as LightModeIcon, Logout as LogoutIcon, Business as BusinessIcon } from '@mui/icons-material'
+import { AppBar, Toolbar, Box, Typography, CircularProgress, LinearProgress, Button, Drawer, IconButton } from '@mui/material'
+import { Help as HelpIcon, Person as PersonIcon, AccountCircle as AccountCircleIcon, SwapHoriz as SwapHorizIcon, DarkMode as DarkModeIcon, LightMode as LightModeIcon, Logout as LogoutIcon, Business as BusinessIcon, Menu as MenuIcon } from '@mui/icons-material'
 import Sidebar from './components/Sidebar'
 import AppBreadcrumbs from './components/AppBreadcrumbs'
 import ActionButtons from './components/ActionButtons'
 import { fetchWorkspaces } from './api/assets'
 import { useTheme } from './contexts/ThemeContext'
 import { useOrganization } from './contexts/OrganizationContext'
+import { useSidebar } from './contexts/SidebarContext'
 
 interface Workspace {
   id: string
@@ -22,36 +23,17 @@ function App() {
   const { organizationId, workspaceId } = useParams()
   const { isDarkMode, toggleTheme } = useTheme()
   const { organizations, activeOrganization, setActiveOrganization } = useOrganization()
+  const { isOpen, setIsOpen, isMobile, windowWidth } = useSidebar()
   const isNavigating = Boolean(navigation.location);
 
   // Check if any matched route has hideBreadcrumbs or hideSidebar set to true
   const hideBreadcrumbs = matches.some((match) => (match.handle as any)?.hideBreadcrumbs)
   const hideSidebar = matches.some((match) => (match.handle as any)?.hideSidebar)
 
-  // Initialize sidebar state from localStorage or default to true
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    const stored = localStorage.getItem('sidebarOpen')
-    return stored !== null ? JSON.parse(stored) : true
-  })
-
-  const sidebarWidth = hideSidebar ? 0 : (sidebarOpen ? 240 : 64)
-
-  // Save sidebar state to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-  }, [sidebarOpen])
+  const sidebarWidth = isMobile ? 0 : (isOpen ? 240 : 64)
 
   // Workspaces for switcher
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-
-  // Window width for responsive toolbar
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
-
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // Load workspaces
   useEffect(() => {
@@ -188,9 +170,23 @@ function App() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
-      {!hideSidebar && <Sidebar isOpen={sidebarOpen} onToggle={setSidebarOpen} />}
+      <Sidebar
+        isOpen={isOpen}
+        onToggle={setIsOpen}
+        variant={isMobile ? "temporary" : "permanent"}
+        onClose={isMobile ? () => setIsOpen(false) : undefined}
+      />
       <AppBar position="fixed" color="primary" elevation={0}>
         <Toolbar>
+          {isMobile && (
+            <IconButton
+              color="inherit"
+              onClick={() => setIsOpen(!isOpen)}
+              sx={{ mr: 1 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Asset Visualizer
           </Typography>
