@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Box, CircularProgress, Paper, Slide } from '@mui/material'
+import { Box, CircularProgress, Paper, Slide, Typography } from '@mui/material'
 import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '../api/assets'
@@ -10,6 +10,26 @@ import TasksCard from './TasksCard'
 import FilesCard from './FilesCard'
 import { useOrganization } from '../contexts/OrganizationContext'
 import type { RelatedAssetsResponse } from '../api/assets'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
+import {
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 
 interface AssetDetailsDrawerProps {
   asset: Asset | null | undefined
@@ -43,6 +63,79 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   const [isOpen, setIsOpen] = useState(!!asset)
   const [isDraggable, setIsDraggable] = useState(true)
   const resizeRef = useRef<HTMLDivElement>(null)
+
+  // Card order for drag and drop (only in drawer mode)
+  const [cardOrder, setCardOrder] = useState(['attributes', 'tree', 'tasks', 'files'])
+
+  // Sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // Handle drag end
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setCardOrder((items) => {
+        const oldIndex = items.indexOf(active.id as string)
+        const newIndex = items.indexOf(over.id as string)
+        return arrayMove(items, oldIndex, newIndex)
+      })
+    }
+  }
+
+  // Sortable card wrapper component
+  function SortableCard({ id, children }: { id: string; children: React.ReactNode }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id })
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    }
+
+    return (
+      <Box
+        ref={setNodeRef}
+        style={style}
+        sx={{
+          position: 'relative',
+          '&:hover .drag-handle': { opacity: 1 },
+        }}
+      >
+        {/* Drag handle */}
+        <Box
+          {...attributes}
+          {...listeners}
+          className="drag-handle"
+          sx={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            zIndex: 10,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+            cursor: 'grab',
+            '&:active': { cursor: 'grabbing' },
+          }}
+        >
+          <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+        </Box>
+        {children}
+      </Box>
+    )
+  }
 
   // Open/close drawer when asset changes
   useEffect(() => {
@@ -275,50 +368,95 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
 
               {/* Scrollable Cards Section */}
               <Box sx={{ flex: 1, overflow: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {/* Attributes Card */}
-                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                  <AttributesCard
-                    asset={displayAsset}
-                    attributes={attributes}
-                    showHidden={showHidden}
-                    onShowHiddenChange={setShowHidden}
-                    selectedTags={selectedTags}
-                    onSelectedTagsChange={setSelectedTags}
-                    selectedTypes={selectedTypes}
-                    onSelectedTypesChange={setSelectedTypes}
-                    excludedScopes={excludedScopes}
-                    onExcludedScopesChange={setExcludedScopes}
-                    isLoading={loadingGlobalValues}
-                  />
+                {/* Drag Indicator */}
+                <Box sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  pb: 1,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  mb: 1,
+                  justifyContent: 'flex-start'
+                }}>
+                  <DragHandleIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                    Drag cards to reorder
+                  </Typography>
                 </Box>
 
-                {/* Asset Tree Card */}
-                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                  <AssetTreeCard
-                    assetId={displayAsset.id}
-                    relatedAssets={relatedAssets}
-                    loading={relatedLoading}
-                    error={relatedError}
-                    organizationId={activeOrganization?.id || ''}
-                    workspaceId={workspaceId}
-                    currentAsset={{
-                      id: displayAsset.id,
-                      name: displayAsset.name,
-                      assetType: displayAsset.assetType,
-                      assetTypeName: displayAsset.assetType?.name || 'Unknown'
-                    }}
-                  />
-                </Box>
-
-                {/* Tasks Card */}
-                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                  <TasksCard asset={displayAsset} />
-                </Box>
-
-                {/* Files Card */}
-                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                  <FilesCard asset={displayAsset} />
-                </Box>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                  modifiers={[restrictToVerticalAxis]}
+                >
+                  <SortableContext items={cardOrder} strategy={rectSortingStrategy}>
+                    {cardOrder.map((cardId) => {
+                      switch (cardId) {
+                        case 'attributes':
+                          return (
+                            <SortableCard key={cardId} id={cardId}>
+                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                                <AttributesCard
+                                  asset={displayAsset}
+                                  attributes={attributes}
+                                  showHidden={showHidden}
+                                  onShowHiddenChange={setShowHidden}
+                                  selectedTags={selectedTags}
+                                  onSelectedTagsChange={setSelectedTags}
+                                  selectedTypes={selectedTypes}
+                                  onSelectedTypesChange={setSelectedTypes}
+                                  excludedScopes={excludedScopes}
+                                  onExcludedScopesChange={setExcludedScopes}
+                                  isLoading={loadingGlobalValues}
+                                />
+                              </Box>
+                            </SortableCard>
+                          )
+                        case 'tree':
+                          return (
+                            <SortableCard key={cardId} id={cardId}>
+                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                                <AssetTreeCard
+                                  assetId={displayAsset.id}
+                                  relatedAssets={relatedAssets}
+                                  loading={relatedLoading}
+                                  error={relatedError}
+                                  organizationId={activeOrganization?.id || ''}
+                                  workspaceId={workspaceId}
+                                  currentAsset={{
+                                    id: displayAsset.id,
+                                    name: displayAsset.name,
+                                    assetType: displayAsset.assetType,
+                                    assetTypeName: displayAsset.assetTypeName || (typeof displayAsset.assetType === 'string' ? displayAsset.assetType : 'Unknown')
+                                  }}
+                                />
+                              </Box>
+                            </SortableCard>
+                          )
+                        case 'tasks':
+                          return (
+                            <SortableCard key={cardId} id={cardId}>
+                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                                <TasksCard asset={displayAsset} />
+                              </Box>
+                            </SortableCard>
+                          )
+                        case 'files':
+                          return (
+                            <SortableCard key={cardId} id={cardId}>
+                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                                <FilesCard asset={displayAsset} />
+                              </Box>
+                            </SortableCard>
+                          )
+                        default:
+                          return null
+                      }
+                    })}
+                  </SortableContext>
+                </DndContext>
               </Box>
             </>
           )}
