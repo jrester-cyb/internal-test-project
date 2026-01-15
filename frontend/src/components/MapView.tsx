@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Polygon, Polyline, ZoomControl } from 'react-leaflet'
+import L from 'leaflet'
 import { Box, CircularProgress, Typography, IconButton } from '@mui/material'
 import { Clear as ClearIcon } from '@mui/icons-material'
+import { useTheme as useMuiTheme } from '@mui/material/styles'
 import { useTheme } from '../contexts/ThemeContext'
 import AssetDetails from './AssetDetails'
 import ClusterMarkers from './ClusterMarkers'
@@ -65,7 +67,21 @@ export default function MapView({
   MapEvents
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
+  const theme = useMuiTheme()
   const [filterOpen, setFilterOpen] = useState(false)
+
+  const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
+  const strokeColor = isDarkMode ? theme.palette.secondary.main : "black"
+
+  const markerIcon = useMemo(() => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
+    return L.icon({
+      iconUrl: `data:image/svg+xml;base64,${btoa(svg)}`,
+      iconSize: [30, 49],
+      iconAnchor: [15, 49],
+      popupAnchor: [1, -39],
+    })
+  }, [fillColor, strokeColor])
 
   return (
     <>
@@ -116,6 +132,7 @@ export default function MapView({
               <Marker
                 key={asset.id}
                 position={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
+                icon={markerIcon}
                 eventHandlers={{
                   click: () => handleAssetClick(asset)
                 }}
@@ -127,7 +144,7 @@ export default function MapView({
                 eventHandlers={{
                   click: () => handleAssetClick(asset)
                 }}
-                pathOptions={{ color: 'blue', weight: 2, fillOpacity: 0.2 }}
+                pathOptions={{ color: strokeColor, fillColor: fillColor, weight: 2, fillOpacity: 0.2 }}
               />
             ) : asset.geometry && asset.geometry.type === "LineString" && Array.isArray(asset.geometry.coordinates) ? (
               <Polyline
