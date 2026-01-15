@@ -5,7 +5,7 @@ import { Box, CircularProgress, Typography, IconButton } from '@mui/material'
 import { Clear as ClearIcon } from '@mui/icons-material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
 import { useTheme } from '../contexts/ThemeContext'
-import AssetDetails from './AssetDetails'
+import AssetDetailsDrawer from './AssetDetailsDrawer'
 import ClusterMarkers from './ClusterMarkers'
 import AssetList from './AssetList'
 import FilterBuilder from './FilterBuilder'
@@ -164,7 +164,7 @@ export default function MapView({
       </Box>
 
       {selectedAsset && (
-        <AssetDetails
+        <AssetDetailsDrawer
           asset={selectedAsset}
           workspaceId={workspaceId}
           onClose={() => setSelectedAsset(null)}

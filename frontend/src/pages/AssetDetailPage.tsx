@@ -26,8 +26,10 @@ export default function AssetDetailPage() {
   }
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null)
-  const [containerWidth, setContainerWidth] = useState(1000)
+  const [containerWidth, setContainerWidth] = useState(800)
   const headerRef = useRef<HTMLDivElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const leftContentRef = useRef<HTMLDivElement>(null)
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
@@ -82,8 +84,12 @@ export default function AssetDetailPage() {
   // Track container width for responsive buttons
   useEffect(() => {
     const updateWidth = () => {
-      if (headerRef.current) {
-        setContainerWidth(headerRef.current.offsetWidth)
+      if (headerRef.current && leftContentRef.current) {
+        const containerWidth = headerRef.current.offsetWidth
+        const leftContentWidth = leftContentRef.current.offsetWidth
+        // Available space for buttons is container width minus left content width, minus some padding
+        const availableSpace = Math.max(0, containerWidth - leftContentWidth - 100) // 100px buffer
+        setContainerWidth(availableSpace)
       }
     }
 
@@ -135,7 +141,7 @@ export default function AssetDetailPage() {
       onClick: handleShare,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      minWidth: 500 // Stays visible longest
+      minWidth: 1200 // Large screens only
     },
     {
       label: 'View on Map',
@@ -143,7 +149,7 @@ export default function AssetDetailPage() {
       onClick: handleViewOnMap,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      minWidth: 550 // Collapses second
+      minWidth: 900 // Medium+ screens
     },
     {
       label: 'Edit',
@@ -151,7 +157,7 @@ export default function AssetDetailPage() {
       onClick: handleEdit,
       color: 'inherit' as const,
       variant: 'outlined' as const,
-      minWidth: 700 // Collapses first
+      minWidth: 600 // Small screens and up
     },
     {
       label: 'System Details',
@@ -202,6 +208,9 @@ export default function AssetDetailPage() {
         containerWidth={containerWidth}
         menuAnchorEl={menuAnchorEl}
         setMenuAnchorEl={setMenuAnchorEl}
+        containerRef={headerRef}
+        actionsRef={actionsRef}
+        leftContentRef={leftContentRef}
       />
 
       {/* Scrollable Content */}

@@ -11,6 +11,9 @@ interface AssetOverviewCardProps {
   containerWidth: number
   menuAnchorEl: HTMLElement | null
   setMenuAnchorEl: (el: HTMLElement | null) => void
+  containerRef?: React.RefObject<HTMLDivElement>
+  actionsRef?: React.RefObject<HTMLDivElement>
+  leftContentRef?: React.RefObject<HTMLDivElement>
 }
 
 export default function AssetOverviewCard({
@@ -20,14 +23,17 @@ export default function AssetOverviewCard({
   actions,
   containerWidth,
   menuAnchorEl,
-  setMenuAnchorEl
+  setMenuAnchorEl,
+  containerRef,
+  actionsRef,
+  leftContentRef
 }: AssetOverviewCardProps) {
   return (
-    <Container maxWidth={false} sx={{ py: 2 }}>
+    <Container maxWidth={false} sx={{ py: 2 }} ref={containerRef}>
       <Card sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
         <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }} ref={leftContentRef}>
               <Typography variant="h4" component="h1" sx={{ mb: 1, fontWeight: 'bold' }}>
                 {asset.name}
               </Typography>
@@ -56,7 +62,7 @@ export default function AssetOverviewCard({
                 )}
               </Box>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText', alignItems: 'center', flexShrink: 0 }} ref={actionsRef}>
               <Tooltip title={globalValuesOnly ? 'Showing global asset values' : 'Show global asset'} arrow>
                 <Button
                   variant={globalValuesOnly ? 'contained' : 'outlined'}
