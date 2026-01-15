@@ -2,6 +2,7 @@ import { StrictMode, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Navigate, RouterProvider, type Params } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { OrganizationProvider } from './contexts/OrganizationContext'
 import './index.css'
 import App from './App.tsx'
 
@@ -55,7 +56,7 @@ const router = createBrowserRouter([
       },
       {
         id: "workspace-route",
-        path: "workspaces/:workspaceId",
+        path: "organizations/:organizationId/workspaces/:workspaceId",
         element: <WorkspaceLayout />,
         loader: async ({ params }) => {
           const { fetchWorkspace } = await import('./api/assets')
@@ -78,7 +79,8 @@ const router = createBrowserRouter([
             path: "map",
             element: <MapPage />,
             handle: {
-              crumb: "Map"
+              crumb: "Map",
+              hideBreadcrumbs: true
             },
           },
           {
@@ -230,7 +232,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
-      <RouterProvider router={router} />
+      <OrganizationProvider>
+        <RouterProvider router={router} />
+      </OrganizationProvider>
     </ThemeProvider>
   </StrictMode>,
 )

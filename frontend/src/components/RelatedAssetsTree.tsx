@@ -28,6 +28,7 @@ const PAGE_SIZE = 50
 
 interface TreeNodeProps {
   asset: RelatedAsset
+  organizationId: string
   workspaceId: string
   currentAssetId?: string
   currentAssetChildren?: RelatedAsset[]
@@ -38,6 +39,7 @@ interface TreeNodeProps {
 
 function TreeNode({
   asset,
+  organizationId,
   workspaceId,
   currentAssetId,
   currentAssetChildren,
@@ -102,7 +104,7 @@ function TreeNode({
           !isCurrentAsset ? (
             <IconButton
               component={RouterLink}
-              to={`/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`}
+              to={`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`}
               target="_blank"
               rel="noopener noreferrer"
               size="small"
@@ -165,6 +167,7 @@ function TreeNode({
               <TreeNode
                 key={child.id}
                 asset={child}
+                organizationId={organizationId}
                 workspaceId={workspaceId}
                 currentAssetId={currentAssetId}
                 currentAssetChildren={currentAssetChildren}
@@ -192,6 +195,7 @@ function TreeNode({
 interface RelatedAssetsTreeProps {
   relatedAssets: RelatedAssetsResponse | null
   currentAsset: RelatedAsset
+  organizationId: string
   workspaceId: string
   loading?: boolean
   error?: string | null
@@ -200,6 +204,7 @@ interface RelatedAssetsTreeProps {
 export default function RelatedAssetsTree({
   relatedAssets,
   currentAsset,
+  organizationId,
   workspaceId,
   loading,
   error,
@@ -254,6 +259,7 @@ export default function RelatedAssetsTree({
       <List dense disablePadding>
         <TreeNode
           asset={parentWithChildren}
+          organizationId={organizationId}
           workspaceId={workspaceId}
           currentAssetId={currentAsset.id}
           currentAssetChildren={relatedAssets.children}
@@ -278,6 +284,7 @@ export default function RelatedAssetsTree({
     <List dense disablePadding>
       <TreeNode
         asset={currentWithChildren}
+        organizationId={organizationId}
         workspaceId={workspaceId}
         currentAssetId={currentAsset.id}
         currentAssetChildren={relatedAssets.children}

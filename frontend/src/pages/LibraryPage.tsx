@@ -13,7 +13,7 @@ import FileExplorer, { type Breadcrumb } from '../components/FileExplorer'
 
 export default function LibraryPage() {
   const currentDir = useLoaderData<DirectoryResponse>()
-  const { workspaceId, directoryId } = useParams()
+  const { organizationId, workspaceId, directoryId } = useParams()
   const navigate = useNavigate()
   const revalidator = useRevalidator()
 
@@ -67,7 +67,7 @@ export default function LibraryPage() {
   }, [searchQuery, workspaceId, directoryId])
 
   // Build breadcrumbs from ancestors
-  const basePath = `/workspaces/${workspaceId}/library`
+  const basePath = `/organizations/${organizationId}/workspaces/${workspaceId}/library`
   const breadcrumbs: Breadcrumb[] = [
     { id: '', name: 'Library', path: basePath },
   ]
@@ -91,7 +91,7 @@ export default function LibraryPage() {
 
   const handleNavigate = (item: FileNode) => {
     if (!item.isDirectory) return
-    navigate(`/workspaces/${workspaceId}/library/${item.id}`)
+    navigate(`/organizations/${organizationId}/workspaces/${workspaceId}/library/${item.id}`)
   }
 
   const handleBreadcrumbClick = (path: string) => {

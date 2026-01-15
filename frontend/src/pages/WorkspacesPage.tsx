@@ -15,6 +15,7 @@ interface Workspace {
   name: string
   description?: string
   created_at: string
+  organization: string
 }
 
 export default function WorkspacesPage() {
@@ -56,7 +57,7 @@ export default function WorkspacesPage() {
               >
                 <CardActionArea
                   component={Link}
-                  to={`/workspaces/${workspace.id}`}
+                  to={`/organizations/${workspace.organization}/workspaces/${workspace.id}`}
                   sx={{ height: '100%' }}
                 >
                   <CardContent>

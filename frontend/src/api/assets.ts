@@ -7,6 +7,13 @@ function workspaceUrl(workspaceId: string, path: string) {
   return `${API_BASE}/workspaces/${workspaceId}/${path}`
 }
 
+// Fetch all organizations
+export async function fetchOrganizations() {
+  const response = await fetch(`${API_BASE}/organizations/`)
+  if (!response.ok) throw new Error('Failed to fetch organizations')
+  return response.json()
+}
+
 // Fetch available attribute types
 export async function fetchAttributeTypes(): Promise<{ value: string; label: string }[]> {
   const response = await fetch(`${API_BASE}/attribute-types/`)

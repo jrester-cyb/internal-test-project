@@ -1,12 +1,25 @@
 import { type ReactNode, Fragment, useState } from 'react'
 import { Box, Button, Stack, IconButton, Menu, MenuItem, Collapse, Tooltip, Divider } from '@mui/material'
-import { MoreVert as MoreVertIcon } from '@mui/icons-material'
+import { MoreVert as MoreVertIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material'
+
+export interface SubMenuItem {
+  id: string
+  label: string
+  icon?: ReactNode
+  selected?: boolean
+  disabled?: boolean
+  // Either onClick OR submenu, not both
+  onClick?: () => void // Called when clicked (only if no submenu)
+  submenu?: SubMenuItem[] // If present, clicking opens this submenu (onClick ignored)
+  dividerAfter?: boolean
+}
 
 // Generic action button type
 export interface ActionButtonConfig {
   label: string
   icon?: ReactNode
-  onClick: (event?: React.MouseEvent<HTMLElement>) => void
+  // Either onClick OR submenu, not both
+  onClick?: (event?: React.MouseEvent<HTMLElement>) => void // Called when clicked (only if no submenu)
   color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' | 'inherit'
   variant?: 'text' | 'outlined' | 'contained'
   disabled?: boolean
@@ -16,6 +29,10 @@ export interface ActionButtonConfig {
    *  For responsive mode: if < 100, treated as percentage; if >= 100, treated as pixels */
   minWidth?: number
   dividerBefore?: boolean // Show a divider before this item in the menu
+  dividerAfter?: boolean // Show a divider after this item in the menu
+  customComponent?: ReactNode // Custom component to render instead of default button/icon
+  keepMenuOpen?: boolean // If true, don't close the parent menu when this item is clicked (only if no submenu)
+  submenu?: SubMenuItem[] // If present, clicking opens this submenu (onClick and keepMenuOpen ignored)
 }
 
 interface ActionButtonsProps {
@@ -44,10 +61,19 @@ export default function ActionButtons({
 }: ActionButtonsProps) {
   // Internal menu state
   const [internalMenuAnchor, setInternalMenuAnchor] = useState<HTMLElement | null>(null)
+  const [submenuAnchors, setSubmenuAnchors] = useState<Record<number, HTMLElement | null>>({})
 
   // Always use internal menu state now
   const currentMenuAnchor = internalMenuAnchor
   const setCurrentMenuAnchor = setInternalMenuAnchor
+
+  const handleSubmenuOpen = (index: number, anchorEl: HTMLElement) => {
+    setSubmenuAnchors(prev => ({ ...prev, [index]: anchorEl }))
+  }
+
+  const handleSubmenuClose = (index: number) => {
+    setSubmenuAnchors(prev => ({ ...prev, [index]: null }))
+  }
 
   // Simple percentage-based breakpoint logic
   const isButtonVisible = (minWidth: number) => {
@@ -59,55 +85,150 @@ export default function ActionButtons({
   // Menu shows when any button is hidden
   const isMenuVisible = () => actions.some(a => !isButtonVisible(a.minWidth ?? 0))
 
+  // Submenu rendering component
+  const SubMenuRenderer = ({ items, onClose }: { items: SubMenuItem[]; onClose: () => void }) => {
+    const [submenuAnchor, setSubmenuAnchor] = useState<{ anchorEl: HTMLElement; item: SubMenuItem } | null>(null)
+
+    const handleItemClick = (item: SubMenuItem, event: React.MouseEvent<HTMLElement>) => {
+      if (item.submenu) {
+        // Open submenu
+        setSubmenuAnchor({ anchorEl: event.currentTarget, item })
+      } else if (item.onClick) {
+        // Execute action and close all menus
+        item.onClick()
+        setSubmenuAnchor(null)
+        onClose()
+      }
+    }
+
+    return (
+      <>
+        {items.map((item, index) => (
+          <Fragment key={item.id}>
+            <MenuItem
+              selected={item.selected}
+              disabled={item.disabled}
+              onClick={(e) => handleItemClick(item, e)}
+            >
+              {item.icon && (
+                <Box component="span" sx={{ mr: 1, display: 'flex', alignItems: 'center', fontSize: 'small' }}>
+                  {item.icon}
+                </Box>
+              )}
+              {item.label}
+              {item.submenu && (
+                <ChevronRightIcon sx={{ ml: 'auto', fontSize: 'small' }} />
+              )}
+            </MenuItem>
+            {item.dividerAfter && <Divider />}
+          </Fragment>
+        ))}
+
+        {/* Nested submenu */}
+        {submenuAnchor && submenuAnchor.item.submenu && (
+          <Menu
+            anchorEl={submenuAnchor.anchorEl}
+            open={true}
+            onClose={() => setSubmenuAnchor(null)}
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          >
+            <SubMenuRenderer items={submenuAnchor.item.submenu} onClose={() => { setSubmenuAnchor(null); onClose(); }} />
+          </Menu>
+        )}
+      </>
+    )
+  }
+
   return (
     <Stack direction="row" sx={{ overflow: 'hidden', alignItems: 'center' }}>
-      {actions.map((action, index) => (
-        <Collapse key={index} in={isButtonVisible(action.minWidth ?? 0)} orientation="horizontal" timeout={250}>
-          {iconOnly && action.icon ? (
-            <Tooltip title={action.tooltip || action.label} arrow>
-              <span>
-                <IconButton
-                  size={size}
-                  color={action.color || 'primary'}
-                  onClick={action.onClick}
-                  disabled={action.disabled}
-                  sx={{ mr: 0.5 }}
+      {actions.map((action, index) => {
+        const handleButtonClick = (e: React.MouseEvent<HTMLElement>) => {
+          if (action.submenu) {
+            // Open submenu for visible button
+            handleSubmenuOpen(index, e.currentTarget)
+          } else if (action.onClick) {
+            action.onClick(e)
+          }
+        }
+
+        return (
+          <Fragment key={index}>
+            <Collapse in={isButtonVisible(action.minWidth ?? 0)} orientation="horizontal" timeout={250}>
+              {action.customComponent ? (
+                <Box
+                  onClick={handleButtonClick}
+                  sx={{
+                    display: 'inline-flex',
+                    cursor: action.submenu ? 'pointer' : 'default',
+                    '& > *': { pointerEvents: 'none' } // Prevent child from intercepting clicks
+                  }}
                 >
-                  {action.icon}
-                </IconButton>
-              </span>
-            </Tooltip>
-          ) : action.tooltip && action.disabled ? (
-            <Tooltip title={action.tooltip} arrow>
-              <span>
+                  {action.customComponent}
+                </Box>
+              ) : iconOnly && action.icon ? (
+                <Tooltip title={action.tooltip || action.label} arrow>
+                  <span>
+                    <IconButton
+                      size={size}
+                      color={action.color || 'primary'}
+                      onClick={handleButtonClick}
+                      disabled={action.disabled}
+                      sx={{ mr: 0.5 }}
+                    >
+                      {action.icon}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              ) : action.tooltip && action.disabled ? (
+                <Tooltip title={action.tooltip} arrow>
+                  <span>
+                    <Button
+                      size={size}
+                      variant={action.variant || 'outlined'}
+                      color={action.color || 'primary'}
+                      startIcon={action.icon}
+                      onClick={handleButtonClick}
+                      disabled={action.disabled}
+                      sx={{ whiteSpace: 'nowrap', mr: 1 }}
+                    >
+                      {action.label}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : (
                 <Button
                   size={size}
                   variant={action.variant || 'outlined'}
                   color={action.color || 'primary'}
                   startIcon={action.icon}
-                  onClick={action.onClick}
+                  onClick={handleButtonClick}
                   disabled={action.disabled}
                   sx={{ whiteSpace: 'nowrap', mr: 1 }}
                 >
                   {action.label}
                 </Button>
-              </span>
-            </Tooltip>
-          ) : (
-            <Button
-              size={size}
-              variant={action.variant || 'outlined'}
-              color={action.color || 'primary'}
-              startIcon={action.icon}
-              onClick={action.onClick}
-              disabled={action.disabled}
-              sx={{ whiteSpace: 'nowrap', mr: 1 }}
-            >
-              {action.label}
-            </Button>
-          )}
-        </Collapse>
-      ))}
+              )}
+            </Collapse>
+
+            {/* Submenu for visible buttons */}
+            {isButtonVisible(action.minWidth ?? 0) && action.submenu && (
+              <Menu
+                anchorEl={submenuAnchors[index]}
+                open={Boolean(submenuAnchors[index])}
+                onClose={() => handleSubmenuClose(index)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+              >
+                <SubMenuRenderer
+                  items={action.submenu}
+                  onClose={() => handleSubmenuClose(index)}
+                />
+              </Menu>
+            )}
+          </Fragment>
+        )
+      })}
       <IconButton
         size={size}
         color="inherit"
@@ -133,6 +254,19 @@ export default function ActionButtons({
           // Only show divider if there's a visible item above this one
           const hasVisibleItemAbove = action.dividerBefore && actions.slice(0, index).some(a => !isButtonVisible(a.minWidth ?? 0))
 
+          const handleActionClick = (e: React.MouseEvent<HTMLElement>) => {
+            if (action.submenu) {
+              // Open submenu
+              handleSubmenuOpen(index, e.currentTarget)
+            } else if (action.onClick) {
+              // Execute action
+              action.onClick(e)
+              if (!action.keepMenuOpen) {
+                setCurrentMenuAnchor(null)
+              }
+            }
+          }
+
           return (
             <Fragment key={index}>
               {hasVisibleItemAbove && <Divider />}
@@ -146,7 +280,7 @@ export default function ActionButtons({
               >
                 <span>
                   <MenuItem
-                    onClick={(e) => { action.onClick(e); setCurrentMenuAnchor(null); }}
+                    onClick={handleActionClick}
                     disabled={action.disabled}
                   >
                     {action.icon && (
@@ -155,9 +289,32 @@ export default function ActionButtons({
                       </Box>
                     )}
                     {action.label}
+                    {action.submenu && (
+                      <ChevronRightIcon sx={{ ml: 'auto', fontSize: 'small' }} />
+                    )}
                   </MenuItem>
                 </span>
               </Tooltip>
+              {action.dividerAfter && <Divider />}
+
+              {/* Submenu for this action */}
+              {action.submenu && (
+                <Menu
+                  anchorEl={submenuAnchors[index]}
+                  open={Boolean(submenuAnchors[index])}
+                  onClose={() => handleSubmenuClose(index)}
+                  anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                >
+                  <SubMenuRenderer
+                    items={action.submenu}
+                    onClose={() => {
+                      handleSubmenuClose(index)
+                      setCurrentMenuAnchor(null)
+                    }}
+                  />
+                </Menu>
+              )}
             </Fragment>
           )
         })}

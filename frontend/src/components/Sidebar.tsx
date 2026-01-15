@@ -1,5 +1,5 @@
 import { Box, List, Drawer, IconButton } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, Home as HomeIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import { useParams } from 'react-router-dom'
 import SidebarNavItem from './SidebarNavItem'
 
@@ -9,11 +9,11 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
-  const { workspaceId } = useParams()
+  const { organizationId, workspaceId } = useParams()
   const drawerWidth = isOpen ? 240 : 64
 
   // Build workspace-scoped paths
-  const basePath = workspaceId ? `/workspaces/${workspaceId}` : ''
+  const basePath = organizationId && workspaceId ? `/organizations/${organizationId}/workspaces/${workspaceId}` : ''
 
   return (
     <>
@@ -22,6 +22,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         sx={{
           width: drawerWidth,
           flexShrink: 0,
+          zIndex: (theme) => theme.zIndex.appBar - 1,
           transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
           '& .MuiDrawer-paper': {
             width: drawerWidth,
@@ -30,6 +31,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             color: '#ffffff',
             transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
             overflowX: 'hidden',
+            zIndex: (theme) => theme.zIndex.appBar - 1,
           },
         }}
       >
@@ -43,12 +45,6 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </IconButton>
           </Box>
           <List>
-            <SidebarNavItem
-              to="/"
-              icon={<HomeIcon />}
-              label="Workspaces"
-              isOpen={isOpen}
-            />
             {workspaceId && (
               <>
                 <SidebarNavItem

@@ -6,15 +6,15 @@ import type { AssetType } from '../types'
 export default function AssetTypesPage() {
   const assetTypes = useLoaderData() as AssetType[]
   const navigate = useNavigate()
-  const { workspaceId } = useParams()
+  const { organizationId, workspaceId } = useParams()
 
   const handleAssetTypeClick = (assetType: AssetType) => {
-    if (!workspaceId) {
+    if (!workspaceId || !organizationId) {
       navigate('/')
       return
     }
 
-    navigate(`/workspaces/${workspaceId}/asset-types/${assetType.id}`, {
+    navigate(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${assetType.id}`, {
       state: { assetTypeName: assetType.name }
     })
   }

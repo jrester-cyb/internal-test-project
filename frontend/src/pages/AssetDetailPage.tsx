@@ -18,7 +18,7 @@ import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
   const { asset, attributes } = useLoaderData() as { asset: Asset, attributes: AssetTypeAttribute[] }
-  const { workspaceId, assetTypeId } = useParams<{ workspaceId: string; assetTypeId: string }>()
+  const { organizationId, workspaceId, assetTypeId } = useParams<{ organizationId: string; workspaceId: string; assetTypeId: string }>()
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null)
   const [containerWidth, setContainerWidth] = useState(1000)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -485,6 +485,7 @@ export default function AssetDetailPage() {
                 <CardContent sx={{ flex: 1, overflow: 'auto' }}>
                   <RelatedAssetsTree
                     relatedAssets={relatedAssets!}
+                    organizationId={organizationId!}
                     workspaceId={workspaceId!}
                     currentAsset={{
                       id: currentAsset.id,
