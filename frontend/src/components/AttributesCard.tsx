@@ -35,6 +35,7 @@ export default function AttributesCard({
   onExcludedScopesChange,
   isLoading = false
 }: AttributesCardProps) {
+  console.log('AttributesCard props:', { attributes, showHidden, selectedTags, selectedTypes, excludedScopes })
   // Get all unique tags from attributes
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -104,7 +105,7 @@ export default function AttributesCard({
               let icon = <ArticleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
 
               if (attributes.length === 0) {
-                message = 'No attributes'
+                message = 'No attributes available'
                 icon = <ArticleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
               } else if (attributes.every(attr => attr.isHidden) && !showHidden) {
                 message = 'All attributes are hidden for this asset type'
