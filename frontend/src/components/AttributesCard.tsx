@@ -47,7 +47,7 @@ export default function AttributesCard({
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   return (
-    <Card sx={{ height: 400, display: 'flex', flexDirection: 'column', minHeight: 400 }}>
+    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardHeader
         title="Attributes"
         action={
@@ -68,7 +68,7 @@ export default function AttributesCard({
           />
         }
       />
-      <CardContent sx={{ height: 320, overflow: 'hidden', p: 0 }}>
+      <CardContent sx={{ flex: 1, overflow: 'hidden', p: 0 }}>
         {(() => {
           // Filter attributes based on showHidden toggle and selected tags
           let displayAttributes = showHidden

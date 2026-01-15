@@ -163,19 +163,11 @@ export default function MapView({
         </MapContainer>
       </Box>
 
-      {selectedAsset && (
-        <AssetDetailsDrawer
-          asset={selectedAsset}
-          workspaceId={workspaceId}
-          onClose={() => setSelectedAsset(null)}
-        />
-      )}
-      {loadingAsset && (
-        <Box sx={{ position: 'absolute', top: 80, right: 16, bgcolor: 'white', p: 2, borderRadius: 1, boxShadow: 2, zIndex: 2000, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CircularProgress size={20} />
-          <Typography>Loading asset details...</Typography>
-        </Box>
-      )}
+      <AssetDetailsDrawer
+        asset={selectedAsset}
+        workspaceId={workspaceId}
+        onClose={() => setSelectedAsset(null)}
+      />
 
       {selectedCluster && (
         <Box sx={{ position: 'fixed', top: 64, bottom: 0, right: 0, width: '66%', bgcolor: 'background.paper', boxShadow: 24, zIndex: 1301, overflowY: 'auto' }}>

@@ -23,7 +23,7 @@ export default function AssetTreeCard({
   currentAsset
 }: AssetTreeCardProps) {
   return (
-    <Card sx={{ height: 400, display: 'flex', flexDirection: 'column' }}>
+    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardHeader title="Asset Tree" />
       <CardContent sx={{ flex: 1, overflow: 'hidden', p: 0 }}>
         {loading ? (

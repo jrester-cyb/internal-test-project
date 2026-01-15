@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
 import { Box, Container, Grid, Drawer, Divider, Typography, IconButton } from '@mui/material'
-import { Info as InfoIcon, Close as CloseIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon } from '@mui/icons-material'
+import { Close as CloseIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import AssetOverviewCard from '../components/AssetOverviewCard'
 import AttributesCard from '../components/AttributesCard'
@@ -25,11 +25,7 @@ export default function AssetDetailPage() {
     )
   }
 
-  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null)
-  const [containerWidth, setContainerWidth] = useState(800)
   const headerRef = useRef<HTMLDivElement>(null)
-  const actionsRef = useRef<HTMLDivElement>(null)
-  const leftContentRef = useRef<HTMLDivElement>(null)
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
@@ -81,22 +77,6 @@ export default function AssetDetailPage() {
     }
   }, [workspaceId, asset.id])
 
-  // Track container width for responsive buttons
-  useEffect(() => {
-    const updateWidth = () => {
-      if (headerRef.current && leftContentRef.current) {
-        const containerWidth = headerRef.current.offsetWidth
-        const leftContentWidth = leftContentRef.current.offsetWidth
-        // Available space for buttons is container width minus left content width, minus some padding
-        const availableSpace = Math.max(0, containerWidth - leftContentWidth - 100) // 100px buffer
-        setContainerWidth(availableSpace)
-      }
-    }
-
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
-  }, [])
 
   const handleEdit = () => {
     setEditDialogOpen(true)
@@ -134,59 +114,6 @@ export default function AssetDetailPage() {
     URL.revokeObjectURL(url)
   }
 
-  const actions = [
-    {
-      label: 'Share',
-      icon: <ShareIcon fontSize="small" />,
-      onClick: handleShare,
-      color: 'inherit' as const,
-      variant: 'outlined' as const,
-      minWidth: 1200 // Large screens only
-    },
-    {
-      label: 'View on Map',
-      icon: <MapIcon fontSize="small" />,
-      onClick: handleViewOnMap,
-      color: 'inherit' as const,
-      variant: 'outlined' as const,
-      minWidth: 900 // Medium+ screens
-    },
-    {
-      label: 'Edit',
-      icon: <EditIcon fontSize="small" />,
-      onClick: handleEdit,
-      color: 'inherit' as const,
-      variant: 'outlined' as const,
-      minWidth: 600 // Small screens and up
-    },
-    {
-      label: 'System Details',
-      icon: <InfoIcon fontSize="small" />,
-      onClick: () => setDetailsOpen(true),
-      color: 'inherit' as const,
-      variant: 'outlined' as const,
-      minWidth: Infinity // Always in menu
-    },
-    {
-      label: 'Clone',
-      icon: <CloneIcon fontSize="small" />,
-      onClick: () => {
-        // TODO: Implement clone functionality
-        console.debug('Clone asset:', asset.id)
-      },
-      color: 'inherit' as const,
-      variant: 'outlined' as const,
-      minWidth: Infinity // Always in menu
-    },
-    {
-      label: 'Download',
-      icon: <DownloadIcon fontSize="small" />,
-      onClick: handleDownload,
-      color: 'inherit' as const,
-      variant: 'outlined' as const,
-      minWidth: Infinity // Always in menu
-    }
-  ]
 
   // Ensure we have currentAsset before rendering
   if (!currentAsset) {
@@ -202,15 +129,18 @@ export default function AssetDetailPage() {
       {/* Fixed Header */}
       <AssetOverviewCard
         asset={currentAsset}
+        mode="page"
         globalValuesOnly={globalValuesOnly}
         onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
-        actions={actions}
-        containerWidth={containerWidth}
-        menuAnchorEl={menuAnchorEl}
-        setMenuAnchorEl={setMenuAnchorEl}
-        containerRef={headerRef}
-        actionsRef={actionsRef}
-        leftContentRef={leftContentRef}
+        onEdit={handleEdit}
+        onShare={handleShare}
+        onViewOnMap={handleViewOnMap}
+        onClone={() => {
+          // TODO: Implement clone functionality
+          console.debug('Clone asset:', asset.id)
+        }}
+        onDownload={handleDownload}
+        onSystemDetails={() => setDetailsOpen(true)}
       />
 
       {/* Scrollable Content */}
