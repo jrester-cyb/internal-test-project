@@ -150,14 +150,22 @@ function App() {
         </Button>
       )
     }] : []),
-
+    {
+      label: 'Profile',
+      icon: <PersonIcon fontSize="small" />,
+      onClick: handleProfile,
+      color: 'inherit' as const,
+      variant: 'text' as const,
+      minWidth: Infinity,
+    },
     {
       label: 'Help',
       icon: <HelpIcon fontSize="small" />,
       onClick: handleHelp,
       color: 'inherit' as const,
       variant: 'text' as const,
-      minWidth: 500 // Show when window >= 500px
+      minWidth: 500, // Show when window >= 500px
+      dividerAfter: true // Divider after Profile when in menu
     },
     {
       label: isDarkMode ? 'Toggle Light Mode' : 'Toggle Dark Mode',
@@ -167,22 +175,14 @@ function App() {
       variant: 'text' as const,
       minWidth: 0 // Always visible as icon button
     },
-    {
-      label: 'Profile',
-      icon: <PersonIcon fontSize="small" />,
-      onClick: handleProfile,
-      color: 'inherit' as const,
-      variant: 'text' as const,
-      minWidth: Infinity
-    },
+
     {
       label: 'Logout',
       icon: <LogoutIcon fontSize="small" />,
       onClick: () => console.log('Logout clicked'),
       color: 'inherit' as const,
       variant: 'text' as const,
-      minWidth: Infinity, // Always in menu
-      dividerBefore: true
+      minWidth: Infinity // Always in menu
     }
   ]
 
