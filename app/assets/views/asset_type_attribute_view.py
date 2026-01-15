@@ -48,6 +48,7 @@ def invalidate_attribute_list_cache(workspace_id, assettype_id):
     """Invalidate cached attribute list responses for a workspace/asset_type.
 
     Called on attribute create/update/delete.
+    Also invalidates the api_key_map cache used for attribute value serialization.
     """
     version_key = f"attr_list_version:{workspace_id}:{assettype_id}"
     try:
@@ -55,6 +56,10 @@ def invalidate_attribute_list_cache(workspace_id, assettype_id):
     except ValueError:
         # Key doesn't exist, set it to 1
         cache.set(version_key, 1, timeout=None)
+
+    # Also invalidate the api_key_map cache for asset serialization
+    api_key_cache_key = f"api_key_map:{assettype_id}:{workspace_id or 'global'}"
+    cache.delete(api_key_cache_key)
 
 
 @extend_schema_view(

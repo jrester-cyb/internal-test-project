@@ -547,10 +547,11 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     )
 
                 # Look for existing override for this workspace
+                # Use override_value__asset since base_value can be null for local attributes
                 existing_override = (
                     WorkspaceAttributeValueOverride.objects.filter(
                         asset_type_attribute_id=attr_with_type.id,
-                        base_value__asset=asset,
+                        override_value__asset=asset,
                         workspace=workspace,
                     )
                     .select_related("override_value")
