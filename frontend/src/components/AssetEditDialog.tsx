@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -13,9 +13,11 @@ import {
   Stack,
   Typography,
   Box,
+  Divider,
 } from '@mui/material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { updateAssetAttributeValue } from '../api/assets'
+import JsonEditor from './JsonEditor'
 import AttributeValueRenderer from './AttributeValueRenderer'
 
 interface AssetEditDialogProps {
@@ -28,6 +30,164 @@ interface AssetEditDialogProps {
   onSuccess: (updatedAsset: Asset) => void
 }
 
+// Individual attribute editor row
+function AttributeRow({
+  attribute,
+  value,
+  onChange,
+  disabled,
+}: {
+  attribute: AssetTypeAttribute
+  value: any
+  onChange: (value: any) => void
+  disabled?: boolean
+}) {
+  const isReadOnly = attribute.cannotOverride || attribute.lockedToGlobal
+
+  const renderInput = () => {
+    // If attribute cannot be overridden, show read-only value
+    if (isReadOnly) {
+      return (
+        <Box sx={{ py: 0.5 }}>
+          <AttributeValueRenderer attribute={attribute} value={value} maxLines={2} />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {attribute.lockedToGlobal ? 'Locked to global value' : 'Cannot be overridden'}
+          </Typography>
+        </Box>
+      )
+    }
+
+    switch (attribute.attributeType) {
+      case 'boolean':
+        return (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={value === true}
+                onChange={(e) => onChange(e.target.checked)}
+                disabled={disabled}
+                size="small"
+              />
+            }
+            label={value ? 'Yes' : 'No'}
+          />
+        )
+      case 'number':
+        return (
+          <TextField
+            type="number"
+            value={value ?? ''}
+            onChange={(e) => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
+            fullWidth
+            size="small"
+            disabled={disabled}
+            inputProps={{ step: attribute.unit ? 0.01 : 1 }}
+            InputProps={attribute.unit ? {
+              endAdornment: (
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 1, whiteSpace: 'nowrap' }}>
+                  {attribute.unit}
+                </Typography>
+              ),
+            } : undefined}
+          />
+        )
+      case 'date':
+        return (
+          <TextField
+            type="date"
+            value={value ? value.split('T')[0] : ''}
+            onChange={(e) => onChange(e.target.value || null)}
+            fullWidth
+            size="small"
+            disabled={disabled}
+            InputLabelProps={{ shrink: true }}
+          />
+        )
+      case 'datetime':
+        return (
+          <TextField
+            type="datetime-local"
+            value={value ? value.slice(0, 16) : ''}
+            onChange={(e) => onChange(e.target.value ? new Date(e.target.value).toISOString() : null)}
+            fullWidth
+            size="small"
+            disabled={disabled}
+            InputLabelProps={{ shrink: true }}
+          />
+        )
+      case 'json':
+        return (
+          <Box sx={{ minHeight: 120, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+            <JsonEditor
+              value={{ json: value, rawJson: value ? JSON.stringify(value, null, 2) : '' }}
+              onChange={(newValue) => {
+                if (newValue && newValue.json !== undefined) {
+                  onChange(newValue.json)
+                } else {
+                  onChange(null)
+                }
+              }}
+              placeholder="Enter JSON..."
+            />
+          </Box>
+        )
+      case 'link':
+        return (
+          <Stack spacing={1}>
+            <TextField
+              placeholder="URL"
+              value={value && typeof value === 'object' ? value.url || '' : typeof value === 'string' ? value : ''}
+              onChange={(e) =>
+                onChange(typeof value === 'object' ? { ...value, url: e.target.value } : { url: e.target.value, text: '' })
+              }
+              fullWidth
+              size="small"
+              disabled={disabled}
+              type="url"
+            />
+            <TextField
+              placeholder="Display text (optional)"
+              value={value && typeof value === 'object' ? value.text || '' : ''}
+              onChange={(e) =>
+                onChange(typeof value === 'object' ? { ...value, text: e.target.value } : { url: '', text: e.target.value })
+              }
+              fullWidth
+              size="small"
+              disabled={disabled}
+            />
+          </Stack>
+        )
+      default: // text
+        return (
+          <TextField
+            value={value ?? ''}
+            onChange={(e) => onChange(e.target.value || null)}
+            fullWidth
+            size="small"
+            disabled={disabled}
+            multiline={attribute.attributeType === 'text'}
+            rows={attribute.attributeType === 'text' ? 2 : 1}
+          />
+        )
+    }
+  }
+
+  return (
+    <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', py: 1 }}>
+      <Box sx={{ minWidth: 150, maxWidth: 200, flexShrink: 0 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
+          {attribute.name}
+          {attribute.isRequired && <Typography component="span" color="error.main"> *</Typography>}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {attribute.attributeType}
+        </Typography>
+      </Box>
+      <Box sx={{ flex: 1 }}>{renderInput()}</Box>
+    </Box>
+  )
+}
+
 export default function AssetEditDialog({
   open,
   asset,
@@ -37,231 +197,163 @@ export default function AssetEditDialog({
   onClose,
   onSuccess,
 }: AssetEditDialogProps) {
-  const [editingAttribute, setEditingAttribute] = useState<AssetTypeAttribute | null>(null)
-  const [value, setValue] = useState<any>(null)
+  const [values, setValues] = useState<Record<string, any>>({})
+  const [originalValues, setOriginalValues] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(false)
+  const [savingAttribute, setSavingAttribute] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const handleSelectAttribute = (attr: AssetTypeAttribute) => {
-    setEditingAttribute(attr)
-    setValue(asset?.attributes?.[attr.apiKey] ?? null)
-    setError(null)
-  }
-
-  const handleSave = async () => {
-    if (!asset || !editingAttribute) return
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await updateAssetAttributeValue(
-        workspaceId,
-        assetTypeId,
-        asset.id,
-        editingAttribute.id,
-        value
-      )
-      setEditingAttribute(null)
-      setValue(null)
-      if (response.asset) {
-        onSuccess(response.asset)
-      } else {
-        onSuccess(asset)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update attribute')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleClose = () => {
-    setEditingAttribute(null)
-    setValue(null)
-    setError(null)
-    onClose()
-  }
+  const [savedCount, setSavedCount] = useState(0)
 
   // Get non-hidden attributes
   const editableAttributes = attributes.filter((attr) => !attr.isHidden)
 
+  // Initialize values when dialog opens or asset changes
+  useEffect(() => {
+    if (open && asset) {
+      const initialValues: Record<string, any> = {}
+      editableAttributes.forEach((attr) => {
+        initialValues[attr.apiKey] = asset.attributes?.[attr.apiKey] ?? null
+      })
+      setValues(initialValues)
+      setOriginalValues(initialValues)
+      setError(null)
+      setSavedCount(0)
+    }
+  }, [open, asset])
+
+  const handleValueChange = (apiKey: string, value: any) => {
+    setValues((prev) => ({ ...prev, [apiKey]: value }))
+  }
+
+  // Get changed attributes (excluding read-only ones)
+  const getChangedAttributes = () => {
+    return editableAttributes.filter((attr) => {
+      // Skip read-only attributes
+      if (attr.cannotOverride || attr.lockedToGlobal) return false
+      const original = originalValues[attr.apiKey]
+      const current = values[attr.apiKey]
+      return JSON.stringify(original) !== JSON.stringify(current)
+    })
+  }
+
+  const handleSave = async () => {
+    if (!asset) return
+
+    const changedAttrs = getChangedAttributes()
+    if (changedAttrs.length === 0) {
+      onClose()
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSavedCount(0)
+
+    let lastAsset = asset
+    let errorOccurred = false
+
+    // Save each changed attribute sequentially
+    for (const attr of changedAttrs) {
+      if (errorOccurred) break
+
+      setSavingAttribute(attr.id)
+      try {
+        const response = await updateAssetAttributeValue(
+          workspaceId,
+          assetTypeId,
+          asset.id,
+          attr.id,
+          values[attr.apiKey]
+        )
+        if (response.asset) {
+          lastAsset = response.asset
+        }
+        setSavedCount((prev) => prev + 1)
+      } catch (err) {
+        setError(`Failed to save ${attr.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        errorOccurred = true
+      }
+    }
+
+    setSavingAttribute(null)
+    setLoading(false)
+
+    if (!errorOccurred) {
+      onSuccess(lastAsset)
+      onClose()
+    }
+  }
+
+  const handleClose = () => {
+    if (!loading) {
+      setValues({})
+      setOriginalValues({})
+      setError(null)
+      onClose()
+    }
+  }
+
+  const changedCount = getChangedAttributes().length
+  const hasRequiredEmpty = editableAttributes.some(
+    (attr) => attr.isRequired && (values[attr.apiKey] === null || values[attr.apiKey] === '')
+  )
+
   if (!asset) return null
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Edit Asset Attributes</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 2 }}>
-          {error && <Alert severity="error">{error}</Alert>}
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        Edit Attributes
+        <Typography variant="body2" color="text.secondary">
+          {asset.name}
+        </Typography>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={0} divider={<Divider />}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-          {!editingAttribute ? (
-            <>
-              <Typography variant="body2" color="text.secondary">
-                Select an attribute to edit:
-              </Typography>
-              <Stack spacing={1}>
-                {editableAttributes.length === 0 ? (
-                  <Typography variant="body2" color="text.disabled">
-                    No editable attributes available
-                  </Typography>
-                ) : (
-                  editableAttributes.map((attr) => (
-                    <Button
-                      key={attr.id}
-                      variant="outlined"
-                      fullWidth
-                      onClick={() => handleSelectAttribute(attr)}
-                      sx={{ justifyContent: 'flex-start', textAlign: 'left', p: 1.5 }}
-                    >
-                      <Box sx={{ width: '100%' }}>
-                        <Typography variant="subtitle2">{attr.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {attr.attributeType}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          Current: <AttributeValueRenderer attribute={attr} value={asset.attributes?.[attr.apiKey]} maxLines={1} />
-                        </Typography>
-                      </Box>
-                    </Button>
-                  ))
-                )}
-              </Stack>
-            </>
+          {editableAttributes.length === 0 ? (
+            <Typography variant="body2" color="text.disabled" sx={{ py: 2 }}>
+              No editable attributes available
+            </Typography>
           ) : (
-            <>
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  {editingAttribute.name}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {editingAttribute.description || 'No description'}
-                </Typography>
-              </Box>
-
-              {editingAttribute.attributeType === 'boolean' ? (
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={value === true}
-                      onChange={(e) => setValue(e.target.checked)}
-                    />
-                  }
-                  label={value ? 'Yes' : 'No'}
-                />
-              ) : editingAttribute.attributeType === 'number' ? (
-                <TextField
-                  type="number"
-                  label="Value"
-                  value={value ?? ''}
-                  onChange={(e) => setValue(e.target.value === '' ? null : parseFloat(e.target.value))}
-                  fullWidth
-                  inputProps={{
-                    step: editingAttribute.unit ? 0.01 : 1,
-                  }}
-                  helperText={editingAttribute.unit ? `Unit: ${editingAttribute.unit}` : undefined}
-                />
-              ) : editingAttribute.attributeType === 'date' ? (
-                <TextField
-                  type="date"
-                  label="Value"
-                  value={value ? value.split('T')[0] : ''}
-                  onChange={(e) => setValue(e.target.value || null)}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                />
-              ) : editingAttribute.attributeType === 'datetime' ? (
-                <TextField
-                  type="datetime-local"
-                  label="Value"
-                  value={value ? value.slice(0, 16) : ''}
-                  onChange={(e) => setValue(e.target.value ? new Date(e.target.value).toISOString() : null)}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                />
-              ) : editingAttribute.attributeType === 'json' ? (
-                <TextField
-                  label="Value (JSON)"
-                  value={value ? JSON.stringify(value, null, 2) : ''}
-                  onChange={(e) => {
-                    try {
-                      setValue(e.target.value ? JSON.parse(e.target.value) : null)
-                    } catch {
-                      // Keep invalid JSON as string for now
-                    }
-                  }}
-                  fullWidth
-                  multiline
-                  rows={4}
-                  error={value !== null && typeof value === 'string' && !value.startsWith('{') && !value.startsWith('[')}
-                />
-              ) : editingAttribute.attributeType === 'link' ? (
-                <>
-                  <TextField
-                    label="URL"
-                    value={
-                      value && typeof value === 'object'
-                        ? value.url || ''
-                        : typeof value === 'string'
-                          ? value
-                          : ''
-                    }
-                    onChange={(e) =>
-                      setValue(
-                        typeof value === 'object'
-                          ? { ...value, url: e.target.value }
-                          : { url: e.target.value, text: '' }
-                      )
-                    }
-                    fullWidth
-                    type="url"
-                  />
-                  <TextField
-                    label="Display Text (optional)"
-                    value={
-                      value && typeof value === 'object' ? value.text || '' : ''
-                    }
-                    onChange={(e) =>
-                      setValue(
-                        typeof value === 'object'
-                          ? { ...value, text: e.target.value }
-                          : { url: '', text: e.target.value }
-                      )
-                    }
-                    fullWidth
-                  />
-                </>
-              ) : (
-                <TextField
-                  label="Value"
-                  value={value ?? ''}
-                  onChange={(e) => setValue(e.target.value || null)}
-                  fullWidth
-                  multiline={editingAttribute.attributeType === 'text'}
-                  rows={editingAttribute.attributeType === 'text' ? 3 : 1}
-                />
-              )}
-
-              {editingAttribute.isRequired && !value && (
-                <Alert severity="warning">This field is required</Alert>
-              )}
-            </>
+            editableAttributes.map((attr) => (
+              <AttributeRow
+                key={attr.id}
+                attribute={attr}
+                value={values[attr.apiKey]}
+                onChange={(value) => handleValueChange(attr.apiKey, value)}
+                disabled={loading}
+              />
+            ))
           )}
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          {editingAttribute ? 'Back' : 'Cancel'}
-        </Button>
-        {editingAttribute && (
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
+        <Typography variant="body2" color="text.secondary">
+          {loading
+            ? `Saving... (${savedCount}/${changedCount})`
+            : changedCount > 0
+              ? `${changedCount} change${changedCount !== 1 ? 's' : ''}`
+              : 'No changes'}
+        </Typography>
+        <Box>
+          <Button onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={loading || (editingAttribute.isRequired && !value)}
+            disabled={loading || changedCount === 0 || hasRequiredEmpty}
+            sx={{ ml: 1 }}
           >
-            {loading ? <CircularProgress size={24} /> : 'Save'}
+            {loading ? <CircularProgress size={24} /> : 'Save Changes'}
           </Button>
-        )}
+        </Box>
       </DialogActions>
     </Dialog>
   )
