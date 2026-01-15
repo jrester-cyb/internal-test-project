@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useLoaderData } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { getAsset } from '../api/assets'
@@ -20,45 +20,22 @@ L.Icon.Default.mergeOptions({
 function MapPage() {
   const { organizationId, workspaceId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+  const loaderData = useLoaderData() as {
+    initialCenter: [number, number]
+    initialZoom: number
+    initialAssets: any[]
+    initialClusters: any[]
+    selectedAsset: any
+  } | null
 
-  // Load saved position from URL, localStorage, or use default
-  const getInitialPosition = () => {
-    // First check URL parameters
-    const urlLat = searchParams.get('lat')
-    const urlLng = searchParams.get('lng')
-    const urlZoom = searchParams.get('zoom')
-
-    if (urlLat && urlLng && urlZoom) {
-      return {
-        center: [parseFloat(urlLat), parseFloat(urlLng)] as [number, number],
-        zoom: parseInt(urlZoom, 10)
-      }
-    }
-
-    // Fall back to localStorage
-    try {
-      const saved = localStorage.getItem('mapPosition')
-      if (saved) {
-        const { lat, lng, zoom } = JSON.parse(saved)
-        return { center: [lat, lng] as [number, number], zoom }
-      }
-    } catch (e) {
-      console.error('Error loading saved position:', e)
-    }
-
-    // Default position
-    return { center: [29.9511, -90.0715] as [number, number], zoom: 10 }
-  }
-
-  const { center: initialCenter, zoom: initialZoom } = getInitialPosition()
-  const [center, setCenter] = useState<[number, number]>(initialCenter)
-  const [zoom, setZoom] = useState(initialZoom)
-
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
+  // Use loader data for initial state
+  const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [29.9511, -90.0715])
+  const [zoom, setZoom] = useState(loaderData?.initialZoom || 10)
+  const [assets, setAssets] = useState<any[]>(loaderData?.initialAssets || [])
+  const [clusters, setClusters] = useState<any[]>(loaderData?.initialClusters || [])
+  const [selectedAsset, setSelectedAsset] = useState<any>(loaderData?.selectedAsset || null)
   const [loadingAsset, setLoadingAsset] = useState(false)
 
-  const [clusters, setClusters] = useState<Cluster[]>([])
-  const [assets, setAssets] = useState<Asset[]>([])
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null)
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
@@ -73,26 +50,6 @@ function MapPage() {
   const [nameFilter, setNameFilter] = useState('')
 
   const initialUrlUpdateDone = useRef(false)
-
-  // Load asset from URL parameter on initial load
-  useEffect(() => {
-    const urlAssetId = searchParams.get('assetId')
-    if (urlAssetId && workspaceId && !selectedAsset) {
-      console.log('Loading asset from URL:', urlAssetId)
-      getAsset(workspaceId, urlAssetId)
-        .then((asset) => {
-          console.log('Asset loaded from URL:', asset)
-          setSelectedAsset(asset)
-        })
-        .catch((error) => {
-          console.error('Error loading asset from URL:', error)
-          // Clear the assetId from URL if loading failed
-          const newSearchParams = new URLSearchParams(searchParams)
-          newSearchParams.delete('assetId')
-          setSearchParams(newSearchParams, { replace: true })
-        })
-    }
-  }, [workspaceId, searchParams])
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return

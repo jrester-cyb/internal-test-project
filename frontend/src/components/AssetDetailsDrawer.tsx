@@ -40,7 +40,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
     return saved ? parseInt(saved, 10) : 600
   }) // Default width in pixels
   const [isResizing, setIsResizing] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(!!asset)
   const [isDraggable, setIsDraggable] = useState(true)
   const resizeRef = useRef<HTMLDivElement>(null)
 

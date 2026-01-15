@@ -146,6 +146,111 @@ const router = createBrowserRouter([
           {
             path: "map",
             element: <MapPage />,
+            loader: async ({ params, request }) => {
+              const { organizationId, workspaceId } = params
+              if (!organizationId || !workspaceId) return null
+
+              const url = new URL(request.url)
+              const searchParams = url.searchParams
+
+              // Get initial position from URL or localStorage
+              const getInitialPosition = () => {
+                const urlLat = searchParams.get('lat')
+                const urlLng = searchParams.get('lng')
+                const urlZoom = searchParams.get('zoom')
+
+                if (urlLat && urlLng && urlZoom) {
+                  return {
+                    center: [parseFloat(urlLat), parseFloat(urlLng)] as [number, number],
+                    zoom: parseInt(urlZoom, 10)
+                  }
+                }
+
+                try {
+                  const saved = localStorage.getItem('mapPosition')
+                  if (saved) {
+                    const { lat, lng, zoom } = JSON.parse(saved)
+                    return { center: [lat, lng] as [number, number], zoom }
+                  }
+                } catch (e) {
+                  console.error('Error loading saved position:', e)
+                }
+
+                return { center: [29.9511, -90.0715] as [number, number], zoom: 10 }
+              }
+
+              const { center, zoom } = getInitialPosition()
+
+              // Load initial assets
+              const { fetchClusters, fetchTiles, getAsset } = await import('./api/assets')
+
+              let assets: any[] = []
+              let clusters: any[] = []
+              let selectedAsset = null
+
+              // Calculate bounds for initial load (rough estimate)
+              const latDiff = 0.01 * Math.pow(2, 10 - zoom) // Rough bounds calculation
+              const lngDiff = latDiff * Math.cos(center[0] * Math.PI / 180)
+              const bounds = [
+                center[0] - latDiff, // south
+                center[1] - lngDiff, // west  
+                center[0] + latDiff, // north
+                center[1] + lngDiff  // east
+              ]
+
+              try {
+                if (zoom < 12) {
+                  const clusterData = await fetchClusters(workspaceId, zoom, bounds)
+                  const geojsonAssets: any[] = []
+                  const realClusters: any[] = []
+                  for (const c of clusterData.clusters) {
+                    if (c.type === 'Feature' && c.geometry && c.properties) {
+                      geojsonAssets.push({
+                        id: c.id,
+                        name: c.properties.name,
+                        assetTypeId: c.properties.assetTypeId,
+                        h3Index: c.properties.h3Index,
+                        geometry: c.geometry
+                      })
+                    } else {
+                      realClusters.push(c)
+                    }
+                  }
+                  clusters = realClusters
+                  assets = geojsonAssets
+                } else {
+                  const tileData = await fetchTiles(workspaceId, bounds, 5000)
+                  assets = tileData.features.map((f: any) => ({
+                    id: f.id,
+                    name: f.properties.name,
+                    assetTypeId: f.properties.assetTypeId,
+                    h3Index: f.properties.h3Index,
+                    geometry: f.geometry
+                  }))
+                  clusters = []
+                }
+
+                // Load selected asset if present in URL
+                const assetId = searchParams.get('assetId')
+                if (assetId) {
+                  try {
+                    selectedAsset = await getAsset(workspaceId, assetId)
+                  } catch (error) {
+                    console.error('Error loading selected asset:', error)
+                  }
+                }
+              } catch (error) {
+                console.error('Error loading initial map data:', error)
+              }
+
+              return {
+                initialCenter: center,
+                initialZoom: zoom,
+                initialAssets: assets,
+                initialClusters: clusters,
+                selectedAsset
+              }
+            },
             handle: {
               crumb: "Map",
               hideBreadcrumbs: true
