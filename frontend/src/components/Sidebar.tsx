@@ -24,6 +24,7 @@ export default function Sidebar({ isOpen, onToggle, variant = 'permanent', onClo
     <>
       <Drawer
         variant={variant}
+        elevation={0}
         anchor={variant === 'temporary' ? 'left' : undefined}
         open={isOpen}
         onClose={onClose}
