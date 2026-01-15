@@ -159,6 +159,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
     <Slide
       direction={isDraggable ? "left" : "up"}
       in={isOpen}
+      appear={false}
       timeout={300}
       container={isDraggable ? undefined : document.body}
       style={!isDraggable ? {
