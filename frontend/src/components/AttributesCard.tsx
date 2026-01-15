@@ -34,7 +34,6 @@ export default function AttributesCard({
   onExcludedScopesChange,
   isLoading = false
 }: AttributesCardProps) {
-  console.log('AttributesCard props:', { attributes, showHidden, selectedTags, selectedTypes, excludedScopes })
   // Get all unique tags from attributes
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>()
