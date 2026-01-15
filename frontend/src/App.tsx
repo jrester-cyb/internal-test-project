@@ -1,7 +1,7 @@
 import { Suspense, useState, useEffect } from 'react'
 import { Outlet, useNavigation, useNavigate, useParams, useMatches } from 'react-router-dom'
-import { AppBar, Toolbar, Box, Typography, CircularProgress, LinearProgress, Button, Drawer, IconButton } from '@mui/material'
-import { Help as HelpIcon, Person as PersonIcon, AccountCircle as AccountCircleIcon, SwapHoriz as SwapHorizIcon, DarkMode as DarkModeIcon, LightMode as LightModeIcon, Logout as LogoutIcon, Business as BusinessIcon, Menu as MenuIcon } from '@mui/icons-material'
+import { AppBar, Toolbar, Box, Typography, CircularProgress, LinearProgress, Button, Drawer, IconButton, BottomNavigation, BottomNavigationAction } from '@mui/material'
+import { Help as HelpIcon, Person as PersonIcon, AccountCircle as AccountCircleIcon, SwapHoriz as SwapHorizIcon, DarkMode as DarkModeIcon, LightMode as LightModeIcon, Logout as LogoutIcon, Business as BusinessIcon, Map as MapIcon, Inventory as AssetsIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import Sidebar from './components/Sidebar'
 import AppBreadcrumbs from './components/AppBreadcrumbs'
 import ActionButtons from './components/ActionButtons'
@@ -24,16 +24,29 @@ function App() {
   const { isDarkMode, toggleTheme } = useTheme()
   const { organizations, activeOrganization, setActiveOrganization } = useOrganization()
   const { isOpen, setIsOpen, isMobile, windowWidth } = useSidebar()
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const isNavigating = Boolean(navigation.location);
 
   // Check if any matched route has hideBreadcrumbs or hideSidebar set to true
   const hideBreadcrumbs = matches.some((match) => (match.handle as any)?.hideBreadcrumbs)
   const hideSidebar = matches.some((match) => (match.handle as any)?.hideSidebar)
 
-  const sidebarWidth = isMobile ? 0 : (isOpen ? 240 : 64)
+  const orgPath = organizationId ? `/organizations/${organizationId}` : ''
+  const basePath = organizationId && workspaceId ? `${orgPath}/workspaces/${workspaceId}` : orgPath
 
-  // Workspaces for switcher
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const getBottomNavValue = () => {
+    const pathname = matches[matches.length - 1]?.pathname || ''
+    if (pathname.includes('/map')) return 'map'
+    if (pathname.includes('/asset-types')) return 'assets'
+    if (pathname.includes('/library')) return 'library'
+    return 'map'
+  }
+
+  const handleBottomNavChange = (event: React.SyntheticEvent, newValue: string) => {
+    if (newValue === 'map') navigate(`${basePath}/map`)
+    else if (newValue === 'assets') navigate(`${basePath}/asset-types`)
+    else if (newValue === 'library') navigate(`${basePath}/library`)
+  }
 
   // Load workspaces
   useEffect(() => {
@@ -54,6 +67,8 @@ function App() {
   const filteredWorkspaces = activeOrganization
     ? workspaces.filter(w => w.organization === activeOrganization.id)
     : workspaces
+
+  const sidebarWidth = isMobile ? 0 : (isOpen ? 240 : 64)
 
   const handleOrganizationSelect = (orgId: string) => {
     const org = organizations.find(o => o.id === orgId)
@@ -170,23 +185,16 @@ function App() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
-      <Sidebar
-        isOpen={isOpen}
-        onToggle={setIsOpen}
-        variant={isMobile ? "temporary" : "permanent"}
-        onClose={isMobile ? () => setIsOpen(false) : undefined}
-      />
+      {!isMobile && (
+        <Sidebar
+          isOpen={isOpen}
+          onToggle={setIsOpen}
+          variant="permanent"
+          onClose={undefined}
+        />
+      )}
       <AppBar position="fixed" color="primary" elevation={0}>
         <Toolbar>
-          {isMobile && (
-            <IconButton
-              color="inherit"
-              onClick={() => setIsOpen(!isOpen)}
-              sx={{ mr: 1 }}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Asset Visualizer
           </Typography>
@@ -202,7 +210,7 @@ function App() {
         {isNavigating && <LinearProgress color="secondary" />}
       </AppBar>
 
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `calc(100% - ${sidebarWidth}px)`, ml: `${sidebarWidth}px`, transition: 'margin 225ms cubic-bezier(0.4, 0, 0.6, 1), width 225ms cubic-bezier(0.4, 0, 0.6, 1)' }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `calc(100% - ${sidebarWidth}px)`, ml: `${sidebarWidth}px`, pb: isMobile ? 7 : 0, transition: 'margin 225ms cubic-bezier(0.4, 0, 0.6, 1), width 225ms cubic-bezier(0.4, 0, 0.6, 1)' }}>
         {!hideBreadcrumbs && (
           <Box sx={{ p: 2, pb: 0, mt: 8 }}>
             <AppBreadcrumbs />
@@ -218,6 +226,32 @@ function App() {
           </Suspense>
         </Box>
       </Box>
+      {isMobile && (
+        <BottomNavigation
+          value={getBottomNavValue()}
+          onChange={handleBottomNavChange}
+          showLabels={true}
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            width: '100%',
+            backgroundColor: 'primary.main',
+            '& .MuiBottomNavigationAction-root': {
+              color: 'white',
+              '&.Mui-selected': {
+                color: 'secondary.light',
+              },
+              '&:hover': {
+                color: 'secondary.light',
+              },
+            },
+          }}
+        >
+          <BottomNavigationAction label="Map" value="map" icon={<MapIcon />} />
+          <BottomNavigationAction label="Assets" value="assets" icon={<AssetsIcon />} />
+          <BottomNavigationAction label="Library" value="library" icon={<LibraryIcon />} />
+        </BottomNavigation>
+      )}
     </Box>
   )
 }
