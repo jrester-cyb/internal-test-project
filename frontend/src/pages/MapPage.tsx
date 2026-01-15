@@ -77,25 +77,22 @@ function MapPage() {
   // Load asset from URL parameter on initial load
   useEffect(() => {
     const urlAssetId = searchParams.get('assetId')
-    if (urlAssetId && workspaceId) {
-      // Only load if we don't already have this asset selected
-      if (!selectedAsset || selectedAsset.id !== urlAssetId) {
-        console.log('Loading asset from URL:', urlAssetId)
-        getAsset(workspaceId, urlAssetId)
-          .then((asset) => {
-            console.log('Asset loaded from URL:', asset)
-            setSelectedAsset(asset)
-          })
-          .catch((error) => {
-            console.error('Error loading asset from URL:', error)
-            // Clear the assetId from URL if loading failed
-            const newSearchParams = new URLSearchParams(searchParams)
-            newSearchParams.delete('assetId')
-            setSearchParams(newSearchParams, { replace: true })
-          })
-      }
+    if (urlAssetId && workspaceId && !selectedAsset) {
+      console.log('Loading asset from URL:', urlAssetId)
+      getAsset(workspaceId, urlAssetId)
+        .then((asset) => {
+          console.log('Asset loaded from URL:', asset)
+          setSelectedAsset(asset)
+        })
+        .catch((error) => {
+          console.error('Error loading asset from URL:', error)
+          // Clear the assetId from URL if loading failed
+          const newSearchParams = new URLSearchParams(searchParams)
+          newSearchParams.delete('assetId')
+          setSearchParams(newSearchParams, { replace: true })
+        })
     }
-  }, [workspaceId, searchParams, selectedAsset])
+  }, [workspaceId, searchParams])
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return
