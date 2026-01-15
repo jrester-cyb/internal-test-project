@@ -62,6 +62,7 @@ export default function ActionButtons({
   // Internal menu state
   const [internalMenuAnchor, setInternalMenuAnchor] = useState<HTMLElement | null>(null)
   const [submenuAnchors, setSubmenuAnchors] = useState<Record<number, HTMLElement | null>>({})
+  const [initialWidth] = useState(width) // Capture initial width to prevent flash
 
   // Always use internal menu state now
   const currentMenuAnchor = internalMenuAnchor
@@ -178,6 +179,10 @@ export default function ActionButtons({
             action.onClick(e)
           }
         }
+
+        // Only render if button would be visible initially or is currently transitioning
+        const shouldRender = isButtonVisible(action.minWidth ?? 0) || (action.minWidth ?? 0) <= initialWidth
+        if (!shouldRender) return null
 
         return (
           <Fragment key={index}>

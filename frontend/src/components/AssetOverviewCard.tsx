@@ -36,7 +36,7 @@ export default function AssetOverviewCard({
   onSystemDetails,
   onClose
 }: AssetOverviewCardProps) {
-  const [containerWidth, setContainerWidth] = useState(800)
+  const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
   const leftContentRef = useRef<HTMLDivElement>(null)
@@ -51,7 +51,8 @@ export default function AssetOverviewCard({
       }
     }
 
-    updateWidth()
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(updateWidth)
 
     // Use ResizeObserver to detect container size changes (works for drawer resize)
     const resizeObserver = new ResizeObserver(updateWidth)
@@ -212,12 +213,14 @@ export default function AssetOverviewCard({
               </Box>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText', alignItems: 'center', flexShrink: 0 }} ref={actionsRef}>
-              <ActionButtons
-                actions={actions}
-                width={containerWidth}
-                size="small"
-                iconOnly
-              />
+              {containerWidth !== null && (
+                <ActionButtons
+                  actions={actions}
+                  width={containerWidth}
+                  size="small"
+                  iconOnly
+                />
+              )}
               {onClose && (
                 <IconButton
                   onClick={onClose}
