@@ -320,6 +320,37 @@ export default function AssetDetailPage() {
                                 {attr.isHidden && <VisibilityOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
                                 <Typography variant="body2" fontWeight={600} noWrap title={attr.name}>{attr.name}</Typography>
                               </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                <Chip
+                                  label={attr.scope === 'local' ? 'Local' : attr.scope === 'override' ? 'Override' : 'Global'}
+                                  size="small"
+                                  variant={excludedScopes.includes(attr.scope || 'global') ? 'outlined' : 'filled'}
+                                  color={attr.scope === 'local' ? 'info' : attr.scope === 'override' ? 'warning' : 'success'}
+                                  onClick={() => {
+                                    const scope = attr.scope || 'global'
+                                    if (excludedScopes.includes(scope)) {
+                                      setExcludedScopes(excludedScopes.filter(s => s !== scope))
+                                    } else {
+                                      setExcludedScopes([...excludedScopes, scope])
+                                    }
+                                  }}
+                                  sx={{ height: 20, fontSize: '0.7rem', cursor: 'pointer' }}
+                                />
+                                <Chip
+                                  label={attr.attributeType}
+                                  size="small"
+                                  variant={selectedTypes.includes(attr.attributeType) ? 'filled' : 'outlined'}
+                                  color={selectedTypes.includes(attr.attributeType) ? 'primary' : 'default'}
+                                  onClick={() => {
+                                    if (selectedTypes.includes(attr.attributeType)) {
+                                      setSelectedTypes(selectedTypes.filter(t => t !== attr.attributeType))
+                                    } else {
+                                      setSelectedTypes([...selectedTypes, attr.attributeType])
+                                    }
+                                  }}
+                                  sx={{ height: 20, fontSize: '0.7rem', cursor: 'pointer' }}
+                                />
+                              </Box>
                               {attr.description && (
                                 <TruncatedText variant="caption" color="text.secondary" maxLines={1} title={attr.name} showCopy={false}>
                                   {attr.description}
@@ -358,10 +389,11 @@ export default function AssetDetailPage() {
                         const value = currentAsset.attributes?.[attr.apiKey]
                         const hasTags = attr.tags && attr.tags.length > 0
                         const hasDescription = !!attr.description
-                        const padding = 18
+                        const padding = 24
 
-                        // Calculate left column height (name + description + tags)
-                        let leftHeight = 24 // name line
+                        // Calculate left column height (name + type/scope chips + description + tags)
+                        let leftHeight = 28 // name line
+                        leftHeight += 28 // type/scope chips row
                         if (hasDescription) {
                           leftHeight += 36 // single line description + "see full text" link
                         }
@@ -371,21 +403,21 @@ export default function AssetDetailPage() {
 
                         // Calculate right column height based on value type
                         // Add extra height for TruncatedText "see full text" link when content is long
-                        let rightHeight = 24
+                        let rightHeight = 28
                         if (value !== null && value !== undefined) {
                           if (attr.attributeType === 'json' || typeof value === 'object') {
                             const formatted = JSON.stringify(value, null, 2)
                             const lines = Math.min(3, formatted.split('\n').length)
-                            rightHeight = (lines * 22) + 28
+                            rightHeight = (lines * 24) + 32
                           } else if (attr.attributeType === 'boolean') {
-                            rightHeight = 28
+                            rightHeight = 32
                           } else {
                             const strValue = String(value)
                             const estimatedLines = Math.min(3, Math.ceil(strValue.length / 50))
-                            rightHeight = estimatedLines * 22
+                            rightHeight = estimatedLines * 24
                             // Add space for "see full text" if content is likely truncated
                             if (strValue.length > 100) {
-                              rightHeight += 18
+                              rightHeight += 20
                             }
                           }
                         }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Box, Typography, IconButton, CircularProgress, Drawer, Paper } from '@mui/material'
 import { Close as CloseIcon, Edit as EditIcon, Delete as DeleteIcon, ContentCopy as CopyIcon } from '@mui/icons-material'
-import type { Asset } from '../types'
-import { getAsset } from '../api/assets'
+import type { Asset, AssetTypeAttribute } from '../types'
+import { getAsset, fetchAssetAttributeDefinitions } from '../api/assets'
 import ActionButtons from './ActionButtons'
 
 interface AssetDetailsProps {
@@ -11,10 +11,12 @@ interface AssetDetailsProps {
   onClose: () => void
   onEdit?: (asset: Asset) => void
   onDelete?: (asset: Asset) => void
+  attributes?: AssetTypeAttribute[]
 }
 
-export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDelete }: AssetDetailsProps) {
+export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDelete, attributes: propAttributes }: AssetDetailsProps) {
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
+  const [attributes, setAttributes] = useState<AssetTypeAttribute[]>(propAttributes || [])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -24,6 +26,12 @@ export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDe
       try {
         const data = await getAsset(workspaceId, asset.id)
         setFullAsset(data)
+
+        // Fetch attributes if not provided and we have an asset type
+        if (!propAttributes && data.assetType) {
+          const attrs = await fetchAssetAttributeDefinitions(workspaceId, data.assetType)
+          setAttributes(attrs)
+        }
       } catch (error) {
         console.error('Error loading asset details:', error)
       } finally {
@@ -31,7 +39,7 @@ export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDe
       }
     }
     loadFullAsset()
-  }, [asset.id, workspaceId])
+  }, [asset.id, workspaceId, propAttributes])
 
   const displayAsset = fullAsset || asset
 
@@ -129,16 +137,33 @@ export default function AssetDetails({ asset, workspaceId, onClose, onEdit, onDe
                   Attributes
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {Object.entries(displayAsset.attributes).map(([key, value]) => (
-                    <Paper key={key} variant="outlined" sx={{ p: 1.5 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        {key}:
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                      </Typography>
-                    </Paper>
-                  ))}
+                  {Object.entries(displayAsset.attributes).map(([key, value]) => {
+                    const attr = attributes.find(a => a.apiKey === key)
+                    const scope = attr?.scope || 'global'
+                    const scopeLabel = scope === 'local' ? 'Local' : scope === 'override' ? 'Override' : 'Global'
+                    const scopeColor = scope === 'local' ? 'info.main' : scope === 'override' ? 'warning.main' : 'text.secondary'
+
+                    return (
+                      <Paper key={key} variant="outlined" sx={{ p: 1.5 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                            {attr?.name || key}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: scopeColor }}>
+                            {scopeLabel}
+                          </Typography>
+                        </Box>
+                        {attr && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                            {attr.attributeType}
+                          </Typography>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </Typography>
+                      </Paper>
+                    )
+                  })}
                 </Box>
               </Box>
             )}

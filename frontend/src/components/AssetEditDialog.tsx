@@ -172,6 +172,18 @@ function AttributeRow({
     }
   }
 
+  const getScopeLabel = () => {
+    if (attribute.scope === 'local') return 'Local'
+    if (attribute.scope === 'override') return 'Override'
+    return 'Global'
+  }
+
+  const getScopeColor = () => {
+    if (attribute.scope === 'local') return 'info.main'
+    if (attribute.scope === 'override') return 'warning.main'
+    return 'text.secondary'
+  }
+
   return (
     <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', py: 1 }}>
       <Box sx={{ minWidth: 150, maxWidth: 200, flexShrink: 0 }}>
@@ -181,6 +193,10 @@ function AttributeRow({
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
           {attribute.attributeType}
+          {' · '}
+          <Typography component="span" variant="caption" sx={{ color: getScopeColor() }}>
+            {getScopeLabel()}
+          </Typography>
         </Typography>
       </Box>
       <Box sx={{ flex: 1 }}>{renderInput()}</Box>
