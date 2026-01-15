@@ -21,6 +21,9 @@ interface AttributeFilterPopoverProps {
   excludedScopes?: string[]
   onExcludedScopesChange?: (scopes: string[]) => void
   showScopeFilter?: boolean
+  // Global values only toggle
+  globalValuesOnly?: boolean
+  onGlobalValuesOnlyChange?: (value: boolean) => void
   // Data
   hiddenCount: number
   availableTags: string[]
@@ -40,6 +43,8 @@ export default function AttributeFilterPopover({
   excludedScopes = [],
   onExcludedScopesChange,
   showScopeFilter = false,
+  globalValuesOnly = false,
+  onGlobalValuesOnlyChange,
   hiddenCount,
   availableTags,
   showTypeFilter = false,
@@ -50,7 +55,7 @@ export default function AttributeFilterPopover({
   const [isLoadingTypes, setIsLoadingTypes] = useState(false)
   const typesFetchedRef = useRef(false)
 
-  const hasActiveFilters = showHidden || selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0
+  const hasActiveFilters = showHidden || selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0 || globalValuesOnly
 
   // Fetch types when popover opens (only once)
   const loadTypes = useCallback(async () => {
@@ -118,6 +123,21 @@ export default function AttributeFilterPopover({
             <Typography variant="subtitle2">Filter Options</Typography>
             {(isLoading || isLoadingTypes) && <CircularProgress size={14} />}
           </Stack>
+
+          {onGlobalValuesOnlyChange && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={globalValuesOnly}
+                  onChange={() => onGlobalValuesOnlyChange(!globalValuesOnly)}
+                  size="small"
+                  color="success"
+                />
+              }
+              label="Show global asset"
+              sx={{ mb: 1.5, display: 'block' }}
+            />
+          )}
 
           {hiddenCount > 0 && (
             <FormControlLabel

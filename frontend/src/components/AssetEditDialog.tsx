@@ -226,16 +226,18 @@ export default function AssetEditDialog({
   // Initialize values when dialog opens or asset changes
   useEffect(() => {
     if (open && asset) {
+      console.log('AssetEditDialog: Initializing values', { assetId: asset.id, attributeCount: attributes.length })
       const initialValues: Record<string, any> = {}
-      editableAttributes.forEach((attr) => {
+      attributes.filter((attr) => !attr.isHidden).forEach((attr) => {
         initialValues[attr.apiKey] = asset.attributes?.[attr.apiKey] ?? null
       })
+      console.log('AssetEditDialog: Initial values', initialValues)
       setValues(initialValues)
-      setOriginalValues(initialValues)
+      setOriginalValues({ ...initialValues })
       setError(null)
       setSavedCount(0)
     }
-  }, [open, asset])
+  }, [open, asset?.id])
 
   const handleValueChange = (apiKey: string, value: any) => {
     setValues((prev) => ({ ...prev, [apiKey]: value }))
@@ -248,7 +250,13 @@ export default function AssetEditDialog({
       if (attr.cannotOverride || attr.lockedToGlobal) return false
       const original = originalValues[attr.apiKey]
       const current = values[attr.apiKey]
-      return JSON.stringify(original) !== JSON.stringify(current)
+      const originalStr = JSON.stringify(original)
+      const currentStr = JSON.stringify(current)
+      const isChanged = originalStr !== currentStr
+      if (isChanged) {
+        console.log(`Changed: ${attr.apiKey}`, { original, current, originalStr, currentStr })
+      }
+      return isChanged
     })
   }
 
@@ -364,7 +372,7 @@ export default function AssetEditDialog({
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={loading || changedCount === 0 || hasRequiredEmpty}
+            disabled={loading || changedCount === 0}
             sx={{ ml: 1 }}
           >
             {loading ? <CircularProgress size={24} /> : 'Save Changes'}

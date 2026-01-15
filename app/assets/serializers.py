@@ -745,6 +745,7 @@ class AssetSerializer(serializers.ModelSerializer):
         - Single-pass dict comprehension for fast iteration
         - Supports ?exclude_fields=attributes to exclude attributes from response
         - Returns workspace-specific override values when in workspace context
+        - Supports ?global_values_only=true to return only base/global values
         """
         # Check if attributes were excluded via ?exclude_fields= parameter
         request = self.context.get("request")
@@ -752,6 +753,13 @@ class AssetSerializer(serializers.ModelSerializer):
             exclude_fields = request.query_params.get("exclude_fields", "")
             if "attributes" in exclude_fields.split(","):
                 return None  # Skip attributes when explicitly excluded
+
+        # Check for global_values_only parameter
+        global_values_only = False
+        if request:
+            global_values_only = (
+                request.query_params.get("global_values_only", "").lower() == "true"
+            )
 
         # Use prefetched attributes if available
         attributes = getattr(obj, "attributes", None)
@@ -771,96 +779,109 @@ class AssetSerializer(serializers.ModelSerializer):
         import logging
 
         logger = logging.getLogger(__name__)
-        if workspace:
+
+        # If global_values_only is requested, skip workspace-specific handling
+        if global_values_only or not workspace:
+            # Return global/base values only - exclude any override values
             from .models import WorkspaceAttributeValueOverride
 
-            # Get all override values for this asset in THIS workspace
-            overrides = (
-                WorkspaceAttributeValueOverride.objects.filter(
-                    override_value__asset=obj,
-                    workspace=workspace,
-                )
-                .select_related("override_value")
-                .values(
-                    "asset_type_attribute_id",
-                    "override_value_id",
-                )
-            )
-
-            # Get ALL override value IDs for this asset (any workspace) to exclude other workspace overrides
+            # Get ALL override value IDs for this asset (any workspace) to exclude them
             all_override_value_ids = set(
                 WorkspaceAttributeValueOverride.objects.filter(
                     override_value__asset=obj,
                 ).values_list("override_value_id", flat=True)
             )
 
-            # Build set of override value IDs for THIS workspace
-            this_workspace_override_ids = {o["override_value_id"] for o in overrides}
-            attr_to_override = {
-                o["asset_type_attribute_id"]: o["override_value_id"] for o in overrides
+            return {
+                api_key_map[str(fv.asset_type_attribute_id)]: fv.typed_value
+                for fv in attr_values
+                if str(fv.asset_type_attribute_id) in api_key_map
+                and getattr(fv, "typed_value", None) is not None
+                and fv.id not in all_override_value_ids  # Exclude override values
             }
 
-            # Build result: use override values where they exist, skip base values that have overrides
-            result = {}
-            debug_asset_id = "bae2d204-8e78-40a6-bfdc-4b216f8f7bf4"
-            is_debug = str(obj.id) == debug_asset_id
-            if is_debug:
-                logger.warning(
-                    f"[DEBUG] Filtering for {obj.id}: all_override_ids={len(all_override_value_ids)}, this_ws_ids={len(this_workspace_override_ids)}"
-                )
-            for fv in attr_values:
-                attr_id = fv.asset_type_attribute_id
-                api_key = api_key_map.get(str(attr_id))
-                if not api_key:
-                    if is_debug:
-                        logger.warning(f"[DEBUG] {fv.id}: no api_key")
-                    continue
+        # Workspace context exists and global_values_only is false - apply override logic
+        from .models import WorkspaceAttributeValueOverride
 
-                typed_value = getattr(fv, "typed_value", None)
-                if typed_value is None:
-                    if is_debug:
-                        logger.warning(f"[DEBUG] {fv.id}: typed_value is None")
-                    continue
+        # Get all override values for this asset in THIS workspace
+        overrides = (
+            WorkspaceAttributeValueOverride.objects.filter(
+                override_value__asset=obj,
+                workspace=workspace,
+            )
+            .select_related("override_value")
+            .values(
+                "asset_type_attribute_id",
+                "override_value_id",
+            )
+        )
 
-                # If this value is an override from ANOTHER workspace, skip it
-                if (
-                    fv.id in all_override_value_ids
-                    and fv.id not in this_workspace_override_ids
-                ):
-                    if is_debug:
-                        logger.warning(f"[DEBUG] {fv.id}: EXCLUDED (other ws override)")
-                    continue
-                # If this value IS an override value for THIS workspace, include it
-                elif fv.id in this_workspace_override_ids:
-                    if is_debug:
-                        logger.warning(
-                            f"[DEBUG] {fv.id}: INCLUDED (this ws override) api_key={api_key}"
-                        )
-                    result[api_key] = typed_value
-                # If this attr has an override in this workspace, skip the base value
-                elif attr_id in attr_to_override:
-                    if is_debug:
-                        logger.warning(f"[DEBUG] {fv.id}: EXCLUDED (has override)")
-                    continue
-                # No override exists, use the base value
-                else:
-                    if is_debug:
-                        logger.warning(
-                            f"[DEBUG] {fv.id}: INCLUDED (base) api_key={api_key}"
-                        )
-                    result[api_key] = typed_value
+        # Get ALL override value IDs for this asset (any workspace) to exclude other workspace overrides
+        all_override_value_ids = set(
+            WorkspaceAttributeValueOverride.objects.filter(
+                override_value__asset=obj,
+            ).values_list("override_value_id", flat=True)
+        )
 
-            if is_debug:
-                logger.warning(f"[DEBUG] Result keys: {list(result.keys())}")
-            return result
-
-        # No workspace context - return all values as-is
-        return {
-            api_key_map[str(fv.asset_type_attribute_id)]: fv.typed_value
-            for fv in attr_values
-            if str(fv.asset_type_attribute_id) in api_key_map
-            and getattr(fv, "typed_value", None) is not None
+        # Build set of override value IDs for THIS workspace
+        this_workspace_override_ids = {o["override_value_id"] for o in overrides}
+        attr_to_override = {
+            o["asset_type_attribute_id"]: o["override_value_id"] for o in overrides
         }
+
+        # Build result: use override values where they exist, skip base values that have overrides
+        result = {}
+        debug_asset_id = "bae2d204-8e78-40a6-bfdc-4b216f8f7bf4"
+        is_debug = str(obj.id) == debug_asset_id
+        if is_debug:
+            logger.warning(
+                f"[DEBUG] Filtering for {obj.id}: all_override_ids={len(all_override_value_ids)}, this_ws_ids={len(this_workspace_override_ids)}"
+            )
+        for fv in attr_values:
+            attr_id = fv.asset_type_attribute_id
+            api_key = api_key_map.get(str(attr_id))
+            if not api_key:
+                if is_debug:
+                    logger.warning(f"[DEBUG] {fv.id}: no api_key")
+                continue
+
+            typed_value = getattr(fv, "typed_value", None)
+            if typed_value is None:
+                if is_debug:
+                    logger.warning(f"[DEBUG] {fv.id}: typed_value is None")
+                continue
+
+            # If this value is an override from ANOTHER workspace, skip it
+            if (
+                fv.id in all_override_value_ids
+                and fv.id not in this_workspace_override_ids
+            ):
+                if is_debug:
+                    logger.warning(f"[DEBUG] {fv.id}: EXCLUDED (other ws override)")
+                continue
+            # If this value IS an override value for THIS workspace, include it
+            elif fv.id in this_workspace_override_ids:
+                if is_debug:
+                    logger.warning(
+                        f"[DEBUG] {fv.id}: INCLUDED (this ws override) api_key={api_key}"
+                    )
+                result[api_key] = typed_value
+            # If this attr has an override in this workspace, skip the base value
+            elif attr_id in attr_to_override:
+                if is_debug:
+                    logger.warning(f"[DEBUG] {fv.id}: EXCLUDED (has override)")
+                continue
+            # No override exists, use the base value
+            else:
+                if is_debug:
+                    logger.warning(
+                        f"[DEBUG] {fv.id}: INCLUDED (base) api_key={api_key}"
+                    )
+                result[api_key] = typed_value
+
+        if is_debug:
+            logger.warning(f"[DEBUG] Result keys: {list(result.keys())}")
+        return result
 
     def create(self, validated_data):
         """Create asset and its attributes"""

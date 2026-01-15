@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, Article as ArticleIcon } from '@mui/icons-material'
+import { Box, Typography, Card, CardContent, CardHeader, Table, TableBody, TableCell, TableRow, Chip, Container, Grid, IconButton, Drawer, Divider, Button, Tooltip } from '@mui/material'
+import { Place as PlaceIcon, Category as CategoryIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, Info as InfoIcon, Close as CloseIcon, ContentCopy as CloneIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, Article as ArticleIcon, Public as PublicIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
 import type { Asset, AssetTypeAttribute } from '../types'
@@ -32,6 +32,8 @@ export default function AssetDetailPage() {
   const [excludedScopes, setExcludedScopes] = useState<string[]>([])
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [currentAsset, setCurrentAsset] = useState<Asset>(asset)
+  const [globalValuesOnly, setGlobalValuesOnly] = useState(false)
+  const [loadingGlobalValues, setLoadingGlobalValues] = useState(false)
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Get all unique tags from attributes
@@ -42,6 +44,20 @@ export default function AssetDetailPage() {
     })
     return Array.from(tagSet).sort()
   }, [attributes])
+
+  // Refetch asset when globalValuesOnly toggle changes
+  useEffect(() => {
+    if (!workspaceId || !asset.id) return
+
+    setLoadingGlobalValues(true)
+    import('../api/assets').then(({ getAsset }) => {
+      const url = globalValuesOnly ? `${asset.id}/?global_values_only=true` : asset.id
+      getAsset(workspaceId, url)
+        .then(setCurrentAsset)
+        .catch(err => console.error('Failed to fetch asset:', err))
+        .finally(() => setLoadingGlobalValues(false))
+    })
+  }, [workspaceId, asset.id, globalValuesOnly])
 
   // Fetch related assets
   useEffect(() => {
@@ -203,6 +219,25 @@ export default function AssetDetailPage() {
                 </Box>
               </Box>
               <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText', alignItems: 'center' }}>
+                <Tooltip title={globalValuesOnly ? 'Showing global asset values' : 'Show global asset'} arrow>
+                  <Button
+                    variant={globalValuesOnly ? 'contained' : 'outlined'}
+                    size="small"
+                    startIcon={<PublicIcon />}
+                    onClick={() => setGlobalValuesOnly(!globalValuesOnly)}
+                    sx={{
+                      color: globalValuesOnly ? 'success.contrastText' : 'primary.contrastText',
+                      bgcolor: globalValuesOnly ? 'success.main' : 'transparent',
+                      borderColor: 'primary.contrastText',
+                      '&:hover': {
+                        bgcolor: globalValuesOnly ? 'success.dark' : 'rgba(255,255,255,0.1)',
+                        borderColor: 'primary.contrastText',
+                      },
+                    }}
+                  >
+                    Global
+                  </Button>
+                </Tooltip>
                 <ActionButtons
                   actions={actions}
                   width={containerWidth}
@@ -240,6 +275,7 @@ export default function AssetDetailPage() {
                       hiddenCount={hiddenCount}
                       availableTags={availableTags}
                       showTypeFilter={true}
+                      isLoading={loadingGlobalValues}
                     />
                   }
                 />
