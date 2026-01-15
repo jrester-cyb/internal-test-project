@@ -45,6 +45,7 @@ from .attribute_value import (
     JSONAttributeValue,
     LinkAttributeValue,
     ChoiceAttributeValue,
+    WorkspaceAttributeValueOverride,
 )
 
 __all__ = [
@@ -70,4 +71,5 @@ __all__ = [
     "JSONAttributeValue",
     "LinkAttributeValue",
     "ChoiceAttributeValue",
+    "WorkspaceAttributeValueOverride",
 ]

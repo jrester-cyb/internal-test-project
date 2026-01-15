@@ -408,6 +408,274 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Assets"],
+        description="Update an asset's attribute value for a workspace",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "attribute_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the attribute to update",
+                    },
+                    "value": {
+                        "description": "New value for the attribute (type depends on attribute definition)"
+                    },
+                },
+                "required": ["attribute_id", "value"],
+            }
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="update-attribute")
+    def update_attribute(self, request, workspace_pk=None, assettype_pk=None, pk=None):
+        """
+        Update an asset's attribute value for a workspace.
+
+        This creates or updates an attribute value for the asset.
+        The value is stored as a workspace-specific override.
+        """
+        from django.db import transaction
+        from ..models import BaseAttributeValue, BaseAssetTypeAttribute
+        from audit_log.logging import AuditLogger
+
+        asset = self.get_object()
+        attribute_id = request.data.get("attribute_id")
+        value = request.data.get("value")
+
+        if not attribute_id or value is None:
+            return Response(
+                {"error": "Both 'attribute_id' and 'value' are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Get the attribute definition
+            attribute = BaseAssetTypeAttribute.objects.get(id=attribute_id)
+
+            # Verify attribute belongs to this asset's type
+            if attribute.asset_type_id != asset.asset_type_id:
+                return Response(
+                    {"error": "Attribute does not belong to this asset's type"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        except BaseAssetTypeAttribute.DoesNotExist:
+            return Response(
+                {"error": "Attribute not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get the real polymorphic instance to determine the value type
+        real_attribute = attribute.get_real_instance()
+
+        # For some polymorphic types like WorkspaceHiddenAttribute, we need to get the actual attribute with the type
+        attr_with_type = real_attribute
+        if (
+            not hasattr(real_attribute, "attribute_type")
+            or not real_attribute.attribute_type
+        ):
+            # If this is a reference type (like WorkspaceHiddenAttribute), get the underlying attribute
+            if hasattr(real_attribute, "hidden_attribute_id"):
+                # This is a WorkspaceHiddenAttribute, get the hidden attribute
+                attr_with_type = real_attribute.hidden_attribute.get_real_instance()
+            elif hasattr(real_attribute, "base_attribute_id"):
+                # This is a WorkspaceOverrideAssetTypeAttribute, get the base attribute
+                attr_with_type = real_attribute.base_attribute.get_real_instance()
+
+        with transaction.atomic():
+            # Get or create the attribute value with the proper type
+            from ..models import (
+                TextAttributeValue,
+                NumberAttributeValue,
+                BooleanAttributeValue,
+                DateAttributeValue,
+                DateTimeAttributeValue,
+                JSONAttributeValue,
+                LinkAttributeValue,
+            )
+
+            # Map attribute types to value model classes
+            type_to_model = {
+                "text": TextAttributeValue,
+                "number": NumberAttributeValue,
+                "boolean": BooleanAttributeValue,
+                "date": DateAttributeValue,
+                "datetime": DateTimeAttributeValue,
+                "json": JSONAttributeValue,
+                "link": LinkAttributeValue,
+            }
+
+            attr_type = getattr(attr_with_type, "attribute_type", None)
+            if not attr_type:
+                return Response(
+                    {"error": "Attribute type not found"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            ValueModel = type_to_model.get(attr_type)
+
+            if not ValueModel:
+                return Response(
+                    {"error": f"Unknown attribute type: {attr_type}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Import the override join table
+            from ..models import WorkspaceAttributeValueOverride
+
+            # Get or create the value
+            old_value = None
+            base_value = None
+
+            # First, try to find the base/global value for this asset+attribute
+            try:
+                base_value = ValueModel.objects.get(
+                    asset=asset, asset_type_attribute_id=attr_with_type.id
+                )
+                old_value = base_value.value if hasattr(base_value, "value") else None
+            except ValueModel.DoesNotExist:
+                pass
+
+            if workspace_pk:
+                # Workspace context: check for existing override or create one
+                try:
+                    from workspaces.models import Workspace
+
+                    workspace = Workspace.objects.get(id=workspace_pk)
+                except Workspace.DoesNotExist:
+                    return Response(
+                        {"error": "Workspace not found"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                # Look for existing override for this workspace
+                existing_override = (
+                    WorkspaceAttributeValueOverride.objects.filter(
+                        asset_type_attribute_id=attr_with_type.id,
+                        base_value__asset=asset,
+                        workspace=workspace,
+                    )
+                    .select_related("override_value")
+                    .first()
+                )
+
+                if existing_override:
+                    # Update the existing override value
+                    attr_value = existing_override.override_value.get_real_instance()
+                    old_value = (
+                        attr_value.value if hasattr(attr_value, "value") else None
+                    )
+
+                    # Update the value
+                    attr_value.value = value
+                    attr_value.save()
+
+                    # Log the change
+                    AuditLogger.log(
+                        action="update",
+                        message=f"Updated workspace override for '{attr_with_type.name}' from '{old_value}' to '{value}'",
+                        target=asset,
+                        references=[
+                            (attr_with_type, "attribute"),
+                            (attr_with_type.asset_type, "asset_type"),
+                            (workspace, "workspace"),
+                        ],
+                    )
+                else:
+                    # Create a new workspace-specific override value
+                    override_value = ValueModel(
+                        asset=asset,
+                        asset_type_attribute_id=attr_with_type.id,
+                    )
+                    override_value.value = value
+                    override_value.save()
+
+                    # Create the override link (base_value can be null if no global value exists)
+                    WorkspaceAttributeValueOverride.objects.create(
+                        asset_type_attribute_id=attr_with_type.id,
+                        base_value=base_value,  # May be None
+                        override_value=override_value,
+                        workspace=workspace,
+                    )
+
+                    # Log the change
+                    AuditLogger.log(
+                        action="create",
+                        message=f"Created workspace override for '{attr_with_type.name}': '{value}'",
+                        target=asset,
+                        references=[
+                            (attr_with_type, "attribute"),
+                            (attr_with_type.asset_type, "asset_type"),
+                            (workspace, "workspace"),
+                        ],
+                    )
+
+                # Invalidate list cache
+                invalidate_asset_list_cache(asset)
+
+                # Re-fetch asset with full prefetch/annotations (refresh_from_db doesn't include prefetch)
+                asset = self.get_queryset().get(pk=asset.pk)
+                context = self.get_serializer_context()
+                api_key_map = self._get_api_key_map(asset.asset_type_id, workspace_pk)
+                context["_api_key_map"] = api_key_map
+                serializer = self.get_serializer(asset, context=context)
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": f"Updated {attr_with_type.name} for workspace",
+                        "asset": serializer.data,
+                    }
+                )
+            else:
+                # No workspace context: update or create the base value
+                if base_value:
+                    attr_value = base_value
+                else:
+                    attr_value = ValueModel(
+                        asset=asset, asset_type_attribute_id=attr_with_type.id
+                    )
+
+            # Update the value
+            if attr_type == "link":
+                # LinkAttributeValue has url and display_text
+                attr_value.value = value
+            else:
+                attr_value.value = value
+
+            attr_value.save()
+
+            # Log the change
+            AuditLogger.log(
+                action="update",
+                message=f"Updated attribute value '{attr_with_type.name}' from '{old_value}' to '{value}'",
+                target=asset,
+                references=[
+                    (attr_with_type, "attribute"),
+                    (attr_with_type.asset_type, "asset_type"),
+                ],
+            )
+
+        # Invalidate list cache
+        invalidate_asset_list_cache(asset)
+
+        # Re-fetch asset with full prefetch/annotations (refresh_from_db doesn't include prefetch)
+        asset = self.get_queryset().get(pk=asset.pk)
+
+        # Serialize and return the updated asset
+        context = self.get_serializer_context()
+        api_key_map = self._get_api_key_map(asset.asset_type_id, workspace_pk)
+        context["_api_key_map"] = api_key_map
+        serializer = self.get_serializer(asset, context=context)
+
+        return Response(
+            {
+                "success": True,
+                "message": f"Updated {attr_with_type.name}",
+                "asset": serializer.data,
+            }
+        )
+
+    @extend_schema(
+        tags=["Assets"],
         summary="Get related assets (parent, siblings, and children)",
         description="Returns the parent asset (if any), sibling assets, and all child assets for the specified asset. Each related asset includes a 'relatedUrl' to fetch its own relationships.",
     )

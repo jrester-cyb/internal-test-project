@@ -13,11 +13,12 @@ import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
 import TagsDisplay from '../components/TagsDisplay'
 import { AssetAuditLogSection } from '../components/AssetAuditLogSection'
+import AssetEditDialog from '../components/AssetEditDialog'
 import { fetchRelatedAssets, type RelatedAssetsResponse } from '../api/assets'
 
 export default function AssetDetailPage() {
   const { asset, attributes } = useLoaderData() as { asset: Asset, attributes: AssetTypeAttribute[] }
-  const { workspaceId } = useParams<{ workspaceId: string }>()
+  const { workspaceId, assetTypeId } = useParams<{ workspaceId: string; assetTypeId: string }>()
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null)
   const [containerWidth, setContainerWidth] = useState(1000)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -29,6 +30,8 @@ export default function AssetDetailPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [excludedScopes, setExcludedScopes] = useState<string[]>([])
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [currentAsset, setCurrentAsset] = useState<Asset>(asset)
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   // Get all unique tags from attributes
@@ -69,8 +72,16 @@ export default function AssetDetailPage() {
   }, [])
 
   const handleEdit = () => {
-    // TODO: Implement edit functionality
-    console.debug('Edit asset:', asset.id)
+    setEditDialogOpen(true)
+  }
+
+  const handleEditDialogClose = () => {
+    setEditDialogOpen(false)
+  }
+
+  const handleEditSuccess = (updatedAsset: Asset) => {
+    setEditDialogOpen(false)
+    setCurrentAsset(updatedAsset)
   }
 
   const handleViewOnMap = () => {
@@ -164,12 +175,12 @@ export default function AssetDetailPage() {
                   sx={{ color: 'primary.contrastText' }}
                   iconColor="primary.contrastText"
                 >
-                  {asset.name}
+                  {currentAsset.name}
                 </CopyableText>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
                   <Chip
                     icon={<CategoryIcon />}
-                    label={asset.assetTypeName || 'Unknown Type'}
+                    label={currentAsset.assetTypeName || 'Unknown Type'}
                     size="small"
                     sx={{
                       bgcolor: 'primary.dark',
@@ -177,10 +188,10 @@ export default function AssetDetailPage() {
                       '& .MuiChip-icon': { color: 'primary.contrastText' }
                     }}
                   />
-                  {asset.location && (
+                  {currentAsset.location && (
                     <Chip
                       icon={<PlaceIcon />}
-                      label={`${asset.location.coordinates[1].toFixed(6)}, ${asset.location.coordinates[0].toFixed(6)}`}
+                      label={`${currentAsset.location.coordinates[1].toFixed(6)}, ${currentAsset.location.coordinates[0].toFixed(6)}`}
                       size="small"
                       sx={{
                         bgcolor: 'primary.dark',
@@ -290,7 +301,7 @@ export default function AssetDetailPage() {
 
                       const AttributeRow = ({ index, style }: { index: number, style: React.CSSProperties }) => {
                         const attr = displayAttributes[index]
-                        const value = asset.attributes?.[attr.apiKey]
+                        const value = currentAsset.attributes?.[attr.apiKey]
                         return (
                           <Box
                             style={style}
@@ -344,7 +355,7 @@ export default function AssetDetailPage() {
                       // Calculate row height based on content and attribute type
                       const getRowHeight = (index: number) => {
                         const attr = displayAttributes[index]
-                        const value = asset.attributes?.[attr.apiKey]
+                        const value = currentAsset.attributes?.[attr.apiKey]
                         const hasTags = attr.tags && attr.tags.length > 0
                         const hasDescription = !!attr.description
                         const padding = 18
@@ -408,10 +419,10 @@ export default function AssetDetailPage() {
                     relatedAssets={relatedAssets!}
                     workspaceId={workspaceId!}
                     currentAsset={{
-                      id: asset.id,
-                      name: asset.name,
-                      assetType: asset.assetType,
-                      assetTypeName: asset.assetTypeName || '',
+                      id: currentAsset.id,
+                      name: currentAsset.name,
+                      assetType: currentAsset.assetType,
+                      assetTypeName: currentAsset.assetTypeName || '',
                       relatedUrl: '',
                       hasChildren: false,
                     }}
@@ -474,7 +485,7 @@ export default function AssetDetailPage() {
                 <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>ID</TableCell>
                 <TableCell sx={{ border: 0, pr: 0 }}>
                   <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                    {asset.id}
+                    {currentAsset.id}
                   </CopyableText>
                 </TableCell>
               </TableRow>
@@ -482,26 +493,26 @@ export default function AssetDetailPage() {
                 <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Asset Type ID</TableCell>
                 <TableCell sx={{ border: 0, pr: 0 }}>
                   <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                    {asset.assetType}
+                    {currentAsset.assetType}
                   </CopyableText>
                 </TableCell>
               </TableRow>
-              {asset.h3Index && (
+              {currentAsset.h3Index && (
                 <TableRow>
                   <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>H3 Index</TableCell>
                   <TableCell sx={{ border: 0, pr: 0 }}>
                     <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                      {asset.h3Index}
+                      {currentAsset.h3Index}
                     </CopyableText>
                   </TableCell>
                 </TableRow>
               )}
-              {asset.parent && (
+              {currentAsset.parent && (
                 <TableRow>
                   <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>Parent ID</TableCell>
                   <TableCell sx={{ border: 0, pr: 0 }}>
                     <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                      {asset.parent}
+                      {currentAsset.parent}
                     </CopyableText>
                   </TableCell>
                 </TableRow>
@@ -526,7 +537,7 @@ export default function AssetDetailPage() {
                 <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 0, pl: 0 }}>API URL</TableCell>
                 <TableCell sx={{ border: 0, pr: 0 }}>
                   <CopyableText variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                    {asset.apiUrl || `${window.location.origin}/api/assets/${asset.id}/`}
+                    {currentAsset.apiUrl || `${window.location.origin}/api/assets/${currentAsset.id}/`}
                   </CopyableText>
                 </TableCell>
               </TableRow>
@@ -534,6 +545,16 @@ export default function AssetDetailPage() {
           </Table>
         </Box>
       </Drawer>
+
+      <AssetEditDialog
+        open={editDialogOpen}
+        asset={currentAsset}
+        attributes={attributes}
+        workspaceId={workspaceId || ''}
+        assetTypeId={assetTypeId || ''}
+        onClose={handleEditDialogClose}
+        onSuccess={handleEditSuccess}
+      />
     </Box>
   )
 }

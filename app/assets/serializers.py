@@ -744,6 +744,7 @@ class AssetSerializer(serializers.ModelSerializer):
         - Values are annotated directly on prefetched attributes (no separate query)
         - Single-pass dict comprehension for fast iteration
         - Supports ?exclude_fields=attributes to exclude attributes from response
+        - Returns workspace-specific override values when in workspace context
         """
         # Check if attributes were excluded via ?exclude_fields= parameter
         request = self.context.get("request")
@@ -758,14 +759,56 @@ class AssetSerializer(serializers.ModelSerializer):
             return {}
 
         # Get all attribute values (these are prefetched with typed_value annotated)
-        attr_values = attributes.all()
+        attr_values = list(attributes.all())
         if not attr_values:
             return {}
 
         # Use cached api_key map from context
         api_key_map = self.context.get("_api_key_map", {})
 
-        # Values are now annotated directly on each attribute - no value_map needed!
+        # Check for workspace context - if present, look up overrides
+        workspace = self.context.get("workspace")
+        if workspace:
+            from .models import WorkspaceAttributeValueOverride
+
+            # Get all override values for this asset in this workspace
+            overrides = WorkspaceAttributeValueOverride.objects.filter(
+                override_value__asset=obj,
+                workspace=workspace,
+            ).select_related("override_value").values(
+                "asset_type_attribute_id",
+                "override_value_id",
+            )
+
+            # Build set of override value IDs and map of attr -> override_value_id
+            override_value_ids = {o["override_value_id"] for o in overrides}
+            attr_to_override = {o["asset_type_attribute_id"]: o["override_value_id"] for o in overrides}
+
+            # Build result: use override values where they exist, skip base values that have overrides
+            result = {}
+            for fv in attr_values:
+                attr_id = fv.asset_type_attribute_id
+                api_key = api_key_map.get(str(attr_id))
+                if not api_key:
+                    continue
+
+                typed_value = getattr(fv, "typed_value", None)
+                if typed_value is None:
+                    continue
+
+                # If this value IS an override value, include it
+                if fv.id in override_value_ids:
+                    result[api_key] = typed_value
+                # If this attr has an override, skip the base value (we'll get the override)
+                elif attr_id in attr_to_override:
+                    continue
+                # No override exists, use the base value
+                else:
+                    result[api_key] = typed_value
+
+            return result
+
+        # No workspace context - return all values as-is
         return {
             api_key_map[str(fv.asset_type_attribute_id)]: fv.typed_value
             for fv in attr_values

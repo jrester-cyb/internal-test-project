@@ -1,7 +1,7 @@
 from django.db import models
 from polymorphic.models import PolymorphicModel
 import uuid
-from core.models.soft_delete import PolymorphicSoftDeleteMixin
+from core.models.soft_delete import PolymorphicSoftDeleteMixin, SoftDeleteMixin
 
 
 class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
@@ -19,13 +19,9 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
 
     class Meta(PolymorphicSoftDeleteMixin.Meta):
         ordering = ["asset", "created_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["asset", "asset_type_attribute"],
-                name="unique_asset_asset_type_attribute",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-        ]
+        # Note: No unique constraint on (asset, asset_type_attribute) because
+        # workspace overrides create additional values for the same asset+attribute.
+        # Uniqueness is enforced at the application level via WorkspaceAttributeValueOverride.
         indexes = [
             models.Index(
                 fields=["asset_type_attribute", "asset"],
@@ -36,6 +32,72 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
 
     def __str__(self):
         return f"{self.asset.name}.{self.asset_type_attribute}"
+
+
+class WorkspaceAttributeValueOverride(SoftDeleteMixin, models.Model):
+    """
+    Join table linking a workspace-specific attribute value override to its base value.
+
+    This allows assets to have different attribute values per workspace while
+    maintaining a clear relationship to the original/global value.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    asset_type_attribute = models.ForeignKey(
+        "assets.BaseAssetTypeAttribute",
+        on_delete=models.CASCADE,
+        related_name="value_overrides",
+        help_text="The attribute definition this override applies to",
+    )
+    base_value = models.ForeignKey(
+        BaseAttributeValue,
+        on_delete=models.CASCADE,
+        related_name="overrides",
+        null=True,
+        blank=True,
+        help_text="The original/global value being overridden",
+    )
+    override_value = models.ForeignKey(
+        BaseAttributeValue,
+        on_delete=models.CASCADE,
+        related_name="overrides_base",
+        help_text="The workspace-specific override value",
+    )
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        on_delete=models.CASCADE,
+        related_name="attribute_value_overrides",
+        help_text="The workspace this override applies to",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(SoftDeleteMixin.Meta):
+        verbose_name = "Workspace Attribute Value Override"
+        verbose_name_plural = "Workspace Attribute Value Overrides"
+        constraints = [
+            # One override per base_value per workspace
+            models.UniqueConstraint(
+                fields=["base_value", "workspace"],
+                name="unique_base_value_workspace_override",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            # One override per asset_type_attribute per workspace per asset (via override_value)
+            models.UniqueConstraint(
+                fields=["override_value"],
+                name="unique_override_value",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["workspace", "asset_type_attribute"]),
+            models.Index(fields=["base_value"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.base_value} -> {self.override_value} (Workspace: {self.workspace})"
+        )
 
 
 class TextAttributeValue(BaseAttributeValue):

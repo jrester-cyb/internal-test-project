@@ -525,3 +525,27 @@ export async function moveFileNodes(workspaceId: string, fileIds: string[], dest
   if (!response.ok) throw new Error('Failed to move files')
   return response.json()
 }
+
+export async function updateAssetAttributeValue(
+  workspaceId: string,
+  assetTypeId: string,
+  assetId: string,
+  attributeId: string,
+  value: any
+) {
+  const response = await fetch(
+    workspaceUrl(workspaceId, `asset-types/${assetTypeId}/assets/${assetId}/update-attribute/`),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ attribute_id: attributeId, value })
+    }
+  )
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update attribute value')
+  }
+  return response.json()
+}
