@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { MapContainer, TileLayer, Marker, Polygon, Polyline, ZoomControl } from 'react-leaflet'
-import { Box, CircularProgress, Typography, IconButton, Button } from '@mui/material'
-import { Clear as ClearIcon, FilterList as FilterListIcon } from '@mui/icons-material'
+import { Box, CircularProgress, Typography, IconButton } from '@mui/material'
+import { Clear as ClearIcon } from '@mui/icons-material'
+import { useTheme } from '../contexts/ThemeContext'
 import AssetDetails from './AssetDetails'
 import ClusterMarkers from './ClusterMarkers'
 import AssetList from './AssetList'
 import FilterBuilder from './FilterBuilder'
 import type { AttributeFilter } from './FilterBuilder'
 import type { Asset, Cluster } from '../types'
+import './MapView.css'
 
 interface MapViewProps {
   workspaceId: string
@@ -62,12 +64,15 @@ export default function MapView({
   setClusterAssets,
   MapEvents
 }: MapViewProps) {
+  const { isDarkMode } = useTheme()
   const [filterOpen, setFilterOpen] = useState(false)
-  const totalFilters = selectedAssetTypes.length + attributeFilters.length + (nameFilter ? 1 : 0)
 
   return (
     <>
-      <Box sx={{ flexGrow: 1, position: 'relative', height: '100%', width: '100%' }}>
+      <Box
+        sx={{ flexGrow: 1, position: 'relative', height: '100%', width: '100%' }}
+        className={isDarkMode ? 'dark-mode' : ''}
+      >
         <FilterBuilder
           workspaceId={workspaceId}
           selectedAssetTypes={selectedAssetTypes}
@@ -88,8 +93,14 @@ export default function MapView({
           zoomControl={false}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={isDarkMode
+              ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }
+            url={isDarkMode
+              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            }
           />
           <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} />
 
