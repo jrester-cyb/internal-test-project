@@ -101,6 +101,33 @@ export default function ActionButtons({
       }
     }
 
+    // Determine submenu position based on available space
+    const getSubmenuPosition = () => {
+      if (!submenuAnchor) return { anchorOrigin: { vertical: 'top' as const, horizontal: 'right' as const }, transformOrigin: { vertical: 'top' as const, horizontal: 'left' as const } }
+
+      const rect = submenuAnchor.anchorEl.getBoundingClientRect()
+      const screenWidth = window.innerWidth
+      const estimatedSubmenuWidth = 250 // Approximate submenu width
+      const spaceOnRight = screenWidth - rect.right
+      const spaceOnLeft = rect.left
+
+      // Open to the left if not enough space on the right
+      if (spaceOnRight < estimatedSubmenuWidth && spaceOnLeft > spaceOnRight) {
+        return {
+          anchorOrigin: { vertical: 'top' as const, horizontal: 'left' as const },
+          transformOrigin: { vertical: 'top' as const, horizontal: 'right' as const }
+        }
+      }
+
+      // Default: open to the right
+      return {
+        anchorOrigin: { vertical: 'top' as const, horizontal: 'right' as const },
+        transformOrigin: { vertical: 'top' as const, horizontal: 'left' as const }
+      }
+    }
+
+    const submenuPosition = getSubmenuPosition()
+
     return (
       <>
         {items.map((item, index) => (
@@ -130,8 +157,8 @@ export default function ActionButtons({
             anchorEl={submenuAnchor.anchorEl}
             open={true}
             onClose={() => setSubmenuAnchor(null)}
-            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            anchorOrigin={submenuPosition.anchorOrigin}
+            transformOrigin={submenuPosition.transformOrigin}
           >
             <SubMenuRenderer items={submenuAnchor.item.submenu} onClose={() => { setSubmenuAnchor(null); onClose(); }} />
           </Menu>
