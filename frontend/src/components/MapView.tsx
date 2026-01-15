@@ -38,6 +38,8 @@ interface MapViewProps {
   setSelectedAsset: (asset: Asset | null) => void
   setSelectedCluster: (cluster: Cluster | null) => void
   setClusterAssets: (assets: Asset[]) => void
+  onCenterChange?: (center: [number, number]) => void
+  onZoomChange?: (zoom: number) => void
   MapEvents: React.ComponentType<any>
 }
 
@@ -66,6 +68,8 @@ export default function MapView({
   setSelectedAsset,
   setSelectedCluster,
   setClusterAssets,
+  onCenterChange,
+  onZoomChange,
   MapEvents
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
@@ -123,7 +127,7 @@ export default function MapView({
               : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             }
           />
-          <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} />
+          <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} />
 
           <ClusterMarkers
             clusters={clusters}

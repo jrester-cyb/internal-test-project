@@ -6,9 +6,11 @@ interface MapEventsProps {
   filters?: any
   selectedAssetTypes: string[]
   attributeFilters: any[]
+  onCenterChange?: (center: [number, number]) => void
+  onZoomChange?: (zoom: number) => void
 }
 
-export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters }: MapEventsProps) {
+export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters, onCenterChange, onZoomChange }: MapEventsProps) {
   const map = useMap()
   const initialLoadDone = useRef(false)
 
@@ -30,6 +32,14 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
         lng: center.lng,
         zoom: currentZoom
       }))
+
+      // Call callbacks to update parent state
+      if (onCenterChange) {
+        onCenterChange([center.lat, center.lng])
+      }
+      if (onZoomChange) {
+        onZoomChange(currentZoom)
+      }
 
       onLoadData(bbox, currentZoom, filters)
     }
