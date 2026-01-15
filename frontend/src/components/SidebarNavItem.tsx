@@ -10,12 +10,13 @@ interface SidebarNavItemProps {
 }
 
 export default function SidebarNavItem({ to, icon, label }: SidebarNavItemProps) {
-  const { isOpen, isMobile } = useSidebar()
+  const { isOpen, isMobile, setIsOpen } = useSidebar()
   return (
     <ListItem disablePadding>
       <ListItemButton
         component={NavLink}
         to={to}
+        onClick={() => { if (isMobile) setIsOpen(false) }}
         sx={{
           color: 'inherit',
           minHeight: 48,
