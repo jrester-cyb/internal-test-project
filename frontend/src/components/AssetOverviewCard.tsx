@@ -1,5 +1,5 @@
-import { Box, Card, CardContent, Chip, Container, IconButton } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Close as CloseIcon, Public as PublicIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
+import { Box, Card, CardContent, Chip, Container } from '@mui/material'
+import { Place as PlaceIcon, Category as CategoryIcon, Public as PublicIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import ActionButtons from './ActionButtons'
 import CopyableText from './CopyableText'
@@ -19,7 +19,6 @@ interface AssetOverviewCardProps {
   onClone?: () => void
   onDownload?: () => void
   onSystemDetails?: () => void
-  onClose?: () => void
 }
 
 export default function AssetOverviewCard({
@@ -33,8 +32,7 @@ export default function AssetOverviewCard({
   onViewDetails,
   onClone,
   onDownload,
-  onSystemDetails,
-  onClose
+  onSystemDetails
 }: AssetOverviewCardProps) {
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -220,20 +218,6 @@ export default function AssetOverviewCard({
                   size="small"
                   iconOnly
                 />
-              )}
-              {onClose && (
-                <IconButton
-                  onClick={onClose}
-                  size="small"
-                  sx={{
-                    color: 'primary.contrastText',
-                    '&:hover': {
-                      bgcolor: 'rgba(255,255,255,0.1)'
-                    }
-                  }}
-                >
-                  <CloseIcon />
-                </IconButton>
               )}
             </Box>
           </Box>

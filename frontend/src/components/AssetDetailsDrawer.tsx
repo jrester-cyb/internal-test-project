@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
-import { Box, CircularProgress, Paper, Slide, Typography } from '@mui/material'
-import { DragHandle as DragHandleIcon } from '@mui/icons-material'
+import { Box, CircularProgress, Paper, Slide, Typography, IconButton } from '@mui/material'
+import { DragHandle as DragHandleIcon, Close as CloseIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '../api/assets'
 import AssetOverviewCard from './AssetOverviewCard'
@@ -62,10 +62,19 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   const [isResizing, setIsResizing] = useState(false)
   const [isOpen, setIsOpen] = useState(!!asset)
   const [isDraggable, setIsDraggable] = useState(true)
+  const [preventClick, setPreventClick] = useState(false)
   const resizeRef = useRef<HTMLDivElement>(null)
 
   // Card order for drag and drop (only in drawer mode)
-  const [cardOrder, setCardOrder] = useState(['attributes', 'tree', 'tasks', 'files'])
+  const [cardOrder, setCardOrder] = useState(() => {
+    const saved = localStorage.getItem('assetDetailsCardOrder')
+    return saved ? JSON.parse(saved) : ['attributes', 'tree', 'tasks', 'files']
+  })
+
+  // Save card order to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('assetDetailsCardOrder', JSON.stringify(cardOrder))
+  }, [cardOrder])
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -89,7 +98,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   }
 
   // Sortable card wrapper component
-  function SortableCard({ id, children }: { id: string; children: React.ReactNode }) {
+  function SortableCard({ id, children }: { id: string; children: (dragHandleProps: { attributes: any; listeners: any }) => React.ReactNode }) {
     const {
       attributes,
       listeners,
@@ -111,28 +120,9 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
         style={style}
         sx={{
           position: 'relative',
-          '&:hover .drag-handle': { opacity: 1 },
         }}
       >
-        {/* Drag handle */}
-        <Box
-          {...attributes}
-          {...listeners}
-          className="drag-handle"
-          sx={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            zIndex: 10,
-            opacity: 0,
-            transition: 'opacity 0.2s',
-            cursor: 'grab',
-            '&:active': { cursor: 'grabbing' },
-          }}
-        >
-          <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-        </Box>
-        {children}
+        {children({ attributes, listeners })}
       </Box>
     )
   }
@@ -212,7 +202,18 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
     setIsResizing(true)
   }
 
+  const handleResizeClick = () => {
+    // Don't close if this click was part of a double-click
+    if (preventClick) {
+      setPreventClick(false)
+      return
+    }
+    handleClose()
+  }
+
   const handleResizeDoubleClick = () => {
+    setPreventClick(true) // Prevent the upcoming click event
+
     if (!isDraggable) return
 
     const minWidth = 380
@@ -302,6 +303,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
       } : undefined}
     >
       <Paper
+        elevation={0}
         sx={{
           position: 'fixed',
           top: isDraggable ? 64 : 56, // Higher up on mobile (56px instead of 64px)
@@ -315,7 +317,6 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
           borderColor: 'divider',
           display: 'flex',
           flexDirection: 'row',
-          boxShadow: 3,
           transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
         }}
       >
@@ -324,20 +325,51 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
           <Box
             ref={resizeRef}
             onMouseDown={handleResizeStart}
-            onDoubleClick={handleResizeDoubleClick}
+            onClick={handleResizeClick}
             sx={{
-              width: '8px',
-              cursor: 'ew-resize',
-              backgroundColor: 'divider',
+              width: '12px',
+              cursor: 'pointer',
+              backgroundColor: 'background.paper',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: 'action.hover'
+                backgroundColor: 'action.hover',
+                '& .resize-dots': {
+                  opacity: 0
+                },
+                '& .close-arrow': {
+                  opacity: 1
+                }
               }
             }}
           >
-            <DragHandleIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(90deg)' }} />
+            <Box
+              className="resize-dots"
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.25,
+                opacity: 0.6,
+                transition: 'opacity 0.2s ease'
+              }}
+            >
+              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+            </Box>
+
+            <ChevronRightIcon
+              className="close-arrow"
+              sx={{
+                position: 'absolute',
+                opacity: 0,
+                transition: 'opacity 0.2s ease',
+                fontSize: 16,
+                color: 'text.secondary'
+              }}
+            />
           </Box>
         )}
 
@@ -362,7 +394,6 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
                   onClone={() => console.debug('Clone asset:', asset.id)}
                   onDownload={() => console.debug('Download asset:', asset.id)}
                   onSystemDetails={() => console.debug('System details:', asset.id)}
-                  onClose={handleClose}
                 />
               </Box>
 
@@ -397,58 +428,68 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
                         case 'attributes':
                           return (
                             <SortableCard key={cardId} id={cardId}>
-                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                                <AttributesCard
-                                  asset={displayAsset}
-                                  attributes={attributes}
-                                  showHidden={showHidden}
-                                  onShowHiddenChange={setShowHidden}
-                                  selectedTags={selectedTags}
-                                  onSelectedTagsChange={setSelectedTags}
-                                  selectedTypes={selectedTypes}
-                                  onSelectedTypesChange={setSelectedTypes}
-                                  excludedScopes={excludedScopes}
-                                  onExcludedScopesChange={setExcludedScopes}
-                                  isLoading={loadingGlobalValues}
-                                />
-                              </Box>
+                              {(dragHandleProps) => (
+                                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                  <AttributesCard
+                                    asset={displayAsset}
+                                    attributes={attributes}
+                                    showHidden={showHidden}
+                                    onShowHiddenChange={setShowHidden}
+                                    selectedTags={selectedTags}
+                                    onSelectedTagsChange={setSelectedTags}
+                                    selectedTypes={selectedTypes}
+                                    onSelectedTypesChange={setSelectedTypes}
+                                    excludedScopes={excludedScopes}
+                                    onExcludedScopesChange={setExcludedScopes}
+                                    isLoading={loadingGlobalValues}
+                                    dragHandleProps={dragHandleProps}
+                                  />
+                                </Box>
+                              )}
                             </SortableCard>
                           )
                         case 'tree':
                           return (
                             <SortableCard key={cardId} id={cardId}>
-                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                                <AssetTreeCard
-                                  assetId={displayAsset.id}
-                                  relatedAssets={relatedAssets}
-                                  loading={relatedLoading}
-                                  error={relatedError}
-                                  organizationId={activeOrganization?.id || ''}
-                                  workspaceId={workspaceId}
-                                  currentAsset={{
-                                    id: displayAsset.id,
-                                    name: displayAsset.name,
-                                    assetType: displayAsset.assetType,
-                                    assetTypeName: displayAsset.assetTypeName || (typeof displayAsset.assetType === 'string' ? displayAsset.assetType : 'Unknown')
-                                  }}
-                                />
-                              </Box>
+                              {(dragHandleProps) => (
+                                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                  <AssetTreeCard
+                                    assetId={displayAsset.id}
+                                    relatedAssets={relatedAssets}
+                                    loading={relatedLoading}
+                                    error={relatedError}
+                                    organizationId={activeOrganization?.id || ''}
+                                    workspaceId={workspaceId}
+                                    currentAsset={{
+                                      id: displayAsset.id,
+                                      name: displayAsset.name,
+                                      assetType: displayAsset.assetType,
+                                      assetTypeName: displayAsset.assetTypeName || (typeof displayAsset.assetType === 'string' ? displayAsset.assetType : 'Unknown')
+                                    }}
+                                    dragHandleProps={dragHandleProps}
+                                  />
+                                </Box>
+                              )}
                             </SortableCard>
                           )
                         case 'tasks':
                           return (
                             <SortableCard key={cardId} id={cardId}>
-                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                                <TasksCard asset={displayAsset} />
-                              </Box>
+                              {(dragHandleProps) => (
+                                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                  <TasksCard dragHandleProps={dragHandleProps} />
+                                </Box>
+                              )}
                             </SortableCard>
                           )
                         case 'files':
                           return (
                             <SortableCard key={cardId} id={cardId}>
-                              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                                <FilesCard asset={displayAsset} />
-                              </Box>
+                              {(dragHandleProps) => (
+                                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                  <FilesCard dragHandleProps={dragHandleProps} />
+                                </Box>
+                              )}
                             </SortableCard>
                           )
                         default:

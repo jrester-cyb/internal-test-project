@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, Box, Typography } from '@mui/material'
-import { Article as ArticleIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon } from '@mui/icons-material'
+import { Article as ArticleIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
 import type { Asset, AssetTypeAttribute } from '../types'
 import AttributeValueRenderer from './AttributeValueRenderer'
@@ -19,6 +19,10 @@ interface AttributesCardProps {
   excludedScopes: string[]
   onExcludedScopesChange: (scopes: string[]) => void
   isLoading?: boolean
+  dragHandleProps?: {
+    attributes: any
+    listeners: any
+  }
 }
 
 export default function AttributesCard({
@@ -32,7 +36,8 @@ export default function AttributesCard({
   onSelectedTypesChange,
   excludedScopes,
   onExcludedScopesChange,
-  isLoading = false
+  isLoading = false,
+  dragHandleProps
 }: AttributesCardProps) {
   // Get all unique tags from attributes
   const availableTags = useMemo(() => {
@@ -46,25 +51,42 @@ export default function AttributesCard({
   const hiddenCount = attributes.filter(attr => attr.isHidden).length
 
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Card sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <CardHeader
         title="Attributes"
         action={
-          <AttributeFilterPopover
-            showHidden={showHidden}
-            onShowHiddenChange={onShowHiddenChange}
-            selectedTags={selectedTags}
-            onSelectedTagsChange={onSelectedTagsChange}
-            selectedTypes={selectedTypes}
-            onSelectedTypesChange={onSelectedTypesChange}
-            excludedScopes={excludedScopes}
-            onExcludedScopesChange={onExcludedScopesChange}
-            showScopeFilter={true}
-            hiddenCount={hiddenCount}
-            availableTags={availableTags}
-            showTypeFilter={true}
-            isLoading={isLoading}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AttributeFilterPopover
+              showHidden={showHidden}
+              onShowHiddenChange={onShowHiddenChange}
+              selectedTags={selectedTags}
+              onSelectedTagsChange={onSelectedTagsChange}
+              selectedTypes={selectedTypes}
+              onSelectedTypesChange={onSelectedTypesChange}
+              excludedScopes={excludedScopes}
+              onExcludedScopesChange={onExcludedScopesChange}
+              showScopeFilter={true}
+              hiddenCount={hiddenCount}
+              availableTags={availableTags}
+              showTypeFilter={true}
+              isLoading={isLoading}
+            />
+            {dragHandleProps && (
+              <Box
+                {...dragHandleProps.attributes}
+                {...dragHandleProps.listeners}
+                sx={{
+                  cursor: 'grab',
+                  '&:active': { cursor: 'grabbing' },
+                  p: 0.5,
+                  borderRadius: 1,
+                  '&:hover': { bgcolor: 'action.hover' }
+                }}
+              >
+                <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+              </Box>
+            )}
+          </Box>
         }
       />
       <CardContent sx={{ flex: 1, overflow: 'hidden', p: 0 }}>
