@@ -5,7 +5,7 @@ import {
   CardContent,
   CardActionArea,
   Typography,
-  Grid2 as Grid,
+  Grid,
   Container,
 } from '@mui/material'
 import { Business as BusinessIcon } from '@mui/icons-material'

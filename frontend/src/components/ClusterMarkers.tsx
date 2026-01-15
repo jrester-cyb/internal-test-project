@@ -2,6 +2,8 @@ import { Marker } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Cluster } from '../types'
+import { useTheme } from '../contexts/ThemeContext'
+import { lightTheme, darkTheme } from '../theme'
 
 interface ClusterMarkersProps {
   clusters: Cluster[]
@@ -9,6 +11,12 @@ interface ClusterMarkersProps {
 }
 
 export default function ClusterMarkers({ clusters, onClusterClick }: ClusterMarkersProps) {
+  const { isDarkMode } = useTheme()
+  // Use primary for background, secondary.light for text/outline in light mode, secondary.dark in dark mode
+  const bgColor = lightTheme.palette.primary.main
+  const textColor = isDarkMode ? darkTheme.palette.secondary.dark : lightTheme.palette.secondary.light
+  const outlineColor = textColor
+
   return (
     <>
       {clusters.map(cluster => {
@@ -17,8 +25,11 @@ export default function ClusterMarkers({ clusters, onClusterClick }: ClusterMark
         const icon = divIcon({
           html: renderToStaticMarkup(
             <div
-              className="flex items-center justify-center bg-orange-500 text-white rounded-full border-2 border-white cursor-pointer font-bold shadow-lg"
+              className="flex items-center justify-center rounded-full cursor-pointer font-bold shadow-lg"
               style={{
+                backgroundColor: bgColor,
+                color: textColor,
+                border: `2px solid ${outlineColor}`,
                 width: `${size}px`,
                 height: `${size}px`,
                 marginLeft: `-${size / 2}px`,

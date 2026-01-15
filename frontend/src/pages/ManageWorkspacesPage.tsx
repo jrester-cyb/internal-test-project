@@ -5,7 +5,7 @@ import {
   CardContent,
   CardActionArea,
   Typography,
-  Grid2 as Grid,
+  Grid,
   Container,
 } from '@mui/material'
 import { Folder as FolderIcon } from '@mui/icons-material'
@@ -47,7 +47,7 @@ export default function ManageWorkspacesPage() {
   }, [organizationId])
 
   const handleWorkspaceClick = (workspaceId: string) => {
-    navigate(`/organizations/${organizationId}/workspaces/${workspaceId}/map`)
+    navigate(`/organizations/${organizationId}/workspaces/${workspaceId}/settings`)
   }
 
   if (loading) {
@@ -62,12 +62,17 @@ export default function ManageWorkspacesPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Manage Workspaces
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        View and manage workspaces for {activeOrganization?.name || 'this organization'}
-      </Typography>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="overline" color="text.secondary" sx={{ display: 'block' }}>
+          {activeOrganization?.name || 'Organization'}
+        </Typography>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Manage Workspaces
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          View and manage workspaces for this organization.
+        </Typography>
+      </Box>
 
       {workspaces.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
