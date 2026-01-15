@@ -202,9 +202,9 @@ function App() {
         {isNavigating && <LinearProgress color="secondary" />}
       </AppBar>
 
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `calc(100% - ${sidebarWidth}px)`, ml: `${sidebarWidth}px`, mt: 8, transition: 'margin 225ms cubic-bezier(0.4, 0, 0.6, 1), width 225ms cubic-bezier(0.4, 0, 0.6, 1)' }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: `calc(100% - ${sidebarWidth}px)`, ml: `${sidebarWidth}px`, transition: 'margin 225ms cubic-bezier(0.4, 0, 0.6, 1), width 225ms cubic-bezier(0.4, 0, 0.6, 1)' }}>
         {!hideBreadcrumbs && (
-          <Box sx={{ p: 2, pb: 0 }}>
+          <Box sx={{ p: 2, pb: 0, mt: 8 }}>
             <AppBreadcrumbs />
           </Box>
         )}
