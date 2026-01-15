@@ -14,6 +14,7 @@ import type { Asset, Cluster } from '../types'
 import './MapView.css'
 
 interface MapViewProps {
+  organizationId: string
   workspaceId: string
   center: [number, number]
   zoom: number
@@ -41,6 +42,7 @@ interface MapViewProps {
 }
 
 export default function MapView({
+  organizationId,
   workspaceId,
   center,
   zoom,
@@ -165,6 +167,7 @@ export default function MapView({
 
       <AssetDetailsDrawer
         asset={selectedAsset}
+        organizationId={organizationId}
         workspaceId={workspaceId}
         onClose={() => setSelectedAsset(null)}
       />

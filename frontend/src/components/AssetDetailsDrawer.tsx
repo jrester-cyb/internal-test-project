@@ -13,6 +13,7 @@ import type { RelatedAssetsResponse } from '../api/assets'
 
 interface AssetDetailsDrawerProps {
   asset: Asset | null | undefined
+  organizationId: string
   workspaceId: string
   onClose: () => void
   onEdit?: (asset: Asset) => void
@@ -20,7 +21,7 @@ interface AssetDetailsDrawerProps {
   attributes?: AssetTypeAttribute[]
 }
 
-export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit, onDelete, attributes: propAttributes }: AssetDetailsDrawerProps) {
+export default function AssetDetailsDrawer({ asset, organizationId, workspaceId, onClose, onEdit, onDelete, attributes: propAttributes }: AssetDetailsDrawerProps) {
   const { activeOrganization } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
   const [attributes, setAttributes] = useState<AssetTypeAttribute[]>(propAttributes || [])
@@ -187,103 +188,103 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
           boxShadow: 3
         }}
       >
-      {/* Resize Handle */}
-      {isDraggable && (
-        <Box
-          ref={resizeRef}
-          onMouseDown={handleResizeStart}
-          sx={{
-            width: '8px',
-            cursor: 'ew-resize',
-            backgroundColor: 'divider',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            '&:hover': {
-              backgroundColor: 'action.hover'
-            }
-          }}
-        >
-          <DragHandleIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(90deg)' }} />
-        </Box>
-      )}
-
-      {/* Main Content */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-            <CircularProgress />
+        {/* Resize Handle */}
+        {isDraggable && (
+          <Box
+            ref={resizeRef}
+            onMouseDown={handleResizeStart}
+            sx={{
+              width: '8px',
+              cursor: 'ew-resize',
+              backgroundColor: 'divider',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              '&:hover': {
+                backgroundColor: 'action.hover'
+              }
+            }}
+          >
+            <DragHandleIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(90deg)' }} />
           </Box>
-        ) : (
-          <>
-            {/* Pinned Overview Card */}
-            <Box sx={{ flexShrink: 0 }}>
-              <AssetOverviewCard
-                asset={displayAsset}
-                mode="drawer"
-                globalValuesOnly={globalValuesOnly}
-                onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
-                onEdit={onEdit}
-                onShare={() => console.debug('Share asset:', asset.id)}
-                onViewDetails={() => console.debug('View details page:', asset.id)}
-                onClone={() => console.debug('Clone asset:', asset.id)}
-                onDownload={() => console.debug('Download asset:', asset.id)}
-                onSystemDetails={() => console.debug('System details:', asset.id)}
-                onClose={handleClose}
-              />
-            </Box>
-
-            {/* Scrollable Cards Section */}
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {/* Attributes Card */}
-              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                <AttributesCard
-                  asset={displayAsset}
-                  attributes={attributes}
-                  showHidden={showHidden}
-                  onShowHiddenChange={setShowHidden}
-                  selectedTags={selectedTags}
-                  onSelectedTagsChange={setSelectedTags}
-                  selectedTypes={selectedTypes}
-                  onSelectedTypesChange={setSelectedTypes}
-                  excludedScopes={excludedScopes}
-                  onExcludedScopesChange={setExcludedScopes}
-                  isLoading={loadingGlobalValues}
-                />
-              </Box>
-
-              {/* Asset Tree Card */}
-              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                <AssetTreeCard
-                  assetId={displayAsset.id}
-                  relatedAssets={relatedAssets}
-                  loading={relatedLoading}
-                  error={relatedError}
-                  organizationId={activeOrganization?.id || ''}
-                  workspaceId={workspaceId}
-                  currentAsset={{
-                    id: displayAsset.id,
-                    name: displayAsset.name,
-                    assetType: displayAsset.assetType,
-                    assetTypeName: displayAsset.assetType?.name || 'Unknown'
-                  }}
-                />
-              </Box>
-
-              {/* Tasks Card */}
-              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                <TasksCard asset={displayAsset} />
-              </Box>
-
-              {/* Files Card */}
-              <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                <FilesCard asset={displayAsset} />
-              </Box>
-            </Box>
-          </>
         )}
-      </Box>
-    </Paper>
+
+        {/* Main Content */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              {/* Pinned Overview Card */}
+              <Box sx={{ flexShrink: 0 }}>
+                <AssetOverviewCard
+                  asset={displayAsset}
+                  mode="drawer"
+                  globalValuesOnly={globalValuesOnly}
+                  onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
+                  onEdit={onEdit}
+                  onShare={() => navigator.clipboard.writeText(window.location.href)}
+                  onViewDetails={() => window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${displayAsset.assetType}/assets/${displayAsset.id}`, '_blank')}
+                  onClone={() => console.debug('Clone asset:', asset.id)}
+                  onDownload={() => console.debug('Download asset:', asset.id)}
+                  onSystemDetails={() => console.debug('System details:', asset.id)}
+                  onClose={handleClose}
+                />
+              </Box>
+
+              {/* Scrollable Cards Section */}
+              <Box sx={{ flex: 1, overflow: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {/* Attributes Card */}
+                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                  <AttributesCard
+                    asset={displayAsset}
+                    attributes={attributes}
+                    showHidden={showHidden}
+                    onShowHiddenChange={setShowHidden}
+                    selectedTags={selectedTags}
+                    onSelectedTagsChange={setSelectedTags}
+                    selectedTypes={selectedTypes}
+                    onSelectedTypesChange={setSelectedTypes}
+                    excludedScopes={excludedScopes}
+                    onExcludedScopesChange={setExcludedScopes}
+                    isLoading={loadingGlobalValues}
+                  />
+                </Box>
+
+                {/* Asset Tree Card */}
+                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                  <AssetTreeCard
+                    assetId={displayAsset.id}
+                    relatedAssets={relatedAssets}
+                    loading={relatedLoading}
+                    error={relatedError}
+                    organizationId={activeOrganization?.id || ''}
+                    workspaceId={workspaceId}
+                    currentAsset={{
+                      id: displayAsset.id,
+                      name: displayAsset.name,
+                      assetType: displayAsset.assetType,
+                      assetTypeName: displayAsset.assetType?.name || 'Unknown'
+                    }}
+                  />
+                </Box>
+
+                {/* Tasks Card */}
+                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                  <TasksCard asset={displayAsset} />
+                </Box>
+
+                {/* Files Card */}
+                <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                  <FilesCard asset={displayAsset} />
+                </Box>
+              </Box>
+            </>
+          )}
+        </Box>
+      </Paper>
     </Slide>
   )
 }

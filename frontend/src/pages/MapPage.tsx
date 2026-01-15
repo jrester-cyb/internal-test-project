@@ -18,7 +18,7 @@ L.Icon.Default.mergeOptions({
 })
 
 function MapPage() {
-  const { workspaceId } = useParams()
+  const { organizationId, workspaceId } = useParams()
 
   // Load saved position from localStorage or use default
   const getSavedPosition = () => {
@@ -259,6 +259,7 @@ function MapPage() {
 
   return (
     <MapView
+      organizationId={organizationId || ''}
       workspaceId={workspaceId || ''}
       center={center}
       zoom={zoom}

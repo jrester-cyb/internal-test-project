@@ -1,5 +1,5 @@
 import { Box, Card, CardContent, Chip, Container, IconButton } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Close as CloseIcon, Public as PublicIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon } from '@mui/icons-material'
+import { Place as PlaceIcon, Category as CategoryIcon, Close as CloseIcon, Public as PublicIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import ActionButtons from './ActionButtons'
 import CopyableText from './CopyableText'
@@ -83,11 +83,11 @@ export default function AssetOverviewCard({
       })
     }
 
-    // View Details Page (drawer mode only)
+    // Open Details Page (drawer mode only)
     if (onViewDetails && mode === 'drawer') {
       actionsList.push({
-        label: 'View Details',
-        icon: <InfoIcon fontSize="small" />,
+        label: 'Open Details Page',
+        icon: <OpenInNewIcon fontSize="small" />,
         onClick: onViewDetails,
         color: 'inherit' as const,
         variant: 'outlined' as const,
