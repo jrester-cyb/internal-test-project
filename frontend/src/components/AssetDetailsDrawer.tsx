@@ -44,12 +44,10 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   const [isDraggable, setIsDraggable] = useState(true)
   const resizeRef = useRef<HTMLDivElement>(null)
 
-  // Open drawer when asset changes from null/undefined to a value
+  // Open/close drawer when asset changes
   useEffect(() => {
-    if (asset) {
-      setIsOpen(true)
-    }
-  }, [asset?.id])
+    setIsOpen(!!asset)
+  }, [asset])
 
   // Check screen size and update draggable state
   useEffect(() => {
