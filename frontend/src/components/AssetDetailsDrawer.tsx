@@ -52,7 +52,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   // Check screen size and update draggable state
   useEffect(() => {
     const checkScreenSize = () => {
-      const minScreenWidth = 700 // Minimum screen width to allow dragging (350 for drawer + 350 for content)
+      const minScreenWidth = 760 // Minimum screen width to allow dragging (380 for drawer + 380 for content)
       setIsDraggable(window.innerWidth >= minScreenWidth)
     }
 
@@ -119,12 +119,41 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
     setIsResizing(true)
   }
 
+  const handleResizeDoubleClick = () => {
+    if (!isDraggable) return
+
+    const minWidth = 380
+    const maxWidth = window.innerWidth - 200
+    const thirdWidth = Math.max(minWidth, Math.floor(window.innerWidth / 3))
+
+    // Define the three sizes: min, third, max
+    const sizes = [minWidth, thirdWidth, maxWidth]
+
+    // Find the current size or closest match
+    const currentSize = panelWidth
+    let currentIndex = 0
+
+    // Find which size we're closest to
+    for (let i = 0; i < sizes.length; i++) {
+      if (Math.abs(currentSize - sizes[i]) < Math.abs(currentSize - sizes[currentIndex])) {
+        currentIndex = i
+      }
+    }
+
+    // Move to next size, wrapping around
+    const nextIndex = (currentIndex + 1) % sizes.length
+    const newWidth = sizes[nextIndex]
+
+    setPanelWidth(newWidth)
+    localStorage.setItem('assetDetailsPanelWidth', newWidth.toString())
+  }
+
   // Resize functionality
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
       const newWidth = window.innerWidth - e.clientX
-      const clampedWidth = Math.max(350, Math.min(window.innerWidth - 200, newWidth))
+      const clampedWidth = Math.max(380, Math.min(window.innerWidth - 200, newWidth))
       setPanelWidth(clampedWidth)
       localStorage.setItem('assetDetailsPanelWidth', clampedWidth.toString())
     }
@@ -193,7 +222,8 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
           borderColor: 'divider',
           display: 'flex',
           flexDirection: 'row',
-          boxShadow: 3
+          boxShadow: 3,
+          transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
         }}
       >
         {/* Resize Handle */}
@@ -201,6 +231,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
           <Box
             ref={resizeRef}
             onMouseDown={handleResizeStart}
+            onDoubleClick={handleResizeDoubleClick}
             sx={{
               width: '8px',
               cursor: 'ew-resize',
