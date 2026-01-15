@@ -1,5 +1,5 @@
-import { Box, List, Drawer, IconButton } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, FolderCopy as LibraryIcon } from '@mui/icons-material'
+import { Box, List, Drawer, IconButton, Divider, Typography } from '@mui/material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, FolderCopy as LibraryIcon, Business as BusinessIcon, Folder as FolderIcon } from '@mui/icons-material'
 import { useParams } from 'react-router-dom'
 import SidebarNavItem from './SidebarNavItem'
 
@@ -12,8 +12,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { organizationId, workspaceId } = useParams()
   const drawerWidth = isOpen ? 240 : 64
 
-  // Build workspace-scoped paths
-  const basePath = organizationId && workspaceId ? `/organizations/${organizationId}/workspaces/${workspaceId}` : ''
+  // Build paths
+  const workspacePath = organizationId && workspaceId ? `/organizations/${organizationId}/workspaces/${workspaceId}` : ''
+  const orgPath = organizationId ? `/organizations/${organizationId}` : ''
 
   return (
     <>
@@ -45,30 +46,56 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </IconButton>
           </Box>
           <List>
-            {workspaceId && (
+            {organizationId && !workspaceId && (
               <>
+                {isOpen && (
+                  <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
+                    ORGANIZATION
+                  </Typography>
+                )}
                 <SidebarNavItem
-                  to={`${basePath}/map`}
+                  to={`${orgPath}/map`}
                   icon={<MapIcon />}
                   label="Map"
                   isOpen={isOpen}
                 />
                 <SidebarNavItem
-                  to={`${basePath}/asset-types`}
+                  to={`${orgPath}/asset-types`}
                   icon={<AssetsIcon />}
                   label="Assets"
                   isOpen={isOpen}
                 />
                 <SidebarNavItem
-                  to={`${basePath}/library`}
+                  to={`${orgPath}/library`}
                   icon={<LibraryIcon />}
                   label="Library"
                   isOpen={isOpen}
                 />
+              </>
+            )}
+            {workspaceId && (
+              <>
+                {isOpen && (
+                  <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
+                    WORKSPACE
+                  </Typography>
+                )}
                 <SidebarNavItem
-                  to={`${basePath}/settings`}
-                  icon={<Settings />}
-                  label="Settings"
+                  to={`${workspacePath}/map`}
+                  icon={<MapIcon />}
+                  label="Map"
+                  isOpen={isOpen}
+                />
+                <SidebarNavItem
+                  to={`${workspacePath}/asset-types`}
+                  icon={<AssetsIcon />}
+                  label="Assets"
+                  isOpen={isOpen}
+                />
+                <SidebarNavItem
+                  to={`${workspacePath}/library`}
+                  icon={<LibraryIcon />}
+                  label="Library"
                   isOpen={isOpen}
                 />
               </>

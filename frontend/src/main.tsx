@@ -7,7 +7,10 @@ import './index.css'
 import App from './App.tsx'
 
 // Lazy load route components
-const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage.tsx'))
+const OrganizationsPage = lazy(() => import('./pages/OrganizationsPage.tsx'))
+const OrganizationLandingPage = lazy(() => import('./pages/OrganizationLandingPage.tsx'))
+const OrganizationSettingsPage = lazy(() => import('./pages/OrganizationSettingsPage.tsx'))
+const ManageWorkspacesPage = lazy(() => import('./pages/ManageWorkspacesPage.tsx'))
 const WorkspaceLayout = lazy(() => import('./pages/WorkspaceLayout.tsx'))
 const WorkspaceSettingsPage = lazy(() => import('./pages/WorkspaceSettingsPage.tsx'))
 const AssetTypesPage = lazy(() => import('./pages/AssetTypesPage.tsx'))
@@ -44,15 +47,79 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <WorkspacesPage />,
-        loader: async () => {
-          const { fetchWorkspaces } = await import('./api/assets')
-          const response = await fetchWorkspaces()
-          return Array.isArray(response) ? response : response.results || []
-        },
+        element: <OrganizationsPage />,
         handle: {
-          crumb: "Workspaces"
+          crumb: "Organizations",
+          hideSidebar: true
         },
+      },
+      {
+        path: "organizations/:organizationId",
+        children: [
+          {
+            index: true,
+            element: <Navigate to="map" replace />,
+          },
+          {
+            path: "map",
+            element: <MapPage />,
+            handle: {
+              crumb: "Map",
+              hideBreadcrumbs: true
+            },
+          },
+          {
+            path: "library",
+            handle: {
+              crumb: "Library"
+            },
+            children: [
+              {
+                index: true,
+                element: <LibraryPage />,
+                loader: async ({ params }) => {
+                  const { fetchFileTree } = await import('./api/assets')
+                  // TODO: Update to fetch organization-level file tree
+                  return fetchFileTree(params.organizationId!)
+                },
+              },
+              {
+                path: ":directoryId",
+                element: <LibraryPage />,
+                loader: async ({ params }) => {
+                  const { fetchFileTree } = await import('./api/assets')
+                  // TODO: Update to fetch organization-level file tree
+                  return fetchFileTree(params.organizationId!, params.directoryId)
+                },
+              },
+            ],
+          },
+          {
+            path: "asset-types",
+            handle: {
+              crumb: "Asset Types"
+            },
+            children: [
+              {
+                index: true,
+                element: <AssetTypesPage />,
+                loader: async ({ params }) => {
+                  const { fetchAssetTypes } = await import('./api/assets')
+                  // TODO: Update to fetch organization-level asset types
+                  const data = await fetchAssetTypes(params.organizationId!)
+                  return Array.isArray(data) ? data : data.results || []
+                },
+              },
+            ],
+          },
+          {
+            path: "workspaces",
+            element: <ManageWorkspacesPage />,
+            handle: {
+              crumb: "Manage Workspaces"
+            },
+          },
+        ],
       },
       {
         id: "workspace-route",

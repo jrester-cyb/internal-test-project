@@ -24,8 +24,9 @@ function App() {
   const { organizations, activeOrganization, setActiveOrganization } = useOrganization()
   const isNavigating = Boolean(navigation.location);
 
-  // Check if any matched route has hideBreadcrumbs set to true
+  // Check if any matched route has hideBreadcrumbs or hideSidebar set to true
   const hideBreadcrumbs = matches.some((match) => (match.handle as any)?.hideBreadcrumbs)
+  const hideSidebar = matches.some((match) => (match.handle as any)?.hideSidebar)
 
   // Initialize sidebar state from localStorage or default to true
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -33,7 +34,7 @@ function App() {
     return stored !== null ? JSON.parse(stored) : true
   })
 
-  const sidebarWidth = sidebarOpen ? 240 : 64
+  const sidebarWidth = hideSidebar ? 0 : (sidebarOpen ? 240 : 64)
 
   // Save sidebar state to localStorage whenever it changes
   useEffect(() => {
@@ -76,6 +77,8 @@ function App() {
     const org = organizations.find(o => o.id === orgId)
     if (org) {
       setActiveOrganization(org)
+      // Navigate to organization global map view
+      navigate(`/organizations/${orgId}/map`)
     }
   }
 
@@ -101,7 +104,7 @@ function App() {
       color: 'inherit' as const,
       variant: 'text' as const,
       minWidth: Infinity, // Always in menu at the top
-      dividerAfter: true,
+      dividerAfter: windowWidth >= 600, // Show divider when workspace is visible as button
       submenu: organizations.map(org => ({
         id: org.id,
         label: org.name,
@@ -110,16 +113,31 @@ function App() {
       }))
     }] : []),
 
-    ...(workspaceId ? [{
-      label: currentWorkspace?.name || 'Switch Workspace',
+    ...(organizationId ? [{
+      label: workspaceId ? (currentWorkspace?.name || 'Switch Workspace') : 'Global',
       icon: <SwapHorizIcon fontSize="small" />,
       minWidth: 600, // Show when window >= 600px
-      submenu: filteredWorkspaces.map(ws => ({
-        id: ws.id,
-        label: ws.name,
-        selected: ws.id === workspaceId,
-        onClick: () => handleWorkspaceSelect(ws.id)
-      })),
+      dividerAfter: windowWidth < 600, // Show divider when collapsed into menu
+      submenu: [
+        {
+          id: 'global',
+          label: 'Global',
+          selected: !workspaceId,
+          onClick: () => navigate(`/organizations/${organizationId}/map`)
+        },
+        ...filteredWorkspaces.map(ws => ({
+          id: ws.id,
+          label: ws.name,
+          selected: ws.id === workspaceId,
+          onClick: () => handleWorkspaceSelect(ws.id)
+        })),
+        {
+          id: 'manage-workspaces',
+          label: 'Manage Workspaces',
+          dividerAfter: false,
+          onClick: () => navigate(`/organizations/${organizationId}/workspaces`)
+        }
+      ],
       customComponent: (
         <Button
           size="small"
@@ -128,7 +146,7 @@ function App() {
           startIcon={<SwapHorizIcon fontSize="small" />}
           sx={{ mr: 0.5, whiteSpace: 'nowrap', textTransform: 'none' }}
         >
-          {currentWorkspace?.name || 'Switch Workspace'}
+          {workspaceId ? (currentWorkspace?.name || 'Switch Workspace') : 'Global'}
         </Button>
       )
     }] : []),
@@ -170,7 +188,7 @@ function App() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
-      <Sidebar isOpen={sidebarOpen} onToggle={setSidebarOpen} />
+      {!hideSidebar && <Sidebar isOpen={sidebarOpen} onToggle={setSidebarOpen} />}
       <AppBar position="fixed" color="primary" elevation={0}>
         <Toolbar>
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
