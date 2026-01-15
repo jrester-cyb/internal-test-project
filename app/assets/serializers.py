@@ -772,17 +772,23 @@ class AssetSerializer(serializers.ModelSerializer):
             from .models import WorkspaceAttributeValueOverride
 
             # Get all override values for this asset in this workspace
-            overrides = WorkspaceAttributeValueOverride.objects.filter(
-                override_value__asset=obj,
-                workspace=workspace,
-            ).select_related("override_value").values(
-                "asset_type_attribute_id",
-                "override_value_id",
+            overrides = (
+                WorkspaceAttributeValueOverride.objects.filter(
+                    override_value__asset=obj,
+                    workspace=workspace,
+                )
+                .select_related("override_value")
+                .values(
+                    "asset_type_attribute_id",
+                    "override_value_id",
+                )
             )
 
             # Build set of override value IDs and map of attr -> override_value_id
             override_value_ids = {o["override_value_id"] for o in overrides}
-            attr_to_override = {o["asset_type_attribute_id"]: o["override_value_id"] for o in overrides}
+            attr_to_override = {
+                o["asset_type_attribute_id"]: o["override_value_id"] for o in overrides
+            }
 
             # Build result: use override values where they exist, skip base values that have overrides
             result = {}
