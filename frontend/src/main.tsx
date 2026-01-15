@@ -182,12 +182,12 @@ const router = createBrowserRouter([
               const { center, zoom } = getInitialPosition()
 
               // Load initial assets
-              const { fetchClusters, fetchTiles, getAsset } = await import('./api/assets')
+              const { fetchClusters, fetchTiles, getAsset, fetchAssetAttributeDefinitions } = await import('./api/assets')
 
               let assets: any[] = []
               let clusters: any[] = []
               let selectedAsset = null
-
+              let selectedAssetAttributes = null
               // Calculate bounds for initial load (rough estimate)
               const latDiff = 0.01 * Math.pow(2, 10 - zoom) // Rough bounds calculation
               const lngDiff = latDiff * Math.cos(center[0] * Math.PI / 180)
@@ -235,6 +235,15 @@ const router = createBrowserRouter([
                 if (assetId) {
                   try {
                     selectedAsset = await getAsset(workspaceId, assetId)
+                    // Load attributes for the selected asset
+                    if (selectedAsset?.assetType) {
+                      try {
+                        const attrsResponse = await fetchAssetAttributeDefinitions(workspaceId, selectedAsset.assetType)
+                        selectedAssetAttributes = attrsResponse.results || []
+                      } catch (error) {
+                        console.error('Error loading selected asset attributes:', error)
+                      }
+                    }
                   } catch (error) {
                     console.error('Error loading selected asset:', error)
                   }
@@ -248,9 +257,11 @@ const router = createBrowserRouter([
                 initialZoom: zoom,
                 initialAssets: assets,
                 initialClusters: clusters,
-                selectedAsset
+                selectedAsset,
+                selectedAssetAttributes
               }
             },
+            shouldRevalidate: () => false,
             handle: {
               crumb: "Map",
               hideBreadcrumbs: true

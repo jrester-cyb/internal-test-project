@@ -67,6 +67,15 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   useEffect(() => {
     async function loadFullAsset() {
       if (!workspaceId || !asset?.id) return
+
+      // If attributes are provided, assume the asset is already fully loaded
+      if (propAttributes) {
+        setFullAsset(asset)
+        setAttributes(propAttributes)
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       try {
         const data = await getAsset(workspaceId, asset.id)

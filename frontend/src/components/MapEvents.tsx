@@ -8,9 +8,10 @@ interface MapEventsProps {
   attributeFilters: any[]
   onCenterChange?: (center: [number, number]) => void
   onZoomChange?: (zoom: number) => void
+  hasInitialData?: boolean
 }
 
-export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters, onCenterChange, onZoomChange }: MapEventsProps) {
+export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters, onCenterChange, onZoomChange, hasInitialData = false }: MapEventsProps) {
   const map = useMap()
   const initialLoadDone = useRef(false)
 
@@ -47,7 +48,7 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
 
   // Load initial data once when map is ready
   useEffect(() => {
-    if (!initialLoadDone.current) {
+    if (!initialLoadDone.current && !hasInitialData) {
       const bounds = map.getBounds()
       const bbox = [
         bounds.getWest(),
@@ -58,8 +59,10 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
       const currentZoom = map.getZoom()
       onLoadData(bbox, currentZoom, filters)
       initialLoadDone.current = true
+    } else if (!initialLoadDone.current && hasInitialData) {
+      initialLoadDone.current = true
     }
-  }, [map, onLoadData, filters])
+  }, [map, onLoadData, filters, hasInitialData])
 
   // Reload data when selected asset types or attribute filters change
   useEffect(() => {

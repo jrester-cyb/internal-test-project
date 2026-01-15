@@ -29,6 +29,8 @@ interface MapViewProps {
   selectedAssetTypes: string[]
   attributeFilters: AttributeFilter[]
   nameFilter: string
+  selectedAssetAttributes: any[]
+  hasInitialData?: boolean
   setSelectedAssetTypes: (types: string[]) => void
   setAttributeFilters: (filters: AttributeFilter[]) => void
   setNameFilter: (name: string) => void
@@ -59,6 +61,8 @@ export default function MapView({
   selectedAssetTypes,
   attributeFilters,
   nameFilter,
+  selectedAssetAttributes,
+  hasInitialData = false,
   setSelectedAssetTypes,
   setAttributeFilters,
   setNameFilter,
@@ -127,7 +131,7 @@ export default function MapView({
               : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             }
           />
-          <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} />
+          <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
 
           <ClusterMarkers
             clusters={clusters}
@@ -173,6 +177,7 @@ export default function MapView({
         asset={selectedAsset}
         organizationId={organizationId}
         workspaceId={workspaceId}
+        attributes={selectedAssetAttributes}
         onClose={() => setSelectedAsset(null)}
       />
 

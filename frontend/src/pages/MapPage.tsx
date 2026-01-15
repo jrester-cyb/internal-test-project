@@ -26,6 +26,7 @@ function MapPage() {
     initialAssets: any[]
     initialClusters: any[]
     selectedAsset: any
+    selectedAssetAttributes: any[]
   } | null
 
   // Use loader data for initial state
@@ -292,6 +293,8 @@ function MapPage() {
       selectedAssetTypes={selectedAssetTypes}
       attributeFilters={attributeFilters}
       nameFilter={nameFilter}
+      selectedAssetAttributes={loaderData?.selectedAssetAttributes || []}
+      hasInitialData={true}
       setSelectedAssetTypes={setSelectedAssetTypes}
       setAttributeFilters={setAttributeFilters}
       setNameFilter={setNameFilter}
