@@ -768,10 +768,13 @@ class AssetSerializer(serializers.ModelSerializer):
 
         # Check for workspace context - if present, look up overrides
         workspace = self.context.get("workspace")
+        import logging
+
+        logger = logging.getLogger(__name__)
         if workspace:
             from .models import WorkspaceAttributeValueOverride
 
-            # Get all override values for this asset in this workspace
+            # Get all override values for this asset in THIS workspace
             overrides = (
                 WorkspaceAttributeValueOverride.objects.filter(
                     override_value__asset=obj,
@@ -784,34 +787,71 @@ class AssetSerializer(serializers.ModelSerializer):
                 )
             )
 
-            # Build set of override value IDs and map of attr -> override_value_id
-            override_value_ids = {o["override_value_id"] for o in overrides}
+            # Get ALL override value IDs for this asset (any workspace) to exclude other workspace overrides
+            all_override_value_ids = set(
+                WorkspaceAttributeValueOverride.objects.filter(
+                    override_value__asset=obj,
+                ).values_list("override_value_id", flat=True)
+            )
+
+            # Build set of override value IDs for THIS workspace
+            this_workspace_override_ids = {o["override_value_id"] for o in overrides}
             attr_to_override = {
                 o["asset_type_attribute_id"]: o["override_value_id"] for o in overrides
             }
 
             # Build result: use override values where they exist, skip base values that have overrides
             result = {}
+            debug_asset_id = "bae2d204-8e78-40a6-bfdc-4b216f8f7bf4"
+            is_debug = str(obj.id) == debug_asset_id
+            if is_debug:
+                logger.warning(
+                    f"[DEBUG] Filtering for {obj.id}: all_override_ids={len(all_override_value_ids)}, this_ws_ids={len(this_workspace_override_ids)}"
+                )
             for fv in attr_values:
                 attr_id = fv.asset_type_attribute_id
                 api_key = api_key_map.get(str(attr_id))
                 if not api_key:
+                    if is_debug:
+                        logger.warning(f"[DEBUG] {fv.id}: no api_key")
                     continue
 
                 typed_value = getattr(fv, "typed_value", None)
                 if typed_value is None:
+                    if is_debug:
+                        logger.warning(f"[DEBUG] {fv.id}: typed_value is None")
                     continue
 
-                # If this value IS an override value, include it
-                if fv.id in override_value_ids:
+                # If this value is an override from ANOTHER workspace, skip it
+                if (
+                    fv.id in all_override_value_ids
+                    and fv.id not in this_workspace_override_ids
+                ):
+                    if is_debug:
+                        logger.warning(f"[DEBUG] {fv.id}: EXCLUDED (other ws override)")
+                    continue
+                # If this value IS an override value for THIS workspace, include it
+                elif fv.id in this_workspace_override_ids:
+                    if is_debug:
+                        logger.warning(
+                            f"[DEBUG] {fv.id}: INCLUDED (this ws override) api_key={api_key}"
+                        )
                     result[api_key] = typed_value
-                # If this attr has an override, skip the base value (we'll get the override)
+                # If this attr has an override in this workspace, skip the base value
                 elif attr_id in attr_to_override:
+                    if is_debug:
+                        logger.warning(f"[DEBUG] {fv.id}: EXCLUDED (has override)")
                     continue
                 # No override exists, use the base value
                 else:
+                    if is_debug:
+                        logger.warning(
+                            f"[DEBUG] {fv.id}: INCLUDED (base) api_key={api_key}"
+                        )
                     result[api_key] = typed_value
 
+            if is_debug:
+                logger.warning(f"[DEBUG] Result keys: {list(result.keys())}")
             return result
 
         # No workspace context - return all values as-is
