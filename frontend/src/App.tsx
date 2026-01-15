@@ -235,6 +235,7 @@ function App() {
             position: 'fixed',
             bottom: 0,
             width: '100%',
+            zIndex: 1100,
             backgroundColor: 'primary.main',
             '& .MuiBottomNavigationAction-root': {
               color: 'white',

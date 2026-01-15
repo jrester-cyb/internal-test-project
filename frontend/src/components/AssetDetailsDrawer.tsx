@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
-import { Box, Typography, IconButton, CircularProgress, Paper } from '@mui/material'
-import { Close as CloseIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
+import { Box, CircularProgress, Paper, Slide } from '@mui/material'
+import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '../api/assets'
 import AssetOverviewCard from './AssetOverviewCard'
@@ -40,6 +40,7 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
   }) // Default width in pixels
   const [isResizing, setIsResizing] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [isDraggable, setIsDraggable] = useState(true)
   const resizeRef = useRef<HTMLDivElement>(null)
 
   // Open drawer when asset changes from null/undefined to a value
@@ -48,6 +49,21 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
       setIsOpen(true)
     }
   }, [asset?.id])
+
+  // Check screen size and update draggable state
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const minScreenWidth = 700 // Minimum screen width to allow dragging (350 for drawer + 350 for content)
+      setIsDraggable(window.innerWidth >= minScreenWidth)
+    }
+
+    checkScreenSize()
+    window.addEventListener('resize', checkScreenSize)
+
+    return () => {
+      window.removeEventListener('resize', checkScreenSize)
+    }
+  }, [])
 
   useEffect(() => {
     async function loadFullAsset() {
@@ -90,6 +106,7 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
 
 
   const handleResizeStart = (e: React.MouseEvent) => {
+    if (!isDraggable) return
     e.preventDefault()
     setIsResizing(true)
   }
@@ -99,7 +116,7 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
       const newWidth = window.innerWidth - e.clientX
-      const clampedWidth = Math.max(300, Math.min(window.innerWidth - 200, newWidth))
+      const clampedWidth = Math.max(350, Math.min(window.innerWidth - 200, newWidth))
       setPanelWidth(clampedWidth)
       localStorage.setItem('assetDetailsPanelWidth', clampedWidth.toString())
     }
@@ -126,7 +143,7 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
 
   const handleClose = () => {
     setIsOpen(false)
-    // Delay the actual close to allow animation to complete
+    // Delay calling onClose to allow slide-out animation to complete
     setTimeout(() => {
       onClose()
     }, 300)
@@ -140,41 +157,56 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
   const displayAsset = fullAsset || asset
 
   return (
-    <Paper
-      sx={{
-        position: 'fixed',
-        top: 64, // Below app bar
-        right: 0,
-        bottom: 0,
-        width: `${panelWidth}px`,
-        zIndex: 1000,
-        borderLeft: 1,
-        borderColor: 'divider',
-        display: 'flex',
-        flexDirection: 'row',
-        boxShadow: 3,
-        transform: isOpen ? 'translateX(0)' : `translateX(${panelWidth + 10}px)`,
-        transition: 'transform 0.3s ease-in-out'
-      }}
+    <Slide
+      direction={isDraggable ? "left" : "up"}
+      in={isOpen}
+      timeout={300}
+      container={isDraggable ? undefined : document.body}
+      style={!isDraggable ? {
+        position: 'absolute',
+        top: 56,
+        bottom: 56,
+        left: 0,
+        right: 0
+      } : undefined}
     >
-      {/* Resize Handle */}
-      <Box
-        ref={resizeRef}
-        onMouseDown={handleResizeStart}
+      <Paper
         sx={{
-          width: '8px',
-          cursor: 'ew-resize',
-          backgroundColor: 'divider',
+          position: 'fixed',
+          top: isDraggable ? 64 : 56, // Higher up on mobile (56px instead of 64px)
+          left: isDraggable ? 'auto' : 0,
+          right: 0,
+          bottom: isDraggable ? 0 : 56, // Leave 56px for bottom nav on mobile
+          width: isDraggable ? `${panelWidth}px` : '100%',
+          height: isDraggable ? 'auto' : 'calc(100vh - 112px)', // 56px top + 56px bottom
+          zIndex: 1000,
+          borderLeft: isDraggable ? 1 : 0,
+          borderColor: 'divider',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          '&:hover': {
-            backgroundColor: 'action.hover'
-          }
+          flexDirection: 'row',
+          boxShadow: 3
         }}
       >
-        <DragHandleIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(90deg)' }} />
-      </Box>
+      {/* Resize Handle */}
+      {isDraggable && (
+        <Box
+          ref={resizeRef}
+          onMouseDown={handleResizeStart}
+          sx={{
+            width: '8px',
+            cursor: 'ew-resize',
+            backgroundColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            '&:hover': {
+              backgroundColor: 'action.hover'
+            }
+          }}
+        >
+          <DragHandleIcon sx={{ fontSize: 16, color: 'text.secondary', transform: 'rotate(90deg)' }} />
+        </Box>
+      )}
 
       {/* Main Content */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -252,5 +284,6 @@ export default function AssetDetailsDrawer({ asset, workspaceId, onClose, onEdit
         )}
       </Box>
     </Paper>
+    </Slide>
   )
 }
