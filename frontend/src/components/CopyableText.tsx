@@ -17,7 +17,7 @@ export default function CopyableText({
   return (
     <Box
       sx={{
-        display: 'inline-flex',
+        display: 'flex',
         alignItems: 'center',
         gap: 0.5,
         minWidth: 0,
@@ -28,9 +28,11 @@ export default function CopyableText({
     >
       <Typography
         sx={{
+          flex: 1,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          minWidth: 0,
           ...sx
         }}
         {...typographyProps}
