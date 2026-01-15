@@ -160,20 +160,20 @@ function App() {
       minWidth: 500 // Show when window >= 500px
     },
     {
+      label: isDarkMode ? 'Toggle Light Mode' : 'Toggle Dark Mode',
+      icon: isDarkMode ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />,
+      onClick: toggleTheme,
+      color: 'inherit' as const,
+      variant: 'text' as const,
+      minWidth: 0 // Always visible as icon button
+    },
+    {
       label: 'Profile',
       icon: <PersonIcon fontSize="small" />,
       onClick: handleProfile,
       color: 'inherit' as const,
       variant: 'text' as const,
       minWidth: Infinity
-    },
-    {
-      label: isDarkMode ? 'Toggle Light Mode' : 'Toggle Dark Mode',
-      icon: isDarkMode ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />,
-      onClick: toggleTheme,
-      color: 'inherit' as const,
-      variant: 'text' as const,
-      minWidth: Infinity // Always in menu
     },
     {
       label: 'Logout',
