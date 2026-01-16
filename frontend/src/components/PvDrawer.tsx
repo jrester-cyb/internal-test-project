@@ -7,16 +7,15 @@ interface PvDrawerProps {
   isOpen: boolean
   onClose: () => void
   children: React.ReactNode
+  /** When true, skip the initial slide animation (for pre-selected assets on page load) */
+  initiallyOpen?: boolean
 }
 
-export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
+export default function PvDrawer({ isOpen, onClose, children, initiallyOpen = false }: PvDrawerProps) {
   const { isMobile } = useSidebar()
   const isDraggable = !isMobile
 
-  const [panelWidth, setPanelWidth] = useState(() => {
-    const saved = localStorage.getItem('assetDetailsPanelWidth')
-    return saved ? parseInt(saved, 10) : 380
-  }) // Default width in pixels
+  const [panelWidth, setPanelWidth] = useState(380) // Default width in pixels
   const [isResizing, setIsResizing] = useState(false)
   const [preventClick, setPreventClick] = useState(false)
   const [isSliding, setIsSliding] = useState(false)
@@ -101,7 +100,7 @@ export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
     <Slide
       direction={isDraggable ? "left" : "up"}
       in={isOpen}
-      appear={false}
+      appear={!initiallyOpen}
       timeout={300}
       style={slideStyle}
     >

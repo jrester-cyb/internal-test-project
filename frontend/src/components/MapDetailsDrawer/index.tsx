@@ -32,12 +32,14 @@ interface CommonProps {
   onClose: () => void
   organizationId: string
   workspaceId: string
+  /** When true, skip the initial slide animation (for pre-selected assets/clusters on page load) */
+  initiallyOpen?: boolean
 }
 
 export type MapDetailsDrawerProps = CommonProps & (ClusterDetailsProps | AssetDetailsProps)
 
 export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
-  const { isOpen, onClose, organizationId, workspaceId } = props
+  const { isOpen, onClose, organizationId, workspaceId, initiallyOpen } = props
 
   if (props.type === 'cluster') {
     return (
@@ -54,6 +56,7 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
         onAssetClick={props.onAssetClick}
         onZoomToAsset={props.onZoomToAsset}
         onLoadRange={props.onLoadRange}
+        initiallyOpen={initiallyOpen}
       />
     )
   }
@@ -68,6 +71,7 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
       attributes={props.attributes}
       onEdit={props.onEdit}
       onDelete={props.onDelete}
+      initiallyOpen={initiallyOpen}
     />
   )
 }

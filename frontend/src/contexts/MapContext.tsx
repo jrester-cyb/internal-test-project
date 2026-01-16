@@ -100,6 +100,9 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       })
   }, [workspaceId])
 
+  // Track if drawer was initially open from URL (to skip animation)
+  const wasInitiallyOpen = Boolean(loaderData?.selectedAsset || loaderData?.selectedCluster)
+
   // Initialize drawer state from loader data
   const getInitialDrawerState = (): DrawerState => {
     if (loaderData?.selectedAsset) {
@@ -354,7 +357,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       isOpen: drawerState.isOpen,
       onClose: closeDrawer,
       organizationId,
-      workspaceId
+      workspaceId,
+      initiallyOpen: wasInitiallyOpen
     }
 
     if (content.type === 'asset') {

@@ -22,6 +22,8 @@ export interface ClusterContentProps {
   onZoomToAsset?: (asset: Asset) => void
   /** Called when items at specific indices need to be loaded */
   onLoadRange?: (startIndex: number, endIndex: number) => void
+  /** When true, skip the initial slide animation (for pre-selected clusters on page load) */
+  initiallyOpen?: boolean
 }
 
 export default function ClusterContent({
@@ -36,7 +38,8 @@ export default function ClusterContent({
   totalCount,
   onAssetClick,
   onZoomToAsset,
-  onLoadRange
+  onLoadRange,
+  initiallyOpen
 }: ClusterContentProps) {
   // Memoize callbacks to prevent VirtualizedList from re-rendering
   const getItemKey = useCallback((asset: Asset) => asset.id, [])
@@ -78,7 +81,7 @@ export default function ClusterContent({
   }
 
   return (
-    <PvDrawer isOpen={isOpen} onClose={onClose}>
+    <PvDrawer isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <Container maxWidth={false} sx={{ py: 2 }}>

@@ -31,6 +31,8 @@ export interface AssetContentProps {
   attributes?: AssetTypeAttribute[]
   onEdit?: (asset: Asset) => void
   onDelete?: (asset: Asset) => void
+  /** When true, skip the initial slide animation (for pre-selected assets on page load) */
+  initiallyOpen?: boolean
 }
 
 export default function AssetContent({
@@ -41,7 +43,8 @@ export default function AssetContent({
   asset,
   attributes: propAttributes,
   onEdit,
-  onDelete
+  onDelete,
+  initiallyOpen
 }: AssetContentProps) {
   const { activeOrganization } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
@@ -178,7 +181,7 @@ export default function AssetContent({
   const displayAsset = fullAsset || asset
 
   return (
-    <PvDrawer isOpen={isOpen} onClose={onClose}>
+    <PvDrawer isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Pinned Overview Card - show immediately with available data */}
         <Box sx={{ flexShrink: 0 }}>
