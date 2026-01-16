@@ -1,6 +1,8 @@
-import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton, Button, TextField } from '@mui/material'
+import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import EditOffIcon from '@mui/icons-material/EditOff'
+import FullscreenIcon from '@mui/icons-material/Fullscreen'
+import CloseIcon from '@mui/icons-material/Close'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -155,12 +157,25 @@ export default function AssetListPage() {
   // JSON cell editor for inline editing of JSON attributes
   const JsonCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
     const [editValue, setEditValue] = useState(value)
+    const [isFullscreen, setIsFullscreen] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+    const fullscreenInputRef = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
       inputRef.current?.focus()
       inputRef.current?.select()
     }, [])
+
+    // Focus fullscreen input when dialog opens
+    useEffect(() => {
+      if (isFullscreen) {
+        // Small delay to ensure dialog is rendered
+        setTimeout(() => {
+          fullscreenInputRef.current?.focus()
+          fullscreenInputRef.current?.select()
+        }, 50)
+      }
+    }, [isFullscreen])
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -173,61 +188,153 @@ export default function AssetListPage() {
       e.stopPropagation()
     }
 
+    const handleFullscreenKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setIsFullscreen(false)
+      }
+      e.stopPropagation()
+    }
+
+    const handleFullscreenSave = () => {
+      setIsFullscreen(false)
+      onSave(editValue)
+    }
+
+    const handleFullscreenCancel = () => {
+      setIsFullscreen(false)
+      onCancel()
+    }
+
     return (
-      <Box
-        style={style}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          bgcolor: 'background.paper',
-          position: 'relative',
-          zIndex: 2,
-          borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
-          borderRight: selectionBorders?.right ? 'none' : '1px solid',
-          borderRightColor: 'divider',
-          borderBottomColor: 'divider',
-          '&::after': selectionBorders ? {
-            content: '""',
-            position: 'absolute',
-            top: -1,
-            right: -1,
-            bottom: -1,
-            left: -1,
-            borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
-            borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
-            borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
-            borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
-            borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
-            pointerEvents: 'none',
-            zIndex: 10,
-          } : undefined,
-          boxSizing: 'border-box',
-        }}
-      >
-        <TextField
-          inputRef={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={() => onSave(editValue)}
-          variant="standard"
-          fullWidth
-          multiline
-          maxRows={4}
-          size="small"
-          slotProps={{
-            input: {
-              disableUnderline: true,
-              sx: {
-                px: 1,
-                py: 0.5,
-                fontSize: '0.75rem',
-                fontFamily: 'monospace',
-              }
-            }
+      <>
+        <Box
+          style={style}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            bgcolor: 'background.paper',
+            position: 'relative',
+            zIndex: 2,
+            borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+            borderRight: selectionBorders?.right ? 'none' : '1px solid',
+            borderRightColor: 'divider',
+            borderBottomColor: 'divider',
+            '&::after': selectionBorders ? {
+              content: '""',
+              position: 'absolute',
+              top: -1,
+              right: -1,
+              bottom: -1,
+              left: -1,
+              borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+              borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+              borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+              borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+              borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+              pointerEvents: 'none',
+              zIndex: 10,
+            } : undefined,
+            boxSizing: 'border-box',
+            '& .fullscreen-btn': { opacity: 0 },
+            '&:hover .fullscreen-btn': { opacity: 1 },
           }}
-        />
-      </Box>
+        >
+          <TextField
+            inputRef={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => {
+              // Don't save on blur if opening fullscreen
+              if (!isFullscreen) {
+                onSave(editValue)
+              }
+            }}
+            variant="standard"
+            fullWidth
+            multiline
+            maxRows={4}
+            size="small"
+            slotProps={{
+              input: {
+                disableUnderline: true,
+                sx: {
+                  px: 1,
+                  py: 0.5,
+                  fontSize: '0.75rem',
+                  fontFamily: 'monospace',
+                }
+              }
+            }}
+          />
+          <Tooltip title="Edit JSON" arrow>
+            <IconButton
+              className="fullscreen-btn"
+              size="small"
+              onMouseDown={(e) => {
+                e.preventDefault() // Prevent blur
+                e.stopPropagation()
+                setIsFullscreen(true)
+              }}
+              sx={{
+                p: 0.25,
+                mr: 0.5,
+                flexShrink: 0,
+                color: 'text.secondary',
+                transition: 'opacity 0.15s',
+                '&:hover': { color: 'primary.main' },
+              }}
+            >
+              <FullscreenIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        <Dialog
+          open={isFullscreen}
+          onClose={handleFullscreenCancel}
+          maxWidth="md"
+          fullWidth
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+            <Typography variant="h6">Edit JSON</Typography>
+            <IconButton onClick={handleFullscreenCancel} size="small">
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ p: 2 }}>
+            <TextField
+              inputRef={fullscreenInputRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleFullscreenKeyDown}
+              variant="outlined"
+              fullWidth
+              multiline
+              minRows={10}
+              maxRows={20}
+              slotProps={{
+                input: {
+                  sx: {
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem',
+                  }
+                }
+              }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 2, pb: 2 }}>
+            <Button onClick={handleFullscreenCancel} color="inherit">
+              Cancel
+            </Button>
+            <Button onClick={handleFullscreenSave} variant="contained">
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
     )
   }, [])
 
