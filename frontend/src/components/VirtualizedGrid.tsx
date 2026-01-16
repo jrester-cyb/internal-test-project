@@ -964,14 +964,20 @@ export default function VirtualizedGrid<T>({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [copySelectionToClipboard, totalCount])
 
-  // Clear selection when clicking outside the grid
+  // Clear selection when clicking outside the grid on the current page
   const gridContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      // Only clear if there's a selection and click is outside the grid container
-      if (selectionRef.current && gridContainerRef.current) {
-        if (!gridContainerRef.current.contains(e.target as Node)) {
+      // Only clear if there's a selection
+      if (selectionRef.current) {
+        const target = e.target as Element
+        // Check if click is within the current page content (not navigation)
+        const isWithinPage = target.closest('[data-page-content]') !== null
+        const isWithinGrid = gridContainerRef.current?.contains(target) === true
+
+        // Only clear selection if clicking within the page content but outside the grid
+        if (isWithinPage && !isWithinGrid) {
           setSelection(null)
         }
       }
