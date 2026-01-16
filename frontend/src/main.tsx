@@ -255,24 +255,45 @@ const router = createBrowserRouter([
               // Load cluster assets if clusterId present in URL
               let selectedCluster = null
               let clusterAssets: any[] = []
+              let clusterTotalCount = 0
               const clusterId = searchParams.get('clusterId')
               if (clusterId) {
                 const { searchAssets } = await import('./api/assets')
-                selectedCluster = {
-                  h3Index: clusterId,
-                  count: 0,
-                  center: { lat: 0, lon: 0 }
-                }
                 try {
                   const results = await searchAssets(workspaceId, {
                     filters: [{
                       field: 'h3_index',
                       value: clusterId,
                       operator: 'startswith'
-                    }]
+                    }],
+                    limit: 20,
+                    offset: 0
                   })
                   clusterAssets = results.results || []
-                  selectedCluster.count = clusterAssets.length
+                  clusterTotalCount = results.count || clusterAssets.length
+
+                  // Calculate center from first asset's coordinates if available
+                  let clusterCenter = { lat: center[0], lon: center[1] }
+                  if (clusterAssets.length > 0) {
+                    const firstAsset = clusterAssets[0]
+                    if (firstAsset.geometry?.type === 'Point' && firstAsset.geometry.coordinates) {
+                      clusterCenter = {
+                        lat: firstAsset.geometry.coordinates[1],
+                        lon: firstAsset.geometry.coordinates[0]
+                      }
+                    } else if (firstAsset.location?.coordinates) {
+                      clusterCenter = {
+                        lat: firstAsset.location.coordinates[1],
+                        lon: firstAsset.location.coordinates[0]
+                      }
+                    }
+                  }
+
+                  selectedCluster = {
+                    h3Index: clusterId,
+                    count: clusterTotalCount,
+                    center: clusterCenter
+                  }
                 } catch (error) {
                   console.error('Error loading cluster assets:', error)
                 }
@@ -286,7 +307,8 @@ const router = createBrowserRouter([
                 selectedAsset,
                 selectedAssetAttributes,
                 selectedCluster,
-                clusterAssets
+                clusterAssets,
+                clusterTotalCount
               }
             },
             shouldRevalidate: () => false,

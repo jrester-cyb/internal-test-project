@@ -181,7 +181,7 @@ export default function AssetContent({
   const displayAsset = fullAsset || asset
 
   return (
-    <PvDrawer isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
+    <PvDrawer key="MapDrawer" isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Pinned Overview Card - show immediately with available data */}
         <Box sx={{ flexShrink: 0 }}>

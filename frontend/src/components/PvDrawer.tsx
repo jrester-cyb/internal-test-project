@@ -4,6 +4,7 @@ import { ChevronRight as ChevronRightIcon, KeyboardArrowDown as ChevronDownIcon 
 import { useSidebar } from '../contexts/SidebarContext'
 
 interface PvDrawerProps {
+  key?: string
   isOpen: boolean
   onClose: () => void
   children: React.ReactNode
@@ -11,11 +12,14 @@ interface PvDrawerProps {
   initiallyOpen?: boolean
 }
 
-export default function PvDrawer({ isOpen, onClose, children, initiallyOpen = false }: PvDrawerProps) {
+export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen = false }: PvDrawerProps) {
   const { isMobile } = useSidebar()
   const isDraggable = !isMobile
 
-  const [panelWidth, setPanelWidth] = useState(380) // Default width in pixels
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem(`${key}-pvdrawerWidth`)
+    return saved ? Number.parseInt(saved, 10) : 400
+  })
   const [isResizing, setIsResizing] = useState(false)
   const [preventClick, setPreventClick] = useState(false)
   const [isSliding, setIsSliding] = useState(false)
@@ -55,7 +59,7 @@ export default function PvDrawer({ isOpen, onClose, children, initiallyOpen = fa
         }
         const clampedWidth = Math.max(minWidth, Math.min(window.innerWidth - 200, newWidth))
         setPanelWidth(clampedWidth)
-        localStorage.setItem('assetDetailsPanelWidth', clampedWidth.toString())
+        localStorage.setItem(`${key}-pvdrawerWidth`, clampedWidth.toString())
       }
     }
 

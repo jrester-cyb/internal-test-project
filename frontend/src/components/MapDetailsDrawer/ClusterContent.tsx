@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 // useMemo used for loadingPlaceholder
-import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItemButton, Tooltip, Card, CardContent, Container, LinearProgress, Typography } from '@mui/material'
-import { LocationOn as LocationIcon, OpenInNew as OpenInNewIcon, Place as PlaceIcon, Layers as LayersIcon, MyLocation as ZoomIcon } from '@mui/icons-material'
+import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItemButton, Tooltip, Card, CardContent, Container, LinearProgress, Typography, Snackbar } from '@mui/material'
+import { LocationOn as LocationIcon, OpenInNew as OpenInNewIcon, Place as PlaceIcon, Layers as LayersIcon, MyLocation as ZoomIcon, Share as ShareIcon } from '@mui/icons-material'
 import type { Asset, Cluster } from '../../types'
 import PvDrawer from '../PvDrawer'
 import CopyableText from '../CopyableText'
@@ -80,8 +80,12 @@ export default function ClusterContent({
     return `${formatCount(totalCount)} Assets`
   }
 
+  const handleShare = useCallback(() => {
+    navigator.clipboard.writeText(window.location.href)
+  }, [])
+
   return (
-    <PvDrawer isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
+    <PvDrawer key="MapDrawer" isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <Container maxWidth={false} sx={{ py: 2 }}>
@@ -121,6 +125,14 @@ export default function ClusterContent({
                     />
                   </Box>
                 </Box>
+                <Tooltip title="Copy link to clipboard" arrow>
+                  <IconButton
+                    onClick={handleShare}
+                    sx={{ color: 'primary.contrastText' }}
+                  >
+                    <ShareIcon />
+                  </IconButton>
+                </Tooltip>
               </Box>
             </CardContent>
             {loading && (
@@ -186,7 +198,7 @@ export default function ClusterContent({
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip title="Open details page" arrow>
+                      <Tooltip title="Open asset details page" arrow>
                         <IconButton
                           edge="end"
                           size="small"
@@ -201,6 +213,8 @@ export default function ClusterContent({
                   <ListItemButton
                     onClick={() => onAssetClick?.(asset)}
                     sx={{ py: 1.5, pr: onZoomToAsset ? 10 : 6 }}
+                    disableRipple
+                    disableTouchRipple
                   >
                     <ListItemText
                       primary={

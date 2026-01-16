@@ -84,7 +84,7 @@ export default function AssetOverviewCard({
     // Open Details Page (drawer mode only)
     if (onViewDetails && mode === 'drawer') {
       actionsList.push({
-        label: 'Open Details Page',
+        label: 'Open asset details page',
         icon: <OpenInNewIcon fontSize="small" />,
         onClick: onViewDetails,
         color: 'inherit' as const,

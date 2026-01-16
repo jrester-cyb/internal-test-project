@@ -44,6 +44,7 @@ interface MapLoaderData {
   selectedAssetAttributes: AssetTypeAttribute[] | null
   selectedCluster: Cluster | null
   clusterAssets: Asset[] | null
+  clusterTotalCount: number
 }
 
 interface MapContextType {
@@ -129,7 +130,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
           cluster: loaderData.selectedCluster,
           assets: assetsMap,
           loading: false,
-          totalCount: loaderData.clusterAssets?.length || 0,
+          totalCount: loaderData.clusterTotalCount || loaderData.clusterAssets?.length || 0,
           loadingMore: false
         }
       }
