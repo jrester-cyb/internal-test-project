@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import type { ReactNode } from 'react'
 import { useSearchParams, useLoaderData } from 'react-router-dom'
 import type { Asset, AssetTypeAttribute, Cluster } from '../types'
-import { searchAssets, fetchAssetTypes } from '../api/assets'
+import { searchAssets, fetchAssetTypes, fetchPaginationUrl } from '../api/assets'
 import MapDetailsDrawer from '../components/MapDetailsDrawer'
 
 // Cache for asset type names: assetTypeId -> name
@@ -20,6 +20,10 @@ type ClusterDrawerData = {
   cluster: Cluster
   assets: Asset[]
   loading: boolean
+  // Pagination state
+  nextUrl: string | null
+  totalCount: number
+  loadingMore: boolean
 }
 
 type DrawerContent = AssetDrawerData | ClusterDrawerData
@@ -51,6 +55,8 @@ interface MapContextType {
   openAssetDrawer: (asset: Asset, attributes?: AssetTypeAttribute[]) => void
   openClusterDrawer: (cluster: Cluster) => void
   closeDrawer: () => void
+  zoomToAsset: (asset: Asset) => void
+  loadMoreClusterAssets: () => void
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined)
@@ -67,9 +73,10 @@ interface MapProviderProps {
   children: ReactNode
   organizationId: string
   workspaceId: string
+  onZoomToAsset?: (asset: Asset) => void
 }
 
-export function MapProvider({ children, organizationId, workspaceId }: MapProviderProps) {
+export function MapProvider({ children, organizationId, workspaceId, onZoomToAsset }: MapProviderProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const loaderData = useLoaderData() as MapLoaderData | null
 
@@ -113,7 +120,10 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
           type: 'cluster',
           cluster: loaderData.selectedCluster,
           assets: loaderData.clusterAssets || [],
-          loading: false
+          loading: false,
+          nextUrl: null,
+          totalCount: loaderData.clusterAssets?.length || 0,
+          loadingMore: false
         }
       }
     }
@@ -149,6 +159,13 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
   }, [])
 
   const openClusterDrawer = useCallback((cluster: Cluster) => {
+    // Skip if this cluster is already open
+    if (drawerState.isOpen &&
+        drawerState.content?.type === 'cluster' &&
+        drawerState.content.cluster.h3Index === cluster.h3Index) {
+      return
+    }
+
     // Set loading state and fetch assets
     setDrawerState({
       isOpen: true,
@@ -156,17 +173,22 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
         type: 'cluster',
         cluster,
         assets: [],
-        loading: true
+        loading: true,
+        nextUrl: null,
+        totalCount: 0,
+        loadingMore: false
       }
     })
 
-    // Fetch cluster assets
+    // Fetch cluster assets (first page)
     searchAssets(workspaceId, {
       filters: [{
         field: 'h3_index',
         value: cluster.h3Index,
         operator: 'startswith'
-      }]
+      }],
+      page: 1,
+      limit: 20
     })
       .then(results => {
         setDrawerState(prev => {
@@ -176,7 +198,10 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
               content: {
                 ...prev.content,
                 assets: results.results || [],
-                loading: false
+                loading: false,
+                nextUrl: results.next || null,
+                totalCount: results.count || 0,
+                loadingMore: false
               }
             }
           }
@@ -191,20 +216,91 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
               ...prev,
               content: {
                 ...prev.content,
-                loading: false
+                loading: false,
+                loadingMore: false
               }
             }
           }
           return prev
         })
       })
-  }, [workspaceId])
+  }, [workspaceId, drawerState.isOpen, drawerState.content])
 
   const closeDrawer = useCallback(() => {
     setDrawerState(prev => ({
       ...prev,
       isOpen: false
     }))
+  }, [])
+
+  const zoomToAsset = useCallback((asset: Asset) => {
+    onZoomToAsset?.(asset)
+  }, [onZoomToAsset])
+
+  // Ref to track drawer state for loadMoreClusterAssets without causing recreation
+  const drawerStateRef = useRef(drawerState)
+  drawerStateRef.current = drawerState
+
+  const loadMoreClusterAssets = useCallback(() => {
+    // Read from ref to avoid dependency on drawerState
+    const currentContent = drawerStateRef.current.content
+
+    // Only load more if we have a cluster drawer open with a next URL
+    if (currentContent?.type !== 'cluster') return
+    if (currentContent.loading || currentContent.loadingMore) return
+    if (!currentContent.nextUrl) return
+
+    const cluster = currentContent.cluster
+    const nextUrl = currentContent.nextUrl
+
+    // Set loading more state
+    setDrawerState(prev => {
+      if (prev.content?.type === 'cluster') {
+        return {
+          ...prev,
+          content: {
+            ...prev.content,
+            loadingMore: true
+          }
+        }
+      }
+      return prev
+    })
+
+    // Fetch next page using the next URL
+    fetchPaginationUrl(nextUrl)
+      .then(results => {
+        setDrawerState(prev => {
+          if (prev.content?.type === 'cluster' && prev.content.cluster.h3Index === cluster.h3Index) {
+            return {
+              ...prev,
+              content: {
+                ...prev.content,
+                assets: [...prev.content.assets, ...(results.results || [])],
+                nextUrl: results.next || null,
+                totalCount: results.count || prev.content.totalCount,
+                loadingMore: false
+              }
+            }
+          }
+          return prev
+        })
+      })
+      .catch(err => {
+        console.error('Failed to load more cluster assets:', err)
+        setDrawerState(prev => {
+          if (prev.content?.type === 'cluster') {
+            return {
+              ...prev,
+              content: {
+                ...prev.content,
+                loadingMore: false
+              }
+            }
+          }
+          return prev
+        })
+      })
   }, [])
 
   // Sync drawer state to URL
@@ -253,7 +349,12 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
       type: 'cluster' as const,
       cluster: content.cluster,
       assets: content.assets,
-      loading: content.loading
+      loading: content.loading,
+      loadingMore: content.loadingMore,
+      totalCount: content.totalCount,
+      onAssetClick: openAssetDrawer,
+      onZoomToAsset: zoomToAsset,
+      onLoadMore: content.nextUrl ? loadMoreClusterAssets : undefined
     }
   }
 
@@ -264,7 +365,9 @@ export function MapProvider({ children, organizationId, workspaceId }: MapProvid
       drawerState,
       openAssetDrawer,
       openClusterDrawer,
-      closeDrawer
+      closeDrawer,
+      zoomToAsset,
+      loadMoreClusterAssets
     }}>
       {children}
       {drawerProps && <MapDetailsDrawer {...drawerProps} />}

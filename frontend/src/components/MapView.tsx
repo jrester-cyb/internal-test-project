@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Polygon, Polyline, ZoomControl } from 'react-leaflet'
+import { useState, useMemo, useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Polygon, Polyline, ZoomControl, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { Box } from '@mui/material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
@@ -29,6 +29,22 @@ interface MapViewProps {
   onZoomChange?: (zoom: number) => void
   workspaceId: string
   MapEvents: React.ComponentType<any>
+  flyToLocation?: { coords: [number, number]; zoom: number } | null
+}
+
+// Component to handle flyTo animation
+function FlyToHandler({ flyToLocation }: { flyToLocation: { coords: [number, number]; zoom: number } | null }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (flyToLocation) {
+      map.flyTo(flyToLocation.coords, flyToLocation.zoom, {
+        duration: 1.5
+      })
+    }
+  }, [flyToLocation, map])
+
+  return null
 }
 
 export default function MapView({
@@ -48,7 +64,8 @@ export default function MapView({
   onCenterChange,
   onZoomChange,
   workspaceId,
-  MapEvents
+  MapEvents,
+  flyToLocation
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
   const theme = useMuiTheme()
@@ -106,6 +123,7 @@ export default function MapView({
             }
           />
           <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
+          <FlyToHandler flyToLocation={flyToLocation ?? null} />
 
           <ClusterMarkers
             clusters={clusters}

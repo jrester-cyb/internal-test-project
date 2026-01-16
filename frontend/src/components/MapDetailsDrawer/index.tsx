@@ -8,6 +8,11 @@ interface ClusterDetailsProps {
   cluster: Cluster
   assets: Asset[]
   loading: boolean
+  loadingMore?: boolean
+  totalCount?: number
+  onAssetClick?: (asset: Asset) => void
+  onZoomToAsset?: (asset: Asset) => void
+  onLoadMore?: () => void
 }
 
 // Asset details props
@@ -42,6 +47,11 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
         cluster={props.cluster}
         assets={props.assets}
         loading={props.loading}
+        loadingMore={props.loadingMore}
+        totalCount={props.totalCount}
+        onAssetClick={props.onAssetClick}
+        onZoomToAsset={props.onZoomToAsset}
+        onLoadMore={props.onLoadMore}
       />
     )
   }

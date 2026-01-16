@@ -39,6 +39,7 @@ function MapPage() {
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
   const [nameFilter, setNameFilter] = useState('')
+  const [flyToLocation, setFlyToLocation] = useState<{ coords: [number, number]; zoom: number } | null>(null)
 
   const initialUrlUpdateDone = useRef(false)
 
@@ -165,8 +166,23 @@ function MapPage() {
     initialUrlUpdateDone.current = true
   }, [center, zoom, setSearchParams, searchParams])
 
+  const handleZoomToAsset = useCallback((asset: Asset) => {
+    // Get coordinates from geometry or location
+    let coords: [number, number] | null = null
+    if (asset.geometry?.type === 'Point' && Array.isArray(asset.geometry.coordinates)) {
+      coords = [asset.geometry.coordinates[1], asset.geometry.coordinates[0]]
+    } else if (asset.location?.coordinates) {
+      coords = [asset.location.coordinates[1], asset.location.coordinates[0]]
+    }
+
+    if (coords) {
+      // Use flyTo for smooth animation
+      setFlyToLocation({ coords, zoom: 16 })
+    }
+  }, [])
+
   return (
-    <MapProvider organizationId={organizationId || ''} workspaceId={workspaceId || ''}>
+    <MapProvider organizationId={organizationId || ''} workspaceId={workspaceId || ''} onZoomToAsset={handleZoomToAsset}>
       <MapView
         center={center}
         zoom={zoom}
@@ -185,6 +201,7 @@ function MapPage() {
         onZoomChange={setZoom}
         workspaceId={workspaceId || ''}
         MapEvents={MapEvents}
+        flyToLocation={flyToLocation}
       />
     </MapProvider>
   )

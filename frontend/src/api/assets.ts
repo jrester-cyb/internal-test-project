@@ -158,6 +158,20 @@ export async function searchAssets(workspaceId: string, request: SearchRequest) 
   return response.json()
 }
 
+/** Fetch from a pagination URL (next/previous) */
+export async function fetchPaginationUrl(url: string) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({})
+  })
+
+  if (!response.ok) throw new Error('Failed to fetch pagination')
+  return response.json()
+}
+
 export async function getAsset(workspaceId: string, id: string) {
   const response = await fetch(workspaceUrl(workspaceId, `assets/${id}/`))
   if (!response.ok) throw new Error('Failed to fetch asset')

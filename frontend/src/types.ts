@@ -89,6 +89,7 @@ export interface Cluster {
 
 export interface SearchFilter {
   type?: string
+  field?: string
   attribute?: string
   value?: any
   operator?: string
@@ -115,4 +116,6 @@ export interface SearchResponse {
   page: number
   limit: number
   total_pages: number
+  next: string | null
+  previous: string | null
 }

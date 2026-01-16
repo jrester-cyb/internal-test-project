@@ -5,25 +5,30 @@ interface CopyableTextProps extends Omit<TypographyProps, 'children'> {
   children: string
   iconSize?: 'small' | 'inherit'
   iconColor?: string
+  /** Styles for the outer container Box */
+  containerSx?: Record<string, unknown>
 }
 
 export default function CopyableText({
   children,
   iconSize = 'small',
   iconColor,
+  containerSx,
   sx,
   ...typographyProps
 }: CopyableTextProps) {
   return (
     <Box
       sx={{
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
         gap: 0.5,
         minWidth: 0,
+        maxWidth: '100%',
         overflow: 'hidden',
         '& .copy-button': { opacity: 0, flexShrink: 0 },
         '&:hover .copy-button': { opacity: 0.7 },
+        ...containerSx
       }}
     >
       <Typography

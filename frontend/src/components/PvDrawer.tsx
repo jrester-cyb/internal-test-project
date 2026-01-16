@@ -118,94 +118,92 @@ export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
   }
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', pointerEvents: 'none', zIndex: 999 }}>
-      <Slide
-        direction={isDraggable ? "left" : "up"}
-        in={isOpen}
-        appear={false}
-        timeout={300}
-        container={isDraggable ? undefined : document.body}
-        style={slideStyle}
+    <Slide
+      direction={isDraggable ? "left" : "up"}
+      in={isOpen}
+      appear={false}
+      timeout={300}
+      container={isDraggable ? undefined : document.body}
+      style={slideStyle}
+    >
+      <Paper
+        elevation={0}
+        sx={{
+          pointerEvents: 'auto',
+          position: 'fixed',
+          top: isDraggable ? 64 : 56, // Higher up on mobile (56px instead of 64px)
+          left: isDraggable ? 'auto' : 0,
+          right: 0,
+          bottom: isDraggable ? 0 : 56, // Leave 56px for bottom nav on mobile
+          width: isDraggable ? `${panelWidth}px` : '100%',
+          height: isDraggable ? 'auto' : 'calc(100vh - 112px)', // 56px top + 56px bottom
+          zIndex: 1000,
+          borderLeft: isDraggable ? 1 : 0,
+          borderColor: 'divider',
+          borderRadius: isDraggable ? undefined : 0, // Remove rounded borders on mobile
+          display: 'flex',
+          flexDirection: 'row',
+          transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
+        }}
       >
-        <Paper
-          elevation={0}
-          sx={{
-            pointerEvents: 'auto',
-            position: 'fixed',
-            top: isDraggable ? 64 : 56, // Higher up on mobile (56px instead of 64px)
-            left: isDraggable ? 'auto' : 0,
-            right: 0,
-            bottom: isDraggable ? 0 : 56, // Leave 56px for bottom nav on mobile
-            width: isDraggable ? `${panelWidth}px` : '100%',
-            height: isDraggable ? 'auto' : 'calc(100vh - 112px)', // 56px top + 56px bottom
-            zIndex: 1000,
-            borderLeft: isDraggable ? 1 : 0,
-            borderColor: 'divider',
-            borderRadius: isDraggable ? undefined : 0, // Remove rounded borders on mobile
-            display: 'flex',
-            flexDirection: 'row',
-            transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
-          }}
-        >
-          {/* Resize Handle */}
-          {isDraggable && (
-            <Box
-              ref={resizeRef}
-              onMouseDown={handleResizeStart}
-              onClick={handleResizeClick}
-              sx={{
-                width: '12px',
-                cursor: 'pointer',
-                backgroundColor: 'background.paper',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                  '& .resize-dots': {
-                    opacity: 0
-                  },
-                  '& .close-arrow': {
-                    opacity: 1
-                  }
+        {/* Resize Handle */}
+        {isDraggable && (
+          <Box
+            ref={resizeRef}
+            onMouseDown={handleResizeStart}
+            onClick={handleResizeClick}
+            sx={{
+              width: '12px',
+              cursor: 'pointer',
+              backgroundColor: 'background.paper',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              '&:hover': {
+                backgroundColor: 'action.hover',
+                '& .resize-dots': {
+                  opacity: 0
+                },
+                '& .close-arrow': {
+                  opacity: 1
                 }
+              }
+            }}
+          >
+            <Box
+              className="resize-dots"
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.25,
+                opacity: 0.6,
+                transition: 'opacity 0.2s ease'
               }}
             >
-              <Box
-                className="resize-dots"
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 0.25,
-                  opacity: 0.6,
-                  transition: 'opacity 0.2s ease'
-                }}
-              >
-                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-              </Box>
-
-              <ChevronRightIcon
-                className="close-arrow"
-                sx={{
-                  position: 'absolute',
-                  opacity: 0,
-                  transition: 'opacity 0.2s ease',
-                  fontSize: 16,
-                  color: 'text.secondary'
-                }}
-              />
+              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
             </Box>
-          )}
 
-          {/* Main Content */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {children}
+            <ChevronRightIcon
+              className="close-arrow"
+              sx={{
+                position: 'absolute',
+                opacity: 0,
+                transition: 'opacity 0.2s ease',
+                fontSize: 16,
+                color: 'text.secondary'
+              }}
+            />
           </Box>
-        </Paper>
-      </Slide>
-    </div>
+        )}
+
+        {/* Main Content */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {children}
+        </Box>
+      </Paper>
+    </Slide>
   )
 }
