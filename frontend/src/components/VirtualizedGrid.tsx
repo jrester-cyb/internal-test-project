@@ -227,6 +227,7 @@ interface StickyHeaderContextValue {
   resizingColumnIndex: number | null
   filters?: ColumnFilters
   onFilterClick?: (columnKey: string, anchorEl: HTMLElement) => void
+  selection: SelectionRange | null
 }
 
 const StickyHeaderContext = createContext<StickyHeaderContextValue | null>(null)
@@ -267,7 +268,7 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
     const ctx = useContext(StickyHeaderContext)
     if (!ctx) return <div ref={ref} {...rest}>{children}</div>
 
-    const { columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, onColumnResize, onColumnResizeEnd, onColumnResizeStart, resizingColumnIndex, filters, onFilterClick } = ctx
+    const { columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, onColumnResize, onColumnResizeEnd, onColumnResizeStart, resizingColumnIndex, filters, onFilterClick, selection } = ctx
 
     return (
       <div ref={ref} {...rest}>
@@ -301,11 +302,14 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
               const filterValue = filters?.[col.key]
               const hasActiveFilter = filterValue !== undefined && filterValue !== null
               const isResizing = resizingColumnIndex === index
-              const isPrevColumnResizing = resizingColumnIndex === index - 1
-              const isNextColumnResizing = resizingColumnIndex === index + 1
               const isLastColumn = index === columns.length - 1
-              // Hide right border if this column is resizing OR next column is resizing (so it doesn't show against their left border)
-              const hideRightBorder = isResizing || isNextColumnResizing || isLastColumn
+
+              // Check if this column has any selected cells
+              const hasSelectedCells = selection ? (() => {
+                const minCol = Math.min(selection.start.columnIndex, selection.end.columnIndex)
+                const maxCol = Math.max(selection.start.columnIndex, selection.end.columnIndex)
+                return index >= minCol && index <= maxCol
+              })() : false
 
               return (
                 <Box
@@ -321,12 +325,13 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
                     alignItems: 'center',
                     fontWeight: 600,
                     overflow: 'hidden',
-                    borderRight: hideRightBorder ? 'none' : '1px solid',
+                    borderRight: isLastColumn ? 'none' : '1px solid',
                     borderRightColor: 'divider',
-                    borderLeft: isPrevColumnResizing ? 'none' : undefined,
+                    borderLeft: 'none',
+                    borderBottom: '1px solid',
+                    borderBottomColor: 'divider',
                     boxSizing: 'border-box',
-                    // Resize highlight using inset box-shadow (left, right, and top borders)
-                    boxShadow: isResizing ? (theme: any) => `inset 2px 0 0 0 ${theme.palette.primary.main}, inset -2px 0 0 0 ${theme.palette.primary.main}` : 'none',
+                    bgcolor: hasSelectedCells ? 'action.selected' : headerBgColor,
                     ...col.headerSx
                   }}
                 >
@@ -369,7 +374,6 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
                   )}
                   {isResizable && (
                     <ResizeHandle
-                      isResizing={isResizing}
                       onResizeStart={() => {
                         onColumnResizeStart(index)
                         return getColumnStartWidth(index)
@@ -487,12 +491,10 @@ interface GridHandle {
 
 // Resize handle component
 function ResizeHandle({
-  isResizing,
   onResizeStart,
   onResize,
   onResizeEnd
 }: {
-  isResizing: boolean
   onResizeStart: () => number  // Returns the starting width
   onResize: (newWidth: number) => void
   onResizeEnd: () => void
@@ -530,17 +532,6 @@ function ResizeHandle({
         width: 8,
         cursor: 'col-resize',
         zIndex: 3,
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          top: 0,
-          bottom: 0,
-          width: 2,
-          bgcolor: isResizing ? 'primary.main' : 'transparent',
-          transition: 'background-color 0.15s',
-        }
       }}
     />
   )
@@ -1063,11 +1054,6 @@ export default function VirtualizedGrid<T>({
     const isSelectedNotStart = selectionBorders !== null && currentSelection !== null &&
       !(rowIndex === currentSelection.start.rowIndex && columnIndex === currentSelection.start.columnIndex)
 
-    // Check if this column is being resized (highlight both borders)
-    const isResizing = currentResizingColumnIndex === columnIndex
-    const isPrevColumnResizing = currentResizingColumnIndex === columnIndex - 1
-    const isNextColumnResizing = currentResizingColumnIndex === columnIndex + 1
-
     // Offset cell position by header height
     const offsetStyle: CSSProperties = {
       ...style,
@@ -1080,8 +1066,8 @@ export default function VirtualizedGrid<T>({
     if (!column) return null
 
     const isLastColumn = columnIndex === currentColumns.length - 1
-    // Hide right border if this column is resizing OR next column is resizing (so it doesn't show against their left border)
-    const hideRightBorder = isResizing || isNextColumnResizing || isLastColumn
+    // Hide right border only if it's the last column
+    const hideRightBorder = isLastColumn
 
     // Show placeholder for items not yet loaded
     if (item === undefined) {
@@ -1095,17 +1081,13 @@ export default function VirtualizedGrid<T>({
             alignItems: 'center',
             bgcolor: 'background.paper',
             position: 'relative',
-            // Raise z-index when resizing so box-shadow appears above adjacent cells
-            zIndex: isResizing ? 1 : undefined,
-            // Hide bottom border when resizing so it doesn't show at intersection with box-shadow
-            borderBottom: isResizing ? `2px solid` : '1px solid',
-            borderBottomColor: isResizing ? 'primary.main' : 'divider',
+            // Standard borders for grid lines
+            borderBottom: '1px solid',
+            borderBottomColor: 'divider',
             borderRight: hideRightBorder ? 'none' : '1px solid',
             borderRightColor: 'divider',
-            borderLeft: isPrevColumnResizing ? 'none' : undefined,
+            borderLeft: undefined,
             boxSizing: 'border-box',
-            // Resize highlight using inset box-shadow (left and right borders)
-            boxShadow: isResizing ? (theme: any) => `inset 2px 0 0 0 ${theme.palette.primary.main}, inset 2px 0 0 0 ${theme.palette.primary.main}` : 'none',
             ...column.cellSx
           }}
         >
@@ -1123,28 +1105,6 @@ export default function VirtualizedGrid<T>({
       }
     }
 
-    // Build inset box-shadow for selection borders and resize highlight
-    const selectionBorderWidth = 1
-    const buildBoxShadow = (theme: any) => {
-      const shadows: string[] = []
-
-      // Add resize highlight shadows (left and right borders only - bottom handled by removing border)
-      if (isResizing) {
-        shadows.push(`inset 2px 0 0 0 ${theme.palette.primary.main}`)
-        shadows.push(`inset -2px 0 0 0 ${theme.palette.primary.main}`)
-      }
-
-      // Add selection border shadows (Excel-style outline)
-      if (selectionBorders) {
-        if (selectionBorders.top) shadows.push(`inset 0 ${selectionBorderWidth}px 0 0 ${theme.palette.primary.main}`)
-        if (selectionBorders.bottom) shadows.push(`inset 0 -${selectionBorderWidth}px 0 0 ${theme.palette.primary.main}`)
-        if (selectionBorders.left) shadows.push(`inset ${selectionBorderWidth}px 0 0 0 ${theme.palette.primary.main}`)
-        if (selectionBorders.right) shadows.push(`inset -${selectionBorderWidth}px 0 0 0 ${theme.palette.primary.main}`)
-      }
-
-      return shadows.length > 0 ? shadows.join(', ') : 'none'
-    }
-
     return (
       <Box
         data-row-index={rowIndex}
@@ -1156,16 +1116,30 @@ export default function VirtualizedGrid<T>({
           alignItems: 'center',
           bgcolor: isSelectedNotStart ? 'action.selected' : 'background.paper',
           position: 'relative',
-          // Raise z-index when resizing so box-shadow appears above adjacent row borders
-          zIndex: isResizing ? 1 : undefined,
-          // Standard borders for grid lines
-          borderBottom: '1px solid',
-          borderRight: hideRightBorder ? 'none' : '1px solid',
+          // Raise z-index when selected so pseudo-elements appear above all borders
+          zIndex: selectionBorders ? 1 : undefined,
+          // Standard borders for grid lines - hide perimeter borders when selected to show clean selection outline
+          borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+          borderRight: hideRightBorder || selectionBorders?.right ? 'none' : '1px solid',
           borderRightColor: 'divider',
-          borderLeft: isPrevColumnResizing ? 'none' : undefined,
+          borderLeft: selectionBorders?.left ? 'none' : undefined,
           borderBottomColor: 'divider',
-          // Selection and resize highlight using box-shadow (doesn't affect layout)
-          boxShadow: buildBoxShadow,
+          // Selection highlight using pseudo-elements
+          '&::after': selectionBorders ? {
+            content: '""',
+            position: 'absolute',
+            top: -1,
+            right: -1,
+            bottom: -1,
+            left: -1,
+            borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+            borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+            borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+            borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+            borderColor: (theme: any) => theme.palette.primary.main,
+            pointerEvents: 'none',
+            zIndex: 10,
+          } : undefined,
           cursor: 'pointer',
           boxSizing: 'border-box',
           userSelect: 'none', // Prevent text selection during drag
@@ -1194,7 +1168,8 @@ export default function VirtualizedGrid<T>({
     resizingColumnIndex,
     filters,
     onFilterClick: onFiltersChange ? handleFilterClick : undefined,
-  }), [columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, handleColumnResize, handleColumnResizeEnd, handleColumnResizeStart, resizingColumnIndex, filters, onFiltersChange, handleFilterClick])
+    selection,
+  }), [columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, handleColumnResize, handleColumnResizeEnd, handleColumnResizeStart, resizingColumnIndex, filters, onFiltersChange, handleFilterClick, selection])
 
   if (totalCount === 0 && !isLoading) {
     return (
