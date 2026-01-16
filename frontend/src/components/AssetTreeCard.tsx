@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, Box, Typography, CircularProgress } from '@mui/material'
+import { Card, CardContent, CardHeader, Box, Typography, CircularProgress, Tooltip } from '@mui/material'
 import { Error as ErrorIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
 import RelatedAssetsTree from './RelatedAssetsTree'
 import type { RelatedAssetsResponse, RelatedAsset } from '../api/assets'
@@ -32,19 +32,21 @@ export default function AssetTreeCard({
       <CardHeader
         title="Asset Tree"
         action={dragHandleProps && (
-          <Box
-            {...dragHandleProps.attributes}
-            {...dragHandleProps.listeners}
-            sx={{
-              cursor: 'grab',
-              '&:active': { cursor: 'grabbing' },
-              p: 0.5,
-              borderRadius: 1,
-              '&:hover': { bgcolor: 'action.hover' }
-            }}
-          >
-            <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-          </Box>
+          <Tooltip title="Drag to reorder cards">
+            <Box
+              {...dragHandleProps.attributes}
+              {...dragHandleProps.listeners}
+              sx={{
+                cursor: 'grab',
+                '&:active': { cursor: 'grabbing' },
+                p: 0.5,
+                borderRadius: 1,
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+            >
+              <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+            </Box>
+          </Tooltip>
         )}
       />
       <CardContent sx={{ flex: 1, overflow: 'hidden', p: 0 }}>

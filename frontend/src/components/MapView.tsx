@@ -177,8 +177,9 @@ export default function MapView({
         asset={selectedAsset}
         organizationId={organizationId}
         workspaceId={workspaceId}
-        attributes={selectedAssetAttributes}
+        isOpen={!!selectedAsset}
         onClose={() => setSelectedAsset(null)}
+        attributes={selectedAssetAttributes}
       />
 
       {selectedCluster && (

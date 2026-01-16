@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, Box, Typography } from '@mui/material'
+import { Card, CardContent, CardHeader, Box, Typography, Tooltip } from '@mui/material'
 import { Article as ArticleIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
 import type { Asset, AssetTypeAttribute } from '../types'
@@ -72,19 +72,21 @@ export default function AttributesCard({
               isLoading={isLoading}
             />
             {dragHandleProps && (
-              <Box
-                {...dragHandleProps.attributes}
-                {...dragHandleProps.listeners}
-                sx={{
-                  cursor: 'grab',
-                  '&:active': { cursor: 'grabbing' },
-                  p: 0.5,
-                  borderRadius: 1,
-                  '&:hover': { bgcolor: 'action.hover' }
-                }}
-              >
-                <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-              </Box>
+              <Tooltip title="Drag to reorder cards">
+                <Box
+                  {...dragHandleProps.attributes}
+                  {...dragHandleProps.listeners}
+                  sx={{
+                    cursor: 'grab',
+                    '&:active': { cursor: 'grabbing' },
+                    p: 0.5,
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                >
+                  <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                </Box>
+              </Tooltip>
             )}
           </Box>
         }
