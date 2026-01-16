@@ -1,7 +1,56 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState, forwardRef, createContext, useContext, type ReactNode, type CSSProperties } from 'react'
-import { Box, Skeleton, Typography } from '@mui/material'
+import { Box, Skeleton, Typography, Snackbar, IconButton, Popover, TextField, MenuItem, Select, FormControl, InputLabel, Checkbox, ListItemText, Chip, InputAdornment, Badge } from '@mui/material'
+import { FilterList as FilterIcon, Clear as ClearIcon } from '@mui/icons-material'
 import { VariableSizeGrid as Grid } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
+
+// Cell selection types
+interface CellPosition {
+  rowIndex: number
+  columnIndex: number
+}
+
+interface SelectionRange {
+  start: CellPosition
+  end: CellPosition
+}
+
+// Helper to check if a cell is within a selection range
+function isCellInRange(cell: CellPosition, range: SelectionRange): boolean {
+  const minRow = Math.min(range.start.rowIndex, range.end.rowIndex)
+  const maxRow = Math.max(range.start.rowIndex, range.end.rowIndex)
+  const minCol = Math.min(range.start.columnIndex, range.end.columnIndex)
+  const maxCol = Math.max(range.start.columnIndex, range.end.columnIndex)
+
+  return cell.rowIndex >= minRow && cell.rowIndex <= maxRow &&
+    cell.columnIndex >= minCol && cell.columnIndex <= maxCol
+}
+
+// Helper to get which borders should be shown for a selected cell (Excel-style outline)
+interface SelectionBorders {
+  top: boolean
+  right: boolean
+  bottom: boolean
+  left: boolean
+}
+
+function getSelectionBorders(cell: CellPosition, selection: SelectionRange | null): SelectionBorders | null {
+  if (!selection) return null
+  if (!isCellInRange(cell, selection)) return null
+
+  const minRow = Math.min(selection.start.rowIndex, selection.end.rowIndex)
+  const maxRow = Math.max(selection.start.rowIndex, selection.end.rowIndex)
+  const minCol = Math.min(selection.start.columnIndex, selection.end.columnIndex)
+  const maxCol = Math.max(selection.start.columnIndex, selection.end.columnIndex)
+
+  return {
+    top: cell.rowIndex === minRow,
+    bottom: cell.rowIndex === maxRow,
+    left: cell.columnIndex === minCol,
+    right: cell.columnIndex === maxCol,
+  }
+}
+
 
 // Default skeleton placeholder for loading cells
 const DefaultLoadingPlaceholder = (
@@ -9,6 +58,160 @@ const DefaultLoadingPlaceholder = (
     <Skeleton variant="text" width="80%" height={20} />
   </Box>
 )
+
+// Column filter popover component
+function ColumnFilterPopover({
+  column,
+  value,
+  onChange,
+  anchorEl,
+  onClose,
+}: {
+  column: ColumnDefinition<any>
+  value: ColumnFilterValue
+  onChange: (value: ColumnFilterValue) => void
+  anchorEl: HTMLElement | null
+  onClose: () => void
+}) {
+  const filter = column.filter
+  if (!filter) return null
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    onChange(newValue || null)
+  }
+
+  const handleSelectChange = (e: any) => {
+    const newValue = e.target.value
+    if (filter.multiple) {
+      onChange(newValue.length > 0 ? newValue : null)
+    } else {
+      onChange(newValue || null)
+    }
+  }
+
+  const handleBooleanChange = (e: any) => {
+    const val = e.target.value
+    if (val === '') {
+      onChange(null)
+    } else {
+      onChange(val === 'true')
+    }
+  }
+
+  const handleClear = () => {
+    onChange(null)
+    onClose()
+  }
+
+  return (
+    <Popover
+      open={Boolean(anchorEl)}
+      anchorEl={anchorEl}
+      onClose={onClose}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+      slotProps={{
+        paper: {
+          sx: { p: 1.5, minWidth: 200 }
+        }
+      }}
+    >
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {filter.type === 'text' && (
+          <TextField
+            size="small"
+            placeholder={filter.placeholder || 'Filter...'}
+            value={(value as string) || ''}
+            onChange={handleTextChange}
+            autoFocus
+            InputProps={{
+              endAdornment: value ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={handleClear} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            }}
+          />
+        )}
+
+        {filter.type === 'select' && !filter.multiple && (
+          <FormControl size="small" fullWidth>
+            <InputLabel>{filter.placeholder || 'Select'}</InputLabel>
+            <Select
+              value={(value as string) || ''}
+              onChange={handleSelectChange}
+              label={filter.placeholder || 'Select'}
+            >
+              <MenuItem value="">
+                <em>All</em>
+              </MenuItem>
+              {filter.options?.map(opt => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {filter.type === 'select' && filter.multiple && (
+          <FormControl size="small" fullWidth>
+            <InputLabel>{filter.placeholder || 'Select'}</InputLabel>
+            <Select
+              multiple
+              value={(value as string[]) || []}
+              onChange={handleSelectChange}
+              label={filter.placeholder || 'Select'}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected as string[]).map((val) => {
+                    const opt = filter.options?.find(o => o.value === val)
+                    return <Chip key={val} label={opt?.label || val} size="small" />
+                  })}
+                </Box>
+              )}
+            >
+              {filter.options?.map(opt => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  <Checkbox checked={((value as string[]) || []).includes(opt.value)} />
+                  <ListItemText primary={opt.label} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {filter.type === 'boolean' && (
+          <FormControl size="small" fullWidth>
+            <InputLabel>{filter.placeholder || 'Value'}</InputLabel>
+            <Select
+              value={value === null ? '' : String(value)}
+              onChange={handleBooleanChange}
+              label={filter.placeholder || 'Value'}
+            >
+              <MenuItem value="">
+                <em>All</em>
+              </MenuItem>
+              <MenuItem value="true">Yes</MenuItem>
+              <MenuItem value="false">No</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+
+        {value !== null && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <IconButton size="small" onClick={handleClear} title="Clear filter">
+              <ClearIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        )}
+      </Box>
+    </Popover>
+  )
+}
 
 // Context to pass header config to the custom outer element
 interface StickyHeaderContextValue {
@@ -20,9 +223,21 @@ interface StickyHeaderContextValue {
   getColumnStartWidth: (columnIndex: number) => number
   onColumnResize: (columnIndex: number, newWidth: number) => void
   onColumnResizeEnd: (columnIndex: number) => void
+  onColumnResizeStart: (columnIndex: number) => void
+  resizingColumnIndex: number | null
+  filters?: ColumnFilters
+  onFilterClick?: (columnKey: string, anchorEl: HTMLElement) => void
 }
 
 const StickyHeaderContext = createContext<StickyHeaderContextValue | null>(null)
+
+// Context for cell selection
+interface CellSelectionContextValue {
+  selection: SelectionRange | null
+  onCellClick: (rowIndex: number, columnIndex: number, event: React.MouseEvent) => void
+}
+
+const CellSelectionContext = createContext<CellSelectionContextValue | null>(null)
 
 // Custom inner element that adds top padding for the sticky header
 const StickyInnerElement = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { style?: CSSProperties }>(
@@ -52,7 +267,7 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
     const ctx = useContext(StickyHeaderContext)
     if (!ctx) return <div ref={ref} {...rest}>{children}</div>
 
-    const { columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, onColumnResize, onColumnResizeEnd } = ctx
+    const { columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, onColumnResize, onColumnResizeEnd, onColumnResizeStart, resizingColumnIndex, filters, onFilterClick } = ctx
 
     return (
       <div ref={ref} {...rest}>
@@ -82,6 +297,15 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
               const left = columnWidths.slice(0, index).reduce((sum, w) => sum + w, 0)
               const isResizable = col.resizable !== false
               const minWidth = col.minWidth ?? 50
+              const hasFilter = col.filter !== undefined
+              const filterValue = filters?.[col.key]
+              const hasActiveFilter = filterValue !== undefined && filterValue !== null
+              const isResizing = resizingColumnIndex === index
+              const isPrevColumnResizing = resizingColumnIndex === index - 1
+              const isNextColumnResizing = resizingColumnIndex === index + 1
+              const isLastColumn = index === columns.length - 1
+              // Hide right border if this column is resizing OR next column is resizing (so it doesn't show against their left border)
+              const hideRightBorder = isResizing || isNextColumnResizing || isLastColumn
 
               return (
                 <Box
@@ -97,6 +321,12 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
                     alignItems: 'center',
                     fontWeight: 600,
                     overflow: 'hidden',
+                    borderRight: hideRightBorder ? 'none' : '1px solid',
+                    borderRightColor: 'divider',
+                    borderLeft: isPrevColumnResizing ? 'none' : undefined,
+                    boxSizing: 'border-box',
+                    // Resize highlight using inset box-shadow (left, right, and top borders)
+                    boxShadow: isResizing ? (theme: any) => `inset 2px 0 0 0 ${theme.palette.primary.main}, inset -2px 0 0 0 ${theme.palette.primary.main}` : 'none',
                     ...col.headerSx
                   }}
                 >
@@ -111,9 +341,39 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
                   >
                     {col.header}
                   </Box>
+                  {hasFilter && onFilterClick && (
+                    <IconButton
+                      size="small"
+                      onClick={(e) => onFilterClick(col.key, e.currentTarget)}
+                      sx={{
+                        p: 0.5,
+                        mr: 0.5,
+                        color: hasActiveFilter ? 'primary.main' : 'action.active',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                    >
+                      <Badge
+                        variant="dot"
+                        color="primary"
+                        invisible={!hasActiveFilter}
+                        sx={{
+                          '& .MuiBadge-badge': {
+                            right: 2,
+                            top: 2,
+                          }
+                        }}
+                      >
+                        <FilterIcon fontSize="small" />
+                      </Badge>
+                    </IconButton>
+                  )}
                   {isResizable && (
                     <ResizeHandle
-                      onResizeStart={() => getColumnStartWidth(index)}
+                      isResizing={isResizing}
+                      onResizeStart={() => {
+                        onColumnResizeStart(index)
+                        return getColumnStartWidth(index)
+                      }}
                       onResize={(newWidth) => onColumnResize(index, newWidth)}
                       onResizeEnd={() => onColumnResizeEnd(index)}
                     />
@@ -128,6 +388,24 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
     )
   }
 )
+
+/** Filter type for a column */
+export type ColumnFilterType = 'text' | 'select' | 'boolean' | 'number' | 'date'
+
+/** Filter value can be string, array of strings (for multi-select), boolean, or number range */
+export type ColumnFilterValue = string | string[] | boolean | { min?: number; max?: number } | { from?: string; to?: string } | null
+
+/** Filter configuration for a column */
+export interface ColumnFilterConfig {
+  /** Type of filter control to show */
+  type: ColumnFilterType
+  /** Placeholder text for the filter input */
+  placeholder?: string
+  /** Options for select filter type */
+  options?: { value: string; label: string }[]
+  /** Whether to allow multiple selections (for select type) */
+  multiple?: boolean
+}
 
 export interface ColumnDefinition<T> {
   /** Unique key for this column */
@@ -144,11 +422,18 @@ export interface ColumnDefinition<T> {
   resizable?: boolean
   /** Render function for cell content */
   render: (item: T, rowIndex: number) => ReactNode
+  /** Get the text value of a cell for copying (defaults to String(value)) */
+  getCellValue?: (item: T, rowIndex: number) => string
   /** Optional cell styles */
   cellSx?: Record<string, any>
   /** Optional header styles */
   headerSx?: Record<string, any>
+  /** Filter configuration for this column (if filterable) */
+  filter?: ColumnFilterConfig
 }
+
+/** Map of column key to filter value */
+export type ColumnFilters = Record<string, ColumnFilterValue>
 
 export interface VirtualizedGridProps<T> {
   /** Map of row index to item for sparse data */
@@ -189,6 +474,10 @@ export interface VirtualizedGridProps<T> {
   headerBgColor?: string
   /** Called when column widths change due to resizing */
   onColumnResize?: (columnKey: string, newWidth: number) => void
+  /** Current column filters (controlled) */
+  filters?: ColumnFilters
+  /** Called when filters change */
+  onFiltersChange?: (filters: ColumnFilters) => void
 }
 
 interface GridHandle {
@@ -198,10 +487,12 @@ interface GridHandle {
 
 // Resize handle component
 function ResizeHandle({
+  isResizing,
   onResizeStart,
   onResize,
   onResizeEnd
 }: {
+  isResizing: boolean
   onResizeStart: () => number  // Returns the starting width
   onResize: (newWidth: number) => void
   onResizeEnd: () => void
@@ -239,9 +530,6 @@ function ResizeHandle({
         width: 8,
         cursor: 'col-resize',
         zIndex: 3,
-        '&:hover::after': {
-          bgcolor: 'primary.main',
-        },
         '&::after': {
           content: '""',
           position: 'absolute',
@@ -250,7 +538,7 @@ function ResizeHandle({
           top: 0,
           bottom: 0,
           width: 2,
-          bgcolor: 'divider',
+          bgcolor: isResizing ? 'primary.main' : 'transparent',
           transition: 'background-color 0.15s',
         }
       }}
@@ -278,6 +566,8 @@ export default function VirtualizedGrid<T>({
   rowHoverSx = { bgcolor: 'action.hover' },
   headerBgColor = 'background.paper',
   onColumnResize,
+  filters,
+  onFiltersChange,
 }: VirtualizedGridProps<T>) {
   const gridRef = useRef<Grid>(null)
   const outerRef = useRef<HTMLDivElement>(null)
@@ -287,30 +577,30 @@ export default function VirtualizedGrid<T>({
   // Track column widths for resizing - map column key to width for persistence across column changes
   const columnWidthsByKey = useRef<Map<string, number>>(new Map())
 
-  // Initialize width map from columns
-  const [columnWidths, setColumnWidths] = useState<number[]>(() => {
-    const widths = columns.map(col => {
+  // Track columns to detect changes
+  const prevColumnsRef = useRef<ColumnDefinition<T>[]>(columns)
+
+  // Force re-render counter for resize updates
+  const [resizeCounter, setResizeCounter] = useState(0)
+
+  // Compute widths - recompute when columns change or resize happens
+  const columnWidths = useMemo(() => {
+    // resizeCounter is used to trigger recomputation on resize
+    void resizeCounter
+    return columns.map(col => {
       // Use stored width if available, otherwise use default
       const storedWidth = columnWidthsByKey.current.get(col.key)
       return storedWidth ?? col.width
     })
-    return widths
-  })
+  }, [columns, resizeCounter])
 
-  // Update column widths when columns prop changes, preserving resized widths
+  // Reset grid when columns change
   useEffect(() => {
-    // Create new widths array, preserving existing widths for columns that still exist
-    const newWidths = columns.map(col => {
-      // First check our persistent map for any previously resized width
-      const storedWidth = columnWidthsByKey.current.get(col.key)
-      if (storedWidth !== undefined) {
-        return storedWidth
-      }
-      // Fall back to the column's default width
-      return col.width
-    })
-
-    setColumnWidths(newWidths)
+    // Only reset if columns actually changed (not just on mount)
+    if (prevColumnsRef.current !== columns) {
+      prevColumnsRef.current = columns
+      gridRef.current?.resetAfterColumnIndex(0)
+    }
   }, [columns])
 
   // Use refs for values that shouldn't cause re-renders
@@ -336,6 +626,230 @@ export default function VirtualizedGrid<T>({
   isLoadingRef.current = isLoading
   rowHoverSxRef.current = rowHoverSx
 
+  // Cell selection state
+  const [selection, setSelection] = useState<SelectionRange | null>(null)
+  const [copyNotification, setCopyNotification] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Filter popover state
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null)
+  const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null)
+
+  // Column resize state
+  const [resizingColumnIndex, setResizingColumnIndex] = useState<number | null>(null)
+  const selectionRef = useRef(selection)
+  selectionRef.current = selection
+  const isDraggingRef = useRef(isDragging)
+  isDraggingRef.current = isDragging
+  const dragStartCellRef = useRef<CellPosition | null>(null)
+
+  // Helper to find cell position from a mouse event target
+  const getCellFromElement = useCallback((element: Element | null): CellPosition | null => {
+    let cellElement = element as HTMLElement | null
+    while (cellElement && !cellElement.dataset.rowIndex) {
+      cellElement = cellElement.parentElement
+    }
+    if (cellElement && cellElement.dataset.rowIndex && cellElement.dataset.columnIndex) {
+      return {
+        rowIndex: parseInt(cellElement.dataset.rowIndex, 10),
+        columnIndex: parseInt(cellElement.dataset.columnIndex, 10)
+      }
+    }
+    return null
+  }, [])
+
+  // Handle mouse down on a cell - starts selection or drag
+  const handleCellMouseDown = useCallback((rowIndex: number, columnIndex: number, event: React.MouseEvent) => {
+    // Only handle left mouse button
+    if (event.button !== 0) return
+    event.stopPropagation()
+
+    const newCell: CellPosition = { rowIndex, columnIndex }
+
+    if (event.shiftKey && selectionRef.current) {
+      // Extend selection from start to clicked cell
+      setSelection({
+        start: selectionRef.current.start,
+        end: newCell
+      })
+      dragStartCellRef.current = selectionRef.current.start
+    } else {
+      // Start new selection
+      setSelection({
+        start: newCell,
+        end: newCell
+      })
+      dragStartCellRef.current = newCell
+    }
+
+    setIsDragging(true)
+  }, [])
+
+  // Handle mouse move during drag - extend selection
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !dragStartCellRef.current) return
+
+      const target = document.elementFromPoint(e.clientX, e.clientY)
+      const cell = getCellFromElement(target)
+
+      if (cell) {
+        setSelection({
+          start: dragStartCellRef.current,
+          end: cell
+        })
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        setIsDragging(false)
+        dragStartCellRef.current = null
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [getCellFromElement])
+
+  const handleCellMouseDownRef = useRef(handleCellMouseDown)
+  handleCellMouseDownRef.current = handleCellMouseDown
+
+  // Copy selected cells to clipboard
+  const copySelectionToClipboard = useCallback(() => {
+    const currentSelection = selectionRef.current
+    if (!currentSelection) return
+
+    const currentItems = itemsRef.current
+    const currentColumns = columnsRef.current
+
+    const minRow = Math.min(currentSelection.start.rowIndex, currentSelection.end.rowIndex)
+    const maxRow = Math.max(currentSelection.start.rowIndex, currentSelection.end.rowIndex)
+    const minCol = Math.min(currentSelection.start.columnIndex, currentSelection.end.columnIndex)
+    const maxCol = Math.max(currentSelection.start.columnIndex, currentSelection.end.columnIndex)
+
+    const rows: string[] = []
+
+    for (let row = minRow; row <= maxRow; row++) {
+      const item = currentItems.get(row)
+      if (!item) continue
+
+      const cellValues: string[] = []
+      for (let col = minCol; col <= maxCol; col++) {
+        const column = currentColumns[col]
+        if (!column) continue
+
+        // Use getCellValue if provided, otherwise try to stringify the rendered content
+        const value = column.getCellValue
+          ? column.getCellValue(item, row)
+          : ''
+        cellValues.push(value)
+      }
+      rows.push(cellValues.join('\t'))
+    }
+
+    const text = rows.join('\n')
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyNotification(true)
+    })
+  }, [])
+
+  // Keyboard handler for copy and arrow key navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Copy with Ctrl/Cmd+C
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectionRef.current) {
+        e.preventDefault()
+        copySelectionToClipboard()
+        return
+      }
+
+      // Escape to clear selection
+      if (e.key === 'Escape') {
+        setSelection(null)
+        return
+      }
+
+      // Arrow key navigation
+      const currentSelection = selectionRef.current
+      if (!currentSelection) return
+
+      const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+      if (!arrowKeys.includes(e.key)) return
+
+      e.preventDefault()
+
+      const currentColumns = columnsRef.current
+      const { end } = currentSelection
+
+      let newRow = end.rowIndex
+      let newCol = end.columnIndex
+
+      switch (e.key) {
+        case 'ArrowUp':
+          newRow = Math.max(0, end.rowIndex - 1)
+          break
+        case 'ArrowDown':
+          newRow = Math.min(totalCount - 1, end.rowIndex + 1)
+          break
+        case 'ArrowLeft':
+          newCol = Math.max(0, end.columnIndex - 1)
+          break
+        case 'ArrowRight':
+          newCol = Math.min(currentColumns.length - 1, end.columnIndex + 1)
+          break
+      }
+
+      const newCell: CellPosition = { rowIndex: newRow, columnIndex: newCol }
+
+      if (e.shiftKey) {
+        // Extend selection
+        setSelection({
+          start: currentSelection.start,
+          end: newCell
+        })
+      } else {
+        // Move selection (single cell)
+        setSelection({
+          start: newCell,
+          end: newCell
+        })
+      }
+
+      // Scroll the cell into view if needed
+      gridRef.current?.scrollToItem({
+        rowIndex: newRow,
+        columnIndex: newCol,
+        align: 'smart'
+      })
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [copySelectionToClipboard, totalCount])
+
+  // Clear selection when clicking outside the grid
+  const gridContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      // Only clear if there's a selection and click is outside the grid container
+      if (selectionRef.current && gridContainerRef.current) {
+        if (!gridContainerRef.current.contains(e.target as Node)) {
+          setSelection(null)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   // Handle column resize - returns starting width
   const getColumnStartWidth = useCallback((columnIndex: number) => {
     return columnWidthsRef.current[columnIndex]
@@ -354,21 +868,47 @@ export default function VirtualizedGrid<T>({
     columnWidthsByKey.current.set(column.key, clampedWidth)
 
     // Update the ref immediately so getColumnWidth returns the new value
-    const updated = [...columnWidthsRef.current]
-    updated[columnIndex] = clampedWidth
-    columnWidthsRef.current = updated
+    columnWidthsRef.current[columnIndex] = clampedWidth
 
-    setColumnWidths(updated)
+    // Trigger re-render so header and grid stay in sync
+    setResizeCounter(c => c + 1)
 
     // Reset grid to recalculate column positions during resize
     gridRef.current?.resetAfterColumnIndex(columnIndex)
   }, [columns])
 
+  const handleColumnResizeStart = useCallback((columnIndex: number) => {
+    setResizingColumnIndex(columnIndex)
+  }, [])
+
   const handleColumnResizeEnd = useCallback((columnIndex: number) => {
+    setResizingColumnIndex(null)
     const column = columnsRef.current[columnIndex]
     const newWidth = columnWidthsRef.current[columnIndex]
     onColumnResize?.(column.key, newWidth)
   }, [onColumnResize])
+
+  // Filter handlers
+  const handleFilterClick = useCallback((columnKey: string, anchorEl: HTMLElement) => {
+    setActiveFilterColumn(columnKey)
+    setFilterAnchorEl(anchorEl)
+  }, [])
+
+  const handleFilterClose = useCallback(() => {
+    setFilterAnchorEl(null)
+    setActiveFilterColumn(null)
+  }, [])
+
+  const handleFilterChange = useCallback((columnKey: string, value: ColumnFilterValue) => {
+    if (!onFiltersChange) return
+    const newFilters = { ...filters }
+    if (value === null) {
+      delete newFilters[columnKey]
+    } else {
+      newFilters[columnKey] = value
+    }
+    onFiltersChange(newFilters)
+  }, [filters, onFiltersChange])
 
   // Get row height (measured or estimated)
   const getRowHeight = useCallback((rowIndex: number): number => {
@@ -492,13 +1032,41 @@ export default function VirtualizedGrid<T>({
   const headerHeightRef = useRef(stickyHeader ? headerHeight : 0)
   headerHeightRef.current = stickyHeader ? headerHeight : 0
 
+  // Selection ref for Cell to access
+  const selectionRefForCell = useRef(selection)
+  selectionRefForCell.current = selection
+  const handleCellMouseDownRefForCell = useRef(handleCellMouseDown)
+  handleCellMouseDownRefForCell.current = handleCellMouseDown
+  const resizingColumnIndexRefForCell = useRef(resizingColumnIndex)
+  resizingColumnIndexRefForCell.current = resizingColumnIndex
+
+  // Force grid to re-render when selection changes
+  useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.resetAfterIndices({ rowIndex: 0, columnIndex: 0 })
+    }
+  }, [selection])
+
   // Cell renderer
   const Cell = useCallback(({ columnIndex, rowIndex, style }: { columnIndex: number; rowIndex: number; style: CSSProperties }) => {
     const currentItems = itemsRef.current
     const currentColumns = columnsRef.current
     const currentOnRowClick = onRowClickRef.current
     const currentPlaceholder = placeholderContentRef.current
-    const currentRowHoverSx = rowHoverSxRef.current
+    const currentSelection = selectionRefForCell.current
+    const currentHandleCellMouseDown = handleCellMouseDownRefForCell.current
+    const currentResizingColumnIndex = resizingColumnIndexRefForCell.current
+
+    // Get selection border info for Excel-style outline
+    const selectionBorders = getSelectionBorders({ rowIndex, columnIndex }, currentSelection)
+    // Check if this cell is selected but not the start of the selection
+    const isSelectedNotStart = selectionBorders !== null && currentSelection !== null &&
+      !(rowIndex === currentSelection.start.rowIndex && columnIndex === currentSelection.start.columnIndex)
+
+    // Check if this column is being resized (highlight both borders)
+    const isResizing = currentResizingColumnIndex === columnIndex
+    const isPrevColumnResizing = currentResizingColumnIndex === columnIndex - 1
+    const isNextColumnResizing = currentResizingColumnIndex === columnIndex + 1
 
     // Offset cell position by header height
     const offsetStyle: CSSProperties = {
@@ -512,19 +1080,32 @@ export default function VirtualizedGrid<T>({
     if (!column) return null
 
     const isLastColumn = columnIndex === currentColumns.length - 1
+    // Hide right border if this column is resizing OR next column is resizing (so it doesn't show against their left border)
+    const hideRightBorder = isResizing || isNextColumnResizing || isLastColumn
 
     // Show placeholder for items not yet loaded
     if (item === undefined) {
       return (
         <Box
+          data-row-index={rowIndex}
+          data-column-index={columnIndex}
           style={offsetStyle}
           sx={{
             display: 'flex',
             alignItems: 'center',
             bgcolor: 'background.paper',
-            borderBottom: '1px solid',
-            borderRight: isLastColumn ? 'none' : '1px solid',
-            borderColor: 'divider',
+            position: 'relative',
+            // Raise z-index when resizing so box-shadow appears above adjacent cells
+            zIndex: isResizing ? 1 : undefined,
+            // Hide bottom border when resizing so it doesn't show at intersection with box-shadow
+            borderBottom: isResizing ? `2px solid` : '1px solid',
+            borderBottomColor: isResizing ? 'primary.main' : 'divider',
+            borderRight: hideRightBorder ? 'none' : '1px solid',
+            borderRightColor: 'divider',
+            borderLeft: isPrevColumnResizing ? 'none' : undefined,
+            boxSizing: 'border-box',
+            // Resize highlight using inset box-shadow (left and right borders)
+            boxShadow: isResizing ? (theme: any) => `inset 2px 0 0 0 ${theme.palette.primary.main}, inset 2px 0 0 0 ${theme.palette.primary.main}` : 'none',
             ...column.cellSx
           }}
         >
@@ -533,21 +1114,61 @@ export default function VirtualizedGrid<T>({
       )
     }
 
-    const handleClick = currentOnRowClick ? () => currentOnRowClick(item, rowIndex) : undefined
+    const handleMouseDown = (e: React.MouseEvent) => {
+      // Handle cell selection (starts drag)
+      currentHandleCellMouseDown(rowIndex, columnIndex, e)
+      // Also trigger row click if defined
+      if (currentOnRowClick) {
+        currentOnRowClick(item, rowIndex)
+      }
+    }
+
+    // Build inset box-shadow for selection borders and resize highlight
+    const selectionBorderWidth = 1
+    const buildBoxShadow = (theme: any) => {
+      const shadows: string[] = []
+
+      // Add resize highlight shadows (left and right borders only - bottom handled by removing border)
+      if (isResizing) {
+        shadows.push(`inset 2px 0 0 0 ${theme.palette.primary.main}`)
+        shadows.push(`inset -2px 0 0 0 ${theme.palette.primary.main}`)
+      }
+
+      // Add selection border shadows (Excel-style outline)
+      if (selectionBorders) {
+        if (selectionBorders.top) shadows.push(`inset 0 ${selectionBorderWidth}px 0 0 ${theme.palette.primary.main}`)
+        if (selectionBorders.bottom) shadows.push(`inset 0 -${selectionBorderWidth}px 0 0 ${theme.palette.primary.main}`)
+        if (selectionBorders.left) shadows.push(`inset ${selectionBorderWidth}px 0 0 0 ${theme.palette.primary.main}`)
+        if (selectionBorders.right) shadows.push(`inset -${selectionBorderWidth}px 0 0 0 ${theme.palette.primary.main}`)
+      }
+
+      return shadows.length > 0 ? shadows.join(', ') : 'none'
+    }
 
     return (
       <Box
+        data-row-index={rowIndex}
+        data-column-index={columnIndex}
         style={offsetStyle}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         sx={{
           display: 'flex',
           alignItems: 'center',
-          bgcolor: 'background.paper',
+          bgcolor: isSelectedNotStart ? 'action.selected' : 'background.paper',
+          position: 'relative',
+          // Raise z-index when resizing so box-shadow appears above adjacent row borders
+          zIndex: isResizing ? 1 : undefined,
+          // Standard borders for grid lines
           borderBottom: '1px solid',
-          borderRight: isLastColumn ? 'none' : '1px solid',
-          borderColor: 'divider',
-          cursor: currentOnRowClick ? 'pointer' : undefined,
-          '&:hover': currentOnRowClick ? currentRowHoverSx : undefined,
+          borderRight: hideRightBorder ? 'none' : '1px solid',
+          borderRightColor: 'divider',
+          borderLeft: isPrevColumnResizing ? 'none' : undefined,
+          borderBottomColor: 'divider',
+          // Selection and resize highlight using box-shadow (doesn't affect layout)
+          boxShadow: buildBoxShadow,
+          cursor: 'pointer',
+          boxSizing: 'border-box',
+          userSelect: 'none', // Prevent text selection during drag
           ...column.cellSx
         }}
       >
@@ -569,7 +1190,11 @@ export default function VirtualizedGrid<T>({
     getColumnStartWidth,
     onColumnResize: handleColumnResize,
     onColumnResizeEnd: handleColumnResizeEnd,
-  }), [columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, handleColumnResize, handleColumnResizeEnd])
+    onColumnResizeStart: handleColumnResizeStart,
+    resizingColumnIndex,
+    filters,
+    onFilterClick: onFiltersChange ? handleFilterClick : undefined,
+  }), [columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, handleColumnResize, handleColumnResizeEnd, handleColumnResizeStart, resizingColumnIndex, filters, onFiltersChange, handleFilterClick])
 
   if (totalCount === 0 && !isLoading) {
     return (
@@ -618,16 +1243,19 @@ export default function VirtualizedGrid<T>({
       className={className}
     >
       {header}
-      <Box sx={{
-        flex: 1,
-        minHeight: 0,
-        position: 'relative',
-        height: '100%',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1,
-        overflow: 'hidden',
-      }}>
+      <Box
+        ref={gridContainerRef}
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          position: 'relative',
+          height: '100%',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          overflow: 'hidden',
+        }}
+      >
         <AutoSizer
           renderProp={({ height, width }) => {
             if (!height || !width) return null
@@ -660,6 +1288,22 @@ export default function VirtualizedGrid<T>({
         />
       </Box>
       {footer}
+      <Snackbar
+        open={copyNotification}
+        autoHideDuration={2000}
+        onClose={() => setCopyNotification(false)}
+        message="Copied to clipboard"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+      {activeFilterColumn && (
+        <ColumnFilterPopover
+          column={columns.find(c => c.key === activeFilterColumn)!}
+          value={filters?.[activeFilterColumn] ?? null}
+          onChange={(value) => handleFilterChange(activeFilterColumn, value)}
+          anchorEl={filterAnchorEl}
+          onClose={handleFilterClose}
+        />
+      )}
     </Box>
   )
 }

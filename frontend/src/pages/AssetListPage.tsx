@@ -99,6 +99,24 @@ export default function AssetListPage() {
     return asset?.attributes?.[apiKey] ?? null
   }
 
+  // Helper to format attribute value as string for copying
+  const formatAttributeValueForCopy = (value: any, attributeType: string): string => {
+    if (value === null || value === undefined) return ''
+    if (attributeType === 'json') {
+      const jsonValue = value.rawJson ?? value
+      return typeof jsonValue === 'string' ? jsonValue : JSON.stringify(jsonValue)
+    }
+    if (attributeType === 'boolean') return value ? 'Yes' : 'No'
+    if (attributeType === 'date' || attributeType === 'datetime') {
+      const date = new Date(value)
+      return attributeType === 'datetime' ? date.toLocaleString() : date.toLocaleDateString()
+    }
+    if (attributeType === 'link') {
+      return typeof value === 'string' ? value : value.url || ''
+    }
+    return String(value)
+  }
+
   // Build column definitions
   const columns: ColumnDefinition<Asset>[] = useMemo(() => {
     const baseColumns: ColumnDefinition<Asset>[] = [
@@ -123,6 +141,7 @@ export default function AssetListPage() {
             </Link>
           </Box>
         ),
+        getCellValue: (asset) => asset.name,
         headerSx: { fontWeight: 600 },
       },
       {
@@ -135,6 +154,7 @@ export default function AssetListPage() {
             {formatCoordinates(asset.location)}
           </Box>
         ),
+        getCellValue: (asset) => formatCoordinates(asset.location),
         headerSx: { fontWeight: 600 },
       },
     ]
@@ -156,8 +176,13 @@ export default function AssetListPage() {
             value={getAttributeValue(asset, attr.apiKey)}
             maxLines={1}
             lineNumbers="fullscreen"
+            showCopyButton={false}
           />
         </Box>
+      ),
+      getCellValue: (asset) => formatAttributeValueForCopy(
+        getAttributeValue(asset, attr.apiKey),
+        attr.attributeType
       ),
       headerSx: { fontWeight: 600 },
     }))
