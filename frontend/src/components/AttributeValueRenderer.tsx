@@ -14,6 +14,8 @@ interface AttributeValueRendererProps {
   lineNumbers?: 'both' | 'inline' | 'fullscreen' | 'none'
   /** Whether to show copy button on supported renderers (default: true) */
   showCopyButton?: boolean
+  /** Compact mode - disables TruncatedText features like expand dialog (default: false) */
+  compact?: boolean
 }
 
 // Compact JSON renderer with fullscreen button for grid cells
@@ -201,11 +203,19 @@ function BooleanRenderer({ value, showCopyButton = true }: { value: boolean; sho
 }
 
 // Date/datetime renderer
-function DateRenderer({ value, includeTime = false, showCopyButton = true }: { value: string; includeTime?: boolean; showCopyButton?: boolean }) {
+function DateRenderer({ value, includeTime = false, showCopyButton = true, compact = false }: { value: string; includeTime?: boolean; showCopyButton?: boolean; compact?: boolean }) {
   const date = new Date(value)
   const formatted = includeTime
     ? date.toLocaleString()
     : date.toLocaleDateString()
+
+  if (compact) {
+    return (
+      <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {formatted}
+      </Typography>
+    )
+  }
 
   return (
     <TruncatedText variant="body2" maxLines={1} title="Date" showCopy={showCopyButton}>
@@ -215,11 +225,37 @@ function DateRenderer({ value, includeTime = false, showCopyButton = true }: { v
 }
 
 // Link renderer - supports both string URLs and {url, text} objects
-function LinkRenderer({ value, maxLines = 3, showCopyButton = true }: { value: string | { url: string; text?: string }; maxLines?: number; showCopyButton?: boolean }) {
+function LinkRenderer({ value, maxLines = 3, showCopyButton = true, compact = false }: { value: string | { url: string; text?: string }; maxLines?: number; showCopyButton?: boolean; compact?: boolean }) {
   // Normalize value to always have url and text
   const linkData = typeof value === 'string'
     ? { url: value, text: value }
     : { url: value.url, text: value.text || value.url }
+
+  if (compact) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'primary.main',
+            cursor: 'pointer',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+            minWidth: 0,
+            '&:hover': { textDecoration: 'underline' },
+          }}
+          onClick={() => window.open(linkData.url, '_blank')}
+        >
+          {linkData.text}
+        </Typography>
+        <IconButton size="small" href={linkData.url} target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0, p: 0.25 }}>
+          <OpenInNewIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+      </Box>
+    )
+  }
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
@@ -245,12 +281,20 @@ function LinkRenderer({ value, maxLines = 3, showCopyButton = true }: { value: s
 }
 
 // Number renderer with formatting and optional unit
-function NumberRenderer({ value, unit, showCopyButton = true }: { value: number; unit?: string; showCopyButton?: boolean }) {
+function NumberRenderer({ value, unit, showCopyButton = true, compact = false }: { value: number; unit?: string; showCopyButton?: boolean; compact?: boolean }) {
   const formatted = typeof value === 'number' && !Number.isInteger(value)
     ? value.toLocaleString(undefined, { maximumFractionDigits: 6 })
     : value.toLocaleString()
 
   const displayText = unit ? `${formatted} ${unit}` : formatted
+
+  if (compact) {
+    return (
+      <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayText}
+      </Typography>
+    )
+  }
 
   return (
     <TruncatedText variant="body2" maxLines={1} title="Number" showCopy={showCopyButton} sx={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -260,7 +304,25 @@ function NumberRenderer({ value, unit, showCopyButton = true }: { value: number;
 }
 
 // Default text renderer using TruncatedText
-function SimpleTextRenderer({ value, maxLines = 3, showCopyButton = true }: { value: string; maxLines?: number; showCopyButton?: boolean }) {
+function SimpleTextRenderer({ value, maxLines = 3, showCopyButton = true, compact = false }: { value: string; maxLines?: number; showCopyButton?: boolean; compact?: boolean }) {
+  if (compact) {
+    return (
+      <Typography
+        variant="body2"
+        sx={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: maxLines === 1 ? 'nowrap' : undefined,
+          display: maxLines > 1 ? '-webkit-box' : undefined,
+          WebkitLineClamp: maxLines > 1 ? maxLines : undefined,
+          WebkitBoxOrient: maxLines > 1 ? 'vertical' : undefined,
+        }}
+      >
+        {value}
+      </Typography>
+    )
+  }
+
   return (
     <TruncatedText variant="body2" maxLines={maxLines} title="Text" showCopy={showCopyButton}>
       {value}
@@ -268,7 +330,7 @@ function SimpleTextRenderer({ value, maxLines = 3, showCopyButton = true }: { va
   )
 }
 
-export default function AttributeValueRenderer({ attribute, value, maxLines = 3, lineNumbers = 'both', showCopyButton = true }: AttributeValueRendererProps) {
+export default function AttributeValueRenderer({ attribute, value, maxLines = 3, lineNumbers = 'both', showCopyButton = true, compact = false }: AttributeValueRendererProps) {
   // Handle null/undefined
   if (value === null || value === undefined) {
     return <Typography variant="body2" color="text.disabled">—</Typography>
@@ -283,28 +345,28 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
       return <BooleanRenderer value={Boolean(value)} showCopyButton={showCopyButton} />
 
     case 'date':
-      return <DateRenderer value={value} includeTime={false} showCopyButton={showCopyButton} />
+      return <DateRenderer value={value} includeTime={false} showCopyButton={showCopyButton} compact={compact} />
 
     case 'datetime':
-      return <DateRenderer value={value} includeTime={true} showCopyButton={showCopyButton} />
+      return <DateRenderer value={value} includeTime={true} showCopyButton={showCopyButton} compact={compact} />
 
     case 'number':
-      return <NumberRenderer value={value} unit={attribute.unit} showCopyButton={showCopyButton} />
+      return <NumberRenderer value={value} unit={attribute.unit} showCopyButton={showCopyButton} compact={compact} />
 
     case 'link':
-      return <LinkRenderer value={value} maxLines={maxLines} showCopyButton={showCopyButton} />
+      return <LinkRenderer value={value} maxLines={maxLines} showCopyButton={showCopyButton} compact={compact} />
 
     case 'text':
     default:
       // Check if it looks like a URL
       if (typeof value === 'string' && /^https?:\/\//.test(value)) {
-        return <LinkRenderer value={value} maxLines={maxLines} showCopyButton={showCopyButton} />
+        return <LinkRenderer value={value} maxLines={maxLines} showCopyButton={showCopyButton} compact={compact} />
       }
       // For objects that aren't typed as JSON, still render as JSON
       if (typeof value === 'object') {
         return <JsonRenderer value={value} maxLines={maxLines} />
       }
-      return <SimpleTextRenderer value={String(value)} maxLines={maxLines} showCopyButton={showCopyButton} />
+      return <SimpleTextRenderer value={String(value)} maxLines={maxLines} showCopyButton={showCopyButton} compact={compact} />
   }
 }
 

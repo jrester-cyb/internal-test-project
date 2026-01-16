@@ -1,8 +1,10 @@
-import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
+import { Box, Typography, Stack, Switch as MuiSwitch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import EditOffIcon from '@mui/icons-material/EditOff'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import CloseIcon from '@mui/icons-material/Close'
+import CheckIcon from '@mui/icons-material/Check'
+import ClearIcon from '@mui/icons-material/Clear'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -100,8 +102,37 @@ export default function AssetListPage() {
           const attrId = columnKey.replace('attr-', '')
           const attribute = attributes.find(a => a.id === attrId)
           if (attribute) {
-            // Store empty/whitespace-only values as null so AttributeValueRenderer shows placeholder
-            const valueToStore = newValue.trim() === '' ? null : newValue
+            // Convert value based on attribute type
+            let valueToStore: any = newValue.trim() === '' ? null : newValue
+
+            if (valueToStore !== null) {
+              switch (attribute.attributeType) {
+                case 'boolean':
+                  valueToStore = newValue === 'true'
+                  break
+                case 'number':
+                  valueToStore = parseFloat(newValue) || null
+                  break
+                case 'date':
+                case 'datetime':
+                  // Store as ISO string
+                  valueToStore = newValue ? new Date(newValue).toISOString() : null
+                  break
+                case 'link':
+                  // Try to parse as JSON object {url, text}, otherwise keep as string URL
+                  try {
+                    const parsed = JSON.parse(newValue)
+                    if (typeof parsed === 'object' && parsed.url !== undefined) {
+                      valueToStore = parsed
+                    }
+                  } catch {
+                    // Keep as string URL
+                  }
+                  break
+                // 'json', 'text', 'string' stay as strings
+              }
+            }
+
             updated.set(rowIndex, {
               ...existingAsset,
               attributes: {
@@ -149,7 +180,9 @@ export default function AssetListPage() {
       return attributeType === 'datetime' ? date.toLocaleString() : date.toLocaleDateString()
     }
     if (attributeType === 'link') {
-      return typeof value === 'string' ? value : value.url || ''
+      if (typeof value === 'string') return value
+      // For {url, text} objects, show display text if available, otherwise URL
+      return value.text || value.url || ''
     }
     return String(value)
   }
@@ -338,6 +371,558 @@ export default function AssetListPage() {
     )
   }, [])
 
+  // Number cell editor with unit display
+  const createNumberWithUnitEditor = useCallback((unit?: string) => {
+    return ({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+      // Filter initial value to only valid number characters
+      const filterNumber = (v: string) => v.replace(/[^0-9.\-]/g, '')
+      const [editValue, setEditValue] = useState(filterNumber(value))
+      const inputRef = useRef<HTMLInputElement>(null)
+      // Detect if opened via keyboard input (single valid digit/character)
+      const isKeyboardInputRef = useRef(value.length === 1 && /^[0-9.\-]$/.test(value))
+
+      useEffect(() => {
+        const input = inputRef.current
+        if (!input) return
+        input.focus()
+        // If opened via keyboard input, put cursor at end
+        // Otherwise select all text
+        if (isKeyboardInputRef.current) {
+          const len = input.value.length
+          input.setSelectionRange(len, len)
+        } else {
+          input.select()
+        }
+      }, [])
+
+      const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Only allow valid number characters: digits, decimal point, minus sign
+        const filtered = filterNumber(e.target.value)
+        setEditValue(filtered)
+      }
+
+      const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onSave(editValue)
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          onCancel()
+        } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          onSave(editValue)
+          return // Don't stop propagation - let grid handle navigation
+        }
+        e.stopPropagation()
+      }
+
+      return (
+        <Box
+          style={style}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            bgcolor: 'background.paper',
+            position: 'relative',
+            zIndex: 2,
+            borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+            borderRight: selectionBorders?.right ? 'none' : '1px solid',
+            borderRightColor: 'divider',
+            borderBottomColor: 'divider',
+            '&::after': selectionBorders ? {
+              content: '""',
+              position: 'absolute',
+              top: -1,
+              right: -1,
+              bottom: -1,
+              left: -1,
+              borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+              borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+              borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+              borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+              borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+              pointerEvents: 'none',
+              zIndex: 10,
+            } : undefined,
+            boxSizing: 'border-box',
+          }}
+        >
+          <TextField
+            inputRef={inputRef}
+            value={editValue}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onBlur={() => onSave(editValue)}
+            variant="standard"
+            fullWidth
+            type="text"
+            inputMode="decimal"
+            size="small"
+            slotProps={{
+              input: {
+                disableUnderline: true,
+                endAdornment: unit ? (
+                  <InputAdornment position="end">
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                      {unit}
+                    </Typography>
+                  </InputAdornment>
+                ) : undefined,
+                sx: {
+                  px: 1,
+                  py: 0.5,
+                  fontSize: '0.75rem',
+                  fontVariantNumeric: 'tabular-nums',
+                }
+              }
+            }}
+          />
+        </Box>
+      )
+    }
+  }, [])
+
+  // Boolean cell editor with toggle buttons
+  const BooleanCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+    // Parse value - handle string 'true'/'false' and actual booleans
+    const parseBool = (v: string) => v === 'true' || v === 'Yes' || v === '1'
+    const [editValue, setEditValue] = useState<boolean | null>(
+      value === '' ? null : parseBool(value)
+    )
+
+    const handleChange = (_: React.MouseEvent<HTMLElement>, newValue: boolean | null) => {
+      setEditValue(newValue)
+      // Save immediately on selection
+      if (newValue !== null) {
+        onSave(newValue ? 'true' : 'false')
+      }
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        onSave(editValue !== null ? (editValue ? 'true' : 'false') : '')
+      }
+      e.stopPropagation()
+    }
+
+    return (
+      <Box
+        style={style}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'background.paper',
+          position: 'relative',
+          zIndex: 2,
+          borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+          borderRight: selectionBorders?.right ? 'none' : '1px solid',
+          borderRightColor: 'divider',
+          borderBottomColor: 'divider',
+          '&::after': selectionBorders ? {
+            content: '""',
+            position: 'absolute',
+            top: -1,
+            right: -1,
+            bottom: -1,
+            left: -1,
+            borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+            borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+            borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+            borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+            borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+            pointerEvents: 'none',
+            zIndex: 10,
+          } : undefined,
+          boxSizing: 'border-box',
+        }}
+      >
+        <ToggleButtonGroup
+          value={editValue}
+          exclusive
+          onChange={handleChange}
+          size="small"
+          sx={{ height: 28 }}
+        >
+          <ToggleButton value={true} sx={{ px: 1.5, py: 0.25 }}>
+            <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />
+          </ToggleButton>
+          <ToggleButton value={false} sx={{ px: 1.5, py: 0.25 }}>
+            <ClearIcon sx={{ fontSize: 16, color: 'error.main' }} />
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+    )
+  }, [])
+
+  // Date cell editor
+  const DateCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+    // Convert display date to input format (YYYY-MM-DD)
+    const parseDate = (v: string) => {
+      if (!v) return ''
+      try {
+        const date = new Date(v)
+        if (isNaN(date.getTime())) return ''
+        return date.toISOString().split('T')[0]
+      } catch {
+        return ''
+      }
+    }
+    const [editValue, setEditValue] = useState(parseDate(value))
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+      inputRef.current?.focus()
+    }, [])
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onSave(editValue)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+      e.stopPropagation()
+    }
+
+    return (
+      <Box
+        style={style}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          bgcolor: 'background.paper',
+          position: 'relative',
+          zIndex: 2,
+          borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+          borderRight: selectionBorders?.right ? 'none' : '1px solid',
+          borderRightColor: 'divider',
+          borderBottomColor: 'divider',
+          '&::after': selectionBorders ? {
+            content: '""',
+            position: 'absolute',
+            top: -1,
+            right: -1,
+            bottom: -1,
+            left: -1,
+            borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+            borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+            borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+            borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+            borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+            pointerEvents: 'none',
+            zIndex: 10,
+          } : undefined,
+          boxSizing: 'border-box',
+        }}
+      >
+        <TextField
+          inputRef={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => onSave(editValue)}
+          variant="standard"
+          fullWidth
+          type="date"
+          size="small"
+          slotProps={{
+            input: {
+              disableUnderline: true,
+              sx: {
+                px: 1,
+                py: 0.5,
+                fontSize: '0.75rem',
+              }
+            }
+          }}
+        />
+      </Box>
+    )
+  }, [])
+
+  // DateTime cell editor
+  const DateTimeCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+    // Convert display datetime to input format (YYYY-MM-DDTHH:mm)
+    const parseDateTime = (v: string) => {
+      if (!v) return ''
+      try {
+        const date = new Date(v)
+        if (isNaN(date.getTime())) return ''
+        return date.toISOString().slice(0, 16)
+      } catch {
+        return ''
+      }
+    }
+    const [editValue, setEditValue] = useState(parseDateTime(value))
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+      inputRef.current?.focus()
+    }, [])
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onSave(editValue)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+      e.stopPropagation()
+    }
+
+    return (
+      <Box
+        style={style}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          bgcolor: 'background.paper',
+          position: 'relative',
+          zIndex: 2,
+          borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+          borderRight: selectionBorders?.right ? 'none' : '1px solid',
+          borderRightColor: 'divider',
+          borderBottomColor: 'divider',
+          '&::after': selectionBorders ? {
+            content: '""',
+            position: 'absolute',
+            top: -1,
+            right: -1,
+            bottom: -1,
+            left: -1,
+            borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+            borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+            borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+            borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+            borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+            pointerEvents: 'none',
+            zIndex: 10,
+          } : undefined,
+          boxSizing: 'border-box',
+        }}
+      >
+        <TextField
+          inputRef={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => onSave(editValue)}
+          variant="standard"
+          fullWidth
+          type="datetime-local"
+          size="small"
+          slotProps={{
+            input: {
+              disableUnderline: true,
+              sx: {
+                px: 1,
+                py: 0.5,
+                fontSize: '0.75rem',
+              }
+            }
+          }}
+        />
+      </Box>
+    )
+  }, [])
+
+  // Link cell editor with popover for URL and display text
+  const LinkCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+    // Parse incoming value - could be string URL or {url, text} object
+    // Also detect if value is a single printable character (from keyboard input)
+    const parseLink = (v: string): { url: string; text: string; isKeyboardInput: boolean } => {
+      if (!v) return { url: '', text: '', isKeyboardInput: false }
+      // Check if this is a single printable character (keyboard input to start editing)
+      if (v.length === 1 && /^[a-zA-Z0-9]$/.test(v)) {
+        return { url: v, text: '', isKeyboardInput: true }
+      }
+      try {
+        const parsed = JSON.parse(v)
+        if (typeof parsed === 'object' && parsed.url !== undefined) {
+          return { url: parsed.url || '', text: parsed.text || '', isKeyboardInput: false }
+        }
+      } catch {
+        // Not JSON, treat as plain URL string
+      }
+      return { url: v, text: '', isKeyboardInput: false }
+    }
+
+    const initialLink = parseLink(value)
+    const [urlValue, setUrlValue] = useState(initialLink.url)
+    const [textValue, setTextValue] = useState(initialLink.text)
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+    const cellRef = useRef<HTMLDivElement>(null)
+    const urlInputRef = useRef<HTMLInputElement>(null)
+    const isKeyboardInputRef = useRef(initialLink.isKeyboardInput)
+
+    // Open popover on mount
+    useEffect(() => {
+      if (cellRef.current) {
+        setAnchorEl(cellRef.current)
+      }
+    }, [])
+
+    // Focus URL input when popover opens
+    useEffect(() => {
+      if (anchorEl) {
+        setTimeout(() => {
+          const input = urlInputRef.current
+          if (!input) return
+          input.focus()
+          // If opened via keyboard input, put cursor at end (after the typed character)
+          // Otherwise select all text
+          if (isKeyboardInputRef.current) {
+            const len = input.value.length
+            input.setSelectionRange(len, len)
+          } else {
+            input.select()
+          }
+        }, 50)
+      }
+    }, [anchorEl])
+
+    const saveValue = () => {
+      // If both are empty, save empty string
+      if (!urlValue && !textValue) {
+        onSave('')
+        return
+      }
+      // If only URL with no display text, just save the URL string for simplicity
+      if (urlValue && !textValue) {
+        onSave(urlValue)
+        return
+      }
+      // Save as JSON object with url and text
+      onSave(JSON.stringify({ url: urlValue, text: textValue }))
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        saveValue()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+      e.stopPropagation()
+    }
+
+    const handlePopoverClose = () => {
+      saveValue()
+    }
+
+    // Display text for the cell
+    const displayText = textValue || urlValue || ''
+
+    return (
+      <>
+        <Box
+          ref={cellRef}
+          style={style}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            bgcolor: 'background.paper',
+            position: 'relative',
+            zIndex: 2,
+            borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+            borderRight: selectionBorders?.right ? 'none' : '1px solid',
+            borderRightColor: 'divider',
+            borderBottomColor: 'divider',
+            '&::after': selectionBorders ? {
+              content: '""',
+              position: 'absolute',
+              top: -1,
+              right: -1,
+              bottom: -1,
+              left: -1,
+              borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+              borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+              borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+              borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+              borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+              pointerEvents: 'none',
+              zIndex: 10,
+            } : undefined,
+            boxSizing: 'border-box',
+            px: 1,
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.75rem',
+              color: urlValue ? 'primary.main' : 'text.secondary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {displayText || 'Click to edit link...'}
+          </Typography>
+        </Box>
+
+        <Popover
+          open={Boolean(anchorEl)}
+          anchorEl={anchorEl}
+          onClose={handlePopoverClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+          slotProps={{
+            paper: {
+              sx: { p: 2, width: 320 }
+            }
+          }}
+        >
+          <Stack spacing={2}>
+            <TextField
+              inputRef={urlInputRef}
+              value={urlValue}
+              onChange={(e) => setUrlValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              label="URL"
+              type="url"
+              placeholder="https://..."
+              size="small"
+              fullWidth
+            />
+            <TextField
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              label="Display Text"
+              placeholder="Optional text to show instead of URL"
+              size="small"
+              fullWidth
+            />
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button size="small" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button size="small" variant="contained" onClick={saveValue}>
+                Save
+              </Button>
+            </Stack>
+          </Stack>
+        </Popover>
+      </>
+    )
+  }, [])
+
   // Build column definitions
   const columns: ColumnDefinition<Asset>[] = useMemo(() => {
     const baseColumns: ColumnDefinition<Asset>[] = [
@@ -385,6 +970,22 @@ export default function AssetListPage() {
       },
     ]
 
+    // Helper to get the editor for an attribute type
+    const getEditorForAttribute = (attr: AssetTypeAttribute) => {
+      switch (attr.attributeType) {
+        case 'json': return JsonCellEditor
+        case 'number': return createNumberWithUnitEditor(attr.unit)
+        case 'boolean': return BooleanCellEditor
+        case 'date': return DateCellEditor
+        case 'datetime': return DateTimeCellEditor
+        case 'link': return LinkCellEditor
+        default: return undefined
+      }
+    }
+
+    // All attribute types are now editable
+    const editableTypes = ['string', 'number', 'text', 'json', 'boolean', 'date', 'datetime', 'link']
+
     // Add dynamic attribute columns
     const attributeColumns: ColumnDefinition<Asset>[] = displayAttributes.map(attr => ({
       key: `attr-${attr.id}`,
@@ -395,8 +996,8 @@ export default function AssetListPage() {
       ),
       width: 150,
       minWidth: 100,
-      editable: editingEnabled && ['string', 'number', 'text', 'json'].includes(attr.attributeType),
-      editor: attr.attributeType === 'json' ? JsonCellEditor : undefined,
+      editable: editingEnabled && editableTypes.includes(attr.attributeType),
+      editor: getEditorForAttribute(attr),
       render: (asset) => (
         <Box sx={{ px: 2, overflow: 'hidden', opacity: attr.isHidden ? 0.5 : 1 }}>
           <AttributeValueRenderer
@@ -405,6 +1006,7 @@ export default function AssetListPage() {
             maxLines={1}
             lineNumbers="fullscreen"
             showCopyButton={false}
+            compact
           />
         </Box>
       ),
@@ -416,7 +1018,7 @@ export default function AssetListPage() {
     }))
 
     return [...baseColumns, ...attributeColumns]
-  }, [displayAttributes, location.state, editingEnabled, JsonCellEditor])
+  }, [displayAttributes, location.state, editingEnabled, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor])
 
   // Cell placeholder for loading state
   const cellPlaceholder = (
@@ -443,7 +1045,7 @@ export default function AssetListPage() {
           {hiddenCount > 0 && (
             <FormControlLabel
               control={
-                <Switch
+                <MuiSwitch
                   size="small"
                   checked={showHidden}
                   onChange={(e) => setShowHidden(e.target.checked)}
