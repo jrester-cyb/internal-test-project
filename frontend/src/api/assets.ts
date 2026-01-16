@@ -189,41 +189,33 @@ export async function fetchAssetType(workspaceId: string, assetTypeId: string) {
   return response.json()
 }
 
-export interface CursorPaginatedResponse<T> {
+export interface OffsetPaginatedResponse<T> {
+  count: number
   next: string | null
   previous: string | null
   results: T[]
 }
 
 /**
- * Fetch assets using cursor-based pagination.
- * Much faster than page-number pagination for large datasets (no COUNT query).
- * 
+ * Fetch assets using limit/offset pagination.
+ *
  * @param workspaceId - Workspace ID
- * @param assetTypeId - Asset type ID  
- * @param cursor - Cursor URL for next/previous page (null for first page)
- * @param pageSize - Number of results per page
+ * @param assetTypeId - Asset type ID
+ * @param limit - Number of results per page
+ * @param offset - Offset to start from
  */
 export async function fetchAssetsByType(
-  workspaceId: string, 
-  assetTypeId: string, 
-  cursor: string | null = null, 
-  pageSize: number = 50
-): Promise<CursorPaginatedResponse<any>> {
-  let url: string
-  
-  if (cursor) {
-    // Cursor URL is absolute - use it directly
-    url = cursor
-  } else {
-    // First page - build URL with cursor_pagination=true
-    const params = new URLSearchParams({
-      cursor_pagination: 'true',
-      page_size: pageSize.toString()
-    })
-    url = workspaceUrl(workspaceId, `asset-types/${assetTypeId}/assets/?${params}`)
-  }
-  
+  workspaceId: string,
+  assetTypeId: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<OffsetPaginatedResponse<any>> {
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    offset: offset.toString()
+  })
+  const url = workspaceUrl(workspaceId, `asset-types/${assetTypeId}/assets/?${params}`)
+
   const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to fetch assets by type')
   return response.json()

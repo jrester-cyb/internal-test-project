@@ -113,6 +113,7 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": f"redis://{os.environ.get('REDIS_HOST', 'redis')}:6379/1",
+        "TIMEOUT": 300,  # Default cache TTL: 5 minutes
     }
 }
 
@@ -175,8 +176,8 @@ REST_FRAMEWORK = {
 
 
 # Django Silk profiling settings
-SILKY_PYTHON_PROFILER = True
-SILKY_PYTHON_PROFILER_BINARY = True
+# SILKY_PYTHON_PROFILER = True
+# SILKY_PYTHON_PROFILER_BINARY = True
 SILKY_PYTHON_PROFILER_RESULT_PATH = "silk/profiler/"
 SILKY_META = True
 

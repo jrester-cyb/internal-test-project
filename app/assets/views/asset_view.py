@@ -174,51 +174,11 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         # Select related for asset_type and organization to avoid N+1 queries
         queryset = queryset.select_related("asset_type", "organization")
 
-        # Prefetch attributes with values - use subquery approach (CASE WHEN is actually optimal here)
-        # PostgreSQL's query planner only evaluates the matching WHEN branch per row
-        from django.db.models.expressions import RawSQL
-        from django.db.models import JSONField
-        from django.contrib.contenttypes.models import ContentType
-        from ..models import (
-            BaseAttributeValue,
-            TextAttributeValue,
-            NumberAttributeValue,
-            BooleanAttributeValue,
-            DateAttributeValue,
-            DateTimeAttributeValue,
-            JSONAttributeValue,
-        )
+        # Prefetch attributes with typed_value annotation to avoid N+1 polymorphic queries
+        from django.db.models import Prefetch
+        from ..models import BaseAttributeValue
 
-        # Get content type IDs dynamically - cached by Django's ContentType framework
-        ct_text = ContentType.objects.get_for_model(TextAttributeValue).id
-        ct_number = ContentType.objects.get_for_model(NumberAttributeValue).id
-        ct_boolean = ContentType.objects.get_for_model(BooleanAttributeValue).id
-        ct_date = ContentType.objects.get_for_model(DateAttributeValue).id
-        ct_datetime = ContentType.objects.get_for_model(DateTimeAttributeValue).id
-        ct_json = ContentType.objects.get_for_model(JSONAttributeValue).id
-
-        # CASE WHEN based on polymorphic_ctype_id - only evaluates 1 subquery per row
-        typed_value_sql = RawSQL(
-            f"""
-            CASE assets_baseattributevalue.polymorphic_ctype_id
-                WHEN {ct_text} THEN (SELECT to_jsonb(tv.value) FROM assets_textattributevalue tv 
-                              WHERE tv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_number} THEN (SELECT to_jsonb(nv.value) FROM assets_numberattributevalue nv 
-                              WHERE nv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_boolean} THEN (SELECT to_jsonb(bv.value) FROM assets_booleanattributevalue bv 
-                              WHERE bv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_date} THEN (SELECT to_jsonb(dv.value) FROM assets_dateattributevalue dv 
-                              WHERE dv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_datetime} THEN (SELECT to_jsonb(dtv.value) FROM assets_datetimeattributevalue dtv 
-                              WHERE dtv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_json} THEN (SELECT jv.value FROM assets_jsonattributevalue jv 
-                              WHERE jv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-            END
-            """,
-            [],
-            output_field=JSONField(),
-        )
-
+        typed_value_sql = self._get_typed_value_annotation()
         attr_queryset = BaseAttributeValue.objects.non_polymorphic().annotate(
             typed_value=typed_value_sql
         )
@@ -250,6 +210,53 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             context["_api_key_map"] = api_key_map
 
         return context
+
+    def _get_typed_value_annotation(self):
+        """Build the typed_value SQL annotation for attribute values.
+
+        Returns a RawSQL annotation that extracts the typed value from polymorphic
+        attribute value tables using a CASE WHEN based on content type.
+        """
+        from django.db.models.expressions import RawSQL
+        from django.db.models import JSONField
+        from django.contrib.contenttypes.models import ContentType
+        from ..models import (
+            TextAttributeValue,
+            NumberAttributeValue,
+            BooleanAttributeValue,
+            DateAttributeValue,
+            DateTimeAttributeValue,
+            JSONAttributeValue,
+        )
+
+        # Get content type IDs dynamically - cached by Django's ContentType framework
+        ct_text = ContentType.objects.get_for_model(TextAttributeValue).id
+        ct_number = ContentType.objects.get_for_model(NumberAttributeValue).id
+        ct_boolean = ContentType.objects.get_for_model(BooleanAttributeValue).id
+        ct_date = ContentType.objects.get_for_model(DateAttributeValue).id
+        ct_datetime = ContentType.objects.get_for_model(DateTimeAttributeValue).id
+        ct_json = ContentType.objects.get_for_model(JSONAttributeValue).id
+
+        return RawSQL(
+            f"""
+            CASE assets_baseattributevalue.polymorphic_ctype_id
+                WHEN {ct_text} THEN (SELECT to_jsonb(tv.value) FROM assets_textattributevalue tv
+                              WHERE tv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_number} THEN (SELECT to_jsonb(nv.value) FROM assets_numberattributevalue nv
+                              WHERE nv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_boolean} THEN (SELECT to_jsonb(bv.value) FROM assets_booleanattributevalue bv
+                              WHERE bv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_date} THEN (SELECT to_jsonb(dv.value) FROM assets_dateattributevalue dv
+                              WHERE dv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_datetime} THEN (SELECT to_jsonb(dtv.value) FROM assets_datetimeattributevalue dtv
+                              WHERE dtv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_json} THEN (SELECT jv.value FROM assets_jsonattributevalue jv
+                              WHERE jv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+            END
+            """,
+            [],
+            output_field=JSONField(),
+        )
 
     def _get_api_key_map(self, assettype_pk, workspace_pk=None):
         """Get api_key map with Redis caching - cache key includes workspace for proper isolation"""
@@ -296,6 +303,48 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         return api_key_map
 
+    def _batch_load_overrides(self, assets, workspace_pk):
+        """Batch-load override data for a list of assets to avoid N+1 queries.
+
+        Returns a tuple of (all_override_ids_by_asset, workspace_overrides_by_asset)
+        that can be passed to the serializer context.
+        """
+        from ..models import WorkspaceAttributeValueOverride
+
+        asset_ids = [a.id for a in assets]
+        if not asset_ids or not workspace_pk:
+            return None, None
+
+        # Load all override value IDs for these assets (any workspace)
+        all_overrides = WorkspaceAttributeValueOverride.objects.filter(
+            override_value__asset_id__in=asset_ids
+        ).values("override_value__asset_id", "override_value_id")
+
+        # Load overrides specific to this workspace
+        workspace_overrides = WorkspaceAttributeValueOverride.objects.filter(
+            override_value__asset_id__in=asset_ids,
+            workspace_id=workspace_pk,
+        ).values(
+            "override_value__asset_id",
+            "asset_type_attribute_id",
+            "override_value_id",
+        )
+
+        # Build per-asset lookup dicts
+        all_override_ids_by_asset = {}
+        for o in all_overrides:
+            asset_id = o["override_value__asset_id"]
+            all_override_ids_by_asset.setdefault(asset_id, set()).add(
+                o["override_value_id"]
+            )
+
+        workspace_overrides_by_asset = {}
+        for o in workspace_overrides:
+            asset_id = o["override_value__asset_id"]
+            workspace_overrides_by_asset.setdefault(asset_id, []).append(o)
+
+        return all_override_ids_by_asset, workspace_overrides_by_asset
+
     def _get_cache_key(self, request):
         """Build cache key for asset list response.
 
@@ -337,22 +386,40 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if page is not None:
             context = self.get_serializer_context()
 
+            # Batch-load override data to avoid N+1 queries in serializer
+            workspace_pk = self.kwargs.get("workspace_pk")
+            all_override_ids, workspace_overrides = self._batch_load_overrides(
+                page, workspace_pk
+            )
+            if all_override_ids is not None:
+                context["_all_override_ids_by_asset"] = all_override_ids
+                context["_workspace_overrides_by_asset"] = workspace_overrides
+
             with silk_profile(name="3. serializer.data"):
                 serializer = self.get_serializer(page, many=True, context=context)
                 data = serializer.data
 
             with silk_profile(name="4. get_paginated_response"):
                 response = self.get_paginated_response(data)
-                # Cache the response data for 60 seconds
-                cache.set(cache_key, response.data, timeout=60)
+                cache.set(cache_key, response.data)
                 return response
 
         # Non-paginated response
         assets = list(queryset)
         context = self.get_serializer_context()
+
+        # Batch-load override data to avoid N+1 queries in serializer
+        workspace_pk = self.kwargs.get("workspace_pk")
+        all_override_ids, workspace_overrides = self._batch_load_overrides(
+            assets, workspace_pk
+        )
+        if all_override_ids is not None:
+            context["_all_override_ids_by_asset"] = all_override_ids
+            context["_workspace_overrides_by_asset"] = workspace_overrides
+
         serializer = self.get_serializer(assets, many=True, context=context)
         response_data = serializer.data
-        cache.set(cache_key, response_data, timeout=60)
+        cache.set(cache_key, response_data)
         return Response(response_data)
 
     def retrieve(self, request, *args, **kwargs):
@@ -889,22 +956,47 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         queryset = queryset.distinct()
 
-        # Optimize prefetch with select_related to reduce queries (after distinct to avoid count issues)
+        # Optimize prefetch with typed_value annotation to avoid N+1 polymorphic queries
+        typed_value_sql = self._get_typed_value_annotation()
+        attr_queryset = BaseAttributeValue.objects.non_polymorphic().annotate(
+            typed_value=typed_value_sql
+        )
+
         queryset = queryset.select_related(
             "asset_type", "organization"
         ).prefetch_related(
-            Prefetch(
-                "attributes",
-                queryset=BaseAttributeValue.objects.all(),
-            ),
+            Prefetch("attributes", queryset=attr_queryset),
         )
 
+        # Build serializer context with workspace and api_key_map
+        context = self.get_serializer_context()
+        if workspace_pk:
+            from workspaces.models import Workspace
+
+            try:
+                context["workspace"] = Workspace.objects.get(pk=workspace_pk)
+            except Workspace.DoesNotExist:
+                pass
+
+        if assettype_pk:
+            context["_api_key_map"] = self._get_api_key_map(assettype_pk, workspace_pk)
+
         page = self.paginate_queryset(queryset)
+        assets = page if page is not None else list(queryset)
+
+        # Batch-load override data to avoid N+1 queries in serializer
+        all_override_ids, workspace_overrides = self._batch_load_overrides(
+            assets, workspace_pk
+        )
+        if all_override_ids is not None:
+            context["_all_override_ids_by_asset"] = all_override_ids
+            context["_workspace_overrides_by_asset"] = workspace_overrides
+
+        serializer = self.get_serializer(assets, many=True, context=context)
+
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @extend_schema(

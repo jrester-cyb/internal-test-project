@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, Drawer, useMediaQuery, useTheme, Checkbox } from '@mui/material'
+import { useState, useEffect, useRef, type ReactNode, lazy, Suspense } from 'react'
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, useMediaQuery, useTheme } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '../components/ActionButtons'
 import AttributeFilterPopover from '../components/AttributeFilterPopover'
@@ -11,17 +11,19 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import type { DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import AttributeChoicesSection from '../components/AttributeChoicesSection'
-import AuditLogSection from '../components/AssetAuditLogSection'
 import ConfirmDialog from '../components/ConfirmDialog'
 import CopyableText from '../components/CopyableText'
 import TruncatedText from '../components/TruncatedText'
 import UnitAutocomplete from '../components/UnitAutocomplete'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
-import JsonEditor from '../components/JsonEditor'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 import PvDrawer from '../components/PvDrawer'
+
+// Lazy load components that aren't needed on initial render
+const AttributeChoicesSection = lazy(() => import('../components/AttributeChoicesSection'))
+const AuditLogSection = lazy(() => import('../components/AssetAuditLogSection'))
+const JsonEditor = lazy(() => import('../components/JsonEditor'))
 
 export default function AssetTypeAttributesPage() {
   const loaderData = useLoaderData() as {
@@ -243,19 +245,45 @@ export default function AssetTypeAttributesPage() {
     return () => resizeObserver.disconnect()
   }, [])
 
-  // Fetch unit categories on mount (for details panel display)
+  // Fetch unit categories after initial render (deferred to avoid blocking UI)
   useEffect(() => {
-    fetchUnitCategories()
-      .then(categories => setUnitCategories(categories))
-      .catch(err => console.error('Failed to fetch unit categories:', err))
+    const fetchData = () => {
+      fetchUnitCategories()
+        .then(categories => setUnitCategories(categories))
+        .catch(err => console.error('Failed to fetch unit categories:', err))
+    }
+    // Defer to idle time to avoid blocking initial render
+    const id = 'requestIdleCallback' in window
+      ? (window as any).requestIdleCallback(fetchData)
+      : setTimeout(fetchData, 100)
+    return () => {
+      if ('cancelIdleCallback' in window) {
+        (window as any).cancelIdleCallback(id)
+      } else {
+        clearTimeout(id)
+      }
+    }
   }, [])
 
-  // Fetch available tags on mount
+  // Fetch available tags after initial render (deferred to avoid blocking UI)
   useEffect(() => {
     if (workspaceId && assetTypeId) {
-      fetchAttributeTags(workspaceId, assetTypeId)
-        .then(tags => setAvailableTags(tags))
-        .catch(err => console.error('Failed to fetch tags:', err))
+      const fetchData = () => {
+        fetchAttributeTags(workspaceId, assetTypeId)
+          .then(tags => setAvailableTags(tags))
+          .catch(err => console.error('Failed to fetch tags:', err))
+      }
+      // Defer to idle time to avoid blocking initial render
+      const id = 'requestIdleCallback' in window
+        ? (window as any).requestIdleCallback(fetchData)
+        : setTimeout(fetchData, 100)
+      return () => {
+        if ('cancelIdleCallback' in window) {
+          (window as any).cancelIdleCallback(id)
+        } else {
+          clearTimeout(id)
+        }
+      }
     }
   }, [workspaceId, assetTypeId])
 
@@ -1243,15 +1271,17 @@ export default function AssetTypeAttributesPage() {
         return (
           <DraggableSection key="choices" id="choices">
             {({ dndAttributes, listeners }) => (
-              <AttributeChoicesSection
-                attribute={displayedAttribute}
-                workspaceId={workspaceId!}
-                assetTypeId={assetTypeId!}
-                expanded={expandedSections.choices}
-                onToggleExpanded={() => toggleSection('choices')}
-                dragHandleProps={{ ...dndAttributes, ...listeners }}
-                readOnly={showingGlobalDefinition}
-              />
+              <Suspense fallback={<CircularProgress size={20} />}>
+                <AttributeChoicesSection
+                  attribute={displayedAttribute}
+                  workspaceId={workspaceId!}
+                  assetTypeId={assetTypeId!}
+                  expanded={expandedSections.choices}
+                  onToggleExpanded={() => toggleSection('choices')}
+                  dragHandleProps={{ ...dndAttributes, ...listeners }}
+                  readOnly={showingGlobalDefinition}
+                />
+              </Suspense>
             )}
           </DraggableSection>
         )
@@ -1321,11 +1351,13 @@ export default function AssetTypeAttributesPage() {
           >
             {displayedAttribute && workspaceId && (
               <Box sx={{ mt: 1 }}>
-                <AuditLogSection
-                  objectId={displayedAttribute.id}
-                  fetchFn={(id: string, pageSize: number) => fetchAttributeAuditLog(id, workspaceId, pageSize)}
-                  emptyMessage="No activity history found for this attribute."
-                />
+                <Suspense fallback={<CircularProgress size={20} />}>
+                  <AuditLogSection
+                    objectId={displayedAttribute.id}
+                    fetchFn={(id: string, pageSize: number) => fetchAttributeAuditLog(id, workspaceId, pageSize)}
+                    emptyMessage="No activity history found for this attribute."
+                  />
+                </Suspense>
               </Box>
             )}
           </DraggableSection>
@@ -1805,10 +1837,12 @@ export default function AssetTypeAttributesPage() {
             {formData.attributeType === 'json' && (
               <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Default Value</Typography>
-                <JsonEditor
-                  value={formData.defaultValue}
-                  onChange={(val) => setFormData({ ...formData, defaultValue: val })}
-                />
+                <Suspense fallback={<CircularProgress size={20} />}>
+                  <JsonEditor
+                    value={formData.defaultValue}
+                    onChange={(val) => setFormData({ ...formData, defaultValue: val })}
+                  />
+                </Suspense>
               </Box>
             )}
             <FormControlLabel

@@ -1,5 +1,6 @@
-import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material'
-import { OpenInNew as OpenInNewIcon, ContentCopy as CopyIcon } from '@mui/icons-material'
+import { useState } from 'react'
+import { Box, Typography, Chip, IconButton, Tooltip, Dialog, DialogTitle, DialogContent } from '@mui/material'
+import { OpenInNew as OpenInNewIcon, ContentCopy as CopyIcon, Fullscreen as FullscreenIcon, Close as CloseIcon } from '@mui/icons-material'
 import type { AssetTypeAttribute } from '../types'
 import TruncatedText from './TruncatedText'
 import { TextRenderer as TextRendererComponent } from './TextRenderer'
@@ -13,10 +14,111 @@ interface AttributeValueRendererProps {
   lineNumbers?: 'both' | 'inline' | 'fullscreen' | 'none'
 }
 
+// Compact JSON renderer with fullscreen button for grid cells
+function CompactJsonRenderer({ value }: { value: any }) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const compactJson = typeof value === 'string' ? value : JSON.stringify(value)
+  const formattedJson = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+
+  return (
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          width: '100%',
+          minWidth: 0,
+          '& .fullscreen-btn': { opacity: 0 },
+          '&:hover .fullscreen-btn': { opacity: 1 },
+        }}
+      >
+        <Typography
+          variant="body2"
+          component="span"
+          sx={{
+            fontFamily: 'monospace',
+            fontSize: '0.75rem',
+            color: 'text.secondary',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {compactJson}
+        </Typography>
+        <Tooltip title="View JSON" arrow>
+          <IconButton
+            className="fullscreen-btn"
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsFullscreen(true)
+            }}
+            sx={{
+              p: 0.25,
+              flexShrink: 0,
+              color: 'text.secondary',
+              transition: 'opacity 0.15s',
+              '&:hover': { color: 'primary.main' },
+            }}
+          >
+            <FullscreenIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
+      <Dialog
+        open={isFullscreen}
+        onClose={() => setIsFullscreen(false)}
+        maxWidth="md"
+        fullWidth
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+          <Typography variant="h6">JSON Value</Typography>
+          <IconButton onClick={() => setIsFullscreen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <Box
+            sx={{
+              bgcolor: 'action.hover',
+              '& textarea': {
+                fontSize: '0.875rem !important',
+              },
+              '& .syntax-highlight': {
+                fontSize: '0.875rem !important',
+              },
+            }}
+          >
+            <TextRendererComponent
+              value={formattedJson}
+              onChange={() => {}}
+              formatter={JsonFormatter}
+              height={400}
+              lineNumbers="inline"
+              enableFullscreen={false}
+            />
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 // Format JSON with syntax highlighting using TextRenderer
 function JsonRenderer({ value, maxLines = 3, lineNumbers = 'both' }: { value: any; maxLines?: number; lineNumbers?: 'both' | 'inline' | 'fullscreen' | 'none' }) {
   // Convert value to JSON string if it's not already a string
   const jsonText = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+
+  // For single line display (e.g., in grid cells), show a compact preview with fullscreen button
+  if (maxLines === 1) {
+    return <CompactJsonRenderer value={value} />
+  }
 
   // Calculate preview height based on line count
   const lines = jsonText.split('\n')

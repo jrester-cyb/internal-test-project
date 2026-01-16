@@ -418,21 +418,28 @@ const router = createBrowserRouter([
                         loader: async ({ params }) => {
                           const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
 
-                          // Fetch first page using cursor pagination (faster - no COUNT query)
-                          const response = await fetchAssetsByType(params.workspaceId!, params.assetTypeId!, null, 50)
+                          const PAGE_SIZE = 20
+                          // Fetch first page using limit/offset pagination
+                          const response = await fetchAssetsByType(params.workspaceId!, params.assetTypeId!, PAGE_SIZE, 0)
                           const assets = response.results || []
 
                           // Fetch ALL asset type attributes (not paginated) to show all columns
                           const attributes = await fetchAllAssetAttributeDefinitions(params.workspaceId!, params.assetTypeId!)
 
-                          return { assets, attributes, nextCursor: response.next, workspaceId: params.workspaceId };
+                          return {
+                            assets,
+                            attributes,
+                            totalCount: response.count,
+                            pageSize: PAGE_SIZE,
+                            workspaceId: params.workspaceId
+                          };
                         },
                       },
                       {
                         path: ":assetId",
                         element: <AssetDetailPage />,
                         handle: {
-                          crumb: ({ loaderData }) => loaderData?.asset?.name || 'Asset Detail',
+                          crumb: ({ loaderData, crumb }) => loaderData?.asset?.name || crumb?.assetName || 'Asset Detail',
                           hideNavbar: true,
                         },
                         loader: async ({ params }) => {

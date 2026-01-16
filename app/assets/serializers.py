@@ -318,8 +318,6 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
 
     def to_representation(self, instance):
         """Return the base attribute serialized with isOverride flag."""
-        from .serializers import GlobalAssetTypeAttributeSerializer
-
         # Get base attribute from cache if available, otherwise access directly
         global_attrs_cache = self.context.get("global_attributes_by_id", {})
         base_attr_id = (
@@ -373,8 +371,8 @@ class WorkspaceOverrideAssetTypeAttributeSerializer(serializers.ModelSerializer)
 class WorkspaceHiddenAttributeSerializer(serializers.Serializer):
     """Serializer for hidden attribute records."""
 
-    # When serializing let's return the serialized data of hidden_attribute
     def to_representation(self, instance):
+        """Return the hidden attribute serialized with isHidden flag."""
         return {
             **AssetTypeAttributeSerializer(
                 instance.hidden_attribute, context=self.context
@@ -780,17 +778,24 @@ class AssetSerializer(serializers.ModelSerializer):
 
         logger = logging.getLogger(__name__)
 
+        # Check for batch-loaded override data in context (from search endpoint optimization)
+        all_override_ids_by_asset = self.context.get("_all_override_ids_by_asset")
+        workspace_overrides_by_asset = self.context.get("_workspace_overrides_by_asset")
+
         # If global_values_only is requested, skip workspace-specific handling
         if global_values_only or not workspace:
             # Return global/base values only - exclude any override values
             from .models import WorkspaceAttributeValueOverride
 
-            # Get ALL override value IDs for this asset (any workspace) to exclude them
-            all_override_value_ids = set(
-                WorkspaceAttributeValueOverride.objects.filter(
-                    override_value__asset=obj,
-                ).values_list("override_value_id", flat=True)
-            )
+            # Use batch-loaded data if available, otherwise query
+            if all_override_ids_by_asset is not None:
+                all_override_value_ids = all_override_ids_by_asset.get(obj.id, set())
+            else:
+                all_override_value_ids = set(
+                    WorkspaceAttributeValueOverride.objects.filter(
+                        override_value__asset=obj,
+                    ).values_list("override_value_id", flat=True)
+                )
 
             return {
                 api_key_map[str(fv.asset_type_attribute_id)]: fv.typed_value
@@ -803,25 +808,30 @@ class AssetSerializer(serializers.ModelSerializer):
         # Workspace context exists and global_values_only is false - apply override logic
         from .models import WorkspaceAttributeValueOverride
 
-        # Get all override values for this asset in THIS workspace
-        overrides = (
-            WorkspaceAttributeValueOverride.objects.filter(
-                override_value__asset=obj,
-                workspace=workspace,
+        # Use batch-loaded data if available, otherwise query
+        if all_override_ids_by_asset is not None and workspace_overrides_by_asset is not None:
+            # Use pre-loaded override data from context
+            all_override_value_ids = all_override_ids_by_asset.get(obj.id, set())
+            overrides = workspace_overrides_by_asset.get(obj.id, [])
+        else:
+            # Fallback to per-asset queries (for non-search endpoints)
+            overrides = list(
+                WorkspaceAttributeValueOverride.objects.filter(
+                    override_value__asset=obj,
+                    workspace=workspace,
+                )
+                .select_related("override_value")
+                .values(
+                    "asset_type_attribute_id",
+                    "override_value_id",
+                )
             )
-            .select_related("override_value")
-            .values(
-                "asset_type_attribute_id",
-                "override_value_id",
-            )
-        )
 
-        # Get ALL override value IDs for this asset (any workspace) to exclude other workspace overrides
-        all_override_value_ids = set(
-            WorkspaceAttributeValueOverride.objects.filter(
-                override_value__asset=obj,
-            ).values_list("override_value_id", flat=True)
-        )
+            all_override_value_ids = set(
+                WorkspaceAttributeValueOverride.objects.filter(
+                    override_value__asset=obj,
+                ).values_list("override_value_id", flat=True)
+            )
 
         # Build set of override value IDs for THIS workspace
         this_workspace_override_ids = {o["override_value_id"] for o in overrides}

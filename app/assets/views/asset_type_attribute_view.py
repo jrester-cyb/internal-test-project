@@ -62,6 +62,35 @@ def invalidate_attribute_list_cache(workspace_id, assettype_id):
     cache.delete(api_key_cache_key)
 
 
+def invalidate_global_attribute_cache(assettype_id):
+    """Invalidate attribute list caches for ALL workspaces using an asset type.
+
+    Called when a global attribute is created, updated, or deleted.
+    Global changes affect all workspaces that have access to the asset type.
+    """
+    # Find all workspaces that have assets of this type
+    workspace_ids = (
+        WorkspaceAsset.objects.filter(asset__asset_type_id=assettype_id)
+        .values_list("workspace_id", flat=True)
+        .distinct()
+    )
+
+    # Invalidate cache for each workspace
+    for workspace_id in workspace_ids:
+        invalidate_attribute_list_cache(workspace_id, assettype_id)
+
+    # Also invalidate organization-level cache (for non-workspace endpoint)
+    try:
+        asset_type = AssetType.objects.get(id=assettype_id)
+        org_version_key = f"attr_list_version:{asset_type.organization_id}:{assettype_id}"
+        try:
+            cache.incr(org_version_key)
+        except ValueError:
+            cache.set(org_version_key, 1, timeout=None)
+    except AssetType.DoesNotExist:
+        pass
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Asset Type Attributes"],
@@ -378,12 +407,12 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             response = self.get_paginated_response(serializer.data)
-            cache.set(cache_key, response.data, timeout=60)
+            cache.set(cache_key, response.data)
             return response
 
         serializer = self.get_serializer(queryset, many=True)
         response_data = serializer.data
-        cache.set(cache_key, response_data, timeout=60)
+        cache.set(cache_key, response_data)
         return Response(response_data)
 
     def _update_config_for_override(self, workspace_pk, assettype_pk, old_id, new_id):
@@ -591,6 +620,8 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 references=[(instance.asset_type, "asset_type")],
                 action_detail="global",
             )
+            # Invalidate cache for all workspaces using this asset type
+            invalidate_global_attribute_cache(assettype_pk)
             return Response(
                 AssetTypeAttributeSerializer(instance).data,
                 status=status.HTTP_201_CREATED,
@@ -708,6 +739,9 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     action_detail="global",
                 )
 
+                # Invalidate cache for all workspaces using this asset type
+                invalidate_global_attribute_cache(assettype_pk)
+
                 return Response(
                     AssetTypeAttributeSerializer(
                         global_attr, context={"request": request}
@@ -824,6 +858,8 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 target=global_attr,
                 action_detail="global",
             )
+            # Invalidate cache for all workspaces before delete
+            invalidate_global_attribute_cache(assettype_pk)
             global_attr.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
