@@ -1,84 +1,58 @@
 import { useState, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Polygon, Polyline, ZoomControl } from 'react-leaflet'
 import L from 'leaflet'
-import { Box, CircularProgress, Typography, IconButton } from '@mui/material'
-import { Clear as ClearIcon } from '@mui/icons-material'
+import { Box } from '@mui/material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
 import { useTheme } from '../contexts/ThemeContext'
-import AssetDetailsDrawer from './AssetDetailsDrawer'
-import ClusterDetailsDrawer from './ClusterDetailsDrawer'
+import { useMapContext } from '../contexts/MapContext'
 import ClusterMarkers from './ClusterMarkers'
-import AssetList from './AssetList'
 import FilterBuilder from './FilterBuilder'
 import type { AttributeFilter } from './FilterBuilder'
 import type { Asset, Cluster } from '../types'
 import './MapView.css'
 
 interface MapViewProps {
-  organizationId: string
-  workspaceId: string
   center: [number, number]
   zoom: number
   clusters: Cluster[]
   assets: Asset[]
-  selectedAsset: Asset | null
-  loadingAsset: boolean
-  selectedCluster: Cluster | null
-  loading: boolean
-  clusterAssets: Asset[]
   activeFilters: any
   selectedAssetTypes: string[]
   attributeFilters: AttributeFilter[]
   nameFilter: string
-  selectedAssetAttributes: any[]
   hasInitialData?: boolean
   setSelectedAssetTypes: (types: string[]) => void
   setAttributeFilters: (filters: AttributeFilter[]) => void
   setNameFilter: (name: string) => void
   loadMapData: (bounds: number[], zoom: number, filters?: any) => void
-  handleClusterClick: (cluster: Cluster) => void
-  handleAssetClick: (asset: Asset) => void
-  setSelectedAsset: (asset: Asset | null) => void
-  setSelectedCluster: (cluster: Cluster | null) => void
-  setClusterAssets: (assets: Asset[]) => void
   onCenterChange?: (center: [number, number]) => void
   onZoomChange?: (zoom: number) => void
+  workspaceId: string
   MapEvents: React.ComponentType<any>
 }
 
 export default function MapView({
-  organizationId,
-  workspaceId,
   center,
   zoom,
   clusters,
   assets,
-  selectedAsset,
-  loadingAsset,
-  selectedCluster,
-  loading,
-  clusterAssets,
   activeFilters,
   selectedAssetTypes,
   attributeFilters,
   nameFilter,
-  selectedAssetAttributes,
   hasInitialData = false,
   setSelectedAssetTypes,
   setAttributeFilters,
   setNameFilter,
   loadMapData,
-  handleClusterClick,
-  handleAssetClick,
-  setSelectedAsset,
-  setSelectedCluster,
-  setClusterAssets,
   onCenterChange,
   onZoomChange,
+  workspaceId,
   MapEvents
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
   const theme = useMuiTheme()
+  const { openAssetDrawer, openClusterDrawer } = useMapContext()
   const [filterOpen, setFilterOpen] = useState(false)
 
   const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
@@ -98,10 +72,9 @@ export default function MapView({
   }, [fillColor, strokeColor])
 
   return (
-    <>
-      <Box
-        sx={{ flexGrow: 1, position: 'relative', height: '100%', width: '100%' }}
-        className={isDarkMode ? 'dark-mode' : ''}
+    <Box
+      sx={{ flexGrow: 1, position: 'relative', height: '100%', width: '100%' }}
+      className={isDarkMode ? 'dark-mode' : ''}
       >
         <FilterBuilder
           workspaceId={workspaceId}
@@ -136,7 +109,7 @@ export default function MapView({
 
           <ClusterMarkers
             clusters={clusters}
-            onClusterClick={handleClusterClick}
+            onClusterClick={openClusterDrawer}
           />
 
           <ZoomControl position="bottomright" />
@@ -148,7 +121,7 @@ export default function MapView({
                 position={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
                 icon={markerIcon}
                 eventHandlers={{
-                  click: () => handleAssetClick(asset)
+                  click: () => openAssetDrawer(asset)
                 }}
               />
             ) : asset.geometry && asset.geometry.type === "Polygon" && Array.isArray(asset.geometry.coordinates) && Array.isArray(asset.geometry.coordinates[0]) ? (
@@ -156,7 +129,7 @@ export default function MapView({
                 key={asset.id}
                 positions={asset.geometry.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])}
                 eventHandlers={{
-                  click: () => handleAssetClick(asset)
+                  click: () => openAssetDrawer(asset)
                 }}
                 pathOptions={{ color: polygonStrokeColor, fillColor: polygonFillColor, weight: 2, fillOpacity: 0.2 }}
               />
@@ -165,31 +138,13 @@ export default function MapView({
                 key={asset.id}
                 positions={asset.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng])}
                 eventHandlers={{
-                  click: () => handleAssetClick(asset)
+                  click: () => openAssetDrawer(asset)
                 }}
                 pathOptions={{ color: polylineColor, weight: 3 }}
               />
             ) : null
           ))}
         </MapContainer>
-      </Box>
-      <AssetDetailsDrawer
-        asset={selectedAsset}
-        organizationId={organizationId}
-        workspaceId={workspaceId}
-        isOpen={!!selectedAsset}
-        onClose={() => setSelectedAsset(null)}
-        attributes={selectedAssetAttributes}
-      />
-      <ClusterDetailsDrawer
-        isOpen={!!selectedCluster}
-        onClose={() => setSelectedCluster(null)}
-        cluster={selectedCluster}
-        assets={clusterAssets}
-        loading={loading}
-        organizationId={organizationId}
-        workspaceId={workspaceId}
-      />
-    </>
+    </Box>
   )
 }

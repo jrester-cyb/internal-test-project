@@ -195,19 +195,21 @@ export default function AssetOverviewCard({
                     flexShrink: 0
                   }}
                 />
-                {asset.location && (
-                  <Chip
-                    icon={<PlaceIcon />}
-                    label={`${asset.location.coordinates[1].toFixed(6)}, ${asset.location.coordinates[0].toFixed(6)}`}
-                    size="small"
-                    sx={{
-                      bgcolor: 'primary.dark',
-                      color: 'primary.contrastText',
-                      '& .MuiChip-icon': { color: 'primary.contrastText' },
-                      flexShrink: 0
-                    }}
-                  />
-                )}
+                <Chip
+                  icon={<PlaceIcon />}
+                  label={
+                    asset.location?.coordinates
+                      ? `${asset.location.coordinates[1].toFixed(6)}, ${asset.location.coordinates[0].toFixed(6)}`
+                      : '--.------, --.------'
+                  }
+                  size="small"
+                  sx={{
+                    bgcolor: 'primary.dark',
+                    color: 'primary.contrastText',
+                    '& .MuiChip-icon': { color: 'primary.contrastText' },
+                    flexShrink: 0
+                  }}
+                />
               </Box>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, color: 'primary.contrastText', alignItems: 'center', flexShrink: 0 }} ref={actionsRef}>

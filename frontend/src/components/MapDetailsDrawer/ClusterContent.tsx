@@ -1,34 +1,27 @@
-import { useState } from 'react'
-import { Box, Typography, IconButton, List, ListItem, ListItemText, ListItemButton, CircularProgress, Chip } from '@mui/material'
-import { Close as CloseIcon, LocationOn as LocationIcon } from '@mui/icons-material'
-import PvDrawer from './PvDrawer'
-import type { Asset, Cluster } from '../types'
+import { Box, CircularProgress, Typography, List, ListItem, ListItemText, ListItemButton, Chip } from '@mui/material'
+import { LocationOn as LocationIcon } from '@mui/icons-material'
+import type { Asset, Cluster } from '../../types'
+import PvDrawer from '../PvDrawer'
 
-interface ClusterDetailsDrawerProps {
+export interface ClusterContentProps {
   isOpen: boolean
   onClose: () => void
-  cluster: Cluster | null
-  assets: Asset[]
-  loading: boolean
   organizationId: string
   workspaceId: string
+  cluster: Cluster
+  assets: Asset[]
+  loading: boolean
 }
 
-export default function ClusterDetailsDrawer({
+export default function ClusterContent({
   isOpen,
   onClose,
+  organizationId,
+  workspaceId,
   cluster,
   assets,
-  loading,
-  organizationId,
-  workspaceId
-}: ClusterDetailsDrawerProps) {
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
-
-  if (!cluster) {
-    return null
-  }
-
+  loading
+}: ClusterContentProps) {
   return (
     <PvDrawer isOpen={isOpen} onClose={onClose}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -80,23 +73,6 @@ export default function ClusterDetailsDrawer({
             </List>
           )}
         </Box>
-
-        {/* Selected Asset Details */}
-        {selectedAsset && (
-          <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="subtitle1" gutterBottom>
-              {selectedAsset.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Type: {selectedAsset.assetType}
-            </Typography>
-            {selectedAsset.location && (
-              <Typography variant="body2" color="text.secondary">
-                Location: {selectedAsset.location.coordinates[1].toFixed(4)}, {selectedAsset.location.coordinates[0].toFixed(4)}
-              </Typography>
-            )}
-          </Box>
-        )}
       </Box>
     </PvDrawer>
   )

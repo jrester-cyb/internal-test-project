@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useLoaderData } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { getAsset } from '../api/assets'
-import { fetchClusters, fetchTiles, searchAssets, interpretSearch } from '../api/assets'
+import { fetchClusters, fetchTiles } from '../api/assets'
 import type { Asset, Cluster } from '../types'
 import type { AttributeFilter } from '../components/FilterBuilder'
+import { MapProvider } from '../contexts/MapContext'
 import MapView from '../components/MapView'
 import MapEvents from '../components/MapEvents'
 
@@ -34,18 +34,8 @@ function MapPage() {
   const [zoom, setZoom] = useState(loaderData?.initialZoom || 10)
   const [assets, setAssets] = useState<any[]>(loaderData?.initialAssets || [])
   const [clusters, setClusters] = useState<any[]>(loaderData?.initialClusters || [])
-  const [selectedAsset, setSelectedAsset] = useState<any>(loaderData?.selectedAsset || null)
-  const [loadingAsset, setLoadingAsset] = useState(false)
 
-  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [query, setQuery] = useState('')
-  const [clusterAssets, setClusterAssets] = useState<Asset[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const [activeFilters, setActiveFilters] = useState<any>(null)
-  const [interpretation, setInterpretation] = useState<string>('')
+  const [activeFilters] = useState<any>(null)
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
   const [nameFilter, setNameFilter] = useState('')
@@ -55,7 +45,6 @@ function MapPage() {
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return
 
-    setLoading(true)
     try {
       // Merge asset type and attribute filters with other filters
       let mergedFilters = filters ? { ...filters } : null
@@ -138,7 +127,7 @@ function MapPage() {
             geojsonAssets.push({
               id: c.id,
               name: c.properties.name,
-              assetTypeId: c.properties.assetTypeId,
+              assetType: c.properties.assetTypeId,
               h3Index: c.properties.h3Index,
               geometry: c.geometry
             })
@@ -154,7 +143,7 @@ function MapPage() {
         setAssets(tileData.features.map((f: any) => ({
           id: f.id,
           name: f.properties.name,
-          assetTypeId: f.properties.assetTypeId,
+          assetType: f.properties.assetTypeId,
           h3Index: f.properties.h3Index,
           geometry: f.geometry
         })))
@@ -162,152 +151,42 @@ function MapPage() {
       }
     } catch (error) {
       console.error('Error loading map data:', error)
-    } finally {
-      setLoading(false)
     }
   }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter])
 
-  // Update URL when map position or selected asset changes
+  // Update URL when map position changes
   useEffect(() => {
     const newSearchParams = new URLSearchParams(searchParams)
     newSearchParams.set('lat', center[0].toFixed(6))
     newSearchParams.set('lng', center[1].toFixed(6))
     newSearchParams.set('zoom', zoom.toString())
 
-    if (selectedAsset) {
-      newSearchParams.set('assetId', selectedAsset.id)
-    } else {
-      // On initial load, don't delete assetId if it exists (it will be loaded)
-      if (!initialUrlUpdateDone.current && searchParams.get('assetId')) {
-        // Keep the assetId for now
-      } else {
-        newSearchParams.delete('assetId')
-      }
-    }
-
     setSearchParams(newSearchParams, { replace: true })
     initialUrlUpdateDone.current = true
-  }, [center, zoom, selectedAsset, setSearchParams, searchParams])
-
-  const handleClusterClick = async (cluster: Cluster) => {
-    if (!workspaceId) return
-    setSelectedCluster(cluster)
-    setLoading(true)
-    try {
-      const results = await searchAssets(workspaceId, {
-        filters: [{
-          field: 'h3_index',
-          value: cluster.h3Index,
-          operator: 'startswith'
-        }]
-      })
-      setClusterAssets(results.results)
-    } catch (error) {
-      console.error('Error loading cluster assets:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleAssetClick = async (asset: Asset) => {
-    if (!workspaceId) return
-    setLoadingAsset(true)
-    try {
-      const fullAsset = await getAsset(workspaceId, asset.id)
-      setSelectedAsset(fullAsset)
-    } catch (error) {
-      setSelectedAsset(asset)
-      console.error('Error fetching asset details:', error)
-    } finally {
-      setLoadingAsset(false)
-    }
-  }
-
-  const handleSearch = async (page: number = 1) => {
-    if (!workspaceId || !query.trim()) {
-      // Clear filters
-      setActiveFilters(null)
-      setInterpretation('')
-      return
-    }
-
-    setLoading(true)
-    try {
-      // First, interpret the natural language query
-      const interpreted = await interpretSearch(workspaceId, query)
-      setInterpretation(interpreted.interpretation || '')
-
-      const filters = {
-        filters: interpreted.filters,
-        logic: interpreted.logic || 'AND'
-      }
-
-      const results = await searchAssets(workspaceId, {
-        ...filters,
-        page,
-        limit: 50
-      })
-      setAssets(results.results || [])
-      setCurrentPage(results.page || 1)
-      setTotalPages(results.total_pages || 1)
-      setTotalCount(results.count || 0)
-
-      // Set active filters to update map
-      setActiveFilters(filters)
-    } catch (error) {
-      console.error('Error searching assets:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleClearSearch = () => {
-    setQuery('')
-    setActiveFilters(null)
-    setInterpretation('')
-    setAssets([])
-    setCurrentPage(1)
-    setTotalPages(1)
-    setTotalCount(0)
-  }
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage)
-    handleSearch(newPage)
-  }
+  }, [center, zoom, setSearchParams, searchParams])
 
   return (
-    <MapView
-      organizationId={organizationId || ''}
-      workspaceId={workspaceId || ''}
-      center={center}
-      zoom={zoom}
-      clusters={clusters}
-      assets={assets}
-      selectedAsset={selectedAsset}
-      loadingAsset={loadingAsset}
-      selectedCluster={selectedCluster}
-      loading={loading}
-      clusterAssets={clusterAssets}
-      activeFilters={activeFilters}
-      selectedAssetTypes={selectedAssetTypes}
-      attributeFilters={attributeFilters}
-      nameFilter={nameFilter}
-      selectedAssetAttributes={loaderData?.selectedAssetAttributes || []}
-      hasInitialData={true}
-      setSelectedAssetTypes={setSelectedAssetTypes}
-      setAttributeFilters={setAttributeFilters}
-      setNameFilter={setNameFilter}
-      loadMapData={loadMapData}
-      handleClusterClick={handleClusterClick}
-      handleAssetClick={handleAssetClick}
-      setSelectedAsset={setSelectedAsset}
-      setSelectedCluster={setSelectedCluster}
-      setClusterAssets={setClusterAssets}
-      onCenterChange={setCenter}
-      onZoomChange={setZoom}
-      MapEvents={MapEvents}
-    />
+    <MapProvider organizationId={organizationId || ''} workspaceId={workspaceId || ''}>
+      <MapView
+        center={center}
+        zoom={zoom}
+        clusters={clusters}
+        assets={assets}
+        activeFilters={activeFilters}
+        selectedAssetTypes={selectedAssetTypes}
+        attributeFilters={attributeFilters}
+        nameFilter={nameFilter}
+        hasInitialData={true}
+        setSelectedAssetTypes={setSelectedAssetTypes}
+        setAttributeFilters={setAttributeFilters}
+        setNameFilter={setNameFilter}
+        loadMapData={loadMapData}
+        onCenterChange={setCenter}
+        onZoomChange={setZoom}
+        workspaceId={workspaceId || ''}
+        MapEvents={MapEvents}
+      />
+    </MapProvider>
   )
 }
 

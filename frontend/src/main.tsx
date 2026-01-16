@@ -252,13 +252,41 @@ const router = createBrowserRouter([
                 console.error('Error loading initial map data:', error)
               }
 
+              // Load cluster assets if clusterId present in URL
+              let selectedCluster = null
+              let clusterAssets: any[] = []
+              const clusterId = searchParams.get('clusterId')
+              if (clusterId) {
+                const { searchAssets } = await import('./api/assets')
+                selectedCluster = {
+                  h3Index: clusterId,
+                  count: 0,
+                  center: { lat: 0, lon: 0 }
+                }
+                try {
+                  const results = await searchAssets(workspaceId, {
+                    filters: [{
+                      field: 'h3_index',
+                      value: clusterId,
+                      operator: 'startswith'
+                    }]
+                  })
+                  clusterAssets = results.results || []
+                  selectedCluster.count = clusterAssets.length
+                } catch (error) {
+                  console.error('Error loading cluster assets:', error)
+                }
+              }
+
               return {
                 initialCenter: center,
                 initialZoom: zoom,
                 initialAssets: assets,
                 initialClusters: clusters,
                 selectedAsset,
-                selectedAssetAttributes
+                selectedAssetAttributes,
+                selectedCluster,
+                clusterAssets
               }
             },
             shouldRevalidate: () => false,
