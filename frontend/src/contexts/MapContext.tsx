@@ -257,7 +257,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
 
     // Only load if we have a cluster drawer open
     if (currentContent?.type !== 'cluster') return
-    if (currentContent.loading) return
+    // Skip if already loading (initial load or loading more)
+    if (currentContent.loading || currentContent.loadingMore) return
 
     const cluster = currentContent.cluster
     const limit = endIndex - startIndex + 1

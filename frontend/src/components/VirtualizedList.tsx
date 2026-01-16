@@ -90,6 +90,7 @@ export default function VirtualizedList<T>({
   const getItemKeyRef = useRef(getItemKey)
   const onLoadRangeRef = useRef(onLoadRange)
   const placeholderContentRef = useRef(loadingPlaceholder ?? DefaultLoadingPlaceholder)
+  const isLoadingRef = useRef(isLoading)
 
   // Update refs on each render
   itemsRef.current = items
@@ -98,6 +99,7 @@ export default function VirtualizedList<T>({
   getItemKeyRef.current = getItemKey
   onLoadRangeRef.current = onLoadRange
   placeholderContentRef.current = loadingPlaceholder ?? DefaultLoadingPlaceholder
+  isLoadingRef.current = isLoading
 
   // Get item height (measured or estimated)
   const getItemHeight = useCallback((index: number): number => {
@@ -114,10 +116,18 @@ export default function VirtualizedList<T>({
     }
   }, [itemGap])
 
-  // Clear loading ranges when items change
+  // Track when items were last loaded to prevent immediate re-requests
+  // Initialize to current time to prevent immediate request on mount
+  const lastLoadTimeRef = useRef<number>(Date.now())
+
+  // Update last load time when items change
   useEffect(() => {
-    // When items are loaded, clear the loading ranges that are now satisfied
-    loadingRangesRef.current.clear()
+    lastLoadTimeRef.current = Date.now()
+    // Clear loading ranges after a delay
+    const timer = setTimeout(() => {
+      loadingRangesRef.current.clear()
+    }, 300)
+    return () => clearTimeout(timer)
   }, [items.size])
 
   // Track pending range to load (for debouncing)
@@ -131,6 +141,10 @@ export default function VirtualizedList<T>({
       const pendingRange = pendingRangeRef.current
 
       if (!currentOnLoadRange || !pendingRange) return
+
+      // Check cooldown again before actually firing (items may have loaded while debouncing)
+      if (isLoadingRef.current) return
+      if (Date.now() - lastLoadTimeRef.current < 500) return
 
       const rangeKey = `${pendingRange.start}-${pendingRange.end}`
 
@@ -153,6 +167,13 @@ export default function VirtualizedList<T>({
   }) => {
     const currentOnLoadRange = onLoadRangeRef.current
     if (!currentOnLoadRange) return
+
+    // Skip if already loading
+    if (isLoadingRef.current) return
+
+    // Skip if items were just loaded (prevent immediate re-request after load completes)
+    const timeSinceLastLoad = Date.now() - lastLoadTimeRef.current
+    if (timeSinceLastLoad < 500) return
 
     const currentItems = itemsRef.current
 
