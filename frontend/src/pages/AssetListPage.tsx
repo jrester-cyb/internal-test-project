@@ -1,4 +1,6 @@
-import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton } from '@mui/material'
+import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton, Button } from '@mui/material'
+import EditIcon from '@mui/icons-material/Edit'
+import EditOffIcon from '@mui/icons-material/EditOff'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -33,6 +35,7 @@ export default function AssetListPage() {
   const [totalCount, setTotalCount] = useState(initialData.totalCount)
   const [isLoading, setIsLoading] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  const [editingEnabled, setEditingEnabled] = useState(false)
 
   // Filter attributes based on showHidden toggle
   const hiddenCount = useMemo(() => attributes.filter(attr => attr.isHidden).length, [attributes])
@@ -81,6 +84,36 @@ export default function AssetListPage() {
     }
   }, [assetTypeId, initialData.workspaceId, isLoading])
 
+  // Handle cell edit
+  const handleCellEdit = useCallback((asset: Asset, columnKey: string, newValue: string, rowIndex: number) => {
+    console.log('Cell edited:', { asset, columnKey, newValue, rowIndex })
+    // TODO: Implement actual save logic (API call)
+    // For now, just update local state
+    setItems(prev => {
+      const updated = new Map(prev)
+      const existingAsset = updated.get(rowIndex)
+      if (existingAsset) {
+        // Handle attribute columns (prefixed with 'attr-')
+        if (columnKey.startsWith('attr-')) {
+          const attrId = columnKey.replace('attr-', '')
+          const attribute = attributes.find(a => a.id === attrId)
+          if (attribute) {
+            updated.set(rowIndex, {
+              ...existingAsset,
+              attributes: {
+                ...existingAsset.attributes,
+                [attribute.apiKey]: newValue
+              }
+            })
+          }
+        } else if (columnKey === 'name') {
+          updated.set(rowIndex, { ...existingAsset, name: newValue })
+        }
+      }
+      return updated
+    })
+  }, [attributes])
+
   const formatCoordinates = (assetLocation: any) => {
     if (!assetLocation?.coordinates) {
       return 'N/A'
@@ -125,20 +158,25 @@ export default function AssetListPage() {
         header: <Box sx={{ px: 2 }}>Name</Box>,
         width: 200,
         minWidth: 150,
+        editable: editingEnabled,
         render: (asset) => (
           <Box sx={{ px: 2 }}>
-            <Link
-              component={RouterLink}
-              to={asset.id}
-              underline="hover"
-              state={{
-                ...location.state,
-                assetName: asset.name
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {asset.name}
-            </Link>
+            {editingEnabled ? (
+              asset.name
+            ) : (
+              <Link
+                component={RouterLink}
+                to={asset.id}
+                underline="hover"
+                state={{
+                  ...location.state,
+                  assetName: asset.name
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {asset.name}
+              </Link>
+            )}
           </Box>
         ),
         getCellValue: (asset) => asset.name,
@@ -169,6 +207,7 @@ export default function AssetListPage() {
       ),
       width: 150,
       minWidth: 100,
+      editable: editingEnabled && ['string', 'number', 'text'].includes(attr.attributeType),
       render: (asset) => (
         <Box sx={{ px: 2, overflow: 'hidden', opacity: attr.isHidden ? 0.5 : 1 }}>
           <AttributeValueRenderer
@@ -188,7 +227,7 @@ export default function AssetListPage() {
     }))
 
     return [...baseColumns, ...attributeColumns]
-  }, [displayAttributes, location.state])
+  }, [displayAttributes, location.state, editingEnabled])
 
   // Cell placeholder for loading state
   const cellPlaceholder = (
@@ -203,6 +242,15 @@ export default function AssetListPage() {
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h5" component="h2">Assets</Typography>
         <Stack direction="row" alignItems="center" spacing={2}>
+          <Button
+            size="small"
+            variant={editingEnabled ? 'contained' : 'outlined'}
+            color={editingEnabled ? 'primary' : 'inherit'}
+            startIcon={editingEnabled ? <EditOffIcon /> : <EditIcon />}
+            onClick={() => setEditingEnabled(!editingEnabled)}
+          >
+            {editingEnabled ? 'Done Editing' : 'Edit'}
+          </Button>
           {hiddenCount > 0 && (
             <FormControlLabel
               control={
@@ -251,6 +299,7 @@ export default function AssetListPage() {
         loadingPlaceholder={cellPlaceholder}
         stickyHeader
         headerHeight={48}
+        onCellEdit={editingEnabled ? handleCellEdit : undefined}
       />
     </Box>
   )
