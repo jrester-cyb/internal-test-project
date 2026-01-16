@@ -517,6 +517,8 @@ export interface VirtualizedGridProps<T> {
   filters?: ColumnFilters
   /** Called when filters change */
   onFiltersChange?: (filters: ColumnFilters) => void
+  /** Whether to disable clickaway selection clearing */
+  disableClickaway?: boolean
 }
 
 interface GridHandle {
@@ -594,6 +596,7 @@ export default function VirtualizedGrid<T>({
   onColumnResize,
   filters,
   onFiltersChange,
+  disableClickaway = false,
 }: VirtualizedGridProps<T>) {
   const gridRef = useRef<Grid>(null)
   const outerRef = useRef<HTMLDivElement>(null)
@@ -893,6 +896,12 @@ export default function VirtualizedGrid<T>({
   // Keyboard handler for copy and arrow key navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+      // Regular arrow key navigation (single step)
+      const currentSelection = selectionRef.current
+      if (!currentSelection) return
+
+
       // Copy with Ctrl/Cmd+C
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectionRef.current) {
         e.preventDefault()
@@ -906,11 +915,58 @@ export default function VirtualizedGrid<T>({
         return
       }
 
-      // Arrow key navigation
-      const currentSelection = selectionRef.current
-      if (!currentSelection) return
+      // Ctrl+Arrow key navigation (jump to edges)
+      if ((e.ctrlKey || e.metaKey) && arrowKeys.includes(e.key)) {
+        e.preventDefault()
 
-      const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+        const currentColumns = columnsRef.current
+        let newRow = currentSelection.start.rowIndex;
+        let newCol = currentSelection.start.columnIndex;
+
+        switch (e.key) {
+          case 'ArrowUp':
+            newRow = 0 // Jump to top
+            break
+          case 'ArrowDown':
+            newRow = totalCount - 1 // Jump to bottom
+            break
+          case 'ArrowLeft':
+            newCol = 0 // Jump to start of row
+            break
+          case 'ArrowRight':
+            newCol = currentColumns.length - 1 // Jump to end of row
+            break
+        }
+
+        const newCell: CellPosition = { rowIndex: newRow, columnIndex: newCol }
+        console.log(newCell)
+
+        if (e.shiftKey) {
+          // Extend selection to the edge
+          setSelection({
+            start: newCell,
+            end: newCell
+          })
+        } else {
+          // Move selection to the edge (single cell)
+          setSelection({
+            start: newCell,
+            end: newCell
+          })
+        }
+
+        // Scroll the cell into view
+        const grid = gridRef.current
+        if (grid) {
+          grid.scrollToItem({
+            columnIndex: newCol,
+            rowIndex: newRow,
+            align: 'auto'
+          })
+        }
+        return
+      }
+
       if (!arrowKeys.includes(e.key)) return
 
       e.preventDefault()
@@ -968,6 +1024,8 @@ export default function VirtualizedGrid<T>({
   const gridContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (disableClickaway) return
+
     const handleClickOutside = (e: MouseEvent) => {
       // Only clear if there's a selection
       if (selectionRef.current) {
@@ -985,7 +1043,7 @@ export default function VirtualizedGrid<T>({
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [disableClickaway])
 
   // Handle column resize - returns starting width
   const getColumnStartWidth = useCallback((columnIndex: number) => {
