@@ -6,6 +6,7 @@ import { Clear as ClearIcon } from '@mui/icons-material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
 import { useTheme } from '../contexts/ThemeContext'
 import AssetDetailsDrawer from './AssetDetailsDrawer'
+import ClusterDetailsDrawer from './ClusterDetailsDrawer'
 import ClusterMarkers from './ClusterMarkers'
 import AssetList from './AssetList'
 import FilterBuilder from './FilterBuilder'
@@ -172,7 +173,6 @@ export default function MapView({
           ))}
         </MapContainer>
       </Box>
-
       <AssetDetailsDrawer
         asset={selectedAsset}
         organizationId={organizationId}
@@ -181,38 +181,14 @@ export default function MapView({
         onClose={() => setSelectedAsset(null)}
         attributes={selectedAssetAttributes}
       />
-
-      {selectedCluster && (
-        <Box sx={{ position: 'fixed', top: 64, bottom: 0, right: 0, width: '66%', bgcolor: 'background.paper', boxShadow: 24, zIndex: 1301, overflowY: 'auto' }}>
-          <Box sx={{ p: 3, height: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h5" component="h2">
-                Cluster Assets ({clusterAssets?.length ?? 0})
-              </Typography>
-              <IconButton
-                onClick={() => {
-                  setSelectedCluster(null)
-                  setClusterAssets([])
-                }}
-              >
-                <ClearIcon />
-              </IconButton>
-            </Box>
-
-            <AssetList
-              assets={clusterAssets}
-              onAssetClick={(asset) => {
-                setSelectedAsset(asset);
-                setSelectedCluster(null);
-              }}
-              loading={loading}
-              currentPage={1}
-              totalPages={1}
-              totalCount={clusterAssets?.length ?? 0}
-            />
-          </Box>
-        </Box>
-      )}
+      <ClusterDetailsDrawer
+        isOpen={!!selectedCluster}
+        onClose={() => setSelectedCluster(null)}
+        cluster={selectedCluster}
+        assets={clusterAssets}
+        loading={loading}
+        organizationId={organizationId}
+      />
     </>
   )
 }
