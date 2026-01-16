@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+// useMemo used for loadingPlaceholder
 import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItemButton, Tooltip, Card, CardContent, Container, LinearProgress, Typography } from '@mui/material'
 import { LocationOn as LocationIcon, OpenInNew as OpenInNewIcon, Place as PlaceIcon, Layers as LayersIcon, MyLocation as ZoomIcon } from '@mui/icons-material'
 import type { Asset, Cluster } from '../../types'
@@ -12,13 +13,15 @@ export interface ClusterContentProps {
   organizationId: string
   workspaceId: string
   cluster: Cluster
-  assets: Asset[]
+  /** Map of index to asset for sparse data */
+  assets: Map<number, Asset>
   loading: boolean
   loadingMore?: boolean
-  totalCount?: number
+  totalCount: number
   onAssetClick?: (asset: Asset) => void
   onZoomToAsset?: (asset: Asset) => void
-  onLoadMore?: () => void
+  /** Called when items at specific indices need to be loaded */
+  onLoadRange?: (startIndex: number, endIndex: number) => void
 }
 
 export default function ClusterContent({
@@ -33,18 +36,10 @@ export default function ClusterContent({
   totalCount,
   onAssetClick,
   onZoomToAsset,
-  onLoadMore
+  onLoadRange
 }: ClusterContentProps) {
   // Memoize callbacks to prevent VirtualizedList from re-rendering
   const getItemKey = useCallback((asset: Asset) => asset.id, [])
-
-  const handleLoadMore = useMemo(() => {
-    if (!onLoadMore) return undefined
-    return async () => {
-      onLoadMore()
-      return { items: [], hasMore: false }
-    }
-  }, [onLoadMore])
 
   // Memoize the loading placeholder to prevent VirtualizedList re-renders
   const loadingPlaceholder = useMemo(() => (
@@ -71,10 +66,7 @@ export default function ClusterContent({
   // Generate chip label text
   const getAssetCountLabel = () => {
     if (loading) return 'Loading...'
-    if (totalCount && totalCount > assets.length) {
-      return `${assets.length} / ${totalCount} Assets`
-    }
-    return `${assets.length} Assets`
+    return `${totalCount} Assets`
   }
 
   return (
@@ -120,7 +112,7 @@ export default function ClusterContent({
                 </Box>
               </Box>
             </CardContent>
-            {(loading || loadingMore) && (
+            {loading && (
               <LinearProgress
                 color="secondary"
                 sx={{
@@ -137,8 +129,8 @@ export default function ClusterContent({
         {/* Content */}
         <Box sx={{ flex: 1, overflow: 'hidden' }}>
           {loading ? (
-            <List>
-              {[1, 2, 3, 4, 5].map((i) => (
+            <List sx={{ height: '100%', overflow: 'hidden' }}>
+              {Array.from({ length: 15 }, (_, i) => i + 1).map((i) => (
                 <ListItem key={i} disablePadding>
                   <ListItemButton sx={{ py: 1.5 }}>
                     <ListItemText
@@ -165,7 +157,8 @@ export default function ClusterContent({
               getItemKey={getItemKey}
               estimatedItemHeight={72}
               totalCount={totalCount}
-              onLoadMore={handleLoadMore}
+              onLoadRange={onLoadRange}
+              isLoading={loadingMore}
               loadingPlaceholder={loadingPlaceholder}
               renderItem={(asset) => (
                 <ListItem

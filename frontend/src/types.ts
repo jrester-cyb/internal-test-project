@@ -106,16 +106,15 @@ export interface SearchFilter {
 export interface SearchRequest {
   logic?: 'AND' | 'OR'
   filters: SearchFilter[]
-  page?: number
   limit?: number
+  offset?: number
 }
 
-export interface SearchResponse {
-  results: Asset[]
+export interface SearchResponse<T = Asset> {
+  results: T[]
   count: number
-  page: number
   limit: number
-  total_pages: number
+  offset: number
   next: string | null
   previous: string | null
 }

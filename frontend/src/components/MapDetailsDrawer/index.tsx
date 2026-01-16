@@ -6,13 +6,15 @@ import AssetContent from './AssetContent'
 interface ClusterDetailsProps {
   type: 'cluster'
   cluster: Cluster
-  assets: Asset[]
+  /** Map of index to asset for sparse data */
+  assets: Map<number, Asset>
   loading: boolean
   loadingMore?: boolean
-  totalCount?: number
+  totalCount: number
   onAssetClick?: (asset: Asset) => void
   onZoomToAsset?: (asset: Asset) => void
-  onLoadMore?: () => void
+  /** Called when items at specific indices need to be loaded */
+  onLoadRange?: (startIndex: number, endIndex: number) => void
 }
 
 // Asset details props
@@ -51,7 +53,7 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
         totalCount={props.totalCount}
         onAssetClick={props.onAssetClick}
         onZoomToAsset={props.onZoomToAsset}
-        onLoadMore={props.onLoadMore}
+        onLoadRange={props.onLoadRange}
       />
     )
   }

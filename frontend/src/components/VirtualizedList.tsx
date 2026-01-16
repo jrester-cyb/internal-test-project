@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, type ReactNode, type CSSProperties } from 'react'
-import { Box, CircularProgress, Skeleton, Typography } from '@mui/material'
+import { useEffect, useRef, useCallback, useMemo, type ReactNode, type CSSProperties } from 'react'
+import { Box, Skeleton, Typography } from '@mui/material'
 import { VariableSizeList as List } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
 
@@ -15,24 +15,20 @@ const DefaultLoadingPlaceholder = (
 )
 
 export interface VirtualizedListProps<T> {
-  /** Array of items to render */
-  items: T[]
+  /** Map of index to item for sparse data */
+  items: Map<number, T>
   /** Unique key extractor for each item */
   getItemKey: (item: T, index: number) => string | number
   /** Render function for each item - receives item, index, and style to apply */
   renderItem: (item: T, index: number, style: CSSProperties) => ReactNode
   /** Estimated height for items (used before measurement) */
   estimatedItemHeight?: number
-  /** Called when more items should be loaded. Return the new items and whether there are more. */
-  onLoadMore?: () => Promise<{ items: T[], hasMore: boolean }>
-  /** Total count of items (for fixed-size lists where not all items are loaded yet) */
-  totalCount?: number
-  /** Whether there are more items to load (deprecated - use totalCount instead) */
-  hasMore?: boolean
-  /** Whether currently loading more items */
+  /** Called when items at specific indices need to be loaded */
+  onLoadRange?: (startIndex: number, endIndex: number) => void
+  /** Total count of items (required for virtualized scrolling) */
+  totalCount: number
+  /** Whether currently loading items */
   isLoading?: boolean
-  /** Threshold (0-1) for triggering load more. 0.8 = 80% scrolled */
-  loadMoreThreshold?: number
   /** Message to show when list is empty */
   emptyMessage?: string
   /** Description to show when list is empty */
@@ -67,11 +63,9 @@ export default function VirtualizedList<T>({
   getItemKey,
   renderItem,
   estimatedItemHeight = 50,
-  onLoadMore,
+  onLoadRange,
   totalCount,
-  hasMore = false,
   isLoading = false,
-  loadMoreThreshold = 0.8,
   emptyMessage = 'No items',
   emptyDescription,
   header,
@@ -84,24 +78,25 @@ export default function VirtualizedList<T>({
   padding = 0,
   loadingPlaceholder,
 }: VirtualizedListProps<T>) {
-  // Use totalCount if provided, otherwise fall back to items.length (+ 1 if hasMore)
-  const itemCount = totalCount ?? (items.length + (hasMore ? 1 : 0))
   const listRef = useRef<List>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   const itemHeights = useRef<Map<number, number>>(new Map())
-  const fetchInProgressRef = useRef(false)
-  const [, forceUpdate] = useState({})
+  const loadingRangesRef = useRef<Set<string>>(new Set())
 
   // Use refs for values that shouldn't cause re-renders of ItemWrapper
   const itemsRef = useRef(items)
   const renderItemRef = useRef(renderItem)
   const onItemClickRef = useRef(onItemClick)
   const getItemKeyRef = useRef(getItemKey)
+  const onLoadRangeRef = useRef(onLoadRange)
   const placeholderContentRef = useRef(loadingPlaceholder ?? DefaultLoadingPlaceholder)
+
+  // Update refs on each render
   itemsRef.current = items
   renderItemRef.current = renderItem
   onItemClickRef.current = onItemClick
   getItemKeyRef.current = getItemKey
+  onLoadRangeRef.current = onLoadRange
   placeholderContentRef.current = loadingPlaceholder ?? DefaultLoadingPlaceholder
 
   // Get item height (measured or estimated)
@@ -119,80 +114,110 @@ export default function VirtualizedList<T>({
     }
   }, [itemGap])
 
-  // Track previous items length to detect additions vs removals
-  const prevItemsLength = useRef(items.length)
-
-  // Handle items length changes without resetting scroll
+  // Clear loading ranges when items change
   useEffect(() => {
-    const prevLength = prevItemsLength.current
-    const newLength = items.length
+    // When items are loaded, clear the loading ranges that are now satisfied
+    loadingRangesRef.current.clear()
+  }, [items.size])
 
-    if (prevLength === newLength) return
+  // Track pending range to load (for debouncing)
+  const pendingRangeRef = useRef<{ start: number; end: number } | null>(null)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    prevItemsLength.current = newLength
+  // Debounced function to actually trigger the load
+  const debouncedLoadRange = useMemo(() => {
+    return () => {
+      const currentOnLoadRange = onLoadRangeRef.current
+      const pendingRange = pendingRangeRef.current
 
-    if (newLength < prevLength) {
-      // Items were removed - clear cached heights for removed items
-      for (const index of itemHeights.current.keys()) {
-        if (index >= newLength) {
-          itemHeights.current.delete(index)
-        }
+      if (!currentOnLoadRange || !pendingRange) return
+
+      const rangeKey = `${pendingRange.start}-${pendingRange.end}`
+
+      if (!loadingRangesRef.current.has(rangeKey)) {
+        loadingRangesRef.current.add(rangeKey)
+        currentOnLoadRange(pendingRange.start, pendingRange.end)
       }
-      // Reset from 0 but don't force scroll - just recalculate sizes
-      listRef.current?.resetAfterIndex(0, false)
-    }
-    // For items added, we don't need to reset - react-window handles new itemCount automatically
-  }, [items.length])
 
-  // Refs for infinite scroll to avoid callback recreation
-  const onLoadMoreRef = useRef(onLoadMore)
-  const totalCountRef = useRef(totalCount)
-  const hasMoreRef = useRef(hasMore)
-  const isLoadingRef = useRef(isLoading)
-  onLoadMoreRef.current = onLoadMore
-  totalCountRef.current = totalCount
-  hasMoreRef.current = hasMore
-  isLoadingRef.current = isLoading
-
-  // Infinite scroll handler using react-window's onItemsRendered callback
-  // Use a stable callback that reads from refs to avoid recreating on data changes
-  const handleItemsRendered = useCallback(({ visibleStopIndex }: { visibleStopIndex: number }) => {
-    const currentOnLoadMore = onLoadMoreRef.current
-    const currentTotalCount = totalCountRef.current
-    const currentHasMore = hasMoreRef.current
-    const currentIsLoading = isLoadingRef.current
-    const currentItemsLength = itemsRef.current.length
-
-    // Check if we have more to load
-    const hasMoreToLoad = currentTotalCount ? currentItemsLength < currentTotalCount : currentHasMore
-    if (!currentOnLoadMore || !hasMoreToLoad) return
-    if (fetchInProgressRef.current || currentIsLoading) return
-
-    // Trigger load more when within 5 rows of the end of loaded items
-    const rowsFromEnd = currentItemsLength - visibleStopIndex - 1
-    if (rowsFromEnd <= 5) {
-      fetchInProgressRef.current = true
-      currentOnLoadMore().finally(() => {
-        fetchInProgressRef.current = false
-      })
+      pendingRangeRef.current = null
     }
   }, [])
 
-  // Expose list methods via ref
-  const scrollToItem = useCallback((index: number, align?: 'auto' | 'smart' | 'center' | 'end' | 'start') => {
-    listRef.current?.scrollToItem(index, align)
-  }, [])
+  // Handle visible range changes - load missing items (debounced)
+  const handleItemsRendered = useCallback(({
+    visibleStartIndex,
+    visibleStopIndex
+  }: {
+    visibleStartIndex: number
+    visibleStopIndex: number
+  }) => {
+    const currentOnLoadRange = onLoadRangeRef.current
+    if (!currentOnLoadRange) return
 
-  const resetAfterIndex = useCallback((index: number, shouldForceUpdate = true) => {
-    listRef.current?.resetAfterIndex(index, shouldForceUpdate)
+    const currentItems = itemsRef.current
+
+    // Find ranges of missing items within visible area (with some buffer)
+    const bufferSize = 5
+    const startIndex = Math.max(0, visibleStartIndex - bufferSize)
+    const endIndex = Math.min(totalCount - 1, visibleStopIndex + bufferSize)
+
+    // Find first missing item in range
+    let missingStart: number | null = null
+    let missingEnd: number | null = null
+
+    for (let i = startIndex; i <= endIndex; i++) {
+      const hasItem = currentItems.has(i)
+
+      if (!hasItem && missingStart === null) {
+        missingStart = i
+      }
+
+      if (hasItem && missingStart !== null && missingEnd === null) {
+        missingEnd = i - 1
+        break
+      }
+    }
+
+    // If we started a range but didn't end it, end at endIndex
+    if (missingStart !== null && missingEnd === null) {
+      missingEnd = endIndex
+    }
+
+    // If we found a missing range, debounce the load request
+    if (missingStart !== null && missingEnd !== null) {
+      const rangeKey = `${missingStart}-${missingEnd}`
+
+      // Skip if already loading this range
+      if (loadingRangesRef.current.has(rangeKey)) return
+
+      // Update pending range
+      pendingRangeRef.current = { start: missingStart, end: missingEnd }
+
+      // Clear existing timer and set new one
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+
+      debounceTimerRef.current = setTimeout(debouncedLoadRange, 150)
+    }
+  }, [totalCount, debouncedLoadRange])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
   }, [])
 
   // Stable itemKey function that reads from refs
   const stableItemKey = useCallback((index: number): string | number => {
     const currentItems = itemsRef.current
     const currentGetItemKey = getItemKeyRef.current
-    return index < currentItems.length
-      ? currentGetItemKey(currentItems[index], index)
+    const item = currentItems.get(index)
+    return item !== undefined
+      ? currentGetItemKey(item, index)
       : `__placeholder_${index}__`
   }, [])
 
@@ -203,10 +228,10 @@ export default function VirtualizedList<T>({
     const currentOnItemClick = onItemClickRef.current
     const currentPlaceholder = placeholderContentRef.current
 
-    // Check if this index is beyond loaded items (show placeholder)
-    const isPlaceholderRow = index >= currentItems.length
+    const item = currentItems.get(index)
 
-    if (isPlaceholderRow) {
+    // Show placeholder for items not yet loaded
+    if (item === undefined) {
       return (
         <div style={style}>
           {currentPlaceholder}
@@ -214,7 +239,6 @@ export default function VirtualizedList<T>({
       )
     }
 
-    const item = currentItems[index]
     const measureRef = (node: HTMLDivElement | null) => {
       if (node) {
         const height = node.getBoundingClientRect().height
@@ -233,7 +257,7 @@ export default function VirtualizedList<T>({
     )
   }, [setItemHeight])
 
-  if (items.length === 0 && !isLoading) {
+  if (totalCount === 0 && !isLoading) {
     return (
       <Box
         sx={{
@@ -289,7 +313,7 @@ export default function VirtualizedList<T>({
               outerRef={outerRef}
               height={height || 400}
               width={width || 300}
-              itemCount={itemCount}
+              itemCount={totalCount}
               itemSize={getItemHeight}
               estimatedItemSize={estimatedItemHeight + itemGap}
               itemKey={stableItemKey}
@@ -303,22 +327,6 @@ export default function VirtualizedList<T>({
           )}
         />
 
-        {isLoading && (
-          <Box
-            sx={{
-              position: 'absolute',
-              bottom: 16,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              bgcolor: 'background.paper',
-              borderRadius: '50%',
-              p: 1,
-              boxShadow: 2
-            }}
-          >
-            <CircularProgress size={24} />
-          </Box>
-        )}
       </Box>
       {footer}
     </Box>

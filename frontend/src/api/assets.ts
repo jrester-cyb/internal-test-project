@@ -137,10 +137,10 @@ export async function fetchTiles(workspaceId: string, bbox: number[], limit: num
 }
 
 export async function searchAssets(workspaceId: string, request: SearchRequest) {
-  const { page = 1, limit = 50, filters = [], ...restRequest } = request
+  const { limit = 50, offset = 0, filters = [], ...restRequest } = request
   const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString()
+    limit: limit.toString(),
+    offset: offset.toString()
   })
 
   // Ensure filters are sent as expected
@@ -155,20 +155,6 @@ export async function searchAssets(workspaceId: string, request: SearchRequest) 
   })
 
   if (!response.ok) throw new Error('Failed to search assets')
-  return response.json()
-}
-
-/** Fetch from a pagination URL (next/previous) */
-export async function fetchPaginationUrl(url: string) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({})
-  })
-
-  if (!response.ok) throw new Error('Failed to fetch pagination')
   return response.json()
 }
 

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import type { ReactNode } from 'react'
 import { useSearchParams, useLoaderData } from 'react-router-dom'
 import type { Asset, AssetTypeAttribute, Cluster } from '../types'
-import { searchAssets, fetchAssetTypes, fetchPaginationUrl } from '../api/assets'
+import { searchAssets, fetchAssetTypes } from '../api/assets'
 import MapDetailsDrawer from '../components/MapDetailsDrawer'
 
 // Cache for asset type names: assetTypeId -> name
@@ -18,10 +18,9 @@ type AssetDrawerData = {
 type ClusterDrawerData = {
   type: 'cluster'
   cluster: Cluster
-  assets: Asset[]
+  /** Sparse map of index -> asset */
+  assets: Map<number, Asset>
   loading: boolean
-  // Pagination state
-  nextUrl: string | null
   totalCount: number
   loadingMore: boolean
 }
@@ -56,7 +55,7 @@ interface MapContextType {
   openClusterDrawer: (cluster: Cluster) => void
   closeDrawer: () => void
   zoomToAsset: (asset: Asset) => void
-  loadMoreClusterAssets: () => void
+  loadClusterAssetsRange: (startIndex: number, endIndex: number) => void
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined)
@@ -114,14 +113,18 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       }
     }
     if (loaderData?.selectedCluster) {
+      // Convert array to Map
+      const assetsMap = new Map<number, Asset>()
+      loaderData.clusterAssets?.forEach((asset, index) => {
+        assetsMap.set(index, asset)
+      })
       return {
         isOpen: true,
         content: {
           type: 'cluster',
           cluster: loaderData.selectedCluster,
-          assets: loaderData.clusterAssets || [],
+          assets: assetsMap,
           loading: false,
-          nextUrl: null,
           totalCount: loaderData.clusterAssets?.length || 0,
           loadingMore: false
         }
@@ -166,40 +169,42 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       return
     }
 
-    // Set loading state and fetch assets
+    // Set loading state - will fetch initial items via onLoadRange
     setDrawerState({
       isOpen: true,
       content: {
         type: 'cluster',
         cluster,
-        assets: [],
+        assets: new Map(),
         loading: true,
-        nextUrl: null,
         totalCount: 0,
         loadingMore: false
       }
     })
 
-    // Fetch cluster assets (first page)
+    // Fetch initial count and first batch
     searchAssets(workspaceId, {
       filters: [{
         field: 'h3_index',
         value: cluster.h3Index,
         operator: 'startswith'
       }],
-      page: 1,
-      limit: 20
+      limit: 20,
+      offset: 0
     })
       .then(results => {
         setDrawerState(prev => {
           if (prev.content?.type === 'cluster' && prev.content.cluster.h3Index === cluster.h3Index) {
+            const newAssets = new Map(prev.content.assets)
+            results.results?.forEach((asset: Asset, index: number) => {
+              newAssets.set(index, asset)
+            })
             return {
               ...prev,
               content: {
                 ...prev.content,
-                assets: results.results || [],
+                assets: newAssets,
                 loading: false,
-                nextUrl: results.next || null,
                 totalCount: results.count || 0,
                 loadingMore: false
               }
@@ -237,21 +242,25 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
     onZoomToAsset?.(asset)
   }, [onZoomToAsset])
 
-  // Ref to track drawer state for loadMoreClusterAssets without causing recreation
+  // Ref to track drawer state for loadClusterAssetsRange without causing recreation
   const drawerStateRef = useRef(drawerState)
   drawerStateRef.current = drawerState
 
-  const loadMoreClusterAssets = useCallback(() => {
+  // Store workspaceId in ref for loadClusterAssetsRange
+  const workspaceIdRef = useRef(workspaceId)
+  workspaceIdRef.current = workspaceId
+
+  const loadClusterAssetsRange = useCallback((startIndex: number, endIndex: number) => {
     // Read from ref to avoid dependency on drawerState
     const currentContent = drawerStateRef.current.content
+    const currentWorkspaceId = workspaceIdRef.current
 
-    // Only load more if we have a cluster drawer open with a next URL
+    // Only load if we have a cluster drawer open
     if (currentContent?.type !== 'cluster') return
-    if (currentContent.loading || currentContent.loadingMore) return
-    if (!currentContent.nextUrl) return
+    if (currentContent.loading) return
 
     const cluster = currentContent.cluster
-    const nextUrl = currentContent.nextUrl
+    const limit = endIndex - startIndex + 1
 
     // Set loading more state
     setDrawerState(prev => {
@@ -267,17 +276,29 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       return prev
     })
 
-    // Fetch next page using the next URL
-    fetchPaginationUrl(nextUrl)
+    // Fetch the specific range
+    searchAssets(currentWorkspaceId, {
+      filters: [{
+        field: 'h3_index',
+        value: cluster.h3Index,
+        operator: 'startswith'
+      }],
+      limit,
+      offset: startIndex
+    })
       .then(results => {
         setDrawerState(prev => {
           if (prev.content?.type === 'cluster' && prev.content.cluster.h3Index === cluster.h3Index) {
+            // Create new Map with existing items plus new items
+            const newAssets = new Map(prev.content.assets)
+            results.results?.forEach((asset: Asset, index: number) => {
+              newAssets.set(startIndex + index, asset)
+            })
             return {
               ...prev,
               content: {
                 ...prev.content,
-                assets: [...prev.content.assets, ...(results.results || [])],
-                nextUrl: results.next || null,
+                assets: newAssets,
                 totalCount: results.count || prev.content.totalCount,
                 loadingMore: false
               }
@@ -287,7 +308,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
         })
       })
       .catch(err => {
-        console.error('Failed to load more cluster assets:', err)
+        console.error('Failed to load cluster assets range:', err)
         setDrawerState(prev => {
           if (prev.content?.type === 'cluster') {
             return {
@@ -354,7 +375,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       totalCount: content.totalCount,
       onAssetClick: openAssetDrawer,
       onZoomToAsset: zoomToAsset,
-      onLoadMore: content.nextUrl ? loadMoreClusterAssets : undefined
+      onLoadRange: loadClusterAssetsRange
     }
   }
 
@@ -367,7 +388,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       openClusterDrawer,
       closeDrawer,
       zoomToAsset,
-      loadMoreClusterAssets
+      loadClusterAssetsRange
     }}>
       {children}
       {drawerProps && <MapDetailsDrawer {...drawerProps} />}
