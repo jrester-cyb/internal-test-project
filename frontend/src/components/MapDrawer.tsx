@@ -47,7 +47,7 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
       setPreventClick(false)
       return
     }
-    handleClose()
+    onClose()
   }
 
 
@@ -56,10 +56,8 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
       const newWidth = window.innerWidth - e.clientX
-      console.log('Mouse move, newWidth:', newWidth)
       const minWidth = 380
       if (newWidth < minWidth) {
-        console.log('Past minimum width:', newWidth, 'minWidth:', minWidth)
         if (!isSliding) {
           setIsSliding(true)
         }
@@ -67,10 +65,8 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
       } else {
         if (isSliding) {
           setIsSliding(false)
-          setSlideOffset(0)
         }
         const clampedWidth = Math.max(minWidth, Math.min(window.innerWidth - 200, newWidth))
-        console.log('Updating width to:', clampedWidth)
         setPanelWidth(clampedWidth)
         localStorage.setItem('assetDetailsPanelWidth', clampedWidth.toString())
       }
@@ -78,13 +74,9 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
 
     const handleMouseUp = () => {
       if (isSliding) {
-        setTimeout(() => {
-          onClose()
-        }, 300)
+        onClose()
       }
       setIsResizing(false)
-      setIsSliding(false)
-      setSlideOffset(0)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
@@ -102,14 +94,27 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
     }
   }, [isResizing, isSliding, slideOffset, panelWidth, onClose])
 
-  const handleClose = () => {
-    console.log('Triggering drawer slide out due to handleClose')
-    setIsSliding(false)
-    setSlideOffset(0)
-    // Delay calling onClose to allow slide-out animation to complete
-    setTimeout(() => {
-      onClose()
-    }, 300)
+  useEffect(() => {
+    if (!isOpen) {
+      setTimeout(() => {
+        setIsSliding(false)
+        setSlideOffset(0)
+      }, 350)
+    }
+  }, [isOpen])
+
+  // Extracted style for Slide component to avoid nested ternary
+  let slideStyle: React.CSSProperties | undefined;
+  if (isDraggable) {
+    slideStyle = isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined;
+  } else {
+    slideStyle = {
+      position: 'absolute',
+      top: 56,
+      bottom: 56,
+      left: 0,
+      right: 0
+    };
   }
 
   return (
@@ -120,13 +125,7 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
         appear={false}
         timeout={300}
         container={isDraggable ? undefined : document.body}
-        style={isDraggable ? (isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined) : {
-          position: 'absolute',
-          top: 56,
-          bottom: 56,
-          left: 0,
-          right: 0
-        }}
+        style={slideStyle}
       >
         <Paper
           elevation={0}
