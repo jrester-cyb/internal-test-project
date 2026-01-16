@@ -224,13 +224,29 @@ interface StickyHeaderContextValue {
   onColumnResize: (columnIndex: number, newWidth: number) => void
   onColumnResizeEnd: (columnIndex: number) => void
   onColumnResizeStart: (columnIndex: number) => void
-  resizingColumnIndex: number | null
+  resizingColumnIndex?: number | null
   filters?: ColumnFilters
   onFilterClick?: (columnKey: string, anchorEl: HTMLElement) => void
-  selection: SelectionRange | null
+  selection?: SelectionRange | null
+  onHeaderMouseDown?: (columnIndex: number, event: React.MouseEvent) => void
 }
 
 const StickyHeaderContext = createContext<StickyHeaderContextValue | null>(null)
+
+// Default context value for when sticky header is disabled
+const defaultStickyHeaderContext: StickyHeaderContextValue = {
+  columns: [],
+  columnWidths: [],
+  headerHeight: 0,
+  headerBgColor: 'background.paper',
+  totalColumnsWidth: 0,
+  getColumnStartWidth: () => 0,
+  onColumnResize: () => { },
+  onColumnResizeEnd: () => { },
+  onColumnResizeStart: () => { },
+  resizingColumnIndex: null,
+  selection: null,
+}
 
 // Context for cell selection
 interface CellSelectionContextValue {
@@ -265,10 +281,23 @@ const StickyInnerElement = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLD
 // Custom outer element that includes a sticky header row
 const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ children, ...rest }, ref) => {
-    const ctx = useContext(StickyHeaderContext)
+    const ctx = useContext(StickyHeaderContext) ?? defaultStickyHeaderContext
     if (!ctx) return <div ref={ref} {...rest}>{children}</div>
 
-    const { columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, onColumnResize, onColumnResizeEnd, onColumnResizeStart, resizingColumnIndex, filters, onFilterClick, selection } = ctx
+    const columns = ctx.columns
+    const columnWidths = ctx.columnWidths
+    const headerHeight = ctx.headerHeight
+    const headerBgColor = ctx.headerBgColor
+    const totalColumnsWidth = ctx.totalColumnsWidth
+    const getColumnStartWidth = ctx.getColumnStartWidth
+    const onColumnResize = ctx.onColumnResize
+    const onColumnResizeEnd = ctx.onColumnResizeEnd
+    const onColumnResizeStart = ctx.onColumnResizeStart
+    const resizingColumnIndex = ctx.resizingColumnIndex ?? null
+    const filters = ctx.filters
+    const onFilterClick = ctx.onFilterClick
+    const selection = ctx.selection ?? null
+    const onHeaderMouseDown = ctx.onHeaderMouseDown
 
     return (
       <div ref={ref} {...rest}>
@@ -314,6 +343,7 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
               return (
                 <Box
                   key={col.key}
+                  data-header-column-index={index}
                   sx={{
                     position: 'absolute',
                     left,
@@ -332,7 +362,12 @@ const StickyHeaderOuterElement = forwardRef<HTMLDivElement, React.HTMLAttributes
                     borderBottomColor: 'divider',
                     boxSizing: 'border-box',
                     bgcolor: hasSelectedCells ? 'action.selected' : headerBgColor,
+                    cursor: 'pointer',
+                    userSelect: 'none',
                     ...col.headerSx
+                  }}
+                  onMouseDown={(e) => {
+                    onHeaderMouseDown?.(index, e)
                   }}
                 >
                   <Box
@@ -621,6 +656,7 @@ export default function VirtualizedGrid<T>({
   const [selection, setSelection] = useState<SelectionRange | null>(null)
   const [copyNotification, setCopyNotification] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isHeaderColumnSelecting, setIsHeaderColumnSelecting] = useState(false)
 
   // Filter popover state
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null)
@@ -628,11 +664,14 @@ export default function VirtualizedGrid<T>({
 
   // Column resize state
   const [resizingColumnIndex, setResizingColumnIndex] = useState<number | null>(null)
+
   const selectionRef = useRef(selection)
   selectionRef.current = selection
   const isDraggingRef = useRef(isDragging)
   isDraggingRef.current = isDragging
   const dragStartCellRef = useRef<CellPosition | null>(null)
+  const isHeaderColumnSelectingRef = useRef(isHeaderColumnSelecting)
+  isHeaderColumnSelectingRef.current = isHeaderColumnSelecting
 
   // Helper to find cell position from a mouse event target
   const getCellFromElement = useCallback((element: Element | null): CellPosition | null => {
@@ -676,24 +715,56 @@ export default function VirtualizedGrid<T>({
     setIsDragging(true)
   }, [])
 
-  // Handle mouse move during drag - extend selection
+  // Handle mouse down on header - starts column selection
+  const handleHeaderMouseDown = useCallback((columnIndex: number, event: React.MouseEvent) => {
+    // Only handle left mouse button
+    if (event.button !== 0) return
+    event.stopPropagation()
+
+    setIsHeaderColumnSelecting(true)
+    setIsDragging(true)
+
+    // Select entire column (all rows for this column)
+    const newSelection: SelectionRange = {
+      start: { rowIndex: 0, columnIndex },
+      end: { rowIndex: totalCount - 1, columnIndex }
+    }
+
+    setSelection(newSelection)
+    dragStartCellRef.current = { rowIndex: 0, columnIndex }
+  }, [totalCount])
+
+  // Handle mouse move during header drag - extend column selection
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current || !dragStartCellRef.current) return
+      if (!isHeaderColumnSelectingRef.current || !isDraggingRef.current || !dragStartCellRef.current) return
 
       const target = document.elementFromPoint(e.clientX, e.clientY)
-      const cell = getCellFromElement(target)
+      if (!target) return
 
-      if (cell) {
+      // Check if we're over a header cell
+      let headerElement = target as HTMLElement
+      while (headerElement && !headerElement.dataset.headerColumnIndex) {
+        headerElement = headerElement.parentElement as HTMLElement
+        if (!headerElement) return
+      }
+
+      const headerColumnIndex = headerElement.dataset.headerColumnIndex
+      if (headerColumnIndex !== undefined) {
+        const columnIndex = parseInt(headerColumnIndex, 10)
+        const startColumn = dragStartCellRef.current.columnIndex
+        const endColumn = columnIndex
+
         setSelection({
-          start: dragStartCellRef.current,
-          end: cell
+          start: { rowIndex: 0, columnIndex: Math.min(startColumn, endColumn) },
+          end: { rowIndex: totalCount - 1, columnIndex: Math.max(startColumn, endColumn) }
         })
       }
     }
 
     const handleMouseUp = () => {
-      if (isDraggingRef.current) {
+      if (isHeaderColumnSelectingRef.current) {
+        setIsHeaderColumnSelecting(false)
         setIsDragging(false)
         dragStartCellRef.current = null
       }
@@ -706,7 +777,7 @@ export default function VirtualizedGrid<T>({
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [getCellFromElement])
+  }, [totalCount])
 
   const handleCellMouseDownRef = useRef(handleCellMouseDown)
   handleCellMouseDownRef.current = handleCellMouseDown
@@ -1169,7 +1240,8 @@ export default function VirtualizedGrid<T>({
     filters,
     onFilterClick: onFiltersChange ? handleFilterClick : undefined,
     selection,
-  }), [columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, handleColumnResize, handleColumnResizeEnd, handleColumnResizeStart, resizingColumnIndex, filters, onFiltersChange, handleFilterClick, selection])
+    onHeaderMouseDown: handleHeaderMouseDown,
+  }), [columns, columnWidths, headerHeight, headerBgColor, totalColumnsWidth, getColumnStartWidth, handleColumnResize, handleColumnResizeEnd, handleColumnResizeStart, resizingColumnIndex, filters, onFiltersChange, handleFilterClick, selection, handleHeaderMouseDown])
 
   if (totalCount === 0 && !isLoading) {
     return (
@@ -1236,7 +1308,7 @@ export default function VirtualizedGrid<T>({
             if (!height || !width) return null
 
             return (
-              <StickyHeaderContext.Provider value={stickyHeader ? headerContextValue : null}>
+              <StickyHeaderContext.Provider value={stickyHeader ? headerContextValue : defaultStickyHeaderContext}>
                 <Grid
                   ref={gridRef}
                   outerRef={outerRef}
