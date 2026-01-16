@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
-import { Box, Paper, Slide, Typography, IconButton } from '@mui/material'
-import { DragHandle as DragHandleIcon, Close as CloseIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material'
+import { Box, Paper, Slide } from '@mui/material'
+import { ChevronRight as ChevronRightIcon, KeyboardArrowDown as ChevronDownIcon } from '@mui/icons-material'
+import { useSidebar } from '../contexts/SidebarContext'
 
 interface PvDrawerProps {
   isOpen: boolean
@@ -9,31 +10,18 @@ interface PvDrawerProps {
 }
 
 export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
+  const { isMobile } = useSidebar()
+  const isDraggable = !isMobile
+
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem('assetDetailsPanelWidth')
     return saved ? parseInt(saved, 10) : 380
   }) // Default width in pixels
   const [isResizing, setIsResizing] = useState(false)
-  const [isDraggable, setIsDraggable] = useState(true)
   const [preventClick, setPreventClick] = useState(false)
   const [isSliding, setIsSliding] = useState(false)
   const [slideOffset, setSlideOffset] = useState(0)
   const resizeRef = useRef<HTMLDivElement>(null)
-
-  // Check screen size and update draggable state
-  useEffect(() => {
-    const checkScreenSize = () => {
-      const minScreenWidth = 760 // Minimum screen width to allow dragging (380 for drawer + 380 for content)
-      setIsDraggable(window.innerWidth >= minScreenWidth)
-    }
-
-    checkScreenSize()
-    window.addEventListener('resize', checkScreenSize)
-
-    return () => {
-      window.removeEventListener('resize', checkScreenSize)
-    }
-  }, [])
 
   const handleResizeStart = (e: React.MouseEvent) => {
     if (!isDraggable) return
@@ -107,14 +95,6 @@ export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
   let slideStyle: React.CSSProperties | undefined;
   if (isDraggable) {
     slideStyle = isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined;
-  } else {
-    slideStyle = {
-      position: 'absolute',
-      top: 56,
-      bottom: 56,
-      left: 0,
-      right: 0
-    };
   }
 
   return (
@@ -123,15 +103,14 @@ export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
       in={isOpen}
       appear={false}
       timeout={300}
-      container={isDraggable ? undefined : document.body}
       style={slideStyle}
     >
       <Paper
-        elevation={0}
+        elevation={isDraggable ? 0 : 8}
         sx={{
           pointerEvents: 'auto',
           position: 'fixed',
-          top: isDraggable ? 64 : 56, // Higher up on mobile (56px instead of 64px)
+          top: isDraggable ? 64 : 'auto',
           left: isDraggable ? 'auto' : 0,
           right: 0,
           bottom: isDraggable ? 0 : 56, // Leave 56px for bottom nav on mobile
@@ -139,10 +118,11 @@ export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
           height: isDraggable ? 'auto' : 'calc(100vh - 112px)', // 56px top + 56px bottom
           zIndex: 1000,
           borderLeft: isDraggable ? 1 : 0,
+          borderTop: isDraggable ? 0 : 1,
           borderColor: 'divider',
-          borderRadius: isDraggable ? undefined : 0, // Remove rounded borders on mobile
+          borderRadius: isDraggable ? undefined : '16px 16px 0 0', // Rounded top corners on mobile
           display: 'flex',
-          flexDirection: 'row',
+          flexDirection: isDraggable ? 'row' : 'column',
           transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
         }}
       >
@@ -196,6 +176,26 @@ export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
                 color: 'text.secondary'
               }}
             />
+          </Box>
+        )}
+
+        {/* Mobile Close Button */}
+        {isMobile && (
+          <Box
+            onClick={onClose}
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              py: 0.5,
+              borderBottom: 1,
+              borderColor: 'divider',
+              width: '100%',
+              cursor: 'pointer',
+              '&:hover': { bgcolor: 'action.hover' }
+            }}
+          >
+            <ChevronDownIcon sx={{ fontSize: 24 }} />
           </Box>
         )}
 

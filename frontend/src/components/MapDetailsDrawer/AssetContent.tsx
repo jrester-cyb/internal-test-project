@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Box, Skeleton, Typography } from '@mui/material'
-import { KeyboardArrowDown as ChevronDownIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
+import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '../../types'
 import { getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '../../api/assets'
 import AssetOverviewCard from '../AssetOverviewCard'
@@ -62,25 +62,10 @@ export default function AssetContent({
     return saved ? JSON.parse(saved) : ['attributes', 'tree', 'tasks', 'files']
   })
 
-  // Mobile detection
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 760)
-
   // Save card order to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('assetDetailsCardOrder', JSON.stringify(cardOrder))
   }, [cardOrder])
-
-  // Mobile detection
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 760)
-    }
-
-    window.addEventListener('resize', checkScreenSize)
-    return () => {
-      window.removeEventListener('resize', checkScreenSize)
-    }
-  }, [])
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -195,26 +180,6 @@ export default function AssetContent({
   return (
     <PvDrawer isOpen={isOpen} onClose={onClose}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Mobile Close Button */}
-        {isMobile && (
-          <Box
-            onClick={onClose}
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              py: 0.5,
-              borderBottom: 1,
-              borderColor: 'divider',
-              width: '100%',
-              cursor: 'pointer',
-              '&:hover': { bgcolor: 'action.hover' }
-            }}
-          >
-            <ChevronDownIcon sx={{ fontSize: 24 }} />
-          </Box>
-        )}
-
         {/* Pinned Overview Card - show immediately with available data */}
         <Box sx={{ flexShrink: 0 }}>
           {loading && !displayAsset.name ? (
