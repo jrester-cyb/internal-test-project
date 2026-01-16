@@ -8,7 +8,7 @@ import AttributesCard from './AttributesCard'
 import AssetTreeCard from './AssetTreeCard'
 import TasksCard from './TasksCard'
 import FilesCard from './FilesCard'
-import MapDrawer from './MapDrawer'
+import PvDrawer from './PvDrawer'
 import { useOrganization } from '../contexts/OrganizationContext'
 import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { RelatedAssetsResponse } from '../api/assets'
@@ -179,7 +179,7 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   const displayAsset = fullAsset || asset
 
   return (
-    <MapDrawer isOpen={isOpen} onClose={onClose}>
+    <PvDrawer isOpen={isOpen} onClose={onClose}>
       {!displayAsset ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
           <CircularProgress />
@@ -327,6 +327,6 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
           )}
         </Box>
       )}
-    </MapDrawer>
+    </PvDrawer>
   )
 }

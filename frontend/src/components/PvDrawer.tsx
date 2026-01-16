@@ -2,13 +2,13 @@ import { useEffect, useState, useRef } from 'react'
 import { Box, Paper, Slide, Typography, IconButton } from '@mui/material'
 import { DragHandle as DragHandleIcon, Close as CloseIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material'
 
-interface MapDrawerProps {
+interface PvDrawerProps {
   isOpen: boolean
   onClose: () => void
   children: React.ReactNode
 }
 
-export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps) {
+export default function PvDrawer({ isOpen, onClose, children }: PvDrawerProps) {
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem('assetDetailsPanelWidth')
     return saved ? parseInt(saved, 10) : 380

@@ -21,6 +21,7 @@ import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import JsonEditor from '../components/JsonEditor'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
+import PvDrawer from '../components/PvDrawer'
 
 export default function AssetTypeAttributesPage() {
   const loaderData = useLoaderData() as {
@@ -1590,19 +1591,10 @@ export default function AssetTypeAttributesPage() {
       </Box>
 
       {/* Details Drawer for small screens */}
-      <Drawer
-        anchor="right"
-        open={isSmallScreen && !!selectedAttribute}
-        onClose={() => setSelectedAttribute(null)}
-        slotProps={{
-          paper: {
-            sx: { width: '100%', maxWidth: 400 }
-          }
-        }}
-      >
+      <PvDrawer isOpen={isSmallScreen && !!selectedAttribute}
+        onClose={() => setSelectedAttribute(null)}>
         {detailsPanelContent}
-      </Drawer>
-
+      </PvDrawer>
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editingAttribute ? 'Edit Attribute' : 'Add Attribute'}</DialogTitle>
         <DialogContent>
