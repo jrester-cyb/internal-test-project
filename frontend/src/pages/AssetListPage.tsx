@@ -1,4 +1,4 @@
-import { Box, Typography, Stack, Switch as MuiSwitch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover } from '@mui/material'
+import { Box, Typography, Stack, Switch as MuiSwitch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover, MenuItem, Select } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import EditOffIcon from '@mui/icons-material/EditOff'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
@@ -923,6 +923,112 @@ export default function AssetListPage() {
     )
   }, [])
 
+  // Choices cell editor - for attributes with predefined choices
+  const createChoicesCellEditor = useCallback((choices: NonNullable<AssetTypeAttribute['choices']>) => {
+    return ({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+      // Find the current choice by matching value
+      const currentChoice = choices.find(c => String(c.value) === value || c.label === value)
+      const [selectedValue, setSelectedValue] = useState(currentChoice?.value ?? '')
+      const [open, setOpen] = useState(true)
+
+      const handleChange = (newValue: any) => {
+        setSelectedValue(newValue)
+        // Save immediately on selection
+        onSave(String(newValue))
+      }
+
+      const handleClose = () => {
+        setOpen(false)
+        // Save current value when closing
+        onSave(String(selectedValue))
+      }
+
+      const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          onCancel()
+        }
+        e.stopPropagation()
+      }
+
+      return (
+        <Box
+          style={style}
+          onKeyDown={handleKeyDown}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            bgcolor: 'background.paper',
+            position: 'relative',
+            zIndex: 2,
+            borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+            borderRight: selectionBorders?.right ? 'none' : '1px solid',
+            borderRightColor: 'divider',
+            borderBottomColor: 'divider',
+            '&::after': selectionBorders ? {
+              content: '""',
+              position: 'absolute',
+              top: -1,
+              right: -1,
+              bottom: -1,
+              left: -1,
+              borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+              borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+              borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+              borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+              borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+              pointerEvents: 'none',
+              zIndex: 10,
+            } : undefined,
+            boxSizing: 'border-box',
+          }}
+        >
+          <Select
+            value={selectedValue}
+            onChange={(e) => handleChange(e.target.value)}
+            onClose={handleClose}
+            open={open}
+            variant="standard"
+            fullWidth
+            size="small"
+            autoFocus
+            MenuProps={{
+              anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+              transformOrigin: { vertical: 'top', horizontal: 'left' },
+            }}
+            sx={{
+              '& .MuiSelect-select': {
+                px: 1,
+                py: 0.5,
+                fontSize: '0.75rem',
+              },
+              '&::before, &::after': { display: 'none' },
+            }}
+          >
+            {choices.map((choice) => (
+              <MenuItem key={choice.id} value={choice.value}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {choice.color && (
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        bgcolor: choice.color,
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  {choice.label}
+                </Box>
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+      )
+    }
+  }, [])
+
   // Build column definitions
   const columns: ColumnDefinition<Asset>[] = useMemo(() => {
     const baseColumns: ColumnDefinition<Asset>[] = [
@@ -972,6 +1078,11 @@ export default function AssetListPage() {
 
     // Helper to get the editor for an attribute type
     const getEditorForAttribute = (attr: AssetTypeAttribute) => {
+      // If the attribute has choices, use the choices editor regardless of type
+      if (attr.choices && attr.choices.length > 0) {
+        return createChoicesCellEditor(attr.choices)
+      }
+
       switch (attr.attributeType) {
         case 'json': return JsonCellEditor
         case 'number': return createNumberWithUnitEditor(attr.unit)
@@ -1018,7 +1129,7 @@ export default function AssetListPage() {
     }))
 
     return [...baseColumns, ...attributeColumns]
-  }, [displayAttributes, location.state, editingEnabled, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor])
+  }, [displayAttributes, location.state, editingEnabled, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor, createChoicesCellEditor])
 
   // Cell placeholder for loading state
   const cellPlaceholder = (

@@ -303,6 +303,59 @@ function NumberRenderer({ value, unit, showCopyButton = true, compact = false }:
   )
 }
 
+// Choice renderer - displays value with optional color indicator
+function ChoiceRenderer({ value, choices, compact = false }: { value: any; choices: NonNullable<AssetTypeAttribute['choices']>; compact?: boolean }) {
+  // Find the matching choice
+  const choice = choices.find(c => c.value === value || String(c.value) === String(value))
+  const displayLabel = choice?.label ?? String(value)
+  const color = choice?.color
+
+  if (compact) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+        {color && (
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              bgcolor: color,
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <Typography
+          variant="body2"
+          sx={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayLabel}
+        </Typography>
+      </Box>
+    )
+  }
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+      {color && (
+        <Box
+          sx={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            bgcolor: color,
+            flexShrink: 0,
+          }}
+        />
+      )}
+      <Typography variant="body2">{displayLabel}</Typography>
+    </Box>
+  )
+}
+
 // Default text renderer using TruncatedText
 function SimpleTextRenderer({ value, maxLines = 3, showCopyButton = true, compact = false }: { value: string; maxLines?: number; showCopyButton?: boolean; compact?: boolean }) {
   if (compact) {
@@ -334,6 +387,11 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
   // Handle null/undefined
   if (value === null || value === undefined) {
     return <Typography variant="body2" color="text.disabled">—</Typography>
+  }
+
+  // If attribute has choices, use the choice renderer regardless of type
+  if (attribute.choices && attribute.choices.length > 0) {
+    return <ChoiceRenderer value={value} choices={attribute.choices} compact={compact} />
   }
 
   // Render based on attribute type
@@ -372,4 +430,4 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
 
 // Export individual renderers for direct use if needed
 // Note: TextRenderer here refers to SimpleTextRenderer for backward compatibility
-export { JsonRenderer, BooleanRenderer, DateRenderer, LinkRenderer, NumberRenderer, SimpleTextRenderer as TextRenderer }
+export { JsonRenderer, BooleanRenderer, DateRenderer, LinkRenderer, NumberRenderer, ChoiceRenderer, SimpleTextRenderer as TextRenderer }
