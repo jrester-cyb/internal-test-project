@@ -40,11 +40,15 @@ function MapPage() {
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
   const [nameFilter, setNameFilter] = useState('')
   const [flyToLocation, setFlyToLocation] = useState<{ coords: [number, number]; zoom: number } | null>(null)
+  const [currentBounds, setCurrentBounds] = useState<number[] | null>(null)
 
   const initialUrlUpdateDone = useRef(false)
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return
+
+    // Track current bounds for cluster search filtering
+    setCurrentBounds(bounds)
 
     try {
       // Merge asset type and attribute filters with other filters
@@ -182,7 +186,7 @@ function MapPage() {
   }, [])
 
   return (
-    <MapProvider organizationId={organizationId || ''} workspaceId={workspaceId || ''} onZoomToAsset={handleZoomToAsset}>
+    <MapProvider organizationId={organizationId || ''} workspaceId={workspaceId || ''} onZoomToAsset={handleZoomToAsset} currentBounds={currentBounds}>
       <MapView
         center={center}
         zoom={zoom}

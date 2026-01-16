@@ -882,7 +882,14 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         else:
             queryset = Asset.objects.all()
 
-        # Optimize prefetch with select_related to reduce queries
+        if filter_config:
+            q_filter = FilterSerializer(data=filter_config).build_query()
+            if q_filter:
+                queryset = queryset.filter(q_filter)
+
+        queryset = queryset.distinct()
+
+        # Optimize prefetch with select_related to reduce queries (after distinct to avoid count issues)
         queryset = queryset.select_related(
             "asset_type", "organization"
         ).prefetch_related(
@@ -891,13 +898,6 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 queryset=BaseAttributeValue.objects.all(),
             ),
         )
-
-        if filter_config:
-            q_filter = FilterSerializer(data=filter_config).build_query()
-            if q_filter:
-                queryset = queryset.filter(q_filter)
-
-        queryset = queryset.distinct()
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -1170,7 +1170,9 @@ Format the output as follows:
             q_filter = FilterSerializer(data=filter_config).build_query()
             if q_filter:
                 queryset = queryset.filter(q_filter)
-                queryset = queryset.distinct()
+
+        # Always apply distinct after workspace join (assets can belong to multiple workspaces)
+        queryset = queryset.distinct()
 
         # Apply bounding box filter if provided
         bbox_param = request.query_params.get("bbox")
@@ -1222,8 +1224,8 @@ Format the output as follows:
         else:
             precision = 7  # Default to mid-level granularity
 
-        # Filter assets with geometry
-        queryset = queryset.exclude(geometry__isnull=True)
+        # Filter assets with h3_index and ensure distinct
+        queryset = queryset.exclude(h3_index="").exclude(h3_index__isnull=True).distinct()
 
         # Group by h3_index prefix and count
         from django.db.models.functions import Substr
@@ -1232,7 +1234,7 @@ Format the output as follows:
         clusters = (
             queryset.annotate(h3_index_prefix=Substr("h3_index", 1, precision))
             .values("h3_index_prefix")
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id", distinct=True))
             .order_by("-count")
         )
 

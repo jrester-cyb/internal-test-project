@@ -73,9 +73,10 @@ interface MapProviderProps {
   organizationId: string
   workspaceId: string
   onZoomToAsset?: (asset: Asset) => void
+  currentBounds?: number[] | null
 }
 
-export function MapProvider({ children, organizationId, workspaceId, onZoomToAsset }: MapProviderProps) {
+export function MapProvider({ children, organizationId, workspaceId, onZoomToAsset, currentBounds }: MapProviderProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const loaderData = useLoaderData() as MapLoaderData | null
 
@@ -185,13 +186,26 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       }
     })
 
+    // Build filters - h3 prefix + optional bbox to match cluster counts
+    const filters: any[] = [{
+      field: 'h3_index',
+      value: cluster.h3Index,
+      operator: 'startswith'
+    }]
+    if (currentBounds?.length === 4) {
+      // Convert bbox to WKT polygon for geometry intersects filter
+      const [minLon, minLat, maxLon, maxLat] = currentBounds
+      const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
+      filters.push({
+        field: 'geometry',
+        value: bboxWkt,
+        operator: 'intersects'
+      })
+    }
+
     // Fetch initial count and first batch
     searchAssets(workspaceId, {
-      filters: [{
-        field: 'h3_index',
-        value: cluster.h3Index,
-        operator: 'startswith'
-      }],
+      filters,
       limit: 20,
       offset: 0
     })
@@ -253,6 +267,10 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   const workspaceIdRef = useRef(workspaceId)
   workspaceIdRef.current = workspaceId
 
+  // Store currentBounds in ref for loadClusterAssetsRange
+  const currentBoundsRef = useRef(currentBounds)
+  currentBoundsRef.current = currentBounds
+
   const loadClusterAssetsRange = useCallback((startIndex: number, endIndex: number) => {
     // Read from ref to avoid dependency on drawerState
     const currentContent = drawerStateRef.current.content
@@ -280,13 +298,27 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       return prev
     })
 
+    // Build filters - h3 prefix + optional bbox to match cluster counts
+    const filters: any[] = [{
+      field: 'h3_index',
+      value: cluster.h3Index,
+      operator: 'startswith'
+    }]
+    const bounds = currentBoundsRef.current
+    if (bounds?.length === 4) {
+      // Convert bbox to WKT polygon for geometry intersects filter
+      const [minLon, minLat, maxLon, maxLat] = bounds
+      const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
+      filters.push({
+        field: 'geometry',
+        value: bboxWkt,
+        operator: 'intersects'
+      })
+    }
+
     // Fetch the specific range
     searchAssets(currentWorkspaceId, {
-      filters: [{
-        field: 'h3_index',
-        value: cluster.h3Index,
-        operator: 'startswith'
-      }],
+      filters,
       limit,
       offset: startIndex
     })
