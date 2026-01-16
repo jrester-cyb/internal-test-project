@@ -91,8 +91,16 @@ export default function TruncatedText({ children, maxLines = 3, title = 'Full Te
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ position: 'sticky', top: 0 }}>
+        <DialogTitle sx={{ position: 'sticky', top: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {title}
+          <Tooltip title="Copy" arrow>
+            <IconButton
+              onClick={() => navigator.clipboard.writeText(children)}
+              size="small"
+            >
+              <ContentCopy fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ whiteSpace: 'pre-wrap' }}>

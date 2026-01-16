@@ -60,6 +60,8 @@ export interface UnitCategory {
 export interface Asset {
   id: string
   name: string
+  organization?: string
+  organizationName?: string
   assetType: string
   assetTypeName?: string
   parent?: string | null

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Container, Grid, Drawer, Divider, Typography, IconButton } from '@mui/material'
-import { Close as CloseIcon } from '@mui/icons-material'
+import { Box, Container, Grid, Typography } from '@mui/material'
 import type { Asset, AssetTypeAttribute } from '../types'
 import AssetOverviewCard from '../components/AssetOverviewCard'
 import AttributesCard from '../components/AttributesCard'
@@ -29,7 +28,6 @@ export default function AssetDetailPage() {
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
-  const [detailsOpen, setDetailsOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
@@ -140,7 +138,6 @@ export default function AssetDetailPage() {
           console.debug('Clone asset:', asset.id)
         }}
         onDownload={handleDownload}
-        onSystemDetails={() => setDetailsOpen(true)}
       />
 
       {/* Scrollable Content */}
@@ -199,44 +196,6 @@ export default function AssetDetailPage() {
           </Grid>
         </Container>
       </Box>
-
-      {/* Details Drawer */}
-      <Drawer
-        anchor="right"
-        open={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-      >
-        <Box sx={{ width: 400, p: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">System Details</Typography>
-            <IconButton onClick={() => setDetailsOpen(false)} size="small">
-              <CloseIcon />
-            </IconButton>
-          </Box>
-          <Divider sx={{ mb: 2 }} />
-
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Asset ID</Typography>
-          <Typography variant="body2" sx={{ mb: 2, fontFamily: 'monospace' }}>{asset.id}</Typography>
-
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Asset Type ID</Typography>
-          <Typography variant="body2" sx={{ mb: 2, fontFamily: 'monospace' }}>{asset.assetType}</Typography>
-
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Created</Typography>
-          <Typography variant="body2" sx={{ mb: 2 }}>{new Date(asset.createdAt).toLocaleString()}</Typography>
-
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Updated</Typography>
-          <Typography variant="body2" sx={{ mb: 2 }}>{new Date(asset.updatedAt).toLocaleString()}</Typography>
-
-          {asset.location && (
-            <>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Location</Typography>
-              <Typography variant="body2" sx={{ mb: 2, fontFamily: 'monospace' }}>
-                {asset.location.type}: [{asset.location.coordinates.join(', ')}]
-              </Typography>
-            </>
-          )}
-        </Box>
-      </Drawer>
 
       <AssetEditDialog
         open={editDialogOpen}

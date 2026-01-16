@@ -1,15 +1,12 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 // useMemo used for loadingPlaceholder
-import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItemButton, Tooltip, Card, CardContent, Container, LinearProgress, Typography, Snackbar } from '@mui/material'
+import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItemButton, Tooltip, Card, CardContent, Container, LinearProgress, Typography } from '@mui/material'
 import { LocationOn as LocationIcon, OpenInNew as OpenInNewIcon, Place as PlaceIcon, Layers as LayersIcon, MyLocation as ZoomIcon, Share as ShareIcon } from '@mui/icons-material'
 import type { Asset, Cluster } from '../../types'
-import PvDrawer from '../PvDrawer'
 import CopyableText from '../CopyableText'
 import VirtualizedList from '../VirtualizedList'
 
 export interface ClusterContentProps {
-  isOpen: boolean
-  onClose: () => void
   organizationId: string
   workspaceId: string
   cluster: Cluster
@@ -22,13 +19,9 @@ export interface ClusterContentProps {
   onZoomToAsset?: (asset: Asset) => void
   /** Called when items at specific indices need to be loaded */
   onLoadRange?: (startIndex: number, endIndex: number) => void
-  /** When true, skip the initial slide animation (for pre-selected clusters on page load) */
-  initiallyOpen?: boolean
 }
 
 export default function ClusterContent({
-  isOpen,
-  onClose,
   organizationId,
   workspaceId,
   cluster,
@@ -39,7 +32,6 @@ export default function ClusterContent({
   onAssetClick,
   onZoomToAsset,
   onLoadRange,
-  initiallyOpen
 }: ClusterContentProps) {
   // Memoize callbacks to prevent VirtualizedList from re-rendering
   const getItemKey = useCallback((asset: Asset) => asset.id, [])
@@ -85,8 +77,7 @@ export default function ClusterContent({
   }, [])
 
   return (
-    <PvDrawer key="MapDrawer" isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <Container maxWidth={false} sx={{ py: 2 }}>
           <Card sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', position: 'relative', overflow: 'hidden' }}>
@@ -241,6 +232,5 @@ export default function ClusterContent({
           )}
         </Container>
       </Box>
-    </PvDrawer >
   )
 }

@@ -1,8 +1,10 @@
-import { Box, Card, CardContent, Chip, Container } from '@mui/material'
+import { Box, Card, CardContent, Chip, Container, Divider, Typography } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Public as PublicIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import ActionButtons from './ActionButtons'
 import CopyableText from './CopyableText'
+import TruncatedText from './TruncatedText'
+import PvDrawer from './PvDrawer'
 import { useState, useRef, useEffect, useMemo } from 'react'
 
 type AssetOverviewMode = 'page' | 'drawer'
@@ -18,7 +20,6 @@ interface AssetOverviewCardProps {
   onViewDetails?: () => void
   onClone?: () => void
   onDownload?: () => void
-  onSystemDetails?: () => void
 }
 
 export default function AssetOverviewCard({
@@ -31,10 +32,10 @@ export default function AssetOverviewCard({
   onViewOnMap,
   onViewDetails,
   onClone,
-  onDownload,
-  onSystemDetails
+  onDownload
 }: AssetOverviewCardProps) {
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
+  const [systemDetailsOpen, setSystemDetailsOpen] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
   const leftContentRef = useRef<HTMLDivElement>(null)
@@ -130,17 +131,15 @@ export default function AssetOverviewCard({
       })
     }
 
-    // System Details (always in menu)
-    if (onSystemDetails) {
-      actionsList.push({
-        label: 'System Details',
-        icon: <InfoIcon fontSize="small" />,
-        onClick: onSystemDetails,
-        color: 'inherit' as const,
-        variant: 'outlined' as const,
-        minWidth: Infinity
-      })
-    }
+    // System Details (always in menu) - always available
+    actionsList.push({
+      label: 'System Details',
+      icon: <InfoIcon fontSize="small" />,
+      onClick: () => setSystemDetailsOpen(true),
+      color: 'inherit' as const,
+      variant: 'outlined' as const,
+      minWidth: Infinity
+    })
 
     // Clone (always in menu)
     if (onClone) {
@@ -167,7 +166,7 @@ export default function AssetOverviewCard({
     }
 
     return actionsList
-  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, onShare, onViewOnMap, onViewDetails, onClone, onDownload, onSystemDetails, asset])
+  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, onShare, onViewOnMap, onViewDetails, onClone, onDownload, asset])
 
   return (
     <Container maxWidth={false} sx={{ py: 2 }} ref={headerRef}>
@@ -225,6 +224,69 @@ export default function AssetOverviewCard({
           </Box>
         </CardContent>
       </Card>
+
+      {/* System Details Drawer */}
+      <PvDrawer
+        key="SystemDetailsDrawer"
+        isOpen={systemDetailsOpen}
+        onClose={() => setSystemDetailsOpen(false)}
+        resizable={false}
+        width={600}
+        overlay
+      >
+        <Box sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>System Details</Typography>
+          <Box sx={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            gap: 2,
+            rowGap: 1.5
+          }}>
+            {asset.apiUrl && (
+              <>
+                <Typography variant="body2" color="text.secondary">API URL</Typography>
+                <TruncatedText maxLines={1} title="API URL" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.apiUrl}</TruncatedText>
+              </>
+            )}
+
+            <Typography variant="body2" color="text.secondary">Asset ID</Typography>
+            <TruncatedText maxLines={1} title="Asset ID" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.id}</TruncatedText>
+
+            <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
+            <TruncatedText maxLines={1} title="Asset Type ID" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.assetType}</TruncatedText>
+
+            {asset.createdAt && (
+              <>
+                <Typography variant="body2" color="text.secondary">Created</Typography>
+                <Typography variant="body2">{new Date(asset.createdAt).toLocaleString()}</Typography>
+              </>
+            )}
+
+            {asset.location && (
+              <>
+                <Typography variant="body2" color="text.secondary">Location ({asset.location.type})</Typography>
+                <TruncatedText maxLines={1} title="Location" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                  {`[${asset.location.coordinates.join(', ')}]`}
+                </TruncatedText>
+              </>
+            )}
+
+            {asset.organization && (
+              <>
+                <Typography variant="body2" color="text.secondary">Organization ID</Typography>
+                <TruncatedText maxLines={1} title="Organization ID" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.organization}</TruncatedText>
+              </>
+            )}
+
+            {asset.updatedAt && (
+              <>
+                <Typography variant="body2" color="text.secondary">Updated</Typography>
+                <Typography variant="body2">{new Date(asset.updatedAt).toLocaleString()}</Typography>
+              </>
+            )}
+          </Box>
+        </Box>
+      </PvDrawer>
     </Container>
   )
 }

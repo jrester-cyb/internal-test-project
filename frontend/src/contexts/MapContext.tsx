@@ -51,6 +51,10 @@ interface MapContextType {
   // Drawer state
   drawerState: DrawerState
 
+  // Selection state for map markers
+  selectedAssetId: string | null
+  selectedClusterId: string | null
+
   // Drawer actions
   openAssetDrawer: (asset: Asset, attributes?: AssetTypeAttribute[]) => void
   openClusterDrawer: (cluster: Cluster) => void
@@ -419,9 +423,19 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
 
   const drawerProps = getDrawerProps()
 
+  // Derive selection state from drawer content
+  const selectedAssetId = drawerState.isOpen && drawerState.content?.type === 'asset'
+    ? drawerState.content.asset.id
+    : null
+  const selectedClusterId = drawerState.isOpen && drawerState.content?.type === 'cluster'
+    ? drawerState.content.cluster.h3Index
+    : null
+
   return (
     <MapContext.Provider value={{
       drawerState,
+      selectedAssetId,
+      selectedClusterId,
       openAssetDrawer,
       openClusterDrawer,
       closeDrawer,

@@ -1,6 +1,7 @@
 import type { Asset, AssetTypeAttribute, Cluster } from '../../types'
 import ClusterContent from './ClusterContent'
 import AssetContent from './AssetContent'
+import PvDrawer from '../PvDrawer'
 
 // Cluster details props
 interface ClusterDetailsProps {
@@ -41,38 +42,32 @@ export type MapDetailsDrawerProps = CommonProps & (ClusterDetailsProps | AssetDe
 export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
   const { isOpen, onClose, organizationId, workspaceId, initiallyOpen } = props
 
-  if (props.type === 'cluster') {
-    return (
-      <ClusterContent
-        isOpen={isOpen}
-        onClose={onClose}
-        organizationId={organizationId}
-        workspaceId={workspaceId}
-        cluster={props.cluster}
-        assets={props.assets}
-        loading={props.loading}
-        loadingMore={props.loadingMore}
-        totalCount={props.totalCount}
-        onAssetClick={props.onAssetClick}
-        onZoomToAsset={props.onZoomToAsset}
-        onLoadRange={props.onLoadRange}
-        initiallyOpen={initiallyOpen}
-      />
-    )
-  }
-
   return (
-    <AssetContent
-      isOpen={isOpen}
-      onClose={onClose}
-      organizationId={organizationId}
-      workspaceId={workspaceId}
-      asset={props.asset}
-      attributes={props.attributes}
-      onEdit={props.onEdit}
-      onDelete={props.onDelete}
-      initiallyOpen={initiallyOpen}
-    />
+    <PvDrawer key="MapDrawer" isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
+      {props.type === 'cluster' ? (
+        <ClusterContent
+          organizationId={organizationId}
+          workspaceId={workspaceId}
+          cluster={props.cluster}
+          assets={props.assets}
+          loading={props.loading}
+          loadingMore={props.loadingMore}
+          totalCount={props.totalCount}
+          onAssetClick={props.onAssetClick}
+          onZoomToAsset={props.onZoomToAsset}
+          onLoadRange={props.onLoadRange}
+        />
+      ) : (
+        <AssetContent
+          organizationId={organizationId}
+          workspaceId={workspaceId}
+          asset={props.asset}
+          attributes={props.attributes}
+          onEdit={props.onEdit}
+          onDelete={props.onDelete}
+        />
+      )}
+    </PvDrawer>
   )
 }
 

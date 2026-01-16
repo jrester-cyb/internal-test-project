@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Box, Paper, Slide } from '@mui/material'
+import { Backdrop, Box, Paper, Slide } from '@mui/material'
 import { ChevronRight as ChevronRightIcon, KeyboardArrowDown as ChevronDownIcon } from '@mui/icons-material'
 import { useSidebar } from '../contexts/SidebarContext'
 
@@ -10,13 +10,22 @@ interface PvDrawerProps {
   children: React.ReactNode
   /** When true, skip the initial slide animation (for pre-selected assets on page load) */
   initiallyOpen?: boolean
+  /** Whether the drawer can be resized by dragging. Defaults to true. */
+  resizable?: boolean
+  /** Fixed width as a percentage string (e.g., '25%') or pixel number. Only used when resizable is false. */
+  width?: string | number
+  /** Whether to show a backdrop overlay when open. Defaults to false. */
+  overlay?: boolean
 }
 
-export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen = false }: PvDrawerProps) {
+export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen = false, resizable = true, width, overlay = false }: PvDrawerProps) {
   const { isMobile } = useSidebar()
-  const isDraggable = !isMobile
+  const isResizable = resizable && !isMobile
 
   const [panelWidth, setPanelWidth] = useState(() => {
+    if (!resizable && width) {
+      return typeof width === 'number' ? width : 400
+    }
     const saved = localStorage.getItem(`${key}-pvdrawerWidth`)
     return saved ? Number.parseInt(saved, 10) : 400
   })
@@ -27,7 +36,7 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
   const resizeRef = useRef<HTMLDivElement>(null)
 
   const handleResizeStart = (e: React.MouseEvent) => {
-    if (!isDraggable) return
+    if (!isResizable) return
     e.preventDefault()
     setIsResizing(true)
   }
@@ -47,7 +56,7 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
       const newWidth = window.innerWidth - e.clientX
-      const minWidth = 380
+      const minWidth = 420
       if (newWidth < minWidth) {
         if (!isSliding) {
           setIsSliding(true)
@@ -96,48 +105,69 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
 
   // Extracted style for Slide component to avoid nested ternary
   let slideStyle: React.CSSProperties | undefined;
-  if (isDraggable) {
+  if (!isMobile) {
     slideStyle = isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined;
   }
 
+  // Compute the drawer width
+  const getDrawerWidth = () => {
+    if (isMobile) return '100%'
+    // For non-resizable drawers with a width prop
+    if (!resizable && width) {
+      return typeof width === 'string' ? width : `${width}px`
+    }
+    // For resizable drawers, use the panel width state
+    return `${panelWidth}px`
+  }
+
   return (
-    <Slide
-      direction={isDraggable ? "left" : "up"}
+    <>
+      {/* Backdrop overlay */}
+      {overlay && (
+        <Backdrop
+          open={isOpen}
+          onClick={onClose}
+          sx={{ zIndex: 999 }}
+          transitionDuration={300}
+        />
+      )}
+      <Slide
+      direction={isMobile ? "up" : "left"}
       in={isOpen}
       appear={!initiallyOpen}
       timeout={300}
       style={slideStyle}
     >
       <Paper
-        elevation={isDraggable ? 0 : 8}
+        elevation={isMobile ? 8 : 0}
         sx={{
           pointerEvents: 'auto',
           position: 'fixed',
-          top: isDraggable ? 64 : 'auto',
-          left: isDraggable ? 'auto' : 0,
+          top: isMobile ? 'auto' : 64,
+          left: isMobile ? 0 : 'auto',
           right: 0,
-          bottom: isDraggable ? 0 : 56, // Leave 56px for bottom nav on mobile
-          width: isDraggable ? `${panelWidth}px` : '100%',
-          height: isDraggable ? 'auto' : 'calc(100vh - 112px)', // 56px top + 56px bottom
+          bottom: isMobile ? 56 : 0, // Leave 56px for bottom nav on mobile
+          width: getDrawerWidth(),
+          height: isMobile ? 'calc(100vh - 112px)' : 'auto', // 56px top + 56px bottom
           zIndex: 1000,
-          borderLeft: isDraggable ? 1 : 0,
-          borderTop: isDraggable ? 0 : 1,
+          borderLeft: isMobile ? 0 : 1,
+          borderTop: isMobile ? 1 : 0,
           borderColor: 'divider',
-          borderRadius: isDraggable ? undefined : '16px 16px 0 0', // Rounded top corners on mobile
+          borderRadius: isMobile ? '16px 16px 0 0' : undefined, // Rounded top corners on mobile
           display: 'flex',
-          flexDirection: isDraggable ? 'row' : 'column',
-          transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
+          flexDirection: isMobile ? 'column' : 'row',
+          transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none'
         }}
       >
-        {/* Resize Handle */}
-        {isDraggable && (
+        {/* Resize/Close Handle - only show on desktop */}
+        {!isMobile && (
           <Box
             ref={resizeRef}
-            onMouseDown={handleResizeStart}
+            onMouseDown={isResizable ? handleResizeStart : undefined}
             onClick={handleResizeClick}
             sx={{
               width: '12px',
-              cursor: 'pointer',
+              cursor: isResizable ? 'ew-resize' : 'pointer',
               backgroundColor: 'background.paper',
               display: 'flex',
               alignItems: 'center',
@@ -154,26 +184,28 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
               }
             }}
           >
-            <Box
-              className="resize-dots"
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 0.25,
-                opacity: 0.6,
-                transition: 'opacity 0.2s ease'
-              }}
-            >
-              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-              <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-            </Box>
+            {isResizable && (
+              <Box
+                className="resize-dots"
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.25,
+                  opacity: 0.6,
+                  transition: 'opacity 0.2s ease'
+                }}
+              >
+                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+              </Box>
+            )}
 
             <ChevronRightIcon
               className="close-arrow"
               sx={{
-                position: 'absolute',
-                opacity: 0,
+                position: isResizable ? 'absolute' : 'static',
+                opacity: isResizable ? 0 : 0.6,
                 transition: 'opacity 0.2s ease',
                 fontSize: 16,
                 color: 'text.secondary'
@@ -208,5 +240,6 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
         </Box>
       </Paper>
     </Slide>
+    </>
   )
 }

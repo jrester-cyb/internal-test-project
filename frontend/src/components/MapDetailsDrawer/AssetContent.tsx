@@ -8,7 +8,6 @@ import AttributesCard from '../AttributesCard'
 import AssetTreeCard from '../AssetTreeCard'
 import TasksCard from '../TasksCard'
 import FilesCard from '../FilesCard'
-import PvDrawer from '../PvDrawer'
 import { useOrganization } from '../../contexts/OrganizationContext'
 import type { RelatedAssetsResponse } from '../../api/assets'
 import {
@@ -23,28 +22,21 @@ import { CSS } from '@dnd-kit/utilities'
 import type { DragEndEvent } from '@dnd-kit/core'
 
 export interface AssetContentProps {
-  isOpen: boolean
-  onClose: () => void
   organizationId: string
   workspaceId: string
   asset: Asset
   attributes?: AssetTypeAttribute[]
   onEdit?: (asset: Asset) => void
   onDelete?: (asset: Asset) => void
-  /** When true, skip the initial slide animation (for pre-selected assets on page load) */
-  initiallyOpen?: boolean
 }
 
 export default function AssetContent({
-  isOpen,
-  onClose,
   organizationId,
   workspaceId,
   asset,
   attributes: propAttributes,
   onEdit,
   onDelete,
-  initiallyOpen
 }: AssetContentProps) {
   const { activeOrganization } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
@@ -181,8 +173,7 @@ export default function AssetContent({
   const displayAsset = fullAsset || asset
 
   return (
-    <PvDrawer key="MapDrawer" isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Pinned Overview Card - show immediately with available data */}
         <Box sx={{ flexShrink: 0 }}>
           {loading && !displayAsset.name ? (
@@ -202,7 +193,6 @@ export default function AssetContent({
               onViewDetails={() => window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${displayAsset.assetType}/assets/${displayAsset.id}`, '_blank')}
               onClone={() => console.debug('Clone asset:', asset.id)}
               onDownload={() => console.debug('Download asset:', asset.id)}
-              onSystemDetails={() => console.debug('System details:', asset.id)}
             />
           )}
         </Box>
@@ -318,6 +308,5 @@ export default function AssetContent({
           </DndContext>
         </Box>
       </Box>
-    </PvDrawer>
   )
 }
