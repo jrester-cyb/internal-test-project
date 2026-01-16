@@ -259,17 +259,10 @@ const CellSelectionContext = createContext<CellSelectionContextValue | null>(nul
 // Custom inner element that adds top padding for the sticky header
 const StickyInnerElement = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { style?: CSSProperties }>(
   ({ style, children, ...rest }, ref) => {
-    const ctx = useContext(StickyHeaderContext)
-    const headerHeight = ctx?.headerHeight ?? 0
-
     return (
       <div
         ref={ref}
-        style={{
-          ...style,
-          // Add header height to the total height so scrolling works correctly
-          height: `${Number.parseFloat(String(style?.height || 0)) + headerHeight}px`,
-        }}
+        style={style}
         {...rest}
       >
         {children}
