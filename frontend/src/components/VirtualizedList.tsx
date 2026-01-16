@@ -307,24 +307,28 @@ export default function VirtualizedList<T>({
       {header}
       <Box sx={{ flex: 1, minHeight: 0, position: 'relative', height: '100%' }}>
         <AutoSizer
-          renderProp={({ height, width }) => (
-            <List
-              ref={listRef}
-              outerRef={outerRef}
-              height={height || 400}
-              width={width || 300}
-              itemCount={totalCount}
-              itemSize={getItemHeight}
-              estimatedItemSize={estimatedItemHeight + itemGap}
-              itemKey={stableItemKey}
-              outerElementType={outerElementType}
-              innerElementType={innerElementType}
-              style={{ padding: typeof padding === 'number' ? padding : undefined }}
-              onItemsRendered={handleItemsRendered}
-            >
-              {ItemWrapper}
-            </List>
-          )}
+          renderProp={({ height, width }) => {
+            // Don't render until AutoSizer has measured the container
+            if (!height || !width) return null
+            return (
+              <List
+                ref={listRef}
+                outerRef={outerRef}
+                height={height}
+                width={width}
+                itemCount={totalCount}
+                itemSize={getItemHeight}
+                estimatedItemSize={estimatedItemHeight + itemGap}
+                itemKey={stableItemKey}
+                outerElementType={outerElementType}
+                innerElementType={innerElementType}
+                style={{ padding: typeof padding === 'number' ? padding : undefined }}
+                onItemsRendered={handleItemsRendered}
+              >
+                {ItemWrapper}
+              </List>
+            )
+          }}
         />
 
       </Box>

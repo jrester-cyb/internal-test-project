@@ -44,29 +44,37 @@ export default function ClusterContent({
   // Memoize the loading placeholder to prevent VirtualizedList re-renders
   const loadingPlaceholder = useMemo(() => (
     <ListItem disablePadding>
-      <ListItemButton sx={{ py: 1.5 }}>
+      <ListItemButton sx={{ py: 1.5, pr: onZoomToAsset ? 10 : 6 }}>
         <ListItemText
           primary={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Skeleton variant="text" width={120} height={24} />
-              <Skeleton variant="rounded" width={80} height={24} />
-            </Box>
+            <Skeleton variant="text" width={140} height={24} />
           }
           secondary={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-              <Skeleton variant="circular" width={14} height={14} />
-              <Skeleton variant="text" width={100} height={16} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+              <Skeleton variant="rounded" width={80} height={24} />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Skeleton variant="circular" width={14} height={14} />
+                <Skeleton variant="text" width={100} height={16} />
+              </Box>
             </Box>
           }
         />
       </ListItemButton>
     </ListItem>
-  ), [])
+  ), [onZoomToAsset])
+
+  // Format count with K suffix for large numbers
+  const formatCount = (count: number): string => {
+    if (count < 1000) return count.toString()
+    if (count < 10000) return `${(count / 1000).toFixed(1)}k`
+    if (count < 1000000) return `${Math.round(count / 1000)}k`
+    return `${(count / 1000000).toFixed(1)}M`
+  }
 
   // Generate chip label text
   const getAssetCountLabel = () => {
     if (loading) return 'Loading...'
-    return `${totalCount} Assets`
+    return `${formatCount(totalCount)} Assets`
   }
 
   return (
@@ -127,23 +135,23 @@ export default function ClusterContent({
         </Container>
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflow: 'hidden' }}>
+        <Container maxWidth={false} sx={{ flex: 1, overflow: 'hidden', px: { xs: 2, sm: 3 } }}>
           {loading ? (
             <List sx={{ height: '100%', overflow: 'hidden' }}>
               {Array.from({ length: 15 }, (_, i) => i + 1).map((i) => (
                 <ListItem key={i} disablePadding>
-                  <ListItemButton sx={{ py: 1.5 }}>
+                  <ListItemButton sx={{ py: 1.5, pr: onZoomToAsset ? 10 : 6 }}>
                     <ListItemText
                       primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Skeleton variant="text" width={120} height={24} />
-                          <Skeleton variant="rounded" width={80} height={24} />
-                        </Box>
+                        <Skeleton variant="text" width={140} height={24} />
                       }
                       secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                          <Skeleton variant="circular" width={14} height={14} />
-                          <Skeleton variant="text" width={100} height={16} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                          <Skeleton variant="rounded" width={80} height={24} />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Skeleton variant="circular" width={14} height={14} />
+                            <Skeleton variant="text" width={100} height={16} />
+                          </Box>
                         </Box>
                       }
                     />
@@ -214,7 +222,7 @@ export default function ClusterContent({
               )}
             />
           )}
-        </Box>
+        </Container>
       </Box>
     </PvDrawer >
   )
