@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Polygon, Polyline, ZoomControl, useMap, Pane } from 'react-leaflet'
+import { MapContainer, TileLayer, ZoomControl, useMap, Pane } from 'react-leaflet'
 import L from 'leaflet'
 import { Box } from '@mui/material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
@@ -7,6 +7,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useMapContext } from '../contexts/MapContext'
 import ClusterMarkers from './ClusterMarkers'
 import FilterBuilder from './FilterBuilder'
+import AssetGeometry from './AssetGeometry'
 import type { AttributeFilter } from './FilterBuilder'
 import type { Asset, Cluster } from '../types'
 import './MapView.css'
@@ -203,78 +204,20 @@ export default function MapView({
 
           <ZoomControl position="bottomright" />
 
-          {assets.map(asset => {
-            const isSelected = selectedAssetId === asset.id
-            return asset.geometry && asset.geometry.type === "Point" && Array.isArray(asset.geometry.coordinates) && asset.geometry.coordinates.length === 2 ? (
-              <Marker
-                key={asset.id}
-                position={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
-                icon={isSelected ? selectedMarkerIcon : markerIcon}
-                zIndexOffset={isSelected ? 1000 : 0}
-                eventHandlers={{
-                  click: () => openAssetDrawer(asset)
-                }}
-              />
-            ) : asset.geometry && asset.geometry.type === "Polygon" && Array.isArray(asset.geometry.coordinates) && Array.isArray(asset.geometry.coordinates[0]) ? (
-              <>
-                {isSelected && (
-                  <Polygon
-                    key={`${asset.id}-glow`}
-                    positions={asset.geometry.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])}
-                    pane="glowPane"
-                    pathOptions={{
-                      color: glowColor,
-                      fillColor: 'transparent',
-                      weight: 12,
-                      opacity: 0.4,
-                      fillOpacity: 0
-                    }}
-                  />
-                )}
-                <Polygon
-                  key={asset.id}
-                  positions={asset.geometry.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])}
-                  eventHandlers={{
-                    click: () => openAssetDrawer(asset)
-                  }}
-                  pathOptions={{
-                    color: polygonStrokeColor,
-                    fillColor: polygonFillColor,
-                    weight: 2,
-                    fillOpacity: 0.2
-                  }}
-                />
-              </>
-            ) : asset.geometry && asset.geometry.type === "LineString" && Array.isArray(asset.geometry.coordinates) ? (
-              <>
-                {isSelected && (
-                  <Polyline
-                    key={`${asset.id}-glow`}
-                    positions={asset.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng])}
-                    pane="glowPane"
-                    pathOptions={{
-                      color: glowColor,
-                      weight: 11,
-                      opacity: 0.5,
-                      lineCap: 'round',
-                      lineJoin: 'round'
-                    }}
-                  />
-                )}
-                <Polyline
-                  key={asset.id}
-                  positions={asset.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng])}
-                  eventHandlers={{
-                    click: () => openAssetDrawer(asset)
-                  }}
-                  pathOptions={{
-                    color: polylineColor,
-                    weight: 3
-                  }}
-                />
-              </>
-            ) : null
-          })}
+          {assets.map(asset => (
+            <AssetGeometry
+              key={asset.id}
+              asset={asset}
+              isSelected={selectedAssetId === asset.id}
+              markerIcon={markerIcon}
+              selectedMarkerIcon={selectedMarkerIcon}
+              glowColor={glowColor}
+              polygonFillColor={polygonFillColor}
+              polygonStrokeColor={polygonStrokeColor}
+              polylineColor={polylineColor}
+              onAssetClick={openAssetDrawer}
+            />
+          ))}
         </MapContainer>
     </Box>
   )

@@ -57,7 +57,14 @@ class Asset(SoftDeleteMixin):
                 name="001_update_location_on_geometry_change",
                 operation=pgtrigger.Update | pgtrigger.Insert,
                 when=pgtrigger.Before,
-                func="NEW.location = ST_Centroid(NEW.geometry); RETURN NEW;",
+                func="""
+                IF ST_GeometryType(NEW.geometry) = 'ST_LineString' THEN
+                    NEW.location = ST_LineInterpolatePoint(NEW.geometry, 0.5);
+                ELSE
+                    NEW.location = ST_Centroid(NEW.geometry);
+                END IF;
+                RETURN NEW;
+                """,
             ),
             pgtrigger.Trigger(
                 name="002_update_h3_index_on_location_change",

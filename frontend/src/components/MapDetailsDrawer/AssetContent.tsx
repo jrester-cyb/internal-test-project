@@ -28,6 +28,7 @@ export interface AssetContentProps {
   attributes?: AssetTypeAttribute[]
   onEdit?: (asset: Asset) => void
   onDelete?: (asset: Asset) => void
+  onZoomToAsset?: (asset: Asset) => void
 }
 
 export default function AssetContent({
@@ -37,6 +38,7 @@ export default function AssetContent({
   attributes: propAttributes,
   onEdit,
   onDelete,
+  onZoomToAsset,
 }: AssetContentProps) {
   const { activeOrganization } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
@@ -191,6 +193,7 @@ export default function AssetContent({
               onEdit={onEdit}
               onShare={() => navigator.clipboard.writeText(window.location.href)}
               onViewDetails={() => window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${displayAsset.assetType}/assets/${displayAsset.id}`, '_blank')}
+              onZoomToAsset={onZoomToAsset}
               onClone={() => console.debug('Clone asset:', asset.id)}
               onDownload={() => console.debug('Download asset:', asset.id)}
             />

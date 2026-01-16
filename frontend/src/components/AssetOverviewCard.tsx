@@ -1,5 +1,5 @@
-import { Box, Card, CardContent, Chip, Container, Divider, Typography } from '@mui/material'
-import { Place as PlaceIcon, Category as CategoryIcon, Public as PublicIcon, Edit as EditIcon, Map as MapIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
+import { Box, Card, CardContent, Chip, Container, Typography } from '@mui/material'
+import { Place as PlaceIcon, Category as CategoryIcon, Public as PublicIcon, Edit as EditIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon, MyLocation as ZoomIcon } from '@mui/icons-material'
 import type { Asset } from '../types'
 import ActionButtons from './ActionButtons'
 import CopyableText from './CopyableText'
@@ -18,6 +18,7 @@ interface AssetOverviewCardProps {
   onShare?: () => void
   onViewOnMap?: () => void
   onViewDetails?: () => void
+  onZoomToAsset?: (asset: Asset) => void
   onClone?: () => void
   onDownload?: () => void
 }
@@ -31,6 +32,7 @@ export default function AssetOverviewCard({
   onShare,
   onViewOnMap,
   onViewDetails,
+  onZoomToAsset,
   onClone,
   onDownload
 }: AssetOverviewCardProps) {
@@ -82,27 +84,15 @@ export default function AssetOverviewCard({
       })
     }
 
-    // Open Details Page (drawer mode only)
-    if (onViewDetails && mode === 'drawer') {
+    // Zoom to Asset (drawer mode only)
+    if (onZoomToAsset && mode === 'drawer') {
       actionsList.push({
-        label: 'Open asset details page',
-        icon: <OpenInNewIcon fontSize="small" />,
-        onClick: onViewDetails,
+        label: 'Zoom to Asset',
+        icon: <ZoomIcon fontSize="small" />,
+        onClick: () => onZoomToAsset(asset),
         color: 'inherit' as const,
         variant: 'outlined' as const,
         minWidth: 580
-      })
-    }
-
-    // View on Map (page mode only)
-    if (onViewOnMap && mode === 'page') {
-      actionsList.push({
-        label: 'View on Map',
-        icon: <MapIcon fontSize="small" />,
-        onClick: onViewOnMap,
-        color: 'inherit' as const,
-        variant: 'outlined' as const,
-        minWidth: 900
       })
     }
 
@@ -118,16 +108,39 @@ export default function AssetOverviewCard({
       })
     }
 
-    // Global button (both modes) - always icon-only
+    // --- Menu-only items below (minWidth: Infinity) ---
+
+    // View On Map (page mode) / View Asset Details Page (drawer mode) - pinned to top of menu
+    if (onViewOnMap && mode === 'page') {
+      actionsList.push({
+        label: 'View On Map',
+        icon: <OpenInNewIcon fontSize="small" />,
+        onClick: onViewOnMap,
+        color: 'inherit' as const,
+        variant: 'outlined' as const,
+        minWidth: Infinity
+      })
+    }
+    if (onViewDetails && mode === 'drawer') {
+      actionsList.push({
+        label: 'View Asset Details Page',
+        icon: <OpenInNewIcon fontSize="small" />,
+        onClick: onViewDetails,
+        color: 'inherit' as const,
+        variant: 'outlined' as const,
+        minWidth: Infinity
+      })
+    }
+
+    // Global button (both modes) - in menu
     if (onGlobalValuesToggle) {
       actionsList.push({
-        label: 'Global',
+        label: globalValuesOnly ? 'Show Local Values' : 'Show Global Values',
         icon: <PublicIcon fontSize="small" />,
         onClick: onGlobalValuesToggle,
         color: 'inherit' as const,
-        variant: globalValuesOnly ? ('contained' as const) : ('outlined' as const),
-        minWidth: mode === 'drawer' ? 780 : 1200,
-        tooltip: globalValuesOnly ? 'Showing global asset values' : 'Show global asset'
+        variant: 'outlined' as const,
+        minWidth: Infinity
       })
     }
 
@@ -166,7 +179,7 @@ export default function AssetOverviewCard({
     }
 
     return actionsList
-  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, onShare, onViewOnMap, onViewDetails, onClone, onDownload, asset])
+  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, onShare, onViewOnMap, onViewDetails, onZoomToAsset, onClone, onDownload, asset])
 
   return (
     <Container maxWidth={false} sx={{ py: 2 }} ref={headerRef}>

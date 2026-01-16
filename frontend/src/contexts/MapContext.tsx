@@ -403,7 +403,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
         ...baseProps,
         type: 'asset' as const,
         asset: content.asset,
-        attributes: content.attributes
+        attributes: content.attributes,
+        onZoomToAsset: zoomToAsset
       }
     }
 

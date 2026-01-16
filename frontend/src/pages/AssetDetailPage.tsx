@@ -90,8 +90,16 @@ export default function AssetDetailPage() {
   }
 
   const handleViewOnMap = () => {
-    // TODO: Implement view on map functionality
-    console.debug('View on map:', asset.id)
+    // Open map page in new window with the asset selected
+    const coords = asset.location?.coordinates || asset.geometry?.coordinates
+    if (coords && coords.length >= 2) {
+      const lat = coords[1]
+      const lng = coords[0]
+      window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/map?lat=${lat}&lng=${lng}&zoom=18&assetId=${asset.id}`, '_blank')
+    } else {
+      // No coordinates, just open map with asset selected
+      window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/map?assetId=${asset.id}`, '_blank')
+    }
   }
 
   const handleShare = () => {
@@ -161,7 +169,7 @@ export default function AssetDetailPage() {
               />
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minHeight: 400, display: 'flex' }}>
               <AssetTreeCard
                 assetId={asset.id}
                 relatedAssets={relatedAssets}

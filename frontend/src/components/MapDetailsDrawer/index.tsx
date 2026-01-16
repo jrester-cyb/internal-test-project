@@ -25,6 +25,7 @@ interface AssetDetailsProps {
   attributes?: AssetTypeAttribute[]
   onEdit?: (asset: Asset) => void
   onDelete?: (asset: Asset) => void
+  onZoomToAsset?: (asset: Asset) => void
 }
 
 // Common props
@@ -65,6 +66,7 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
           attributes={props.attributes}
           onEdit={props.onEdit}
           onDelete={props.onDelete}
+          onZoomToAsset={props.onZoomToAsset}
         />
       )}
     </PvDrawer>

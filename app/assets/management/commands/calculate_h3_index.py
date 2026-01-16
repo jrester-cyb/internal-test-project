@@ -59,10 +59,15 @@ class Command(BaseCommand):
 
         with connection.cursor() as cursor:
             # First, update location from geometry for filtered assets
+            # Use midpoint for LineStrings, centroid for all other geometry types
             cursor.execute(
                 f"""
                 UPDATE assets_asset
-                SET location = ST_Centroid(geometry)
+                SET location = CASE
+                    WHEN ST_GeometryType(geometry) = 'ST_LineString'
+                    THEN ST_LineInterpolatePoint(geometry, 0.5)
+                    ELSE ST_Centroid(geometry)
+                END
                 WHERE {where_clause}
             """,
                 params,

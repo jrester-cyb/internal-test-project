@@ -173,15 +173,32 @@ function MapPage() {
   const handleZoomToAsset = useCallback((asset: Asset) => {
     // Get coordinates from geometry or location
     let coords: [number, number] | null = null
+
     if (asset.geometry?.type === 'Point' && Array.isArray(asset.geometry.coordinates)) {
+      // Point geometry - use directly
       coords = [asset.geometry.coordinates[1], asset.geometry.coordinates[0]]
+    } else if (asset.geometry?.type === 'Polygon' && Array.isArray(asset.geometry.coordinates) && Array.isArray(asset.geometry.coordinates[0])) {
+      // Polygon geometry - calculate centroid
+      const ring = asset.geometry.coordinates[0] as number[][]
+      let sumLat = 0, sumLng = 0
+      for (const [lng, lat] of ring) {
+        sumLat += lat
+        sumLng += lng
+      }
+      coords = [sumLat / ring.length, sumLng / ring.length]
+    } else if (asset.geometry?.type === 'LineString' && Array.isArray(asset.geometry.coordinates)) {
+      // LineString geometry - use midpoint
+      const line = asset.geometry.coordinates as unknown as number[][]
+      const midIndex = Math.floor(line.length / 2)
+      coords = [line[midIndex][1], line[midIndex][0]]
     } else if (asset.location?.coordinates) {
+      // Fallback to location field
       coords = [asset.location.coordinates[1], asset.location.coordinates[0]]
     }
 
     if (coords) {
-      // Use flyTo for smooth animation
-      setFlyToLocation({ coords, zoom: 16 })
+      // Use flyTo for smooth animation, zoom to 18 for close-up view
+      setFlyToLocation({ coords, zoom: 18 })
     }
   }, [])
 
