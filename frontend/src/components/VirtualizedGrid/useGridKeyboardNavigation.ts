@@ -17,6 +17,10 @@ export interface UseGridKeyboardNavigationOptions<T> {
   gridRef: RefObject<Grid | null>
   /** Whether keyboard shortcuts are enabled (default: true) */
   enabled?: boolean
+  /** Function to start editing a cell, optionally with an initial value to replace content */
+  startEditing?: (rowIndex: number, columnIndex: number, initialValue?: string) => void
+  /** Whether cell editing is enabled */
+  editingEnabled?: boolean
 }
 
 /**
@@ -27,6 +31,8 @@ export interface UseGridKeyboardNavigationOptions<T> {
  * - Ctrl/Cmd+Arrow for jumping to edges
  * - Ctrl/Cmd+C for copying selection
  * - Escape for clearing selection
+ * - F2/Enter to start editing
+ * - Printable keys to start editing and replace content
  */
 export function useGridKeyboardNavigation<T>({
   selectionRef,
@@ -36,6 +42,8 @@ export function useGridKeyboardNavigation<T>({
   columnsRef,
   gridRef,
   enabled = true,
+  startEditing,
+  editingEnabled = false,
 }: UseGridKeyboardNavigationOptions<T>) {
   useEffect(() => {
     if (!enabled) return
@@ -56,6 +64,36 @@ export function useGridKeyboardNavigation<T>({
       if (e.key === 'Escape') {
         setSelection(null)
         return
+      }
+
+      // Check if we should start editing (only for single-cell selection)
+      const isSingleCell =
+        currentSelection.start.rowIndex === currentSelection.end.rowIndex &&
+        currentSelection.start.columnIndex === currentSelection.end.columnIndex
+
+      if (editingEnabled && startEditing && isSingleCell) {
+        const { rowIndex, columnIndex } = currentSelection.start
+        const currentColumns = columnsRef.current
+        const column = currentColumns?.[columnIndex]
+
+        // Check if the column is editable
+        if (column?.editable) {
+          // F2 or Enter to start editing (keep current value)
+          if (e.key === 'F2' || e.key === 'Enter') {
+            e.preventDefault()
+            startEditing(rowIndex, columnIndex)
+            return
+          }
+
+          // Printable character - start editing and replace content with the typed character
+          // Check for single printable character (not modifier keys, function keys, etc.)
+          const isPrintable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+          if (isPrintable) {
+            e.preventDefault()
+            startEditing(rowIndex, columnIndex, e.key)
+            return
+          }
+        }
       }
 
       // Ctrl+Arrow key navigation (jump to edges)
@@ -142,5 +180,5 @@ export function useGridKeyboardNavigation<T>({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [enabled, selectionRef, setSelection, copySelectionToClipboard, totalCount, columnsRef, gridRef])
+  }, [enabled, selectionRef, setSelection, copySelectionToClipboard, totalCount, columnsRef, gridRef, startEditing, editingEnabled])
 }

@@ -1,12 +1,12 @@
-import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton, Button } from '@mui/material'
+import { Box, Typography, Stack, Switch, FormControlLabel, Link, Skeleton, Button, TextField } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import EditOffIcon from '@mui/icons-material/EditOff'
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink } from 'react-router-dom'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { fetchAssetsByType } from '../api/assets'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
-import VirtualizedGrid, { type ColumnDefinition } from '../components/VirtualizedGrid'
+import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '../components/VirtualizedGrid'
 
 export default function AssetListPage() {
   const initialData = useLoaderData() as {
@@ -98,11 +98,13 @@ export default function AssetListPage() {
           const attrId = columnKey.replace('attr-', '')
           const attribute = attributes.find(a => a.id === attrId)
           if (attribute) {
+            // Store empty/whitespace-only values as null so AttributeValueRenderer shows placeholder
+            const valueToStore = newValue.trim() === '' ? null : newValue
             updated.set(rowIndex, {
               ...existingAsset,
               attributes: {
                 ...existingAsset.attributes,
-                [attribute.apiKey]: newValue
+                [attribute.apiKey]: valueToStore
               }
             })
           }
@@ -149,6 +151,85 @@ export default function AssetListPage() {
     }
     return String(value)
   }
+
+  // JSON cell editor for inline editing of JSON attributes
+  const JsonCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+    const [editValue, setEditValue] = useState(value)
+    const inputRef = useRef<HTMLTextAreaElement>(null)
+
+    useEffect(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }, [])
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        onSave(editValue)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+      e.stopPropagation()
+    }
+
+    return (
+      <Box
+        style={style}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          bgcolor: 'background.paper',
+          position: 'relative',
+          zIndex: 2,
+          borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+          borderRight: selectionBorders?.right ? 'none' : '1px solid',
+          borderRightColor: 'divider',
+          borderBottomColor: 'divider',
+          '&::after': selectionBorders ? {
+            content: '""',
+            position: 'absolute',
+            top: -1,
+            right: -1,
+            bottom: -1,
+            left: -1,
+            borderTop: `${selectionBorders?.top ? 2 : 0}px solid`,
+            borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
+            borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
+            borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
+            borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+            pointerEvents: 'none',
+            zIndex: 10,
+          } : undefined,
+          boxSizing: 'border-box',
+        }}
+      >
+        <TextField
+          inputRef={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => onSave(editValue)}
+          variant="standard"
+          fullWidth
+          multiline
+          maxRows={4}
+          size="small"
+          slotProps={{
+            input: {
+              disableUnderline: true,
+              sx: {
+                px: 1,
+                py: 0.5,
+                fontSize: '0.75rem',
+                fontFamily: 'monospace',
+              }
+            }
+          }}
+        />
+      </Box>
+    )
+  }, [])
 
   // Build column definitions
   const columns: ColumnDefinition<Asset>[] = useMemo(() => {
@@ -207,7 +288,8 @@ export default function AssetListPage() {
       ),
       width: 150,
       minWidth: 100,
-      editable: editingEnabled && ['string', 'number', 'text'].includes(attr.attributeType),
+      editable: editingEnabled && ['string', 'number', 'text', 'json'].includes(attr.attributeType),
+      editor: attr.attributeType === 'json' ? JsonCellEditor : undefined,
       render: (asset) => (
         <Box sx={{ px: 2, overflow: 'hidden', opacity: attr.isHidden ? 0.5 : 1 }}>
           <AttributeValueRenderer
@@ -227,7 +309,7 @@ export default function AssetListPage() {
     }))
 
     return [...baseColumns, ...attributeColumns]
-  }, [displayAttributes, location.state, editingEnabled])
+  }, [displayAttributes, location.state, editingEnabled, JsonCellEditor])
 
   // Cell placeholder for loading state
   const cellPlaceholder = (

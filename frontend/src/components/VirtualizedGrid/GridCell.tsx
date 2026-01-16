@@ -26,6 +26,8 @@ export interface GridCellProps<T> {
   resizingColumnIndex: number | null
   /** Currently editing cell position (if any) */
   editingCell?: CellPosition | null
+  /** Initial value when starting to edit via keyboard (to replace content) */
+  editingInitialValue?: string
   /** Handler for saving cell edits */
   onCellEditSave?: (rowIndex: number, columnIndex: number, newValue: string) => void
   /** Handler for cancelling cell edits */
@@ -119,6 +121,7 @@ function GridCellInner<T>({
   placeholderContentRef,
   headerHeight,
   editingCell,
+  editingInitialValue,
   onCellEditSave,
   onCellEditCancel,
   onCellDoubleClick,
@@ -199,13 +202,16 @@ function GridCellInner<T>({
       ? column.getCellValue(item, rowIndex)
       : String(column.render(item, rowIndex) ?? '')
 
+    // Use initial value if provided (from keyboard input), otherwise use cell value
+    const editorValue = editingInitialValue ?? cellValue
+
     // Use custom editor if provided, otherwise use default Editor
     if (column.editor) {
       return (
         <>
           {column.editor({
             item,
-            value: cellValue,
+            value: editorValue,
             rowIndex,
             columnIndex,
             style: offsetStyle,
@@ -220,7 +226,7 @@ function GridCellInner<T>({
 
     return (
       <Editor
-        value={cellValue}
+        value={editorValue}
         onSave={(newValue) => onCellEditSave(rowIndex, columnIndex, newValue)}
         onCancel={onCellEditCancel}
         rowIndex={rowIndex}
@@ -229,6 +235,7 @@ function GridCellInner<T>({
         column={column}
         selectionBorders={selectionBorders}
         onMouseDown={handleMouseDown}
+        item={item}
       />
     )
   }

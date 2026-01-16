@@ -22,6 +22,8 @@ export interface EditorProps<T> {
   selectionBorders: SelectionBorders | null
   /** Mouse down handler for selection */
   onMouseDown: (e: React.MouseEvent) => void
+  /** The item data for this row (used for placeholder rendering) */
+  item?: T
 }
 
 export function Editor<T>({
@@ -34,9 +36,11 @@ export function Editor<T>({
   column,
   selectionBorders,
   onMouseDown,
+  item,
 }: EditorProps<T>) {
   const [editValue, setEditValue] = useState(value)
   const inputRef = useRef<HTMLInputElement>(null)
+  const isBlank = !editValue.trim()
 
   // Focus input on mount
   useEffect(() => {
@@ -96,6 +100,21 @@ export function Editor<T>({
         ...column.cellSx
       }}
     >
+      {isBlank && item ? (
+        // Show column's renderer as placeholder when value is blank
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            pointerEvents: 'none',
+            opacity: 0.5,
+          }}
+        >
+          {column.render(item, rowIndex)}
+        </Box>
+      ) : null}
       <TextField
         inputRef={inputRef}
         value={editValue}
@@ -111,6 +130,7 @@ export function Editor<T>({
             px: 1,
             py: 0.5,
             fontSize: 'inherit',
+            bgcolor: isBlank ? 'transparent' : undefined,
           }
         }}
       />

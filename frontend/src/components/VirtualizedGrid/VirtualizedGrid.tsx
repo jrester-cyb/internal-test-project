@@ -137,6 +137,8 @@ function VirtualizedGridInner<T>({
 
   // Cell editing state
   const [editingCell, setEditingCell] = useState<CellPosition | null>(null)
+  // Initial value when starting to edit via keyboard (to replace content)
+  const [editingInitialValue, setEditingInitialValue] = useState<string | undefined>(undefined)
 
   const handleCellMouseDownRef = useRef(handleCellMouseDown)
   handleCellMouseDownRef.current = handleCellMouseDown
@@ -150,23 +152,28 @@ function VirtualizedGridInner<T>({
       onCellEdit(item, column.key, newValue, rowIndex)
     }
     setEditingCell(null)
+    setEditingInitialValue(undefined)
   }, [onCellEdit, items, columns])
 
   const handleCellEditCancel = useCallback(() => {
     setEditingCell(null)
+    setEditingInitialValue(undefined)
   }, [])
 
-  // Start editing on double-click (if column is editable)
-  const handleCellDoubleClick = useCallback((rowIndex: number, columnIndex: number) => {
+  // Start editing on double-click or keyboard (if column is editable)
+  const handleCellDoubleClick = useCallback((rowIndex: number, columnIndex: number, initialValue?: string) => {
     const column = columns[columnIndex]
     if (column?.editable && onCellEdit) {
       setEditingCell({ rowIndex, columnIndex })
+      setEditingInitialValue(initialValue)
     }
   }, [columns, onCellEdit])
 
   // Ref for editing cell
   const editingCellRef = useRef(editingCell)
   editingCellRef.current = editingCell
+  const editingInitialValueRef = useRef(editingInitialValue)
+  editingInitialValueRef.current = editingInitialValue
   const handleCellEditSaveRef = useRef(handleCellEditSave)
   handleCellEditSaveRef.current = handleCellEditSave
   const handleCellEditCancelRef = useRef(handleCellEditCancel)
@@ -183,6 +190,8 @@ function VirtualizedGridInner<T>({
     columnsRef,
     gridRef,
     enabled: enableKeyboardShortcuts,
+    startEditing: handleCellDoubleClick,
+    editingEnabled: !!onCellEdit,
   })
 
   // Handle column resize - returns starting width
@@ -396,12 +405,13 @@ function VirtualizedGridInner<T>({
         headerHeight={headerHeightRef.current}
         resizingColumnIndex={resizingColumnIndex}
         editingCell={editingCellRef.current}
+        editingInitialValue={editingInitialValueRef.current}
         onCellEditSave={handleCellEditSaveRef.current}
         onCellEditCancel={handleCellEditCancelRef.current}
         onCellDoubleClick={handleCellDoubleClickRef.current}
       />
     )
-  }, [resizingColumnIndex, editingCell])
+  }, [resizingColumnIndex, editingCell, editingInitialValue])
 
   // Calculate total width of all columns
   const totalColumnsWidth = useMemo(() => columnWidths.reduce((sum, w) => sum + w, 0), [columnWidths])
