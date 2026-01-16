@@ -206,7 +206,7 @@ export default function ClusterContent({
                         </CopyableText>
                       }
                       secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: 0.5 }}>
                           <Chip label={asset.assetTypeName || asset.assetType} size="small" variant="outlined" />
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <LocationIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
