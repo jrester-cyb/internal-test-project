@@ -57,12 +57,14 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   const [loadingGlobalValues, setLoadingGlobalValues] = useState(false)
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem('assetDetailsPanelWidth')
-    return saved ? parseInt(saved, 10) : 600
+    return saved ? parseInt(saved, 10) : 380
   }) // Default width in pixels
   const [isResizing, setIsResizing] = useState(false)
   const [isOpen, setIsOpen] = useState(!!asset)
   const [isDraggable, setIsDraggable] = useState(true)
   const [preventClick, setPreventClick] = useState(false)
+  const [isSliding, setIsSliding] = useState(false)
+  const [slideOffset, setSlideOffset] = useState(0)
   const resizeRef = useRef<HTMLDivElement>(null)
 
   // Card order for drag and drop (only in drawer mode)
@@ -130,6 +132,8 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
   // Open/close drawer when asset changes
   useEffect(() => {
     setIsOpen(!!asset)
+    setIsSliding(false)
+    setSlideOffset(0)
   }, [asset])
 
   // Check screen size and update draggable state
@@ -247,12 +251,32 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
       const newWidth = window.innerWidth - e.clientX
-      const clampedWidth = Math.max(380, Math.min(window.innerWidth - 200, newWidth))
-      setPanelWidth(clampedWidth)
-      localStorage.setItem('assetDetailsPanelWidth', clampedWidth.toString())
+      const minWidth = 380
+      if (newWidth <= minWidth) {
+        console.log('Past minimum width:', newWidth, 'minWidth:', minWidth)
+        if (!isSliding) {
+          setIsSliding(true)
+        }
+        setSlideOffset(minWidth - newWidth)
+      } else {
+        if (isSliding) {
+          setIsSliding(false)
+          setSlideOffset(0)
+        }
+        const clampedWidth = Math.max(minWidth, Math.min(window.innerWidth - 200, newWidth))
+        setPanelWidth(clampedWidth)
+        localStorage.setItem('assetDetailsPanelWidth', clampedWidth.toString())
+      }
     }
 
     const handleMouseUp = () => {
+      if (isSliding) {
+        console.log('Triggering drawer slide out due to release in sliding mode')
+        setIsOpen(false)
+        setTimeout(() => {
+          onClose()
+        }, 300)
+      }
       setIsResizing(false)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
@@ -273,7 +297,10 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
 
 
   const handleClose = () => {
+    console.log('Triggering drawer slide out due to handleClose')
     setIsOpen(false)
+    setIsSliding(false)
+    setSlideOffset(0)
     // Delay calling onClose to allow slide-out animation to complete
     setTimeout(() => {
       onClose()
@@ -294,13 +321,13 @@ export default function AssetDetailsDrawer({ asset, organizationId, workspaceId,
       appear={false}
       timeout={300}
       container={isDraggable ? undefined : document.body}
-      style={!isDraggable ? {
+      style={isDraggable ? (isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined) : {
         position: 'absolute',
         top: 56,
         bottom: 56,
         left: 0,
         right: 0
-      } : undefined}
+      }}
     >
       <Paper
         elevation={0}
