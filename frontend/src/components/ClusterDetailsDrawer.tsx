@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Box, Typography, IconButton, List, ListItem, ListItemText, ListItemButton, CircularProgress } from '@mui/material'
-import { Close as CloseIcon } from '@mui/icons-material'
+import { Box, Typography, IconButton, List, ListItem, ListItemText, ListItemButton, CircularProgress, Chip } from '@mui/material'
+import { Close as CloseIcon, LocationOn as LocationIcon } from '@mui/icons-material'
 import PvDrawer from './PvDrawer'
 import type { Asset, Cluster } from '../types'
 
@@ -11,6 +11,7 @@ interface ClusterDetailsDrawerProps {
   assets: Asset[]
   loading: boolean
   organizationId: string
+  workspaceId: string
 }
 
 export default function ClusterDetailsDrawer({
@@ -19,7 +20,8 @@ export default function ClusterDetailsDrawer({
   cluster,
   assets,
   loading,
-  organizationId
+  organizationId,
+  workspaceId
 }: ClusterDetailsDrawerProps) {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
 
@@ -53,12 +55,24 @@ export default function ClusterDetailsDrawer({
               {assets.map((asset) => (
                 <ListItem key={asset.id} disablePadding>
                   <ListItemButton
-                    onClick={() => setSelectedAsset(asset)}
-                    selected={selectedAsset?.id === asset.id}
+                    onClick={() => window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${asset.assetType}/assets/${asset.id}`, '_blank')}
+                    sx={{ py: 1.5 }}
                   >
                     <ListItemText
-                      primary={asset.name}
-                      secondary={`${asset.assetType} • ${asset.location ? `${asset.location.coordinates[1].toFixed(4)}, ${asset.location.coordinates[0].toFixed(4)}` : 'No location'}`}
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="subtitle2">{asset.name}</Typography>
+                          <Chip label={asset.assetType} size="small" variant="outlined" />
+                        </Box>
+                      }
+                      secondary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                          <LocationIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                          <Typography variant="body2" color="text.secondary">
+                            {asset.location ? `${asset.location.coordinates[1].toFixed(4)}, ${asset.location.coordinates[0].toFixed(4)}` : 'No location'}
+                          </Typography>
+                        </Box>
+                      }
                     />
                   </ListItemButton>
                 </ListItem>

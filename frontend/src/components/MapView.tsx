@@ -188,6 +188,7 @@ export default function MapView({
         assets={clusterAssets}
         loading={loading}
         organizationId={organizationId}
+        workspaceId={workspaceId}
       />
     </>
   )
