@@ -734,6 +734,75 @@ export default function VirtualizedGrid<T>({
     dragStartCellRef.current = { rowIndex: 0, columnIndex }
   }, [totalCount])
 
+  // Handle mouse move during drag - extend selection
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !dragStartCellRef.current) return
+
+      const target = document.elementFromPoint(e.clientX, e.clientY)
+
+      if (isHeaderColumnSelectingRef.current) {
+        // Header column selection mode - look for header cells or grid cells
+        let columnIndex = -1
+
+        // Check if we're over a header cell
+        let headerElement = target as HTMLElement
+        while (headerElement && !headerElement.dataset.headerColumnIndex) {
+          headerElement = headerElement.parentElement as HTMLElement
+          if (!headerElement) break
+        }
+
+        if (headerElement?.dataset.headerColumnIndex) {
+          columnIndex = parseInt(headerElement.dataset.headerColumnIndex, 10)
+        } else {
+          // Check if we're over a grid cell
+          const cell = getCellFromElement(target)
+          if (cell) {
+            columnIndex = cell.columnIndex
+          }
+        }
+
+        if (columnIndex >= 0) {
+          const startColumn = dragStartCellRef.current.columnIndex
+          const endColumn = columnIndex
+
+          setSelection({
+            start: { rowIndex: 0, columnIndex: Math.min(startColumn, endColumn) },
+            end: { rowIndex: totalCount - 1, columnIndex: Math.max(startColumn, endColumn) }
+          })
+        }
+      } else {
+        // Normal cell selection mode
+        const cell = getCellFromElement(target)
+
+        if (cell) {
+          setSelection({
+            start: dragStartCellRef.current,
+            end: cell
+          })
+        }
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        setIsDragging(false)
+        if (isHeaderColumnSelectingRef.current) {
+          setIsHeaderColumnSelecting(false)
+        }
+        dragStartCellRef.current = null
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [getCellFromElement])
+
   // Handle mouse move during header drag - extend column selection
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1207,7 +1276,7 @@ export default function VirtualizedGrid<T>({
             borderRight: `${selectionBorders?.right ? 2 : 0}px solid`,
             borderBottom: `${selectionBorders?.bottom ? 2 : 0}px solid`,
             borderLeft: `${selectionBorders?.left ? 2 : 0}px solid`,
-            borderColor: (theme: any) => theme.palette.primary.main,
+            borderColor: (theme: any) => theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
             pointerEvents: 'none',
             zIndex: 10,
           } : undefined,
