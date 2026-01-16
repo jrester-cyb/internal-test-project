@@ -141,6 +141,7 @@ export default function MapDrawer({ isOpen, onClose, children }: MapDrawerProps)
             zIndex: 1000,
             borderLeft: isDraggable ? 1 : 0,
             borderColor: 'divider',
+            borderRadius: isDraggable ? undefined : 0, // Remove rounded borders on mobile
             display: 'flex',
             flexDirection: 'row',
             transition: isDraggable && !isResizing ? 'width 0.3s ease-in-out' : 'none'
