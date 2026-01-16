@@ -235,7 +235,8 @@ export default function AssetListPage() {
       overflow: 'hidden',
       bgcolor: 'background.default',
       height: '100%',
-      minHeight: 0
+      minHeight: 0,
+      pb: 2
     }}>
       <VirtualizedGrid<Asset>
         items={items}
