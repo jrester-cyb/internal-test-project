@@ -236,6 +236,7 @@ function GridCellInner<T>({
         selectionBorders={selectionBorders}
         onMouseDown={handleMouseDown}
         item={item}
+        isReplacing={editingInitialValue !== undefined}
       />
     )
   }

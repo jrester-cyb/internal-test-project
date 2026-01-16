@@ -24,6 +24,8 @@ export interface EditorProps<T> {
   onMouseDown: (e: React.MouseEvent) => void
   /** The item data for this row (used for placeholder rendering) */
   item?: T
+  /** Whether the editor was opened with a replacement value (from keyboard input) - if true, don't select text */
+  isReplacing?: boolean
 }
 
 export function Editor<T>({
@@ -37,6 +39,7 @@ export function Editor<T>({
   selectionBorders,
   onMouseDown,
   item,
+  isReplacing,
 }: EditorProps<T>) {
   const [editValue, setEditValue] = useState(value)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -44,8 +47,17 @@ export function Editor<T>({
 
   // Focus input on mount
   useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
+    const input = inputRef.current
+    if (!input) return
+    input.focus()
+    // If replacing (opened via keyboard typing), put cursor at end
+    // Otherwise (opened via double-click/F2/Enter), select all text
+    if (isReplacing) {
+      const len = input.value.length
+      input.setSelectionRange(len, len)
+    } else {
+      input.select()
+    }
   }, [])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -55,8 +67,12 @@ export function Editor<T>({
     } else if (e.key === 'Escape') {
       e.preventDefault()
       onCancel()
+    } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      // Save and exit edit mode, let the event propagate for grid navigation
+      onSave(editValue)
+      return // Don't stop propagation - let grid handle navigation
     }
-    // Stop propagation to prevent grid keyboard navigation
+    // Stop propagation to prevent grid keyboard navigation for other keys
     e.stopPropagation()
   }, [editValue, onSave, onCancel])
 

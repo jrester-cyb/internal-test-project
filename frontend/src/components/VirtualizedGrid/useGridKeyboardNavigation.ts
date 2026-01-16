@@ -33,6 +33,7 @@ export interface UseGridKeyboardNavigationOptions<T> {
  * - Escape for clearing selection
  * - F2/Enter to start editing
  * - Printable keys to start editing and replace content
+ * - Delete/Backspace to clear cell content
  */
 export function useGridKeyboardNavigation<T>({
   selectionRef,
@@ -91,6 +92,14 @@ export function useGridKeyboardNavigation<T>({
           if (isPrintable) {
             e.preventDefault()
             startEditing(rowIndex, columnIndex, e.key)
+            return
+          }
+
+          // Delete or Backspace - clear cell and enter edit mode
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault()
+            // Start editing with empty value to clear and focus
+            startEditing(rowIndex, columnIndex, '')
             return
           }
         }
