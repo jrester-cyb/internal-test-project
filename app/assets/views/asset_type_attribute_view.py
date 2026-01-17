@@ -1264,6 +1264,17 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             }
         )
 
+    # Maps attribute types to their choice value lookup paths
+    CHOICE_LOOKUP_MAP = {
+        "text": "textattributechoice__value",
+        "number": "numberattributechoice__value",
+        "date": "dateattributechoice__value",
+        "datetime": "datetimeattributechoice__value",
+        "json": "jsonattributechoice__value",
+        "link": "linkattributechoice__url",
+        # Boolean attributes cannot have choices (enforced by DB trigger)
+    }
+
     @extend_schema(
         tags=["Asset Type Attributes"],
         summary="Get distinct values for this attribute",
@@ -1271,16 +1282,20 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def values(self, request, assettype_pk=None, pk=None, workspace_pk=None):
         """Get distinct values for this attribute."""
-        # Find the attribute to get its type
+        from assets.models import AssetTypeAttributeChoice
+
+        # Find the attribute to get its type and check if it has choices
         global_attr = GlobalAssetTypeAttribute.objects.filter(
             id=pk, asset_type_id=assettype_pk
         ).first()
 
         attribute_type = None
         attribute_id = pk
+        attribute_obj = None
 
         if global_attr:
             attribute_type = global_attr.attribute_type
+            attribute_obj = global_attr
         else:
             # Check override
             override = (
@@ -1291,6 +1306,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             if override:
                 attribute_type = override.base_attribute.attribute_type
                 attribute_id = override.base_attribute_id
+                attribute_obj = override.base_attribute
             else:
                 # Check extension
                 extension = WorkspaceLocalAssetTypeAttribute.objects.filter(
@@ -1298,27 +1314,63 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 ).first()
                 if extension:
                     attribute_type = extension.attribute_type
+                    attribute_obj = extension
 
         if not attribute_type:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        lookup_field = self.LOOKUP_MAP.get(attribute_type)
-        if not lookup_field:
-            return Response(
-                {"error": f"Unsupported attribute type: {attribute_type}"},
-                status=status.HTTP_400_BAD_REQUEST,
+        # Check if the attribute has choices defined
+        has_choices = attribute_obj and attribute_obj.choices.exists()
+
+        if has_choices:
+            # For choice attributes, return only the choices that are actually used
+            from assets.models import ChoiceAttributeValue
+
+            choice_lookup_field = self.CHOICE_LOOKUP_MAP.get(attribute_type)
+            if not choice_lookup_field:
+                return Response(
+                    {"error": f"Unsupported attribute type for choices: {attribute_type}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Get distinct choice IDs that are actually used for this attribute
+            used_choice_ids = (
+                ChoiceAttributeValue.objects.filter(
+                    asset_type_attribute_id=attribute_id
+                )
+                .values_list("choice_id", flat=True)
+                .distinct()
             )
 
-        values_qs = (
-            BaseAttributeValue.objects.filter(asset_type_attribute_id=attribute_id)
-            .distinct(lookup_field)
-            .only(lookup_field)
-            .order_by(lookup_field)
-            .values_list(lookup_field, flat=True)
-        )
+            # Get the choice values for those used choices, ordered by 'order' field
+            values_qs = (
+                AssetTypeAttributeChoice.objects.filter(
+                    id__in=used_choice_ids,
+                    deleted_at__isnull=True
+                )
+                .order_by("order")
+                .values_list(choice_lookup_field, flat=True)
+            )
+            values_list = list(values_qs)
+        else:
+            # For non-choice attributes, get distinct values from actual data
+            lookup_field = self.LOOKUP_MAP.get(attribute_type)
+            if not lookup_field:
+                return Response(
+                    {"error": f"Unsupported attribute type: {attribute_type}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            values_qs = (
+                BaseAttributeValue.objects.filter(asset_type_attribute_id=attribute_id)
+                .distinct(lookup_field)
+                .only(lookup_field)
+                .order_by(lookup_field)
+                .values_list(lookup_field, flat=True)
+            )
+            values_list = list(values_qs)
 
         paginator = CustomPageNumberPagination()
-        values_list = list(values_qs)
         # Replace null values with "Blank"
         values_list = ["Blank" if v is None else v for v in values_list]
         # Remove duplicates that might have been created by the replacement

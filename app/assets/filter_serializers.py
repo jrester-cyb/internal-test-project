@@ -14,7 +14,7 @@ from utils.units.helpers.unit_conversion import convert_value, validate_unit
 def get_attributes_by_api_key(api_key: str) -> list[dict]:
     """
     Get attribute definitions by api_key, with caching.
-    Returns a list of dicts with id, attribute_type, and unit.
+    Returns a list of dicts with id, attribute_type, unit, and has_choices.
     Cache TTL is 5 minutes.
     """
     cache_key = f"attr_filter:{api_key}"
@@ -24,16 +24,21 @@ def get_attributes_by_api_key(api_key: str) -> list[dict]:
 
     from itertools import chain
 
-    global_attrs = GlobalAssetTypeAttribute.objects.filter(api_key=api_key).only(
-        "id", "attribute_type", "unit"
-    )
-    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(api_key=api_key).only(
-        "id", "attribute_type", "unit"
-    )
+    global_attrs = GlobalAssetTypeAttribute.objects.filter(api_key=api_key).prefetch_related(
+        "choices"
+    ).only("id", "attribute_type", "unit")
+    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(api_key=api_key).prefetch_related(
+        "choices"
+    ).only("id", "attribute_type", "unit")
 
     # Convert to list of dicts for caching (can't cache querysets)
     attrs = [
-        {"id": attr.id, "attribute_type": attr.attribute_type, "unit": attr.unit}
+        {
+            "id": attr.id,
+            "attribute_type": attr.attribute_type,
+            "unit": attr.unit,
+            "has_choices": attr.choices.exists(),
+        }
         for attr in chain(global_attrs, local_attrs)
     ]
 
@@ -75,6 +80,7 @@ class FilterGroupSerializer(serializers.Serializer):
         "geometry": ["within", "intersects", "contains", "exact"],
         "h3_index": ["exact", "startswith"],
     }
+    # Lookup paths for direct attribute values (no choices)
     LOOKUP_MAP = {
         "text": "textattributevalue__value",
         "number": "numberattributevalue__value",
@@ -83,6 +89,16 @@ class FilterGroupSerializer(serializers.Serializer):
         "datetime": "datetimeattributevalue__value",
         "json": "jsonattributevalue__value",
         "link": "linkattributevalue__url",
+    }
+    # Lookup paths for choice attribute values (via ChoiceAttributeValue -> polymorphic choice)
+    CHOICE_LOOKUP_MAP = {
+        "text": "choiceattributevalue__choice__textattributechoice__value",
+        "number": "choiceattributevalue__choice__numberattributechoice__value",
+        "date": "choiceattributevalue__choice__dateattributechoice__value",
+        "datetime": "choiceattributevalue__choice__datetimeattributechoice__value",
+        "json": "choiceattributevalue__choice__jsonattributechoice__value",
+        "link": "choiceattributevalue__choice__linkattributechoice__url",
+        # Boolean attributes cannot have choices (enforced by DB trigger)
     }
 
     inverse = serializers.BooleanField(default=False)
@@ -146,7 +162,11 @@ class FilterGroupSerializer(serializers.Serializer):
                     attr_type = attr["attribute_type"]
                     attr_id = attr["id"]
                     attr_unit = attr["unit"]
+                    has_choices = attr.get("has_choices", False)
                     filter_value = value
+
+                    # Select the correct lookup path based on whether the attribute has choices
+                    lookup_map = self.CHOICE_LOOKUP_MAP if has_choices else self.LOOKUP_MAP
 
                     # For number types with units, convert the query value to the stored unit
                     if attr_type == "number" and query_unit and attr_unit:
@@ -175,6 +195,14 @@ class FilterGroupSerializer(serializers.Serializer):
 
                     # Link type searches both url and display_text fields
                     if attr_type == "link":
+                        # Select the correct path prefix based on whether attribute has choices
+                        if has_choices:
+                            url_path = "choiceattributevalue__choice__linkattributechoice__url"
+                            text_path = "choiceattributevalue__choice__linkattributechoice__display_text"
+                        else:
+                            url_path = "linkattributevalue__url"
+                            text_path = "linkattributevalue__display_text"
+
                         if actual_operator == "in":
                             if has_null:
                                 new_q = (
@@ -186,12 +214,12 @@ class FilterGroupSerializer(serializers.Serializer):
                                     & (
                                         Q(
                                             **{
-                                                f"attributes__linkattributevalue__url__in": non_null_values
+                                                f"attributes__{url_path}__in": non_null_values
                                             }
                                         )
                                         | Q(
                                             **{
-                                                f"attributes__linkattributevalue__display_text__in": non_null_values
+                                                f"attributes__{text_path}__in": non_null_values
                                             }
                                         )
                                     )
@@ -207,12 +235,12 @@ class FilterGroupSerializer(serializers.Serializer):
                                 ) & (
                                     Q(
                                         **{
-                                            f"attributes__linkattributevalue__url__in": filter_value
+                                            f"attributes__{url_path}__in": filter_value
                                         }
                                     )
                                     | Q(
                                         **{
-                                            f"attributes__linkattributevalue__display_text__in": filter_value
+                                            f"attributes__{text_path}__in": filter_value
                                         }
                                     )
                                 )
@@ -230,61 +258,65 @@ class FilterGroupSerializer(serializers.Serializer):
                                 ) & (
                                     Q(
                                         **{
-                                            f"attributes__linkattributevalue__url__{actual_operator}": filter_value
+                                            f"attributes__{url_path}__{actual_operator}": filter_value
                                         }
                                     )
                                     | Q(
                                         **{
-                                            f"attributes__linkattributevalue__display_text__{actual_operator}": filter_value
+                                            f"attributes__{text_path}__{actual_operator}": filter_value
                                         }
                                     )
                                 )
                     else:
                         if actual_operator == "in":
                             if is_negated:
+                                # Use Exists with a filtered subquery to ensure both
+                                # asset_type_attribute_id and value are checked together
+                                # in the same row (avoiding Django's separate subquery issue)
+                                from django.db.models import Exists, OuterRef
+                                from assets.models import BaseAttributeValue
+
                                 if has_null:
-                                    new_q = (
-                                        Q(
-                                            **{
-                                                "attributes__asset_type_attribute_id": attr_id
-                                            }
-                                        )
-                                        & ~Q(
-                                            **{
-                                                f"attributes__{self.LOOKUP_MAP[attr_type]}__in": non_null_values
-                                            }
-                                        )
-                                        & ~Q(
-                                            **{
-                                                f"attributes__{self.LOOKUP_MAP[attr_type]}__isnull": True
-                                            }
-                                        )
+                                    # nin [null] or nin [null, "foo", ...]:
+                                    # Exclude assets with null values (or specified non-null values)
+                                    # = Include assets that HAVE a non-null value not in the exclusion list
+                                    subquery = BaseAttributeValue.objects.filter(
+                                        asset_id=OuterRef("pk"),
+                                        asset_type_attribute_id=attr_id,
+                                        **{f"{lookup_map[attr_type]}__isnull": False},
                                     )
+                                    if non_null_values:
+                                        # Also exclude specific values
+                                        subquery = subquery.exclude(
+                                            **{f"{lookup_map[attr_type]}__in": non_null_values}
+                                        )
+                                    new_q = Exists(subquery)
                                 else:
-                                    new_q = ~Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__in": filter_value,
-                                        }
+                                    # nin ["foo", "bar"]: Exclude assets with these specific values
+                                    subquery = BaseAttributeValue.objects.filter(
+                                        asset_id=OuterRef("pk"),
+                                        asset_type_attribute_id=attr_id,
+                                        **{f"{lookup_map[attr_type]}__in": filter_value},
                                     )
+                                    new_q = ~Exists(subquery)
                             else:
                                 if has_null:
                                     new_q = Q(
                                         **{
                                             "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__in": non_null_values,
+                                            f"attributes__{lookup_map[attr_type]}__in": non_null_values,
                                         }
                                     ) | Q(
                                         **{
                                             "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__isnull": True,
+                                            f"attributes__{lookup_map[attr_type]}__isnull": True,
                                         }
                                     )
                                 else:
                                     new_q = Q(
                                         **{
                                             "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__in": filter_value,
+                                            f"attributes__{lookup_map[attr_type]}__in": filter_value,
                                         }
                                     )
                         else:
@@ -293,7 +325,7 @@ class FilterGroupSerializer(serializers.Serializer):
                                     **{"attributes__asset_type_attribute_id": attr_id}
                                 ) & ~Q(
                                     **{
-                                        f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value
+                                        f"attributes__{lookup_map[attr_type]}__{actual_operator}": filter_value
                                     }
                                 )
                             else:
@@ -301,27 +333,42 @@ class FilterGroupSerializer(serializers.Serializer):
                                     new_q = Q(
                                         **{
                                             "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__isnull": True,
+                                            f"attributes__{lookup_map[attr_type]}__isnull": True,
                                         }
                                     )
                                 else:
                                     new_q = Q(
                                         **{
                                             "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value,
+                                            f"attributes__{lookup_map[attr_type]}__{actual_operator}": filter_value,
                                         }
                                     )
 
                     if q is None:
                         q = new_q
                     else:
-                        # Always OR the attribute definitions together
-                        # (asset matches if ANY attribute definition matches)
-                        q |= new_q
-
-                # Apply negation AFTER combining all attribute matches with OR
-                # For nin: we want NOT(has value in attr1 OR has value in attr2)
-                # Removed: negation is now handled in the new_q building
+                        # Logic for combining queries across multiple attributes with same api_key:
+                        #
+                        # For nin with specific values (e.g., nin ["foo", "bar"]):
+                        #   "Exclude assets where value is foo OR bar"
+                        #   = NOT(attr1 in values) AND NOT(attr2 in values)
+                        #   = AND logic
+                        #
+                        # For nin with only null (e.g., nin [null]):
+                        #   "Exclude assets where value is null" = "Include assets that HAVE a value"
+                        #   = (attr1 exists and not null) OR (attr2 exists and not null)
+                        #   = OR logic (asset is included if it has a value in ANY matching attribute)
+                        #
+                        # For positive filters (in, exact, etc.):
+                        #   "Include assets where value matches"
+                        #   = (attr1 matches) OR (attr2 matches)
+                        #   = OR logic
+                        if is_negated and non_null_values:
+                            # nin with specific values: AND logic
+                            q &= new_q
+                        else:
+                            # nin with only null, or positive filters: OR logic
+                            q |= new_q
 
                 if q is None:
                     return Q()

@@ -1654,6 +1654,1187 @@ class TestAttributeFilterRegressions:
             results.count() == 2
         ), f"Expected 2 results (filter has no effect), got {results.count()}"
 
+    def test_nin_with_multiple_attribute_definitions_same_api_key(
+        self, organization, workspace
+    ):
+        """
+        Test that nin operator works correctly when multiple attribute definitions
+        have the same api_key (e.g., global and workspace-local attributes).
+
+        Bug context: When there are multiple attribute definitions with the same api_key,
+        the filter serializer was incorrectly OR-ing the negated conditions together:
+        NOT(has value in attr1) OR NOT(has value in attr2)
+
+        This is wrong because:
+        - NOT(A) OR NOT(B) = NOT(A AND B)
+        - This means "NOT (has value in BOTH attr1 AND attr2)"
+        - But we want "NOT (has value in attr1 OR attr2)" = NOT(A OR B) = NOT(A) AND NOT(B)
+
+        For nin filters, the correct behavior is to AND the negated conditions:
+        NOT(has value in attr1) AND NOT(has value in attr2)
+
+        This ensures an asset is excluded if it has the excluded value in ANY of the
+        matching attribute definitions.
+        """
+        # Create two asset types that both have a "status" attribute
+        asset_type1 = AssetType.objects.create(
+            organization=organization, name="Type1 with status"
+        )
+        status_attr1 = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type1,
+            name="Status",
+            api_key="status",
+            attribute_type="text",
+        )
+
+        asset_type2 = AssetType.objects.create(
+            organization=organization, name="Type2 with status"
+        )
+        status_attr2 = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type2,
+            name="Status",
+            api_key="status",
+            attribute_type="text",
+        )
+
+        # Create assets of type1 with different statuses
+        type1_active = Asset.objects.create(
+            organization=organization, asset_type=asset_type1, name="Type1 Active"
+        )
+        TextAttributeValue.objects.create(
+            asset=type1_active, asset_type_attribute=status_attr1, value="active"
+        )
+
+        type1_inactive = Asset.objects.create(
+            organization=organization, asset_type=asset_type1, name="Type1 Inactive"
+        )
+        TextAttributeValue.objects.create(
+            asset=type1_inactive, asset_type_attribute=status_attr1, value="inactive"
+        )
+
+        # Create assets of type2 with different statuses
+        type2_active = Asset.objects.create(
+            organization=organization, asset_type=asset_type2, name="Type2 Active"
+        )
+        TextAttributeValue.objects.create(
+            asset=type2_active, asset_type_attribute=status_attr2, value="active"
+        )
+
+        type2_inactive = Asset.objects.create(
+            organization=organization, asset_type=asset_type2, name="Type2 Inactive"
+        )
+        TextAttributeValue.objects.create(
+            asset=type2_inactive, asset_type_attribute=status_attr2, value="inactive"
+        )
+
+        # Filter: exclude assets where status = "inactive"
+        # This should use the "status" api_key which matches BOTH attr1 and attr2
+        data = {
+            "field": "attributes.status",
+            "value": ["inactive"],
+            "operator": "nin",
+        }
+
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for nin with multiple attrs: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should include: type1_active, type2_active (status is "active", not "inactive")
+        # Should NOT include: type1_inactive, type2_inactive (status is "inactive")
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results, got {results.count()}: {result_names}"
+        assert type1_active in results
+        assert type2_active in results
+        assert type1_inactive not in results
+        assert type2_inactive not in results
+
+
+    def test_choice_attribute_filter(self, organization):
+        """
+        Test that filtering by choice attribute values works correctly.
+
+        Choice attributes store values via ChoiceAttributeValue -> AssetTypeAttributeChoice,
+        not directly in TextAttributeValue, NumberAttributeValue, etc.
+
+        The filter serializer must use CHOICE_LOOKUP_MAP when the attribute has choices.
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type with choices"
+        )
+        status_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Status",
+            api_key="status",
+            attribute_type="text",
+        )
+
+        # Create choices for the attribute
+        choice_active = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Active",
+            order=0,
+        )
+        choice_inactive = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Inactive",
+            order=1,
+        )
+        choice_pending = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Pending",
+            order=2,
+        )
+
+        # Create assets with choice values
+        asset_active = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Active Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_active, asset_type_attribute=status_attr, choice=choice_active
+        )
+
+        asset_inactive = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Inactive Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_inactive, asset_type_attribute=status_attr, choice=choice_inactive
+        )
+
+        asset_pending = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Pending Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_pending, asset_type_attribute=status_attr, choice=choice_pending
+        )
+
+        # Clear the cache to ensure we get fresh attribute definitions with has_choices
+        from django.core.cache import cache
+        cache.clear()
+
+        # Test 1: Filter for exact value "Active"
+        data = {
+            "field": "attributes.status",
+            "value": "Active",
+            "operator": "exact",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Exact filter results: {result_names}")
+
+        assert results.count() == 1, f"Expected 1 result for exact 'Active', got {results.count()}: {result_names}"
+        assert asset_active in results
+
+        # Test 2: Filter to exclude "Inactive" (nin operator)
+        data = {
+            "field": "attributes.status",
+            "value": ["Inactive"],
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Nin filter results: {result_names}")
+
+        # Should include: Active, Pending (not Inactive)
+        assert results.count() == 2, f"Expected 2 results for nin 'Inactive', got {results.count()}: {result_names}"
+        assert asset_active in results
+        assert asset_pending in results
+        assert asset_inactive not in results
+
+        # Test 3: Filter with "in" operator for multiple values
+        data = {
+            "field": "attributes.status",
+            "value": ["Active", "Pending"],
+            "operator": "in",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"In filter results: {result_names}")
+
+        # Should include: Active, Pending
+        assert results.count() == 2, f"Expected 2 results for in ['Active', 'Pending'], got {results.count()}: {result_names}"
+        assert asset_active in results
+        assert asset_pending in results
+        assert asset_inactive not in results
+
+    def test_choice_attribute_filter_with_single_value_in_operator(self, organization):
+        """
+        Test that filtering by a single choice value using 'in' operator works.
+
+        This is the scenario the user reported: They see an asset using a particular
+        choice on a text attribute, but it isn't returned when filtering to only that value.
+
+        The frontend typically sends: {"field": "attributes.foo", "value": ["ChoiceValue"], "operator": "in"}
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type with text choices"
+        )
+        category_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Category",
+            api_key="category",
+            attribute_type="text",
+        )
+
+        # Create a choice for the attribute
+        choice_residential = TextAttributeChoice.objects.create(
+            asset_type_attribute=category_attr,
+            value="Residential",
+            order=0,
+        )
+        choice_commercial = TextAttributeChoice.objects.create(
+            asset_type_attribute=category_attr,
+            value="Commercial",
+            order=1,
+        )
+
+        # Create an asset with the "Residential" choice
+        asset_with_choice = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Residential Building"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_with_choice, asset_type_attribute=category_attr, choice=choice_residential
+        )
+
+        # Create another asset with a different choice
+        asset_commercial = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Commercial Building"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_commercial, asset_type_attribute=category_attr, choice=choice_commercial
+        )
+
+        # Clear the cache to ensure we get fresh attribute definitions with has_choices
+        from django.core.cache import cache
+        cache.clear()
+
+        # This is what the frontend sends when the user selects just "Residential"
+        data = {
+            "field": "attributes.category",
+            "value": ["Residential"],
+            "operator": "in",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q object: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Filter results: {result_names}")
+
+        # Should find the asset with "Residential" choice
+        assert results.count() == 1, f"Expected 1 result for in ['Residential'], got {results.count()}: {result_names}"
+        assert asset_with_choice in results
+        assert asset_commercial not in results
+
+    def test_choice_attribute_filter_debug_query_path(self, organization):
+        """
+        Debug test to verify the query path for choice attributes.
+        This test prints the actual SQL to help diagnose issues.
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+        from assets.filter_serializers import get_attributes_by_api_key
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Debug Type"
+        )
+        status_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Debug Status",
+            api_key="debug_status",
+            attribute_type="text",
+        )
+
+        # Create a choice
+        choice_active = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="DebugActive",
+            order=0,
+        )
+
+        # Create an asset with the choice
+        asset = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Debug Asset"
+        )
+        cv = ChoiceAttributeValue.objects.create(
+            asset=asset, asset_type_attribute=status_attr, choice=choice_active
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Get attribute definitions
+        attrs = get_attributes_by_api_key("debug_status")
+        print(f"Attribute definitions: {attrs}")
+
+        for attr in attrs:
+            print(f"  Attr ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices', 'N/A')}")
+
+        # Build filter
+        data = {
+            "field": "attributes.debug_status",
+            "value": "DebugActive",
+            "operator": "exact",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q: {q}")
+
+        # Get the SQL
+        qs = Asset.objects.filter(q)
+        print(f"SQL Query: {qs.query}")
+
+        results = qs.filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert asset in results
+
+    def test_choice_attribute_filter_with_stale_cache(self, organization):
+        """
+        Test that choice attribute filtering fails when the cache has stale data.
+
+        This tests the scenario where:
+        1. An attribute was created without choices (cached without has_choices)
+        2. Later, choices were added to the attribute
+        3. An asset is created using a choice value
+        4. Filtering fails because the cache says has_choices=False
+
+        This is likely the bug the user is experiencing.
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+        from assets.filter_serializers import get_attributes_by_api_key
+
+        # Create asset type with a text attribute (NO CHOICES YET)
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Stale Cache Type"
+        )
+        status_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Status",
+            api_key="stale_status",
+            attribute_type="text",
+        )
+
+        # Clear the cache and then query to populate it WITHOUT has_choices
+        from django.core.cache import cache
+        cache.clear()
+
+        # This caches the attribute WITHOUT has_choices=True (because no choices exist yet)
+        attrs_before = get_attributes_by_api_key("stale_status")
+        print(f"Attrs BEFORE adding choices: {attrs_before}")
+        assert attrs_before[0].get("has_choices") == False, "Should be False since no choices exist"
+
+        # NOW add choices to the attribute (simulating a later modification)
+        choice_active = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Active",
+            order=0,
+        )
+
+        # Create an asset with the choice
+        asset = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Stale Cache Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset, asset_type_attribute=status_attr, choice=choice_active
+        )
+
+        # DON'T clear the cache - this simulates the bug where cache is stale
+        # The cache still thinks has_choices=False
+
+        # Now try to filter - this SHOULD fail because the cache is stale
+        data = {
+            "field": "attributes.stale_status",
+            "value": "Active",
+            "operator": "exact",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q with stale cache: {q}")
+
+        # The stale cache should cause this to use the wrong lookup path
+        # (textattributevalue__value instead of choiceattributevalue__choice__textattributechoice__value)
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results with stale cache: {result_names}")
+
+        # This assertion documents the BUG - with stale cache, filtering fails
+        # Comment: We expect 0 results because the query uses the wrong path
+        # The actual values are stored in ChoiceAttributeValue, not TextAttributeValue
+        assert results.count() == 0, (
+            f"Expected 0 results with stale cache (BUG), got {results.count()}: {result_names}. "
+            "If this passes with 1 result, the cache was properly refreshed."
+        )
+
+        # NOW clear the cache and retry - should work
+        cache.clear()
+        attrs_after = get_attributes_by_api_key("stale_status")
+        print(f"Attrs AFTER cache clear: {attrs_after}")
+        assert attrs_after[0].get("has_choices") == True, "Should be True since choices exist now"
+
+        # Build filter again with fresh cache
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+        print(f"Generated Q with fresh cache: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results with fresh cache: {result_names}")
+
+        # With fresh cache, should work
+        assert results.count() == 1, f"Expected 1 result with fresh cache, got {results.count()}: {result_names}"
+        assert asset in results
+
+    def test_choice_attribute_nin_null_excludes_asset_without_choice(self, organization):
+        """
+        User scenario: Two assets - one with a choice attribute set, one without.
+        Filter: nin [null] to exclude assets without a value.
+        Expected: Only the asset WITH the choice should be returned.
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for nin null test"
+        )
+        lk_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="LK",
+            api_key="lk",
+            attribute_type="text",
+        )
+
+        # Create a choice for the attribute
+        choice_a = TextAttributeChoice.objects.create(
+            asset_type_attribute=lk_attr,
+            value="Choice A",
+            order=0,
+        )
+
+        # Asset 1: HAS a choice value set
+        asset_with_choice = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset WITH choice"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_with_choice, asset_type_attribute=lk_attr, choice=choice_a
+        )
+
+        # Asset 2: Does NOT have any value for the attribute (null)
+        asset_without_value = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset WITHOUT choice"
+        )
+
+        # Clear the cache to get fresh attribute definitions
+        from django.core.cache import cache
+        cache.clear()
+
+        # Filter: exclude null - should return only assets that HAVE a value
+        data = {
+            "field": "attributes.lk",
+            "value": [None],
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for nin [null]: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should include only the asset WITH a choice value
+        # Should exclude the asset WITHOUT a value (null)
+        assert results.count() == 1, f"Expected 1 result (asset with choice), got {results.count()}: {result_names}"
+        assert asset_with_choice in results
+        assert asset_without_value not in results
+
+    def test_choice_attribute_nin_excludes_specific_value(self, organization):
+        """
+        Test filtering choice attributes with nin to exclude specific values.
+
+        Scenario: User wants to see all assets EXCEPT those with "Choice B"
+        Filter: {"field": "attributes.lk", "value": ["Choice B"], "operator": "nin"}
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for nin value test"
+        )
+        lk_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="LK",
+            api_key="lk_test",
+            attribute_type="text",
+        )
+
+        # Create choices for the attribute
+        choice_a = TextAttributeChoice.objects.create(
+            asset_type_attribute=lk_attr,
+            value="Choice A",
+            order=0,
+        )
+        choice_b = TextAttributeChoice.objects.create(
+            asset_type_attribute=lk_attr,
+            value="Choice B",
+            order=1,
+        )
+
+        # Create asset with Choice A
+        asset_a = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with Choice A"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_a, asset_type_attribute=lk_attr, choice=choice_a
+        )
+
+        # Create asset with Choice B
+        asset_b = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with Choice B"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_b, asset_type_attribute=lk_attr, choice=choice_b
+        )
+
+        # Create asset without any value
+        asset_none = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset without value"
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Exclude "Choice B" - should return asset_a and asset_none
+        data = {
+            "field": "attributes.lk_test",
+            "value": ["Choice B"],
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for nin ['Choice B']: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should include asset_a (has Choice A, not Choice B)
+        # Should include asset_none (has no value, not Choice B)
+        # Should exclude asset_b (has Choice B)
+        assert results.count() == 2, f"Expected 2 results, got {results.count()}: {result_names}"
+        assert asset_a in results
+        assert asset_none in results
+        assert asset_b not in results
+
+    def test_choice_attribute_in_selects_specific_value(self, organization):
+        """
+        Test filtering choice attributes with 'in' to include specific values.
+
+        Scenario: User wants to see ONLY assets with "Choice A"
+        Filter: {"field": "attributes.lk", "value": ["Choice A"], "operator": "in"}
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for in value test"
+        )
+        lk_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="LK",
+            api_key="lk_in_test",
+            attribute_type="text",
+        )
+
+        # Create choices for the attribute
+        choice_a = TextAttributeChoice.objects.create(
+            asset_type_attribute=lk_attr,
+            value="Choice A",
+            order=0,
+        )
+        choice_b = TextAttributeChoice.objects.create(
+            asset_type_attribute=lk_attr,
+            value="Choice B",
+            order=1,
+        )
+
+        # Create asset with Choice A
+        asset_a = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with Choice A"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_a, asset_type_attribute=lk_attr, choice=choice_a
+        )
+
+        # Create asset with Choice B
+        asset_b = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with Choice B"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_b, asset_type_attribute=lk_attr, choice=choice_b
+        )
+
+        # Create asset without any value
+        asset_none = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset without value"
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Select only "Choice A"
+        data = {
+            "field": "attributes.lk_in_test",
+            "value": ["Choice A"],
+            "operator": "in",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for in ['Choice A']: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should include ONLY asset_a (has Choice A)
+        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert asset_a in results
+        assert asset_b not in results
+        assert asset_none not in results
+
+    def test_workspace_local_choice_attribute_filter(self, organization, workspace):
+        """
+        Test filtering by choice on a WorkspaceLocalAssetTypeAttribute.
+
+        This tests the scenario where the user has a workspace-local attribute
+        with choices, and filtering by choice value should work correctly.
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for local attr test"
+        )
+
+        # Create a WORKSPACE LOCAL attribute with choices
+        local_attr = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace,
+            name="Local Status",
+            api_key="local_status",
+            attribute_type="text",
+        )
+
+        # Create choices for the local attribute
+        choice_active = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr,
+            value="Active",
+            order=0,
+        )
+        choice_inactive = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr,
+            value="Inactive",
+            order=1,
+        )
+
+        # Create assets with different choices
+        asset_active = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Active Local Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_active, asset_type_attribute=local_attr, choice=choice_active
+        )
+
+        asset_inactive = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Inactive Local Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_inactive, asset_type_attribute=local_attr, choice=choice_inactive
+        )
+
+        asset_no_value = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="No Value Local Asset"
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Check what the cache returns
+        from assets.filter_serializers import get_attributes_by_api_key
+        attrs = get_attributes_by_api_key("local_status")
+        print(f"Cached attrs for local_status: {attrs}")
+        for attr in attrs:
+            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+
+        # Filter for "Active" choice
+        data = {
+            "field": "attributes.local_status",
+            "value": ["Active"],
+            "operator": "in",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for local attr: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should find only the active asset
+        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert asset_active in results
+        assert asset_inactive not in results
+        assert asset_no_value not in results
+
+    def test_workspace_local_choice_attribute_nin_null(self, organization, workspace):
+        """
+        Test nin [null] filter on a WorkspaceLocalAssetTypeAttribute with choices.
+
+        This is the user's exact scenario - filtering to exclude null on a
+        workspace-local attribute that uses choices.
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for local nin null test"
+        )
+
+        # Create a WORKSPACE LOCAL attribute with choices
+        local_attr = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace,
+            name="LK Local",
+            api_key="lk_local",
+            attribute_type="text",
+        )
+
+        # Create a choice
+        choice_a = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr,
+            value="Choice A",
+            order=0,
+        )
+
+        # Asset WITH a choice value
+        asset_with_choice = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset WITH local choice"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_with_choice, asset_type_attribute=local_attr, choice=choice_a
+        )
+
+        # Asset WITHOUT any value
+        asset_without_value = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset WITHOUT local choice"
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Check what the cache returns
+        from assets.filter_serializers import get_attributes_by_api_key
+        attrs = get_attributes_by_api_key("lk_local")
+        print(f"Cached attrs for lk_local: {attrs}")
+        for attr in attrs:
+            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+
+        # Filter: exclude null
+        data = {
+            "field": "attributes.lk_local",
+            "value": [None],
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for nin null on local attr: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should include only the asset WITH a choice value
+        assert results.count() == 1, f"Expected 1 result (asset with choice), got {results.count()}: {result_names}"
+        assert asset_with_choice in results
+        assert asset_without_value not in results
+
+    def test_workspace_local_choice_attribute_nin_specific_value(self, organization, workspace):
+        """
+        Test nin with specific value on a single workspace local attribute with choices.
+
+        User scenario: Single workspace, local attribute with choices, filter nin ["m"]
+        should exclude the asset with choice value "m".
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+
+        # Create asset type
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for local nin specific value"
+        )
+
+        # Create a WORKSPACE LOCAL attribute with choices
+        local_attr = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace,
+            name="LK",
+            api_key="lk_single",
+            attribute_type="text",
+        )
+
+        # Create choices
+        choice_m = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr,
+            value="m",
+            order=0,
+        )
+        choice_n = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr,
+            value="n",
+            order=1,
+        )
+
+        # Asset with choice "m"
+        asset_m = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with m"
+        )
+        asset_m.workspace_memberships.create(workspace=workspace)
+        ChoiceAttributeValue.objects.create(
+            asset=asset_m, asset_type_attribute=local_attr, choice=choice_m
+        )
+
+        # Asset with choice "n"
+        asset_n = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with n"
+        )
+        asset_n.workspace_memberships.create(workspace=workspace)
+        ChoiceAttributeValue.objects.create(
+            asset=asset_n, asset_type_attribute=local_attr, choice=choice_n
+        )
+
+        # Asset without any value
+        asset_none = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset without value"
+        )
+        asset_none.workspace_memberships.create(workspace=workspace)
+
+        # Clear cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Check cached attrs
+        from assets.filter_serializers import get_attributes_by_api_key
+        attrs = get_attributes_by_api_key("lk_single")
+        print(f"Cached attrs: {attrs}")
+        for attr in attrs:
+            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+
+        # Filter: nin ["m"] - should exclude asset with "m", include "n" and no value
+        data = {
+            "field": "attributes.lk_single",
+            "value": ["m"],
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for nin ['m']: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should EXCLUDE asset_m (has choice "m")
+        # Should INCLUDE asset_n (has choice "n", not "m")
+        # Should INCLUDE asset_none (no value, not "m")
+        assert asset_m not in results, f"Asset with 'm' should be EXCLUDED, got: {result_names}"
+        assert asset_n in results, f"Asset with 'n' should be INCLUDED, got: {result_names}"
+        assert asset_none in results, f"Asset without value should be INCLUDED, got: {result_names}"
+        assert results.count() == 2, f"Expected 2 results, got {results.count()}: {result_names}"
+
+    def test_workspace_local_choice_attribute_cross_workspace_conflict(self, organization):
+        """
+        Test the case where TWO workspaces have local attributes with the SAME api_key,
+        but only ONE has choices. This demonstrates the current bug where filtering
+        uses the wrong lookup path because get_attributes_by_api_key doesn't filter
+        by workspace.
+
+        Scenario:
+        - Workspace A: local attribute "lk" WITH choices
+        - Workspace B: local attribute "lk" WITHOUT choices (plain text)
+        - Asset in Workspace A has a ChoiceAttributeValue
+        - Filtering should find the asset, but may fail if the wrong attribute is used
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+            TextAttributeValue,
+        )
+        from workspaces.models import Workspace
+
+        # Create TWO workspaces
+        workspace_a = Workspace.objects.create(
+            organization=organization, name="Workspace A"
+        )
+        workspace_b = Workspace.objects.create(
+            organization=organization, name="Workspace B"
+        )
+
+        # Create asset type
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for cross-workspace test"
+        )
+
+        # Workspace A: local attribute WITH choices
+        local_attr_a = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace_a,
+            name="LK",
+            api_key="lk_cross",  # Same api_key
+            attribute_type="text",
+        )
+        choice_a = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr_a,
+            value="Choice Value",
+            order=0,
+        )
+
+        # Workspace B: local attribute WITHOUT choices (plain text)
+        local_attr_b = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace_b,
+            name="LK",
+            api_key="lk_cross",  # Same api_key!
+            attribute_type="text",
+        )
+        # No choices added to local_attr_b
+
+        # Create asset in Workspace A with a CHOICE value
+        asset_with_choice = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset in Workspace A"
+        )
+        asset_with_choice.workspace_memberships.create(workspace=workspace_a)
+        ChoiceAttributeValue.objects.create(
+            asset=asset_with_choice, asset_type_attribute=local_attr_a, choice=choice_a
+        )
+
+        # Create asset in Workspace B with a plain TEXT value (no choice)
+        asset_with_text = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset in Workspace B"
+        )
+        asset_with_text.workspace_memberships.create(workspace=workspace_b)
+        TextAttributeValue.objects.create(
+            asset=asset_with_text, asset_type_attribute=local_attr_b, value="Plain Text Value"
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Check what the cache returns - it will return BOTH attributes!
+        from assets.filter_serializers import get_attributes_by_api_key
+        attrs = get_attributes_by_api_key("lk_cross")
+        print(f"Cached attrs for lk_cross: {attrs}")
+        for attr in attrs:
+            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+
+        # This shows the bug: we get BOTH attributes, one with choices, one without
+        assert len(attrs) == 2, f"Expected 2 attributes (from both workspaces), got {len(attrs)}"
+
+        # Now filter for "Choice Value"
+        data = {
+            "field": "attributes.lk_cross",
+            "value": ["Choice Value"],
+            "operator": "in",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q: {q}")
+
+        # The query should find asset_with_choice (in Workspace A)
+        # The current implementation ORs the queries for both attributes,
+        # so it should still work, but the query is inefficient and
+        # may have edge cases that fail
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should find the asset with the choice value
+        assert asset_with_choice in results, f"Expected to find asset_with_choice, got: {result_names}"
+        # Should NOT find the asset with plain text (different value)
+        assert asset_with_text not in results, f"Should not find asset_with_text"
+
+    def test_workspace_local_choice_nin_null_cross_workspace(self, organization):
+        """
+        Test nin [null] with cross-workspace local attributes where one has choices
+        and one doesn't.
+
+        This is the likely root cause of the user's bug:
+        - Workspace A: local attribute "lk" WITH choices, asset has a ChoiceAttributeValue
+        - Workspace B: local attribute "lk" WITHOUT choices
+        - Filter nin [null] should return the asset in Workspace A
+        - But the query for attribute B (without choices) looks for textattributevalue__value
+          which doesn't exist for the asset in Workspace A
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            TextAttributeChoice,
+        )
+        from workspaces.models import Workspace
+
+        # Create TWO workspaces
+        workspace_a = Workspace.objects.create(
+            organization=organization, name="Workspace A"
+        )
+        workspace_b = Workspace.objects.create(
+            organization=organization, name="Workspace B"
+        )
+
+        # Create asset type
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for nin null cross-workspace"
+        )
+
+        # Workspace A: local attribute WITH choices
+        local_attr_a = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace_a,
+            name="LK",
+            api_key="lk_nin_cross",
+            attribute_type="text",
+        )
+        choice_a = TextAttributeChoice.objects.create(
+            asset_type_attribute=local_attr_a,
+            value="Choice Value",
+            order=0,
+        )
+
+        # Workspace B: local attribute WITHOUT choices
+        local_attr_b = WorkspaceLocalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            workspace=workspace_b,
+            name="LK",
+            api_key="lk_nin_cross",  # Same api_key!
+            attribute_type="text",
+        )
+
+        # Create asset in Workspace A with a CHOICE value
+        asset_with_choice = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset with choice value"
+        )
+        asset_with_choice.workspace_memberships.create(workspace=workspace_a)
+        ChoiceAttributeValue.objects.create(
+            asset=asset_with_choice, asset_type_attribute=local_attr_a, choice=choice_a
+        )
+
+        # Create asset in Workspace A WITHOUT any value
+        asset_without_value = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset without value"
+        )
+        asset_without_value.workspace_memberships.create(workspace=workspace_a)
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # Check what the cache returns
+        from assets.filter_serializers import get_attributes_by_api_key
+        attrs = get_attributes_by_api_key("lk_nin_cross")
+        print(f"Cached attrs for lk_nin_cross: {attrs}")
+        for attr in attrs:
+            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+
+        # Filter: nin [null] - should return only assets WITH a value
+        data = {
+            "field": "attributes.lk_nin_cross",
+            "value": [None],
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        print(f"Generated Q for nin [null]: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # KEY ASSERTION: Should find asset_with_choice (it HAS a value)
+        # This may FAIL if the cross-workspace attribute without choices
+        # causes the wrong query to be used
+        assert asset_with_choice in results, (
+            f"Expected to find 'Asset with choice value', got: {result_names}. "
+            "This is the BUG - cross-workspace attributes with same api_key "
+            "but different has_choices settings cause incorrect filtering."
+        )
+        assert asset_without_value not in results
+
 
 class TestAttributeValuesEndpoint:
     """Test the attribute values endpoint that returns distinct values for filtering."""
@@ -1727,3 +2908,80 @@ class TestAttributeValuesEndpoint:
         assert (
             blank_count == 1
         ), f"Expected 'Blank' to appear once, but found {blank_count} times"
+
+    @pytest.mark.django_db
+    def test_values_endpoint_returns_only_used_choices_for_choice_attribute(
+        self, client, organization, workspace
+    ):
+        """
+        Test that the values endpoint returns only the choices that are actually used
+        by assets, not all defined choices.
+        """
+        from assets.models import TextAttributeChoice, ChoiceAttributeValue
+
+        # Create asset type with a text attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type with choices"
+        )
+        status_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Status",
+            api_key="status",
+            attribute_type="text",
+        )
+
+        # Create choices for the attribute (3 choices, but we'll only use 2)
+        choice_active = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Active",
+            order=0,
+        )
+        choice_inactive = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Inactive",
+            order=1,
+        )
+        choice_pending = TextAttributeChoice.objects.create(
+            asset_type_attribute=status_attr,
+            value="Pending",
+            order=2,
+        )
+
+        # Create assets that use only Active and Pending (NOT Inactive)
+        asset_active = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Active Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_active, asset_type_attribute=status_attr, choice=choice_active
+        )
+
+        asset_pending = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Pending Asset"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_pending, asset_type_attribute=status_attr, choice=choice_pending
+        )
+
+        # Make a request to the values endpoint
+        url = f"/api/workspaces/{workspace.id}/asset-types/{asset_type.id}/attributes/{status_attr.id}/values/"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        results = data["results"]
+
+        print(f"Choice values endpoint results: {results}")
+
+        # Should return: Blank, Active, Pending (only USED choices, in order)
+        # Note: Inactive should NOT be in results because no asset uses it
+        assert results[0] == "Blank", f"Expected 'Blank' as first result, got {results[0]}"
+        assert "Active" in results, "Expected 'Active' in results (it's used)"
+        assert "Pending" in results, "Expected 'Pending' in results (it's used)"
+        assert "Inactive" not in results, "Inactive should NOT be in results (it's not used)"
+
+        # Verify order: Active (order=0) should come before Pending (order=2)
+        active_idx = results.index("Active")
+        pending_idx = results.index("Pending")
+        assert active_idx < pending_idx, (
+            f"Expected Active before Pending, got indices: {active_idx}, {pending_idx}"
+        )
