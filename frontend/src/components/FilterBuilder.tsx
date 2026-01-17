@@ -53,10 +53,19 @@ interface FilterBuilderProps {
   onAttributeFiltersChange: (filters: AttributeFilter[]) => void
   nameFilter?: string
   onNameFilterChange?: (name: string) => void
+  geometryTypeFilter?: string[]
+  onGeometryTypeFilterChange?: (types: string[]) => void
   open?: boolean
   onClose?: () => void
   onToggle?: () => void
 }
+
+// Available geometry types for filtering (values must match PostGIS GeometryType() output - uppercase)
+const GEOMETRY_TYPES = [
+  { value: 'POINT', label: 'Points' },
+  { value: 'LINESTRING', label: 'Lines' },
+  { value: 'POLYGON', label: 'Polygons' },
+]
 
 export default function FilterBuilder({
   workspaceId,
@@ -66,6 +75,8 @@ export default function FilterBuilder({
   onAttributeFiltersChange,
   nameFilter = '',
   onNameFilterChange,
+  geometryTypeFilter = [],
+  onGeometryTypeFilterChange,
   open: externalOpen,
   onClose: externalOnClose,
   onToggle
@@ -350,10 +361,11 @@ export default function FilterBuilder({
   }
 
   const handleClearAll = () => {
-    // Clear all filters including exclusions, attribute filters, and name filter
+    // Clear all filters including exclusions, attribute filters, name filter, and geometry filter
     onAssetTypesChange([])
     onAttributeFiltersChange([])
     onNameFilterChange?.('')
+    onGeometryTypeFilterChange?.([])
     setSelectedTypeForAttributes(null)
     setSelectedAttribute(null)
   }
@@ -589,7 +601,24 @@ export default function FilterBuilder({
   // When selectedAssetTypes is empty, all types are shown (no type filter active)
   // When selectedAssetTypes has items, those are the only types shown (type filter active)
   const typeFilterCount = selectedAssetTypes.length > 0 && selectedAssetTypes.length < assetTypes.length ? 1 : 0
-  const totalFilters = typeFilterCount + attributeFilters.length + (nameFilter.trim() ? 1 : 0)
+  const geometryFilterCount = geometryTypeFilter.length > 0 ? 1 : 0
+  const totalFilters = typeFilterCount + attributeFilters.length + (nameFilter.trim() ? 1 : 0) + geometryFilterCount
+
+  // Handle geometry type filter toggle
+  const handleGeometryTypeToggle = (geometryType: string) => {
+    if (!onGeometryTypeFilterChange) return
+
+    const currentIndex = geometryTypeFilter.indexOf(geometryType)
+    if (currentIndex === -1) {
+      // Add to filter (exclude this type)
+      onGeometryTypeFilterChange([...geometryTypeFilter, geometryType])
+    } else {
+      // Remove from filter (include this type)
+      const newFilter = [...geometryTypeFilter]
+      newFilter.splice(currentIndex, 1)
+      onGeometryTypeFilterChange(newFilter)
+    }
+  }
 
   const filterContent = (
     <Box sx={{ px: 3, py: 2, display: 'flex', flexDirection: 'column', height: 'calc(70vh - 36px)', minHeight: 0 }}>
@@ -609,7 +638,7 @@ export default function FilterBuilder({
           />
         </Box> */}
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexShrink: 0 }}>
         <Button
           size="small"
           onClick={handleSelectAll}
@@ -625,6 +654,32 @@ export default function FilterBuilder({
           Clear Filters
         </Button>
       </Box>
+
+      {/* Geometry Type Filter */}
+      {onGeometryTypeFilterChange && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+            Geometry:
+          </Typography>
+          {GEOMETRY_TYPES.map((geoType) => {
+            const isIncluded = geometryTypeFilter.indexOf(geoType.value) === -1
+            return (
+              <Chip
+                key={geoType.value}
+                label={geoType.label}
+                size="small"
+                variant={isIncluded ? 'filled' : 'outlined'}
+                color={isIncluded ? 'primary' : 'default'}
+                onClick={() => handleGeometryTypeToggle(geoType.value)}
+                sx={{
+                  opacity: isIncluded ? 1 : 0.5,
+                  cursor: 'pointer',
+                }}
+              />
+            )
+          })}
+        </Box>
+      )}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>

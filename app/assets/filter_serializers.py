@@ -348,6 +348,24 @@ class FilterGroupSerializer(serializers.Serializer):
                     q = ~q
                 return q
 
+        # Special handling for geometry_type filter
+        if field == "geometry_type":
+            # geometry_type filters on the geometry's type (Point, LineString, Polygon)
+            # Use geometry__geom_type which returns the OGC geometry type name
+            if operator == "nin":
+                # Exclude these geometry types
+                query_obj = ~Q(geometry__geom_type__in=value)
+            elif operator == "in":
+                # Include only these geometry types
+                query_obj = Q(geometry__geom_type__in=value)
+            elif operator == "exact":
+                query_obj = Q(geometry__geom_type=value)
+            else:
+                query_obj = Q(**{f"geometry__geom_type__{operator}": value})
+            if self.validated_data.get("inverse", False):
+                query_obj = ~query_obj
+            return query_obj
+
         # Handle nin (not in) operator for regular fields
         if operator == "nin":
             query_obj = ~Q(**{f"{field}__in": value})

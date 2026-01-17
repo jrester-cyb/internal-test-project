@@ -32,7 +32,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
   onBoundsChange: (bounds: number[] | null) => void
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { selectedAssetTypes, attributeFilters, nameFilter, clusteringDisabled } = useMapContext()
+  const { selectedAssetTypes, attributeFilters, nameFilter, geometryTypeFilter, clusteringDisabled } = useMapContext()
 
   const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [29.9511, -90.0715])
   const [zoom, setZoom] = useState(loaderData?.initialZoom || 10)
@@ -63,6 +63,15 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
           field: 'name',
           value: nameFilter.trim(),
           operator: 'icontains'
+        })
+      }
+
+      // Add geometry type filter if any types are excluded
+      if (geometryTypeFilter.length > 0) {
+        filterGroups.push({
+          field: 'geometry_type',
+          value: geometryTypeFilter,
+          operator: 'nin'
         })
       }
 
@@ -202,7 +211,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
       }
       console.error('Error loading map data:', error)
     }
-  }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter, clusteringDisabled, onBoundsChange])
+  }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter, geometryTypeFilter, clusteringDisabled, onBoundsChange])
 
   useEffect(() => {
     const newSearchParams = new URLSearchParams(searchParams)

@@ -68,6 +68,8 @@ interface MapContextType {
   setAttributeFilters: (filters: AttributeFilter[]) => void
   nameFilter: string
   setNameFilter: (name: string) => void
+  geometryTypeFilter: string[]
+  setGeometryTypeFilter: (types: string[]) => void
 
   // Clustering state
   clusteringDisabled: boolean
@@ -112,6 +114,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
   const [nameFilter, setNameFilter] = useState('')
+  const [geometryTypeFilter, setGeometryTypeFilter] = useState<string[]>([])
 
   // Clustering state - persisted to localStorage
   const [clusteringDisabled, setClusteringDisabledState] = useState(() => {
@@ -619,6 +622,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       setAttributeFilters,
       nameFilter,
       setNameFilter,
+      geometryTypeFilter,
+      setGeometryTypeFilter,
       clusteringDisabled,
       setClusteringDisabled,
       openAssetDrawer,
@@ -649,6 +654,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
           onAttributeFiltersChange={setAttributeFilters}
           nameFilter={nameFilter}
           onNameFilterChange={setNameFilter}
+          geometryTypeFilter={geometryTypeFilter}
+          onGeometryTypeFilterChange={setGeometryTypeFilter}
           open={filterOpen}
           onClose={() => setFilterOpen(false)}
           onToggle={() => setFilterOpen(!filterOpen)}
