@@ -43,9 +43,19 @@ function MapPage() {
   const [currentBounds, setCurrentBounds] = useState<number[] | null>(null)
 
   const initialUrlUpdateDone = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return
+
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // Create a new AbortController for this request
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
     // Track current bounds for cluster search filtering
     setCurrentBounds(bounds)
@@ -123,7 +133,7 @@ function MapPage() {
 
       if (zoom < 12) {
         // Show clusters at high zoom out
-        const clusterData = await fetchClusters(workspaceId, zoom, bounds, mergedFilters)
+        const clusterData = await fetchClusters(workspaceId, zoom, bounds, mergedFilters, abortController.signal)
         // Separate GeoJSON features (single-asset clusters) from true clusters
         const geojsonAssets: Asset[] = []
         const realClusters: Cluster[] = []
@@ -144,7 +154,7 @@ function MapPage() {
         setAssets(geojsonAssets)
       } else {
         // Show individual assets when zoomed in
-        const tileData = await fetchTiles(workspaceId, bounds, 5000, mergedFilters)
+        const tileData = await fetchTiles(workspaceId, bounds, 5000, mergedFilters, abortController.signal)
         setAssets(tileData.features.map((f: any) => ({
           id: f.id,
           name: f.properties.name,
@@ -155,6 +165,10 @@ function MapPage() {
         setClusters([])
       }
     } catch (error) {
+      // Ignore abort errors - these are expected when canceling in-flight requests
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
       console.error('Error loading map data:', error)
     }
   }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter])

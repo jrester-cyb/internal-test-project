@@ -87,6 +87,8 @@ export interface Cluster {
     lat: number
     lon: number
   }
+  /** Optional bounding box for client-side clusters [minLon, minLat, maxLon, maxLat] */
+  bbox?: [number, number, number, number]
 }
 
 export interface SearchFilter {

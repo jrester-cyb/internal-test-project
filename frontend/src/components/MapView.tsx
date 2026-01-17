@@ -7,7 +7,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useMapContext } from '../contexts/MapContext'
 import ClusterMarkers from './ClusterMarkers'
 import FilterBuilder from './FilterBuilder'
-import AssetGeometry from './AssetGeometry'
+import AssetClusterLayer from './AssetClusterLayer'
 import type { AttributeFilter } from './FilterBuilder'
 import type { Asset, Cluster } from '../types'
 import './MapView.css'
@@ -204,20 +204,18 @@ export default function MapView({
 
           <ZoomControl position="bottomright" />
 
-          {assets.map(asset => (
-            <AssetGeometry
-              key={asset.id}
-              asset={asset}
-              isSelected={selectedAssetId === asset.id}
-              markerIcon={markerIcon}
-              selectedMarkerIcon={selectedMarkerIcon}
-              glowColor={glowColor}
-              polygonFillColor={polygonFillColor}
-              polygonStrokeColor={polygonStrokeColor}
-              polylineColor={polylineColor}
-              onAssetClick={openAssetDrawer}
-            />
-          ))}
+          <AssetClusterLayer
+            assets={assets}
+            selectedAssetId={selectedAssetId}
+            markerIcon={markerIcon}
+            selectedMarkerIcon={selectedMarkerIcon}
+            glowColor={glowColor}
+            polygonFillColor={polygonFillColor}
+            polygonStrokeColor={polygonStrokeColor}
+            polylineColor={polylineColor}
+            onAssetClick={openAssetDrawer}
+            onClusterClick={openClusterDrawer}
+          />
         </MapContainer>
     </Box>
   )

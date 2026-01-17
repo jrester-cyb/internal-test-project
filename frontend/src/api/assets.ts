@@ -86,51 +86,53 @@ export async function fetchRelatedAssets(workspaceId: string, assetId: string): 
   return response.json()
 }
 
-export async function fetchClusters(workspaceId: string, zoom: number, bbox?: number[], filters?: any) {
+export async function fetchClusters(workspaceId: string, zoom: number, bbox?: number[], filters?: any, signal?: AbortSignal) {
   const params = new URLSearchParams({ zoom: zoom.toString() })
   if (bbox) {
     params.append('bbox', bbox.join(','))
   }
-  
+
   const url = workspaceUrl(workspaceId, `assets/clusters/?${params}`)
-  
+
   if (filters) {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(filters)
+      body: JSON.stringify(filters),
+      signal
     })
     if (!response.ok) throw new Error('Failed to fetch clusters')
     return response.json()
   } else {
-    const response = await fetch(url)
+    const response = await fetch(url, { signal })
     if (!response.ok) throw new Error('Failed to fetch clusters')
     return response.json()
   }
 }
 
-export async function fetchTiles(workspaceId: string, bbox: number[], limit: number = 5000, filters?: any) {
+export async function fetchTiles(workspaceId: string, bbox: number[], limit: number = 5000, filters?: any, signal?: AbortSignal) {
   const params = new URLSearchParams({
     bbox: bbox.join(','),
     limit: limit.toString()
   })
-  
+
   const url = workspaceUrl(workspaceId, `assets/tiles/?${params}`)
-  
+
   if (filters) {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(filters)
+      body: JSON.stringify(filters),
+      signal
     })
     if (!response.ok) throw new Error('Failed to fetch tiles')
     return response.json()
   } else {
-    const response = await fetch(url)
+    const response = await fetch(url, { signal })
     if (!response.ok) throw new Error('Failed to fetch tiles')
     return response.json()
   }

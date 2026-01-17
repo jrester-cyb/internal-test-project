@@ -191,21 +191,36 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       }
     })
 
-    // Build filters - h3 prefix + optional bbox to match cluster counts
-    const filters: any[] = [{
-      field: 'h3_index',
-      value: cluster.h3Index,
-      operator: 'startswith'
-    }]
-    if (currentBounds?.length === 4) {
-      // Convert bbox to WKT polygon for geometry intersects filter
-      const [minLon, minLat, maxLon, maxLat] = currentBounds
+    // Build filters based on whether cluster has a specific bbox (client-side cluster)
+    // or needs to use h3 prefix (server-side cluster)
+    const filters: any[] = []
+
+    if (cluster.bbox) {
+      // Client-side cluster with precise bbox - use geometry intersects only
+      const [minLon, minLat, maxLon, maxLat] = cluster.bbox
       const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
       filters.push({
         field: 'geometry',
         value: bboxWkt,
         operator: 'intersects'
       })
+    } else {
+      // Server-side cluster - use h3 prefix + optional map bounds
+      filters.push({
+        field: 'h3_index',
+        value: cluster.h3Index,
+        operator: 'startswith'
+      })
+      if (currentBounds?.length === 4) {
+        // Convert bbox to WKT polygon for geometry intersects filter
+        const [minLon, minLat, maxLon, maxLat] = currentBounds
+        const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
+        filters.push({
+          field: 'geometry',
+          value: bboxWkt,
+          operator: 'intersects'
+        })
+      }
     }
 
     // Fetch initial count and first batch
@@ -303,22 +318,37 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       return prev
     })
 
-    // Build filters - h3 prefix + optional bbox to match cluster counts
-    const filters: any[] = [{
-      field: 'h3_index',
-      value: cluster.h3Index,
-      operator: 'startswith'
-    }]
-    const bounds = currentBoundsRef.current
-    if (bounds?.length === 4) {
-      // Convert bbox to WKT polygon for geometry intersects filter
-      const [minLon, minLat, maxLon, maxLat] = bounds
+    // Build filters based on whether cluster has a specific bbox (client-side cluster)
+    // or needs to use h3 prefix (server-side cluster)
+    const filters: any[] = []
+
+    if (cluster.bbox) {
+      // Client-side cluster with precise bbox - use geometry intersects only
+      const [minLon, minLat, maxLon, maxLat] = cluster.bbox
       const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
       filters.push({
         field: 'geometry',
         value: bboxWkt,
         operator: 'intersects'
       })
+    } else {
+      // Server-side cluster - use h3 prefix + optional map bounds
+      filters.push({
+        field: 'h3_index',
+        value: cluster.h3Index,
+        operator: 'startswith'
+      })
+      const bounds = currentBoundsRef.current
+      if (bounds?.length === 4) {
+        // Convert bbox to WKT polygon for geometry intersects filter
+        const [minLon, minLat, maxLon, maxLat] = bounds
+        const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
+        filters.push({
+          field: 'geometry',
+          value: bboxWkt,
+          operator: 'intersects'
+        })
+      }
     }
 
     // Fetch the specific range
