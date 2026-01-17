@@ -165,6 +165,8 @@ export interface VirtualizedGridProps<T> {
   keyboardActions?: KeyboardAction[]
   /** Called when a cell value is edited */
   onCellEdit?: (item: T, columnKey: string, newValue: string, rowIndex: number) => void
+  /** Called when data is pasted into a range of cells. Receives parsed data (rows of columns), starting position, and end position for tiling */
+  onPasteRange?: (data: string[][], startRow: number, startCol: number, endRow: number, endCol: number) => void
 }
 
 export interface GridHandle {

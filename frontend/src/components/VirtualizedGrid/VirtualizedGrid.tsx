@@ -58,6 +58,7 @@ function VirtualizedGridInner<T>({
   gridContainerRef,
   enableKeyboardShortcuts = true,
   onCellEdit,
+  onPasteRange,
 }: VirtualizedGridInnerProps<T>) {
   const gridRef = useRef<Grid>(null)
   const outerRef = useRef<HTMLDivElement>(null)
@@ -192,6 +193,7 @@ function VirtualizedGridInner<T>({
     enabled: enableKeyboardShortcuts,
     startEditing: handleCellDoubleClick,
     editingEnabled: !!onCellEdit,
+    onPasteRange,
   })
 
   // Handle column resize - returns starting width

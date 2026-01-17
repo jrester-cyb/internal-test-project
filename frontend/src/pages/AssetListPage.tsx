@@ -114,10 +114,16 @@ export default function AssetListPage() {
                   valueToStore = parseFloat(newValue) || null
                   break
                 case 'date':
-                case 'datetime':
-                  // Store as ISO string
-                  valueToStore = newValue ? new Date(newValue).toISOString() : null
+                case 'datetime': {
+                  // Store as ISO string, handle invalid dates
+                  if (newValue) {
+                    const date = new Date(newValue)
+                    valueToStore = isNaN(date.getTime()) ? null : date.toISOString()
+                  } else {
+                    valueToStore = null
+                  }
                   break
+                }
                 case 'link':
                   // Try to parse as JSON object {url, text}, otherwise keep as string URL
                   try {
@@ -148,6 +154,128 @@ export default function AssetListPage() {
       return updated
     })
   }, [attributes])
+
+  // Handle paste range - paste data into multiple cells, tiling to fill the selection
+  // If clipboard data is larger than selection, paste all the data (extending beyond selection)
+  // If clipboard data is smaller than selection, tile/repeat to fill the selection
+  // Column layout: [name, coordinates, ...displayAttributes]
+  const handlePasteRange = useCallback((data: string[][], startRow: number, startCol: number, endRow: number, endCol: number) => {
+    console.log('Paste range:', { data, startRow, startCol, endRow, endCol })
+
+    if (data.length === 0 || data[0].length === 0) return
+
+    setItems(prev => {
+      const updated = new Map(prev)
+      // Base columns: name (0), coordinates (1)
+      // Attribute columns start at index 2
+      const baseColumnCount = 2
+
+      // Calculate the selection dimensions
+      const selectionRows = endRow - startRow + 1
+      const selectionCols = endCol - startCol + 1
+
+      // Data dimensions
+      const dataRows = data.length
+      const dataCols = data[0].length
+
+      // Use the larger of selection or data dimensions
+      // This allows pasting all data even if it's larger than selection,
+      // and tiling if data is smaller than selection
+      const rowsToProcess = Math.max(selectionRows, dataRows)
+      const colsToProcess = Math.max(selectionCols, dataCols)
+
+      // Total columns in grid (for bounds checking)
+      const totalCols = baseColumnCount + displayAttributes.length
+
+      // Iterate over the paste range
+      for (let rowOffset = 0; rowOffset < rowsToProcess; rowOffset++) {
+        const targetRow = startRow + rowOffset
+        if (targetRow >= totalCount) continue // Don't paste beyond grid row bounds
+
+        const existingAsset = updated.get(targetRow)
+        if (!existingAsset) continue // Skip if row not loaded
+
+        let updatedAsset = { ...existingAsset }
+
+        // Get the source row by wrapping around (tiling)
+        const sourceRowIndex = rowOffset % dataRows
+        const sourceRow = data[sourceRowIndex]
+
+        for (let colOffset = 0; colOffset < colsToProcess; colOffset++) {
+          const targetCol = startCol + colOffset
+          if (targetCol >= totalCols) continue // Don't paste beyond grid column bounds
+
+          // Get the source column by wrapping around (tiling)
+          const sourceColIndex = colOffset % dataCols
+          const cellValue = sourceRow[sourceColIndex] ?? ''
+
+          // Handle name column (index 0, editable when editing is enabled)
+          if (targetCol === 0 && editingEnabled) {
+            updatedAsset = { ...updatedAsset, name: cellValue }
+            continue
+          }
+
+          // Handle coordinates column (index 1, not editable)
+          if (targetCol === 1) {
+            continue // Skip - coordinates not editable
+          }
+
+          // Handle attribute columns (index 2+)
+          const attrIndex = targetCol - baseColumnCount
+          if (attrIndex >= 0 && attrIndex < displayAttributes.length) {
+            const attribute = displayAttributes[attrIndex]
+            if (!attribute) continue
+
+            // Convert value based on attribute type
+            let valueToStore: any = cellValue.trim() === '' ? null : cellValue
+
+            if (valueToStore !== null) {
+              switch (attribute.attributeType) {
+                case 'boolean':
+                  valueToStore = cellValue.toLowerCase() === 'true' || cellValue.toLowerCase() === 'yes' || cellValue === '1'
+                  break
+                case 'number':
+                  valueToStore = parseFloat(cellValue) || null
+                  break
+                case 'date':
+                case 'datetime': {
+                  if (cellValue) {
+                    const date = new Date(cellValue)
+                    valueToStore = isNaN(date.getTime()) ? null : date.toISOString()
+                  } else {
+                    valueToStore = null
+                  }
+                  break
+                }
+                case 'link':
+                  try {
+                    const parsed = JSON.parse(cellValue)
+                    if (typeof parsed === 'object' && parsed.url !== undefined) {
+                      valueToStore = parsed
+                    }
+                  } catch {
+                    // Keep as string URL
+                  }
+                  break
+              }
+            }
+
+            updatedAsset = {
+              ...updatedAsset,
+              attributes: {
+                ...updatedAsset.attributes,
+                [attribute.apiKey]: valueToStore
+              }
+            }
+          }
+        }
+
+        updated.set(targetRow, updatedAsset)
+      }
+
+      return updated
+    })
+  }, [displayAttributes, totalCount, editingEnabled])
 
   const formatCoordinates = (assetLocation: any) => {
     if (!assetLocation?.coordinates) {
@@ -1202,6 +1330,7 @@ export default function AssetListPage() {
         stickyHeader
         headerHeight={48}
         onCellEdit={editingEnabled ? handleCellEdit : undefined}
+        onPasteRange={editingEnabled ? handlePasteRange : undefined}
       />
     </Box>
   )

@@ -21,6 +21,8 @@ export interface UseGridKeyboardNavigationOptions<T> {
   startEditing?: (rowIndex: number, columnIndex: number, initialValue?: string) => void
   /** Whether cell editing is enabled */
   editingEnabled?: boolean
+  /** Function to paste data into a range of cells. Called with parsed clipboard data (rows of columns), starting position, and end position for tiling */
+  onPasteRange?: (data: string[][], startRow: number, startCol: number, endRow: number, endCol: number) => void
 }
 
 /**
@@ -30,6 +32,7 @@ export interface UseGridKeyboardNavigationOptions<T> {
  * - Shift+Arrow for extending selection
  * - Ctrl/Cmd+Arrow for jumping to edges
  * - Ctrl/Cmd+C for copying selection
+ * - Ctrl/Cmd+V for pasting (single cell or multi-cell range from spreadsheet)
  * - Escape for clearing selection
  * - F2/Enter to start editing
  * - Printable keys to start editing and replace content
@@ -45,6 +48,7 @@ export function useGridKeyboardNavigation<T>({
   enabled = true,
   startEditing,
   editingEnabled = false,
+  onPasteRange,
 }: UseGridKeyboardNavigationOptions<T>) {
   useEffect(() => {
     if (!enabled) return
@@ -60,6 +64,7 @@ export function useGridKeyboardNavigation<T>({
         copySelectionToClipboard()
         return
       }
+
 
       // Escape to clear selection
       if (e.key === 'Escape') {
@@ -187,7 +192,62 @@ export function useGridKeyboardNavigation<T>({
       })
     }
 
+    // Handle paste event - uses clipboardData directly (no permission prompt)
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!editingEnabled || !onPasteRange) return
+
+      const currentSelection = selectionRef.current
+      if (!currentSelection) return
+
+      const text = e.clipboardData?.getData('text/plain')
+      if (!text) return
+
+      e.preventDefault()
+
+      const { rowIndex: startRow, columnIndex: startCol } = currentSelection.start
+      const { rowIndex: endRow, columnIndex: endCol } = currentSelection.end
+
+      // Normalize start/end (selection can go in any direction)
+      const normalizedStartRow = Math.min(startRow, endRow)
+      const normalizedEndRow = Math.max(startRow, endRow)
+      const normalizedStartCol = Math.min(startCol, endCol)
+      const normalizedEndCol = Math.max(startCol, endCol)
+
+      // Parse clipboard text - split by newlines for rows, tabs for columns
+      const rows = text.split(/\r?\n/).filter(row => row.length > 0)
+      const data = rows.map(row => row.split('\t'))
+
+      // Calculate paste dimensions (larger of selection or data)
+      const selectionRows = normalizedEndRow - normalizedStartRow + 1
+      const selectionCols = normalizedEndCol - normalizedStartCol + 1
+      const dataRows = data.length
+      const dataCols = data[0]?.length ?? 0
+
+      const pastedRows = Math.max(selectionRows, dataRows)
+      const pastedCols = Math.max(selectionCols, dataCols)
+
+      // Get column count for bounds checking
+      const currentColumns = columnsRef.current
+      const maxCol = currentColumns ? currentColumns.length - 1 : normalizedStartCol + pastedCols - 1
+
+      // Calculate the actual end position of pasted data (clamped to grid bounds)
+      const newEndRow = Math.min(normalizedStartRow + pastedRows - 1, totalCount - 1)
+      const newEndCol = Math.min(normalizedStartCol + pastedCols - 1, maxCol)
+
+      onPasteRange(data, normalizedStartRow, normalizedStartCol, normalizedEndRow, normalizedEndCol)
+
+      // Update selection to cover the pasted range
+      setSelection({
+        start: { rowIndex: normalizedStartRow, columnIndex: normalizedStartCol },
+        end: { rowIndex: newEndRow, columnIndex: newEndCol }
+      })
+    }
+
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [enabled, selectionRef, setSelection, copySelectionToClipboard, totalCount, columnsRef, gridRef, startEditing, editingEnabled])
+    document.addEventListener('paste', handlePaste)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('paste', handlePaste)
+    }
+  }, [enabled, selectionRef, setSelection, copySelectionToClipboard, totalCount, columnsRef, gridRef, startEditing, editingEnabled, onPasteRange])
 }
