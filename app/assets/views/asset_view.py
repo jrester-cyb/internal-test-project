@@ -1428,22 +1428,18 @@ Format the output as follows:
 
         where_sql = " AND ".join(where_clauses)
 
-        # Single query: groups by h3 prefix, computes centroids using AVG(location) which is faster
-        # than ST_Centroid(ST_Collect(geometry)) for large clusters
+        # Two-pass approach: first get cluster counts efficiently, then fetch details only for single-asset clusters
+        # This avoids computing expensive ST_AsGeoJSON for large clusters that won't use it
         with silk_profile(name="clusters: raw_sql_query"):
             with connection.cursor() as cursor:
+                # First pass: quick aggregation to get cluster sizes and centroids
                 cursor.execute(
                     f"""
                     SELECT
                         LEFT(a.h3_index, %s) as h3_prefix,
                         COUNT(*) as cluster_count,
-                        MIN(a.id::text),
-                        MIN(a.name),
-                        MIN(a.asset_type_id::text),
-                        MIN(a.h3_index),
-                        ST_AsGeoJSON(MIN(a.geometry)),
-                        AVG(ST_Y(a.location)),
-                        AVG(ST_X(a.location))
+                        AVG(ST_Y(a.location)) as lat,
+                        AVG(ST_X(a.location)) as lon
                     FROM assets_asset a
                     WHERE {where_sql}
                     GROUP BY h3_prefix
@@ -1451,7 +1447,43 @@ Format the output as follows:
                     """,
                     params,
                 )
-                rows = cursor.fetchall()
+                cluster_rows = cursor.fetchall()
+
+                # Identify single-asset clusters (need full details)
+                single_prefixes = [row[0] for row in cluster_rows if row[1] == 1]
+
+                # Second pass: only fetch geometry for single-asset clusters
+                single_asset_details = {}
+                if single_prefixes:
+                    # Params order: precision (for SELECT), then original where params, then precision again, then prefixes
+                    prefix_placeholders = ",".join(["%s"] * len(single_prefixes))
+                    detail_params = [precision] + params[1:] + [precision] + single_prefixes
+                    cursor.execute(
+                        f"""
+                        SELECT
+                            LEFT(a.h3_index, %s) as h3_prefix,
+                            a.id::text,
+                            a.name,
+                            a.asset_type_id::text,
+                            a.h3_index,
+                            ST_AsGeoJSON(a.geometry)
+                        FROM assets_asset a
+                        WHERE {where_sql}
+                          AND LEFT(a.h3_index, %s) IN ({prefix_placeholders})
+                        """,
+                        detail_params,
+                    )
+                    for row in cursor.fetchall():
+                        single_asset_details[row[0]] = row[1:]  # prefix -> (id, name, type_id, h3, geojson)
+
+                # Combine results
+                rows = []
+                for prefix, count, lat, lon in cluster_rows:
+                    if count == 1 and prefix in single_asset_details:
+                        asset_id, name, type_id, h3, geojson = single_asset_details[prefix]
+                        rows.append((prefix, count, asset_id, name, type_id, h3, geojson, lat, lon))
+                    else:
+                        rows.append((prefix, count, None, None, None, None, None, lat, lon))
 
         # Build response: indices are 0=prefix, 1=count, 2=id, 3=name, 4=type_id, 5=h3, 6=geojson, 7=lat, 8=lon
         cluster_data = []
