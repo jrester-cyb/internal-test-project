@@ -185,6 +185,9 @@ export default function FilterBuilder({
   }
 
   const handleValueClick = (value: any) => {
+    if (value === "Blank") {
+      value = null
+    }
     if (selectedAttribute && selectedTypeForAttributes) {
       const currentFilter = attributeFilters.find(
         f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
@@ -234,6 +237,9 @@ export default function FilterBuilder({
 
   // Check if a value is included (checked) - inverted logic: checked by default
   const isValueSelected = (value: any) => {
+    if (value === "Blank") {
+      value = null
+    }
     if (!selectedAttribute || !selectedTypeForAttributes) return true // Default to checked
 
     const currentFilter = attributeFilters.find(
@@ -337,7 +343,7 @@ export default function FilterBuilder({
 
     // Remove filter if no exclusions (value is empty and excludedValues is empty)
     if ((value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0))
-        && (!excludedValues || excludedValues.length === 0)) {
+      && (!excludedValues || excludedValues.length === 0)) {
       if (existingIndex > -1) {
         const newFilters = [...attributeFilters]
         newFilters.splice(existingIndex, 1)
@@ -558,8 +564,8 @@ export default function FilterBuilder({
     <Box sx={{ px: 3, py: 2, display: 'flex', flexDirection: 'column', height: 'calc(70vh - 36px)', minHeight: 0 }}>
       <Divider sx={{ mb: 2 }} />
 
-        {/* Name Filter - temporarily hidden */}
-        {/* <Box sx={{ mb: 3 }}>
+      {/* Name Filter - temporarily hidden */}
+      {/* <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
             Search by Name
           </Typography>
@@ -572,303 +578,303 @@ export default function FilterBuilder({
           />
         </Box> */}
 
-        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexShrink: 0 }}>
-          <Button
-            size="small"
-            onClick={handleSelectAll}
-            disabled={loading || selectedAssetTypes.length === 0}
-          >
-            Select All Types
-          </Button>
-          <Button
-            size="small"
-            onClick={handleClearAll}
-            disabled={loading || totalFilters === 0}
-          >
-            Clear Filters
-          </Button>
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexShrink: 0 }}>
+        <Button
+          size="small"
+          onClick={handleSelectAll}
+          disabled={loading || selectedAssetTypes.length === 0}
+        >
+          Select All Types
+        </Button>
+        <Button
+          size="small"
+          onClick={handleClearAll}
+          disabled={loading || totalFilters === 0}
+        >
+          Clear Filters
+        </Button>
+      </Box>
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
         </Box>
+      ) : (
+        <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
+          {/* Left side: Asset Types */}
+          <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', flexShrink: 0 }}>
+              Asset Types
+            </Typography>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <AutoSizer
+                renderProp={({ height, width }) => {
+                  if (!height || !width) return null
+                  return (
+                    <List
+                      height={height}
+                      width={width}
+                      itemCount={assetTypes.length}
+                      itemSize={52}
+                    >
+                      {({ index, style }) => {
+                        const assetType = assetTypes[index]
+                        const isIncluded = selectedAssetTypes.length === 0 || selectedAssetTypes.indexOf(assetType.id) > -1
+                        const isActive = selectedTypeForAttributes === assetType.id
 
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
-            {/* Left side: Asset Types */}
-            <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', flexShrink: 0 }}>
-                Asset Types
-              </Typography>
-              <Box sx={{ flex: 1, minHeight: 0 }}>
-                <AutoSizer
-                  renderProp={({ height, width }) => {
-                    if (!height || !width) return null
-                    return (
-                      <List
-                        height={height}
-                        width={width}
-                        itemCount={assetTypes.length}
-                        itemSize={52}
-                      >
-                        {({ index, style }) => {
-                          const assetType = assetTypes[index]
-                          const isIncluded = selectedAssetTypes.length === 0 || selectedAssetTypes.indexOf(assetType.id) > -1
-                          const isActive = selectedTypeForAttributes === assetType.id
-
-                          return (
-                            <div style={style}>
-                              <Box
-                                onClick={() => handleTypeClick(assetType.id)}
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                  bgcolor: isActive ? 'action.selected' : 'transparent',
-                                  opacity: isIncluded ? 1 : 0.5,
-                                  cursor: 'pointer',
-                                  '&:hover': {
-                                    bgcolor: isActive ? 'action.selected' : 'action.hover'
-                                  }
+                        return (
+                          <div style={style}>
+                            <Box
+                              onClick={() => handleTypeClick(assetType.id)}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                bgcolor: isActive ? 'action.selected' : 'transparent',
+                                opacity: isIncluded ? 1 : 0.5,
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  bgcolor: isActive ? 'action.selected' : 'action.hover'
+                                }
+                              }}
+                            >
+                              <Checkbox
+                                checked={isIncluded}
+                                onChange={(e) => {
+                                  e.stopPropagation()
+                                  handleToggle(assetType.id)
                                 }}
-                              >
-                                <Checkbox
-                                  checked={isIncluded}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    handleToggle(assetType.id)
-                                  }}
-                                  size="small"
-                                  sx={{ p: 0, flexShrink: 0 }}
-                                />
-                                <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                                  <CopyableText variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
-                                    {assetType.name}
-                                  </CopyableText>
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                                    {assetType.description || 'No description'}
-                                  </Typography>
-                                </Box>
-                                <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                                size="small"
+                                sx={{ p: 0, flexShrink: 0 }}
+                              />
+                              <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                                <CopyableText variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
+                                  {assetType.name}
+                                </CopyableText>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
+                                  {assetType.description || 'No description'}
+                                </Typography>
                               </Box>
-                            </div>
-                          )
+                              <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                            </Box>
+                          </div>
+                        )
+                      }}
+                    </List>
+                  )
+                }}
+              />
+            </Box>
+          </Box>
+
+          {/* Middle: Attribute selection - always shown */}
+          <Divider orientation="vertical" flexItem />
+          <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexShrink: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                Attributes
+              </Typography>
+              {selectedTypeForAttributes && (
+                (() => {
+                  const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
+                  const hiddenCount = allAttrs.filter(a => a.isHidden).length
+                  const availableTags = [...new Set(allAttrs.flatMap(a => a.tags || []))]
+                  return (
+                    <AttributeFilterPopover
+                      showHidden={attrFilterShowHidden}
+                      onShowHiddenChange={setAttrFilterShowHidden}
+                      selectedTags={attrFilterSelectedTags}
+                      onSelectedTagsChange={setAttrFilterSelectedTags}
+                      selectedTypes={attrFilterSelectedTypes}
+                      onSelectedTypesChange={setAttrFilterSelectedTypes}
+                      excludedScopes={attrFilterExcludedScopes}
+                      onExcludedScopesChange={setAttrFilterExcludedScopes}
+                      showScopeFilter
+                      hiddenCount={hiddenCount}
+                      availableTags={availableTags}
+                      showTypeFilter
+                    />
+                  )
+                })()
+              )}
+            </Box>
+            {selectedTypeForAttributes ? (
+              (() => {
+                const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
+                // Filter attributes based on popover settings
+                const attrs = allAttrs.filter(attr => {
+                  // Hide hidden attributes unless showHidden is true
+                  if (attr.isHidden && !attrFilterShowHidden) return false
+                  // Filter by selected types
+                  if (attrFilterSelectedTypes.length > 0 && !attrFilterSelectedTypes.includes(attr.attributeType)) return false
+                  // Filter by selected tags
+                  if (attrFilterSelectedTags.length > 0) {
+                    const attrTags = attr.tags || []
+                    if (!attrFilterSelectedTags.some(tag => attrTags.includes(tag))) return false
+                  }
+                  // Filter by excluded scopes
+                  if (attrFilterExcludedScopes.length > 0 && attr.scope && attrFilterExcludedScopes.includes(attr.scope)) return false
+                  return true
+                })
+                if (allAttrs.length === 0) {
+                  return (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      No attributes defined
+                    </Typography>
+                  )
+                }
+                if (attrs.length === 0) {
+                  return (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      No attributes match filters
+                    </Typography>
+                  )
+                }
+                return (
+                  <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <AutoSizer
+                      renderProp={({ height, width }) => {
+                        if (!height || !width) return null
+                        return (
+                          <List
+                            height={height}
+                            width={width}
+                            itemCount={attrs.length}
+                            itemSize={52}
+                          >
+                            {({ index, style }) => {
+                              const attr = attrs[index]
+                              const isSelected = selectedAttribute?.id === attr.id
+                              const activeCount = selectedTypeForAttributes
+                                ? getActiveCount(selectedTypeForAttributes, attr.apiKey)
+                                : null
+
+                              return (
+                                <div style={style}>
+                                  <Box
+                                    onClick={() => handleAttributeSelect(attr)}
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 1,
+                                      px: 1,
+                                      py: 0.5,
+                                      borderRadius: 1,
+                                      bgcolor: isSelected ? 'action.selected' : 'transparent',
+                                      cursor: 'pointer',
+                                      '&:hover': {
+                                        bgcolor: isSelected ? 'action.selected' : 'action.hover'
+                                      }
+                                    }}
+                                  >
+                                    <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <CopyableText variant="body2" sx={{ fontWeight: isSelected ? 'bold' : 'normal' }}>
+                                          {attr.name}
+                                        </CopyableText>
+                                        {activeCount !== null && (
+                                          <Chip
+                                            label={activeCount}
+                                            size="small"
+                                            color="primary"
+                                            sx={{ height: 18, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.75 } }}
+                                          />
+                                        )}
+                                      </Box>
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
+                                        {attr.description || 'No description'}
+                                      </Typography>
+                                    </Box>
+                                    <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                                  </Box>
+                                </div>
+                              )
+                            }}
+                          </List>
+                        )
+                      }}
+                    />
+                  </Box>
+                )
+              })()
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                Select an asset type to view attributes
+              </Typography>
+            )}
+          </Box>
+
+          {/* Right side: Existing values for selected attribute - always shown */}
+          <Divider orientation="vertical" flexItem />
+          <Box sx={{ flex: 1, minWidth: 350, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', flexShrink: 0 }}>
+              Values{selectedAttribute ? `: ${selectedAttribute.name}` : ''}
+            </Typography>
+            {selectedAttribute && selectedTypeForAttributes ? (
+              <>
+                {selectedAttribute.description && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block', flexShrink: 0 }}>
+                    {selectedAttribute.description}
+                  </Typography>
+                )}
+                <VirtualizedList
+                  items={attributeValuesMap}
+                  totalCount={attributeValuesTotalCount}
+                  getItemKey={(value, index) => `value-${index}-${String(value)}`}
+                  onLoadRange={loadAttributeValuesRange}
+                  isLoading={loadingValues}
+                  estimatedItemHeight={36}
+                  emptyMessage="No values found"
+                  renderItem={(value, index, style) => {
+                    const isSelected = isValueSelected(value)
+                    return (
+                      <Box
+                        onClick={() => handleValueClick(value)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            bgcolor: 'action.hover'
+                          }
                         }}
-                      </List>
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          size="small"
+                          sx={{ p: 0, flexShrink: 0 }}
+                          onChange={() => handleValueClick(value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                          <AttributeValueRenderer
+                            attribute={selectedAttribute}
+                            value={value}
+                            compact
+                            maxLines={1}
+                            showCopyButton={false}
+                          />
+                        </Box>
+                      </Box>
                     )
                   }}
                 />
-              </Box>
-            </Box>
-
-            {/* Middle: Attribute selection - always shown */}
-            <Divider orientation="vertical" flexItem />
-            <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexShrink: 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  Attributes
-                </Typography>
-                {selectedTypeForAttributes && (
-                  (() => {
-                    const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
-                    const hiddenCount = allAttrs.filter(a => a.isHidden).length
-                    const availableTags = [...new Set(allAttrs.flatMap(a => a.tags || []))]
-                    return (
-                      <AttributeFilterPopover
-                        showHidden={attrFilterShowHidden}
-                        onShowHiddenChange={setAttrFilterShowHidden}
-                        selectedTags={attrFilterSelectedTags}
-                        onSelectedTagsChange={setAttrFilterSelectedTags}
-                        selectedTypes={attrFilterSelectedTypes}
-                        onSelectedTypesChange={setAttrFilterSelectedTypes}
-                        excludedScopes={attrFilterExcludedScopes}
-                        onExcludedScopesChange={setAttrFilterExcludedScopes}
-                        showScopeFilter
-                        hiddenCount={hiddenCount}
-                        availableTags={availableTags}
-                        showTypeFilter
-                      />
-                    )
-                  })()
-                )}
-              </Box>
-              {selectedTypeForAttributes ? (
-                (() => {
-                  const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
-                  // Filter attributes based on popover settings
-                  const attrs = allAttrs.filter(attr => {
-                    // Hide hidden attributes unless showHidden is true
-                    if (attr.isHidden && !attrFilterShowHidden) return false
-                    // Filter by selected types
-                    if (attrFilterSelectedTypes.length > 0 && !attrFilterSelectedTypes.includes(attr.attributeType)) return false
-                    // Filter by selected tags
-                    if (attrFilterSelectedTags.length > 0) {
-                      const attrTags = attr.tags || []
-                      if (!attrFilterSelectedTags.some(tag => attrTags.includes(tag))) return false
-                    }
-                    // Filter by excluded scopes
-                    if (attrFilterExcludedScopes.length > 0 && attr.scope && attrFilterExcludedScopes.includes(attr.scope)) return false
-                    return true
-                  })
-                  if (allAttrs.length === 0) {
-                    return (
-                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        No attributes defined
-                      </Typography>
-                    )
-                  }
-                  if (attrs.length === 0) {
-                    return (
-                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        No attributes match filters
-                      </Typography>
-                    )
-                  }
-                  return (
-                    <Box sx={{ flex: 1, minHeight: 0 }}>
-                      <AutoSizer
-                        renderProp={({ height, width }) => {
-                          if (!height || !width) return null
-                          return (
-                            <List
-                              height={height}
-                              width={width}
-                              itemCount={attrs.length}
-                              itemSize={52}
-                            >
-                              {({ index, style }) => {
-                                const attr = attrs[index]
-                                const isSelected = selectedAttribute?.id === attr.id
-                                const activeCount = selectedTypeForAttributes
-                                  ? getActiveCount(selectedTypeForAttributes, attr.apiKey)
-                                  : null
-
-                                return (
-                                  <div style={style}>
-                                    <Box
-                                      onClick={() => handleAttributeSelect(attr)}
-                                      sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 1,
-                                        px: 1,
-                                        py: 0.5,
-                                        borderRadius: 1,
-                                        bgcolor: isSelected ? 'action.selected' : 'transparent',
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                          bgcolor: isSelected ? 'action.selected' : 'action.hover'
-                                        }
-                                      }}
-                                    >
-                                      <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                          <CopyableText variant="body2" sx={{ fontWeight: isSelected ? 'bold' : 'normal' }}>
-                                            {attr.name}
-                                          </CopyableText>
-                                          {activeCount !== null && (
-                                            <Chip
-                                              label={activeCount}
-                                              size="small"
-                                              color="primary"
-                                              sx={{ height: 18, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.75 } }}
-                                            />
-                                          )}
-                                        </Box>
-                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                                          {attr.description || 'No description'}
-                                        </Typography>
-                                      </Box>
-                                      <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
-                                    </Box>
-                                  </div>
-                                )
-                              }}
-                            </List>
-                          )
-                        }}
-                      />
-                    </Box>
-                  )
-                })()
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                  Select an asset type to view attributes
-                </Typography>
-              )}
-            </Box>
-
-            {/* Right side: Existing values for selected attribute - always shown */}
-            <Divider orientation="vertical" flexItem />
-            <Box sx={{ flex: 1, minWidth: 350, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', flexShrink: 0 }}>
-                Values{selectedAttribute ? `: ${selectedAttribute.name}` : ''}
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                Select an attribute to view values
               </Typography>
-              {selectedAttribute && selectedTypeForAttributes ? (
-                <>
-                  {selectedAttribute.description && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block', flexShrink: 0 }}>
-                      {selectedAttribute.description}
-                    </Typography>
-                  )}
-                  <VirtualizedList
-                    items={attributeValuesMap}
-                    totalCount={attributeValuesTotalCount}
-                    getItemKey={(value, index) => `value-${index}-${String(value)}`}
-                    onLoadRange={loadAttributeValuesRange}
-                    isLoading={loadingValues}
-                    estimatedItemHeight={36}
-                    emptyMessage="No values found"
-                    renderItem={(value, index, style) => {
-                      const isSelected = isValueSelected(value)
-                      return (
-                        <Box
-                          onClick={() => handleValueClick(value)}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            px: 1,
-                            py: 0.5,
-                            borderRadius: 1,
-                            cursor: 'pointer',
-                            '&:hover': {
-                              bgcolor: 'action.hover'
-                            }
-                          }}
-                        >
-                          <Checkbox
-                            checked={isSelected}
-                            size="small"
-                            sx={{ p: 0, flexShrink: 0 }}
-                            onChange={() => handleValueClick(value)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                            <AttributeValueRenderer
-                              attribute={selectedAttribute}
-                              value={value}
-                              compact
-                              maxLines={1}
-                              showCopyButton={false}
-                            />
-                          </Box>
-                        </Box>
-                      )
-                    }}
-                  />
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                  Select an attribute to view values
-                </Typography>
-              )}
-            </Box>
+            )}
           </Box>
-        )}
+        </Box>
+      )}
     </Box>
   )
 

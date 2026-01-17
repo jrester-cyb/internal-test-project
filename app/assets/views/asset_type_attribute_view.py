@@ -83,7 +83,9 @@ def invalidate_global_attribute_cache(assettype_id):
     # Also invalidate organization-level cache (for non-workspace endpoint)
     try:
         asset_type = AssetType.objects.get(id=assettype_id)
-        org_version_key = f"attr_list_version:{asset_type.organization_id}:{assettype_id}"
+        org_version_key = (
+            f"attr_list_version:{asset_type.organization_id}:{assettype_id}"
+        )
         try:
             cache.incr(org_version_key)
         except ValueError:
@@ -1316,11 +1318,14 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         )
 
         paginator = CustomPageNumberPagination()
-        page = paginator.paginate_queryset(values_qs, request)
-
+        values_list = list(values_qs)
+        # Add "Blank" as the first value if not already present
+        if "Blank" not in values_list:
+            values_list.insert(0, "Blank")
+        page = paginator.paginate_queryset(values_list, request)
         if page is not None:
             return paginator.get_paginated_response(page)
-        return Response(list(values_qs))
+        return Response(values_list)
 
 
 @api_view(["GET"])
