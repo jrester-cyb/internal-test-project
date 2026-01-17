@@ -191,6 +191,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         "date": "dateattributevalue__value",
         "datetime": "datetimeattributevalue__value",
         "json": "jsonattributevalue__value",
+        "link": "linkattributevalue__url",
     }
 
     def get_queryset(self):
@@ -1324,7 +1325,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         if has_choices:
             # For choice attributes, return only the choices that are actually used
-            from assets.models import ChoiceAttributeValue
+            from assets.models import ChoiceAttributeValue, LinkAttributeChoice
 
             choice_lookup_field = self.CHOICE_LOOKUP_MAP.get(attribute_type)
             if not choice_lookup_field:
@@ -1342,16 +1343,31 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 .distinct()
             )
 
-            # Get the choice values for those used choices, ordered by 'order' field
-            values_qs = (
-                AssetTypeAttributeChoice.objects.filter(
-                    id__in=used_choice_ids,
-                    deleted_at__isnull=True
+            # Special handling for link choices - return both url and display_text
+            if attribute_type == "link":
+                values_qs = (
+                    LinkAttributeChoice.objects.filter(
+                        id__in=used_choice_ids,
+                        deleted_at__isnull=True
+                    )
+                    .order_by("order")
+                    .values("url", "display_text")
                 )
-                .order_by("order")
-                .values_list(choice_lookup_field, flat=True)
-            )
-            values_list = list(values_qs)
+                values_list = [
+                    {"url": v["url"], "text": v["display_text"] or v["url"]}
+                    for v in values_qs
+                ]
+            else:
+                # Get the choice values for those used choices, ordered by 'order' field
+                values_qs = (
+                    AssetTypeAttributeChoice.objects.filter(
+                        id__in=used_choice_ids,
+                        deleted_at__isnull=True
+                    )
+                    .order_by("order")
+                    .values_list(choice_lookup_field, flat=True)
+                )
+                values_list = list(values_qs)
         else:
             # For non-choice attributes, get distinct values from actual data
             lookup_field = self.LOOKUP_MAP.get(attribute_type)
@@ -1361,20 +1377,40 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            values_qs = (
-                BaseAttributeValue.objects.filter(asset_type_attribute_id=attribute_id)
-                .distinct(lookup_field)
-                .only(lookup_field)
-                .order_by(lookup_field)
-                .values_list(lookup_field, flat=True)
-            )
-            values_list = list(values_qs)
+            # Special handling for link attributes - return both url and display_text
+            if attribute_type == "link":
+                from assets.models import LinkAttributeValue
+
+                values_qs = (
+                    LinkAttributeValue.objects.filter(asset_type_attribute_id=attribute_id)
+                    .values("url", "display_text")
+                    .distinct()
+                    .order_by("url")
+                )
+                values_list = [
+                    {"url": v["url"], "text": v["display_text"] or v["url"]}
+                    for v in values_qs
+                ]
+            else:
+                values_qs = (
+                    BaseAttributeValue.objects.filter(asset_type_attribute_id=attribute_id)
+                    .distinct(lookup_field)
+                    .only(lookup_field)
+                    .order_by(lookup_field)
+                    .values_list(lookup_field, flat=True)
+                )
+                values_list = list(values_qs)
 
         paginator = CustomPageNumberPagination()
-        # Replace null values with "Blank"
-        values_list = ["Blank" if v is None else v for v in values_list]
+        # Replace null values with "Blank" (skip for dict values like links)
+        values_list = [
+            "Blank" if v is None else v
+            for v in values_list
+        ]
         # Remove duplicates that might have been created by the replacement
-        values_list = list(dict.fromkeys(values_list))
+        # For hashable values, use dict.fromkeys; for dicts (links), they're already distinct
+        if values_list and not isinstance(values_list[0], dict):
+            values_list = list(dict.fromkeys(values_list))
         # Ensure "Blank" is at the beginning
         if "Blank" in values_list:
             values_list.remove("Blank")
