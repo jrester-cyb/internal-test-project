@@ -697,6 +697,65 @@ class TestAttributeFilterExecution:
         results_global = Asset.objects.filter(q_global)
         assert results_global.count() == 0
 
+    def test_global_only_when_not_in_workspace(
+        self, organization, asset_type, workspace, global_text_attribute
+    ):
+        """Test that global attribute values are used when not in a workspace."""
+        asset1 = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset 1"
+        )
+        global_value = TextAttributeValue.objects.create(
+            asset=asset1,
+            asset_type_attribute=global_text_attribute,
+            value="global_only",
+        )
+        local_value = TextAttributeValue.objects.create(
+            asset=asset1,
+            asset_type_attribute=global_text_attribute,
+            value="local_override",
+        )
+        # Create a workspace override for the local_override value
+        WorkspaceAttributeValueOverride.objects.create(
+            asset_type_attribute=global_text_attribute,
+            base_value=global_value,
+            override_value=local_value,
+            workspace=workspace,
+        )
+
+        # Filter for global_only without workspace context
+        data = {
+            "field": "attributes.status",
+            "value": "global_only",
+            "operator": "exact",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        results = Asset.objects.filter(q)
+        assert results.count() == 1
+        assert results.first() == asset1
+
+        # Filter for local_override without workspace context - should not find the asset
+        data_local = {
+            "field": "attributes.status",
+            "value": "local_override",
+            "operator": "exact",
+        }
+        serializer_local = FilterGroupSerializer(data=data_local)
+        q_local = serializer_local.build_filter_query()
+        results_local = Asset.objects.filter(q_local)
+        assert results_local.count() == 0
+
+        # Now filter with workspace context - should still find the asset
+        serializer_ws = FilterGroupSerializer(
+            data=data, context={"workspace": workspace}
+        )
+        q_ws = serializer_ws.build_filter_query()
+
+        results_ws = Asset.objects.filter(q_ws)
+        assert results_ws.count() == 1
+        assert results_ws.first() == asset1
+
     def test_link_attribute_filter_searches_url(
         self, organization, asset_type, global_link_attribute
     ):
