@@ -3078,3 +3078,153 @@ class TestAttributeValuesEndpoint:
         assert active_idx < pending_idx, (
             f"Expected Active before Pending, got indices: {active_idx}, {pending_idx}"
         )
+
+    @pytest.mark.django_db
+    def test_values_endpoint_returns_link_with_url_and_text(
+        self, client, organization, workspace, asset_type, global_link_attribute
+    ):
+        """
+        Test that the values endpoint returns link values as objects with both
+        url and text fields, not just the URL string.
+        """
+        # Create assets with link values
+        asset1 = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with link 1",
+            geometry="POINT(0 0)",
+        )
+        LinkAttributeValue.objects.create(
+            asset=asset1,
+            asset_type_attribute=global_link_attribute,
+            url="https://example.com",
+            display_text="Example Site",
+        )
+
+        asset2 = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with link 2",
+            geometry="POINT(1 1)",
+        )
+        LinkAttributeValue.objects.create(
+            asset=asset2,
+            asset_type_attribute=global_link_attribute,
+            url="https://google.com",
+            display_text="",  # No display text - should fall back to URL
+        )
+
+        # Make a request to the values endpoint
+        url = f"/api/workspaces/{workspace.id}/asset-types/{asset_type.id}/attributes/{global_link_attribute.id}/values/"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        results = data["results"]
+
+        print(f"Link values endpoint results: {results}")
+
+        # First should be "Blank"
+        assert results[0] == "Blank", f"Expected 'Blank' as first result, got {results[0]}"
+
+        # The link values should be objects with url and text fields
+        link_values = [r for r in results if isinstance(r, dict)]
+        assert len(link_values) == 2, f"Expected 2 link values, got {len(link_values)}"
+
+        # Find the example.com link
+        example_link = next((l for l in link_values if l.get("url") == "https://example.com"), None)
+        assert example_link is not None, "Expected to find example.com link"
+        assert example_link["text"] == "Example Site", f"Expected text 'Example Site', got {example_link['text']}"
+
+        # Find the google.com link (no display_text, should fall back to URL)
+        google_link = next((l for l in link_values if l.get("url") == "https://google.com"), None)
+        assert google_link is not None, "Expected to find google.com link"
+        assert google_link["text"] == "https://google.com", f"Expected text to fall back to URL, got {google_link['text']}"
+
+    @pytest.mark.django_db
+    def test_values_endpoint_returns_link_choices_with_url_and_text(
+        self, client, organization, workspace
+    ):
+        """
+        Test that the values endpoint returns link choice values as objects with both
+        url and text fields when the attribute has choices defined.
+        """
+        from assets.models import LinkAttributeChoice, ChoiceAttributeValue
+
+        # Create asset type with a link attribute that HAS CHOICES
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type with link choices"
+        )
+        link_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Reference Link",
+            api_key="reference_link",
+            attribute_type="link",
+        )
+
+        # Create link choices
+        choice1 = LinkAttributeChoice.objects.create(
+            asset_type_attribute=link_attr,
+            url="https://docs.example.com",
+            display_text="Documentation",
+            order=0,
+        )
+        choice2 = LinkAttributeChoice.objects.create(
+            asset_type_attribute=link_attr,
+            url="https://support.example.com",
+            display_text="",  # No display text
+            order=1,
+        )
+        # Unused choice - should not appear in results
+        choice3 = LinkAttributeChoice.objects.create(
+            asset_type_attribute=link_attr,
+            url="https://unused.example.com",
+            display_text="Unused",
+            order=2,
+        )
+
+        # Create assets using only choice1 and choice2
+        asset1 = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset 1"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset1, asset_type_attribute=link_attr, choice=choice1
+        )
+
+        asset2 = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset 2"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset2, asset_type_attribute=link_attr, choice=choice2
+        )
+
+        # Make a request to the values endpoint
+        url = f"/api/workspaces/{workspace.id}/asset-types/{asset_type.id}/attributes/{link_attr.id}/values/"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        results = data["results"]
+
+        print(f"Link choice values endpoint results: {results}")
+
+        # First should be "Blank"
+        assert results[0] == "Blank", f"Expected 'Blank' as first result, got {results[0]}"
+
+        # The link values should be objects with url and text fields
+        link_values = [r for r in results if isinstance(r, dict)]
+        assert len(link_values) == 2, f"Expected 2 link values (unused choice excluded), got {len(link_values)}"
+
+        # Find the docs link
+        docs_link = next((l for l in link_values if l.get("url") == "https://docs.example.com"), None)
+        assert docs_link is not None, "Expected to find docs.example.com link"
+        assert docs_link["text"] == "Documentation", f"Expected text 'Documentation', got {docs_link['text']}"
+
+        # Find the support link (no display_text, should fall back to URL)
+        support_link = next((l for l in link_values if l.get("url") == "https://support.example.com"), None)
+        assert support_link is not None, "Expected to find support.example.com link"
+        assert support_link["text"] == "https://support.example.com", f"Expected text to fall back to URL, got {support_link['text']}"
+
+        # Verify unused choice is NOT in results
+        unused_urls = [l.get("url") for l in link_values]
+        assert "https://unused.example.com" not in unused_urls, "Unused choice should NOT be in results"
