@@ -63,7 +63,7 @@ export default function MapView({
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
   const theme = useMuiTheme()
-  const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId, clusteringDisabled, setClusteringDisabled } = useMapContext()
+  const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId, clusteringDisabled, setClusteringDisabled, geometryTypeFilter } = useMapContext()
 
   const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
   const strokeColor = isDarkMode ? theme.palette.secondary.main : "black"
@@ -169,7 +169,7 @@ export default function MapView({
             : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           }
         />
-        <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
+        <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} geometryTypeFilter={geometryTypeFilter} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
         <FlyToHandler flyToLocation={flyToLocation ?? null} />
 
         {/* Custom pane for glow effects - z-index 399 is below overlayPane (400) */}

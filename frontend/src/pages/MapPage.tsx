@@ -43,14 +43,6 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
   const initialUrlUpdateDone = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Track previous filter state to detect filter changes vs map movements
-  const prevFiltersRef = useRef<{
-    selectedAssetTypes: string[]
-    attributeFilters: any[]
-    nameFilter: string
-    geometryTypeFilter: string[]
-  } | null>(null)
-
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
     if (!workspaceId) return
 
@@ -62,22 +54,6 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
     abortControllerRef.current = abortController
     onBoundsChange(bounds)
 
-    // Detect if this is a filter change vs a map movement
-    const prevFilters = prevFiltersRef.current
-    const isFilterChange = prevFilters !== null && (
-      JSON.stringify(prevFilters.selectedAssetTypes) !== JSON.stringify(selectedAssetTypes) ||
-      JSON.stringify(prevFilters.attributeFilters) !== JSON.stringify(attributeFilters) ||
-      prevFilters.nameFilter !== nameFilter ||
-      JSON.stringify(prevFilters.geometryTypeFilter) !== JSON.stringify(geometryTypeFilter)
-    )
-
-    // Update the previous filters ref
-    prevFiltersRef.current = {
-      selectedAssetTypes: [...selectedAssetTypes],
-      attributeFilters: [...attributeFilters],
-      nameFilter,
-      geometryTypeFilter: [...geometryTypeFilter]
-    }
 
     try {
       let mergedFilters = filters ? { ...filters } : null
@@ -204,7 +180,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         // When clustering is disabled, pass zoom level to server for filtering small geometries
         // This reduces data transfer since small polygons/lines won't be visible anyway
         const serverZoom = clusteringDisabled ? zoom : undefined
-        let tileData = await fetchTiles(workspaceId, bounds, 1000, mergedFilters, abortController.signal, 0, serverZoom)
+        let tileData = await fetchTiles(workspaceId, bounds, 100, mergedFilters, abortController.signal, 0, serverZoom)
 
         // Check if aborted before processing
         if (abortController.signal.aborted) return
@@ -224,16 +200,12 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         // Build a set of new asset IDs for deduplication
         const newAssetIds = new Set(firstBatch.map(a => a.id))
 
-        if (clusteringDisabled && !isFilterChange) {
-          // Map movement in non-cluster mode: merge with existing assets, never remove
-          setAssets(prev => {
-            const merged = [...prev.filter(a => !newAssetIds.has(a.id)), ...firstBatch]
-            return merged
-          })
-        } else {
-          // Filter change or cluster mode: replace with first batch
-          setAssets(firstBatch)
-        }
+        // Always merge new assets with existing - don't remove anything yet
+        // This keeps existing assets visible while loading
+        setAssets(prev => {
+          const merged = [...prev.filter(a => !newAssetIds.has(a.id)), ...firstBatch]
+          return merged
+        })
 
         // Fetch additional pages if available, appending progressively
         let allNewAssets = [...firstBatch]
@@ -257,20 +229,17 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
           allNewAssets = [...allNewAssets, ...pageAssets]
           const allNewIds = new Set(allNewAssets.map(a => a.id))
 
-          if (clusteringDisabled && !isFilterChange) {
-            // Map movement in non-cluster mode: merge with existing assets
-            setAssets(prev => {
-              const merged = [...prev.filter(a => !allNewIds.has(a.id)), ...allNewAssets]
-              return merged
-            })
-          } else {
-            // Filter change or cluster mode: just append
-            setAssets(allNewAssets)
-          }
+          // Merge new assets with existing - don't remove anything yet
+          setAssets(prev => {
+            const merged = [...prev.filter(a => !allNewIds.has(a.id)), ...allNewAssets]
+            return merged
+          })
         }
 
-        // After all pages loaded for a filter change: remove assets not in the new set
-        if (isFilterChange && !abortController.signal.aborted) {
+        // After all pages loaded: remove assets not in the new set
+        // This is when we finally clean up stale assets
+        // (geometry type filtering happens immediately on the UI via AssetClusterLayer)
+        if (!abortController.signal.aborted) {
           const finalIds = new Set(allNewAssets.map(a => a.id))
           setAssets(prev => prev.filter(a => finalIds.has(a.id)))
         }

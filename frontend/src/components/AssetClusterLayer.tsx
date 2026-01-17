@@ -153,11 +153,18 @@ export default function AssetClusterLayer({
   const { geometryTypeFilter } = useMapContext()
 
   // Filter out excluded geometry types immediately on the UI
+  // This provides instant visual feedback when geometry type filter changes,
+  // hiding assets before the server response arrives
   const filteredAssets = useMemo(() => {
     if (geometryTypeFilter.length === 0) return assets
+    // Only filter assets that have a geometry type we're excluding
+    // Assets without geometry or with allowed types pass through
+    // Note: geometryTypeFilter values may be uppercase, but GeoJSON types are capitalized
+    const filterLower = geometryTypeFilter.map(t => t.toLowerCase())
     return assets.filter(asset => {
-      if (!asset.geometry?.type) return true
-      return !geometryTypeFilter.includes(asset.geometry.type)
+      const geomType = asset.geometry?.type
+      if (!geomType) return true
+      return !filterLower.includes(geomType.toLowerCase())
     })
   }, [assets, geometryTypeFilter])
 
@@ -324,6 +331,12 @@ export default function AssetClusterLayer({
     })
   }, [filteredAssets, mapState.bounds, disableClustering])
 
+  // When filtering to only show Polygons, use marker fallback for small ones
+  // (i.e., when Point and LineString are excluded)
+  // Note: geometryTypeFilter values may be uppercase (e.g., "POINT", "LINESTRING")
+  const geometryTypeFilterLower = geometryTypeFilter.map(t => t.toLowerCase())
+  const showingOnlyPolygons = geometryTypeFilterLower.includes('point') && geometryTypeFilterLower.includes('linestring')
+
   // When clustering is disabled, render visible assets directly without going through Supercluster
   if (disableClustering) {
     return (
@@ -343,6 +356,7 @@ export default function AssetClusterLayer({
             currentZoom={mapState.zoom}
             canvasRenderer={canvasRenderer}
             disableClustering={true}
+            useMarkerFallbackForPolygons={showingOnlyPolygons}
           />
         ))}
       </>

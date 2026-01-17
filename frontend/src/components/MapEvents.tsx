@@ -6,12 +6,13 @@ interface MapEventsProps {
   filters?: any
   selectedAssetTypes: string[]
   attributeFilters: any[]
+  geometryTypeFilter: string[]
   onCenterChange?: (center: [number, number]) => void
   onZoomChange?: (zoom: number) => void
   hasInitialData?: boolean
 }
 
-export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters, onCenterChange, onZoomChange, hasInitialData = false }: MapEventsProps) {
+export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters, geometryTypeFilter, onCenterChange, onZoomChange, hasInitialData = false }: MapEventsProps) {
   const map = useMap()
   const initialLoadDone = useRef(false)
 
@@ -64,7 +65,7 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
     }
   }, [map, onLoadData, filters, hasInitialData])
 
-  // Reload data when selected asset types or attribute filters change
+  // Reload data when selected asset types, attribute filters, or geometry type filter change
   useEffect(() => {
     if (initialLoadDone.current) {
       const bounds = map.getBounds()
@@ -77,7 +78,7 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
       const currentZoom = map.getZoom()
       onLoadData(bbox, currentZoom, filters)
     }
-  }, [selectedAssetTypes, attributeFilters, map, onLoadData, filters])
+  }, [selectedAssetTypes, attributeFilters, geometryTypeFilter, map, onLoadData, filters])
 
   return null
 }

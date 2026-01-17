@@ -21,6 +21,8 @@ interface AssetGeometryProps {
   canvasRenderer?: L.Canvas
   /** When true (clustering disabled), skip small geometries. When false (clustering enabled), render as markers */
   disableClustering?: boolean
+  /** When true, use marker fallback for small polygons even when clustering is disabled */
+  useMarkerFallbackForPolygons?: boolean
 }
 
 // Calculate the pixel bounding box diagonal of a polygon
@@ -94,7 +96,8 @@ function AssetGeometryInner({
   minPixelSize = 50,
   currentZoom,
   canvasRenderer,
-  disableClustering = false
+  disableClustering = false,
+  useMarkerFallbackForPolygons = false
 }: Readonly<AssetGeometryProps>) {
   const map = useMap()
 
@@ -118,9 +121,10 @@ function AssetGeometryInner({
       const coords = coordinates[0] as unknown as number[][]
       const pixelSize = getPolygonPixelSize(map, coords)
 
-      // If too small: skip when clustering disabled, show as marker when clustering enabled
+      // If too small: skip when clustering disabled (unless useMarkerFallbackForPolygons),
+      // show as marker when clustering enabled
       if (pixelSize < minPixelSize) {
-        if (disableClustering) {
+        if (disableClustering && !useMarkerFallbackForPolygons) {
           return null
         }
         // Collapse to marker at centroid
@@ -160,7 +164,7 @@ function AssetGeometryInner({
 
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asset.geometry, map, minPixelSize, zoom, disableClustering])
+  }, [asset.geometry, map, minPixelSize, zoom, disableClustering, useMarkerFallbackForPolygons])
 
   if (!renderInfo) return null
 
@@ -259,7 +263,8 @@ const AssetGeometry = memo(AssetGeometryInner, (prevProps, nextProps) => {
     prevProps.polygonStrokeColor === nextProps.polygonStrokeColor &&
     prevProps.polylineColor === nextProps.polylineColor &&
     prevProps.canvasRenderer === nextProps.canvasRenderer &&
-    prevProps.disableClustering === nextProps.disableClustering
+    prevProps.disableClustering === nextProps.disableClustering &&
+    prevProps.useMarkerFallbackForPolygons === nextProps.useMarkerFallbackForPolygons
   )
 })
 

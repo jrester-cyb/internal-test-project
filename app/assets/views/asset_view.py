@@ -1269,7 +1269,19 @@ Format the output as follows:
         # This reduces data transfer and improves client rendering performance
         zoom_param = request.query_params.get("zoom")
         min_pixel_size_param = request.query_params.get("min_pixel_size")
-        if zoom_param is not None:
+
+        # Check if user has applied any geometry type filter
+        # If so, skip size-based filtering - they explicitly want to see those geometry types
+        # regardless of size (e.g., showing only Lines or only Polygons should show all of them)
+        has_geometry_type_filter = False
+        if request.method == "POST" and request.data:
+            filters = request.data.get("filters", [])
+            for f in filters:
+                if f.get("field") == "geometry_type":
+                    has_geometry_type_filter = True
+                    break
+
+        if zoom_param is not None and not has_geometry_type_filter:
             try:
                 zoom = int(zoom_param)
                 min_pixel_size = int(min_pixel_size_param) if min_pixel_size_param else 50
