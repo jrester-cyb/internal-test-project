@@ -685,8 +685,13 @@ class TestAttributeFilterExecution:
         assert results.first() == asset1
 
         # Test that if we're in the workspace but filter for global_value, we get no results
+        data_global = {
+            "field": "attributes.status",
+            "value": "global_value",
+            "operator": "exact",
+        }
         serializer_global = FilterGroupSerializer(
-            data=data, context={"workspace": workspace}
+            data=data_global, context={"workspace": workspace}
         )
         q_global = serializer_global.build_filter_query()
         results_global = Asset.objects.filter(q_global)
