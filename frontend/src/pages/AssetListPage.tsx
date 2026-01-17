@@ -618,6 +618,12 @@ export default function AssetListPage() {
     const [editValue, setEditValue] = useState<boolean | null>(
       value === '' ? null : parseBool(value)
     )
+    const containerRef = useRef<HTMLDivElement>(null)
+
+    // Focus container on mount
+    useEffect(() => {
+      containerRef.current?.focus()
+    }, [])
 
     const handleChange = (_: React.MouseEvent<HTMLElement>, newValue: boolean | null) => {
       setEditValue(newValue)
@@ -638,10 +644,19 @@ export default function AssetListPage() {
       e.stopPropagation()
     }
 
+    const handleBlur = (e: React.FocusEvent) => {
+      // Check if focus is moving outside the container
+      if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+        onSave(editValue !== null ? (editValue ? 'true' : 'false') : '')
+      }
+    }
+
     return (
       <Box
+        ref={containerRef}
         style={style}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         tabIndex={0}
         sx={{
           display: 'flex',
