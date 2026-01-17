@@ -25,10 +25,10 @@ ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so \
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY . /app/
+# COPY . /app/
 
 # Change ownership of the app directory to ubuntu user (UID 1000)
-RUN chown -R ${USER_ID}:${GROUP_ID} /app
+# RUN chown -R ${USER_ID}:${GROUP_ID} /app
 
 # Switch to non-root user (ubuntu user already exists with UID 1000)
 USER ${USER_ID}:${GROUP_ID}

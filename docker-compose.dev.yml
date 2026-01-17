@@ -34,7 +34,7 @@ services:
       - redis_data:/data
   web:
     build:
-      context: .
+      context: ./app
       args:
         USER_ID: 1000
         GROUP_ID: 1000

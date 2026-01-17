@@ -3,17 +3,12 @@ Pytest configuration for the Django application.
 """
 
 import pytest
+from django.core.cache import cache
 
 
-@pytest.fixture(scope="session")
-def django_db_setup():
-    """Ensure the test database is set up for the session."""
-    pass
-
-
-@pytest.fixture
-def db(django_db_blocker):
-    """Allow database access for tests."""
-    django_db_blocker.unblock()
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Clear the cache before each test to avoid stale cached data."""
+    cache.clear()
     yield
-    django_db_blocker.restore()
+    cache.clear()

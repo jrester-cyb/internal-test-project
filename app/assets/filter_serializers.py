@@ -3,11 +3,42 @@ from rest_framework import serializers
 import re
 from django.db.models import Q
 from django.contrib.gis.geos import GEOSGeometry
+from django.core.cache import cache
 import json
 from datetime import date, datetime
 
 from assets.models import GlobalAssetTypeAttribute, WorkspaceLocalAssetTypeAttribute
 from utils.units.helpers.unit_conversion import convert_value, validate_unit
+
+
+def get_attributes_by_api_key(api_key: str) -> list[dict]:
+    """
+    Get attribute definitions by api_key, with caching.
+    Returns a list of dicts with id, attribute_type, and unit.
+    Cache TTL is 5 minutes.
+    """
+    cache_key = f"attr_filter:{api_key}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    from itertools import chain
+
+    global_attrs = GlobalAssetTypeAttribute.objects.filter(
+        api_key=api_key
+    ).only("id", "attribute_type", "unit")
+    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
+        api_key=api_key
+    ).only("id", "attribute_type", "unit")
+
+    # Convert to list of dicts for caching (can't cache querysets)
+    attrs = [
+        {"id": attr.id, "attribute_type": attr.attribute_type, "unit": attr.unit}
+        for attr in chain(global_attrs, local_attrs)
+    ]
+
+    cache.set(cache_key, attrs, timeout=300)  # 5 minutes
+    return attrs
 
 
 class FilterGroupSerializer(serializers.Serializer):
@@ -103,30 +134,25 @@ class FilterGroupSerializer(serializers.Serializer):
             parts = attr_prefix.split("__")
             if len(parts) == 2:
                 api_key = parts[1]
-                # Get the model type and unit based on the api_key
-                # Check both GlobalAssetTypeAttribute and WorkspaceLocalAssetTypeAttribute
-                from itertools import chain
-                global_attrs = GlobalAssetTypeAttribute.objects.filter(
-                    api_key=api_key
-                ).only("id", "attribute_type", "unit")
-                local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
-                    api_key=api_key
-                ).only("id", "attribute_type", "unit")
+                # Get attribute definitions (cached)
+                attrs = get_attributes_by_api_key(api_key)
 
                 q = None
                 # Handle nin (not in) operator - convert to 'in' with negation
                 is_negated = operator == "nin"
                 actual_operator = "in" if is_negated else operator
 
-                for attr in chain(global_attrs, local_attrs):
-                    attr_type = attr.attribute_type
+                for attr in attrs:
+                    attr_type = attr["attribute_type"]
+                    attr_id = attr["id"]
+                    attr_unit = attr["unit"]
                     filter_value = value
 
                     # For number types with units, convert the query value to the stored unit
-                    if attr_type == "number" and query_unit and attr.unit:
+                    if attr_type == "number" and query_unit and attr_unit:
                         try:
                             # Convert from query unit to the attribute's stored unit
-                            filter_value = convert_value(value, query_unit, attr.unit)
+                            filter_value = convert_value(value, query_unit, attr_unit)
                         except Exception:
                             # If conversion fails, use the original value
                             pass
@@ -136,7 +162,7 @@ class FilterGroupSerializer(serializers.Serializer):
                     if attr_type == "link":
                         new_q = Q(
                             **{
-                                "attributes__asset_type_attribute_id": attr.id,
+                                "attributes__asset_type_attribute_id": attr_id,
                             }
                         ) & (
                             Q(
@@ -153,7 +179,7 @@ class FilterGroupSerializer(serializers.Serializer):
                     else:
                         new_q = Q(
                             **{
-                                "attributes__asset_type_attribute_id": attr.id,
+                                "attributes__asset_type_attribute_id": attr_id,
                                 f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value,
                             }
                         )
@@ -179,16 +205,9 @@ class FilterGroupSerializer(serializers.Serializer):
                 # For deeper paths, only JSONField supports nested lookups
                 api_key = parts[1]
                 json_path = "__".join(parts[2:])
-                # Get attribute IDs for the api_key
-                from itertools import chain
-                global_attrs = GlobalAssetTypeAttribute.objects.filter(
-                    api_key=api_key
-                ).only("id")
-                local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
-                    api_key=api_key
-                ).only("id")
-
-                attr_ids = [attr.id for attr in chain(global_attrs, local_attrs)]
+                # Get attribute definitions (cached)
+                attrs = get_attributes_by_api_key(api_key)
+                attr_ids = [attr["id"] for attr in attrs]
                 if not attr_ids:
                     return Q()
 

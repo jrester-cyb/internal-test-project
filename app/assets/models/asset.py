@@ -52,6 +52,15 @@ class Asset(SoftDeleteMixin):
 
     class Meta(SoftDeleteMixin.Meta):
         ordering = ["-created_at"]
+        indexes = [
+            # Composite index for filtering by asset_type with ordering by created_at
+            # Excludes soft-deleted records for efficiency
+            models.Index(
+                fields=["asset_type_id", "created_at"],
+                name="idx_asset_type_created",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
         triggers = [
             pgtrigger.Trigger(
                 name="001_update_location_on_geometry_change",

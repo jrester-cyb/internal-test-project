@@ -1608,3 +1608,78 @@ class TestAttributeFilterRegressions:
         assert pending_asset in results
         assert archived_asset not in results
         assert deleted_asset not in results
+
+    def test_invalid_api_key_does_not_raise_error(self, organization, asset_type):
+        """
+        Test that filtering on an invalid/nonexistent api_key does not raise an error.
+
+        This is important because:
+        1. The frontend may have stale attribute definitions
+        2. Attributes may be deleted while a filter is still active
+        3. Typos in api_key should fail gracefully
+
+        Note: An invalid api_key returns an empty Q(), which doesn't filter anything.
+        This means all results pass through. This is acceptable behavior - the filter
+        simply has no effect rather than causing an error.
+        """
+        # Create an asset (doesn't matter what attributes it has)
+        asset = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Test Asset"
+        )
+
+        # Filter on a completely nonexistent api_key
+        data = {
+            "field": "attributes.nonexistent_attribute_xyz",
+            "value": "some_value",
+            "operator": "exact"
+        }
+
+        serializer = FilterGroupSerializer(data=data)
+        # Should not raise an error
+        q = serializer.build_filter_query()
+
+        # Q should be empty (no attribute definitions found)
+        assert q == Q(), f"Expected empty Q(), got {q}"
+
+        # An empty Q() doesn't filter anything - all assets pass through
+        results = Asset.objects.filter(q).filter(organization=organization)
+        assert results.count() == 1
+        assert asset in results
+
+    def test_invalid_api_key_with_nin_does_not_raise_error(self, organization, asset_type):
+        """
+        Test that nin operator on an invalid api_key does not raise an error.
+
+        Since the attribute doesn't exist, no assets have that attribute value,
+        so technically nothing matches the "in" condition, and negating nothing
+        with nin returns an empty Q() which doesn't filter anything.
+        """
+        # Create some assets
+        asset1 = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset 1"
+        )
+        asset2 = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset 2"
+        )
+
+        # nin filter on nonexistent attribute
+        data = {
+            "field": "attributes.does_not_exist",
+            "value": ["value1", "value2"],
+            "operator": "nin"
+        }
+
+        serializer = FilterGroupSerializer(data=data)
+        # Should not raise an error
+        q = serializer.build_filter_query()
+
+        # With no attribute definitions found, q is None, so we return Q()
+        # An empty Q() doesn't filter anything - all assets pass through
+        results = Asset.objects.filter(q).filter(organization=organization)
+        assert results.count() == 2, f"Expected 2 results (filter has no effect), got {results.count()}"

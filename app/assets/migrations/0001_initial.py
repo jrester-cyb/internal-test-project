@@ -3,6 +3,7 @@
 import django.contrib.gis.db.models.fields
 import django.db.models.manager
 import uuid
+from django.contrib.postgres.operations import CreateExtension
 from django.db import migrations, models
 
 
@@ -14,6 +15,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        CreateExtension("postgis"),
+        CreateExtension("h3"),
         migrations.CreateModel(
             name='Asset',
             fields=[

@@ -1007,9 +1007,11 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             queryset = Asset.objects.all()
 
         if filter_config:
-            q_filter = FilterSerializer(data=filter_config).build_query()
+            with silk_profile(name="search: build_query"):
+                q_filter = FilterSerializer(data=filter_config).build_query()
             if q_filter:
-                queryset = queryset.filter(q_filter)
+                with silk_profile(name="search: apply_filter"):
+                    queryset = queryset.filter(q_filter)
 
         queryset = queryset.distinct()
 
@@ -1038,23 +1040,27 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if assettype_pk:
             context["_api_key_map"] = self._get_api_key_map(assettype_pk, workspace_pk)
 
-        page = self.paginate_queryset(queryset)
+        with silk_profile(name="search: paginate_queryset"):
+            page = self.paginate_queryset(queryset)
         assets = page if page is not None else list(queryset)
 
         # Batch-load override data to avoid N+1 queries in serializer
-        all_override_ids, workspace_overrides = self._batch_load_overrides(
-            assets, workspace_pk
-        )
+        with silk_profile(name="search: batch_load_overrides"):
+            all_override_ids, workspace_overrides = self._batch_load_overrides(
+                assets, workspace_pk
+            )
         if all_override_ids is not None:
             context["_all_override_ids_by_asset"] = all_override_ids
             context["_workspace_overrides_by_asset"] = workspace_overrides
 
-        serializer = self.get_serializer(assets, many=True, context=context)
+        with silk_profile(name="search: serializer.data"):
+            serializer = self.get_serializer(assets, many=True, context=context)
+            data = serializer.data
 
         if page is not None:
-            return self.get_paginated_response(serializer.data)
+            return self.get_paginated_response(data)
 
-        return Response(serializer.data)
+        return Response(data)
 
     @extend_schema(
         tags=["Assets"],
@@ -1381,24 +1387,25 @@ Format the output as follows:
 
             filtered_ids = cache.get(cache_key)
             if filtered_ids is None:
-                q_filter = FilterSerializer(data=request.data).build_query()
+                with silk_profile(name="clusters: build_query"):
+                    q_filter = FilterSerializer(data=request.data).build_query()
                 if q_filter:
                     base_qs = Asset.objects.all()
                     if organization_pk:
                         base_qs = base_qs.filter(organization_id=organization_pk)
                     if workspace_pk:
                         base_qs = base_qs.filter(workspace_memberships__workspace_id=workspace_pk)
-                    filtered_ids = list(
-                        base_qs.filter(q_filter).values_list("id", flat=True)
-                    )
+                    with silk_profile(name="clusters: filter_and_fetch_ids"):
+                        filtered_ids = list(
+                            base_qs.filter(q_filter).values_list("id", flat=True)
+                        )
                     cache.set(cache_key, filtered_ids, timeout=60)  # Cache for 1 minute
                 else:
                     filtered_ids = []
 
             if filtered_ids:
-                placeholders = ",".join(["%s"] * len(filtered_ids))
-                where_clauses.append(f"a.id IN ({placeholders})")
-                params.extend([str(id) for id in filtered_ids])
+                where_clauses.append("a.id = ANY(%s::uuid[])")
+                params.append([str(id) for id in filtered_ids])
             elif request.data:
                 # Filter was provided but no assets match, return empty result
                 return Response({"clusters": [], "precision": precision, "totalClusters": 0})
@@ -1417,27 +1424,28 @@ Format the output as follows:
 
         # Single query: groups by h3 prefix, computes centroids using AVG(location) which is faster
         # than ST_Centroid(ST_Collect(geometry)) for large clusters
-        with connection.cursor() as cursor:
-            cursor.execute(
-                f"""
-                SELECT
-                    LEFT(a.h3_index, %s) as h3_prefix,
-                    COUNT(*) as cluster_count,
-                    MIN(a.id::text),
-                    MIN(a.name),
-                    MIN(a.asset_type_id::text),
-                    MIN(a.h3_index),
-                    ST_AsGeoJSON(MIN(a.geometry)),
-                    AVG(ST_Y(a.location)),
-                    AVG(ST_X(a.location))
-                FROM assets_asset a
-                WHERE {where_sql}
-                GROUP BY h3_prefix
-                ORDER BY cluster_count DESC
-                """,
-                params,
-            )
-            rows = cursor.fetchall()
+        with silk_profile(name="clusters: raw_sql_query"):
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        LEFT(a.h3_index, %s) as h3_prefix,
+                        COUNT(*) as cluster_count,
+                        MIN(a.id::text),
+                        MIN(a.name),
+                        MIN(a.asset_type_id::text),
+                        MIN(a.h3_index),
+                        ST_AsGeoJSON(MIN(a.geometry)),
+                        AVG(ST_Y(a.location)),
+                        AVG(ST_X(a.location))
+                    FROM assets_asset a
+                    WHERE {where_sql}
+                    GROUP BY h3_prefix
+                    ORDER BY cluster_count DESC
+                    """,
+                    params,
+                )
+                rows = cursor.fetchall()
 
         # Build response: indices are 0=prefix, 1=count, 2=id, 3=name, 4=type_id, 5=h3, 6=geojson, 7=lat, 8=lon
         cluster_data = []

@@ -103,31 +103,31 @@ class WorkspaceAttributeValueOverride(SoftDeleteMixin, models.Model):
 class TextAttributeValue(BaseAttributeValue):
     """Text attribute value"""
 
-    value = models.TextField(blank=True)
+    value = models.TextField(blank=True, db_index=True)
 
 
 class NumberAttributeValue(BaseAttributeValue):
     """Number attribute value"""
 
-    value = models.FloatField(null=True, blank=True)
+    value = models.FloatField(null=True, blank=True, db_index=True)
 
 
 class BooleanAttributeValue(BaseAttributeValue):
     """Boolean attribute value"""
 
-    value = models.BooleanField(null=True, blank=True)
+    value = models.BooleanField(null=True, blank=True, db_index=True)
 
 
 class DateAttributeValue(BaseAttributeValue):
     """Date attribute value"""
 
-    value = models.DateField(null=True, blank=True)
+    value = models.DateField(null=True, blank=True, db_index=True)
 
 
 class DateTimeAttributeValue(BaseAttributeValue):
     """DateTime attribute value"""
 
-    value = models.DateTimeField(null=True, blank=True)
+    value = models.DateTimeField(null=True, blank=True, db_index=True)
 
 
 class JSONAttributeValue(BaseAttributeValue):
@@ -139,8 +139,8 @@ class JSONAttributeValue(BaseAttributeValue):
 class LinkAttributeValue(BaseAttributeValue):
     """Link/URL attribute value with optional display text"""
 
-    url = models.URLField(max_length=2000, blank=True)
-    display_text = models.CharField(max_length=500, blank=True)
+    url = models.URLField(max_length=2000, blank=True, db_index=True)
+    display_text = models.CharField(max_length=500, blank=True, db_index=True)
 
     @property
     def value(self):
