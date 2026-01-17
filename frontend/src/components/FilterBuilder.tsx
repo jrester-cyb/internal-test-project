@@ -621,7 +621,7 @@ export default function FilterBuilder({
   }
 
   const filterContent = (
-    <Box sx={{ px: 3, py: 2, display: 'flex', flexDirection: 'column', height: 'calc(70vh - 36px)', minHeight: 0 }}>
+    <Box sx={{ px: 3, py: 2, display: 'flex', flexDirection: 'column', height: 'calc(50vh - 84px)', minHeight: 0 }}>
       <Divider sx={{ mb: 2 }} />
 
       {/* Name Filter - temporarily hidden */}
@@ -834,6 +834,7 @@ export default function FilterBuilder({
                             {({ index, style }) => {
                               const attr = attrs[index]
                               const isSelected = selectedAttribute?.id === attr.id
+                              const totalCount = attributeTotalCounts[`${selectedTypeForAttributes}-${attr.apiKey}`]
                               const activeCount = selectedTypeForAttributes
                                 ? getActiveCount(selectedTypeForAttributes, attr.apiKey)
                                 : null
@@ -861,7 +862,7 @@ export default function FilterBuilder({
                                         <CopyableText variant="body2" sx={{ fontWeight: isSelected ? 'bold' : 'normal' }}>
                                           {attr.name}
                                         </CopyableText>
-                                        {activeCount !== null && (
+                                        {activeCount !== null && totalCount !== undefined && activeCount !== totalCount && (
                                           <Chip
                                             label={activeCount}
                                             size="small"
@@ -992,8 +993,7 @@ export default function FilterBuilder({
             pointerEvents: open ? 'auto' : 'none',
             bgcolor: 'background.paper',
             boxShadow: 3,
-            maxHeight: 'calc(50vh - 48px)',
-            overflowY: 'auto',
+            overflow: 'hidden',
             pb: 0.5,
           }}
         >
