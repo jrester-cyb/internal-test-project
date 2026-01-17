@@ -305,9 +305,9 @@ function NumberRenderer({ value, unit, showCopyButton = true, compact = false }:
 
 // Choice renderer - displays value with optional color indicator
 function ChoiceRenderer({ value, choices, compact = false }: { value: any; choices: NonNullable<AssetTypeAttribute['choices']>; compact?: boolean }) {
-  // Find the matching choice
+  // Find the matching choice to get its color
   const choice = choices.find(c => c.value === value || String(c.value) === String(value))
-  const displayLabel = choice?.label ?? String(value)
+  const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
   const color = choice?.color
 
   if (compact) {
@@ -332,7 +332,7 @@ function ChoiceRenderer({ value, choices, compact = false }: { value: any; choic
             whiteSpace: 'nowrap',
           }}
         >
-          {displayLabel}
+          {displayValue}
         </Typography>
       </Box>
     )
@@ -351,7 +351,7 @@ function ChoiceRenderer({ value, choices, compact = false }: { value: any; choic
           }}
         />
       )}
-      <Typography variant="body2">{displayLabel}</Typography>
+      <Typography variant="body2">{displayValue}</Typography>
     </Box>
   )
 }

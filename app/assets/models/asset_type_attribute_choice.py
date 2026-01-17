@@ -1,6 +1,7 @@
 from django.db import models
 from polymorphic.models import PolymorphicModel
 import uuid
+import pgtrigger
 from core.models.soft_delete import PolymorphicSoftDeleteMixin
 
 
@@ -13,7 +14,6 @@ class AssetTypeAttributeChoice(PolymorphicSoftDeleteMixin, PolymorphicModel):
         on_delete=models.CASCADE,
         related_name="choices",
     )
-    label = models.CharField(max_length=255, help_text="Display label shown to users")
     icon = models.CharField(
         max_length=100,
         blank=True,
@@ -29,7 +29,7 @@ class AssetTypeAttributeChoice(PolymorphicSoftDeleteMixin, PolymorphicModel):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta(PolymorphicSoftDeleteMixin.Meta):
-        ordering = ["asset_type_attribute", "order", "label"]
+        ordering = ["asset_type_attribute", "order"]
         constraints = [
             models.UniqueConstraint(
                 fields=["asset_type_attribute", "order"],
@@ -37,9 +37,38 @@ class AssetTypeAttributeChoice(PolymorphicSoftDeleteMixin, PolymorphicModel):
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_boolean_attribute_choices",
+                operation=pgtrigger.Insert,
+                when=pgtrigger.Before,
+                func="""
+                    -- Check GlobalAssetTypeAttribute
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_globalassettypeattribute gata
+                        WHERE gata.baseassettypeattribute_ptr_id = NEW.asset_type_attribute_id
+                        AND gata.attribute_type = 'boolean'
+                    ) THEN
+                        RAISE EXCEPTION 'Boolean attributes cannot have choices';
+                    END IF;
+                    -- Check WorkspaceLocalAssetTypeAttribute
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_workspacelocalassettypeattribute wla
+                        WHERE wla.baseassettypeattribute_ptr_id = NEW.asset_type_attribute_id
+                        AND wla.attribute_type = 'boolean'
+                    ) THEN
+                        RAISE EXCEPTION 'Boolean attributes cannot have choices';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.asset_type_attribute.name}: {self.label}"
+        value = getattr(self, "value", None)
+        return f"{self.asset_type_attribute.name}: {value}"
 
 
 class TextAttributeChoice(AssetTypeAttributeChoice):
@@ -52,12 +81,6 @@ class NumberAttributeChoice(AssetTypeAttributeChoice):
     """Number choice value"""
 
     value = models.FloatField()
-
-
-class BooleanAttributeChoice(AssetTypeAttributeChoice):
-    """Boolean choice value"""
-
-    value = models.BooleanField()
 
 
 class DateAttributeChoice(AssetTypeAttributeChoice):
@@ -140,7 +163,6 @@ class WorkspaceChoiceOverride(BaseWorkspaceChoice):
         help_text="The base choice this overrides",
     )
     # Overridable fields - null means "use base value"
-    label = models.CharField(max_length=255, null=True, blank=True)
     icon = models.CharField(max_length=100, null=True, blank=True)
     color = models.CharField(max_length=50, null=True, blank=True)
     order = models.IntegerField(null=True, blank=True)
@@ -150,7 +172,7 @@ class WorkspaceChoiceOverride(BaseWorkspaceChoice):
         pass
 
     def __str__(self):
-        return f"Override: {self.base_choice.label} in {self.workspace.name}"
+        return f"Override: {self.base_choice} in {self.workspace.name}"
 
     def get_effective_value(self, field_name):
         """Get the effective value for a field, falling back to base choice."""
@@ -182,7 +204,7 @@ class WorkspaceHiddenChoice(BaseWorkspaceChoice):
         pass
 
     def __str__(self):
-        return f"Hidden: {self.base_choice.label} in {self.workspace.name}"
+        return f"Hidden: {self.base_choice} in {self.workspace.name}"
 
 
 class BaseWorkspaceExtensionChoice(BaseWorkspaceChoice):
@@ -210,7 +232,6 @@ class BaseWorkspaceExtensionChoice(BaseWorkspaceChoice):
         related_name="workspace_extension_choices",
         help_text="Extension attribute this choice belongs to (if applicable)",
     )
-    label = models.CharField(max_length=255)
     icon = models.CharField(max_length=100, blank=True)
     color = models.CharField(max_length=50, blank=True)
     order = models.IntegerField(default=0)
@@ -234,9 +255,8 @@ class BaseWorkspaceExtensionChoice(BaseWorkspaceChoice):
 
     def __str__(self):
         attr = self.global_attribute or self.extension_attribute
-        return (
-            f"Extension choice: {self.label} for {attr.name} in {self.workspace.name}"
-        )
+        value = getattr(self, "value", None)
+        return f"Extension choice: {value} for {attr.name} in {self.workspace.name}"
 
 
 class TextExtensionChoice(BaseWorkspaceExtensionChoice):
@@ -249,12 +269,6 @@ class NumberExtensionChoice(BaseWorkspaceExtensionChoice):
     """Number extension choice value"""
 
     value = models.FloatField()
-
-
-class BooleanExtensionChoice(BaseWorkspaceExtensionChoice):
-    """Boolean extension choice value"""
-
-    value = models.BooleanField()
 
 
 class DateExtensionChoice(BaseWorkspaceExtensionChoice):

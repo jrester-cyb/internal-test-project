@@ -7,7 +7,6 @@ export interface AssetType {
 export interface AssetTypeAttributeChoice {
   id: string
   value: any
-  label: string
   icon?: string
   color?: string
   order: number

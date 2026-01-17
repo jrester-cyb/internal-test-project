@@ -34,7 +34,6 @@ class AssetTypeAttributeChoiceSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "value",
-            "label",
             "icon",
             "color",
             "order",
@@ -59,7 +58,6 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
     value = serializers.JSONField(
         help_text="The choice value (type should match attribute type)"
     )
-    label = serializers.CharField(max_length=255)
     icon = serializers.CharField(
         max_length=100, required=False, allow_blank=True, default=""
     )
@@ -72,7 +70,6 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
         from .models import (
             TextAttributeChoice,
             NumberAttributeChoice,
-            BooleanAttributeChoice,
             DateAttributeChoice,
             DateTimeAttributeChoice,
             JSONAttributeChoice,
@@ -82,11 +79,16 @@ class AssetTypeAttributeChoiceWriteSerializer(serializers.Serializer):
         asset_type_attribute = validated_data.pop("asset_type_attribute")
         value = validated_data.pop("value")
 
+        # Boolean attributes cannot have choices
+        if asset_type_attribute.attribute_type == "boolean":
+            raise serializers.ValidationError(
+                {"attribute_type": "Boolean attributes cannot have choices."}
+            )
+
         # Get the correct choice model based on attribute type
         choice_model = {
             "text": TextAttributeChoice,
             "number": NumberAttributeChoice,
-            "boolean": BooleanAttributeChoice,
             "date": DateAttributeChoice,
             "datetime": DateTimeAttributeChoice,
             "json": JSONAttributeChoice,

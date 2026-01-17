@@ -382,7 +382,7 @@ export async function reorderAssetTypeAttributes(workspaceId: string, assetTypeI
   return response.json()
 }
 
-export async function createAssetTypeAttributeChoice(workspaceId: string, assetTypeId: string, attributeId: string, data: { value: any, label: string, icon?: string, color?: string, order?: number }) {
+export async function createAssetTypeAttributeChoice(workspaceId: string, assetTypeId: string, attributeId: string, data: { value: any, icon?: string, color?: string, order?: number }) {
   const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/`), {
     method: 'POST',
     headers: {

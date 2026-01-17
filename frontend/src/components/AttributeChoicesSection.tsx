@@ -11,7 +11,8 @@ import {
   Button,
   IconButton,
   CircularProgress,
-  Collapse
+  Collapse,
+  InputAdornment
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -23,6 +24,8 @@ import {
 import type { AssetTypeAttribute, AssetTypeAttributeChoice } from '../types'
 import { createAssetTypeAttributeChoice, deleteAssetTypeAttributeChoice, fetchAssetTypeAttributeChoices, reorderAssetTypeAttributeChoices } from '../api/assets'
 import SimpleTable, { type ColumnDef } from './SimpleTable'
+import { JsonRenderer, DateRenderer, LinkRenderer, NumberRenderer, TextRenderer } from './AttributeValueRenderer'
+import JsonEditor from './JsonEditor'
 
 interface AttributeChoicesSectionProps {
   attribute: AssetTypeAttribute
@@ -48,7 +51,9 @@ export default function AttributeChoicesSection({
   const toggleExpanded = onToggleExpanded ?? (() => setInternalExpanded(prev => !prev))
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [formData, setFormData] = useState({ value: '', label: '' })
+  const [formValue, setFormValue] = useState<string>('')
+  const [formLinkLabel, setFormLinkLabel] = useState<string>('')
+  const [formJsonValue, setFormJsonValue] = useState<{ json: any; rawJson: string } | undefined>(undefined)
   const [choices, setChoices] = useState<AssetTypeAttributeChoice[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -82,8 +87,44 @@ export default function AttributeChoicesSection({
     }
   }
 
+  // Convert form value to appropriate type for the attribute
+  const getTypedValue = () => {
+    if (attribute.attributeType === 'number') {
+      return Number.parseFloat(formValue)
+    }
+    if (attribute.attributeType === 'json') {
+      return formJsonValue?.json
+    }
+    if (attribute.attributeType === 'link') {
+      return {
+        url: formValue,
+        text: formLinkLabel || formValue
+      }
+    }
+    return formValue
+  }
+
+  const isFormValid = () => {
+    if (attribute.attributeType === 'number') {
+      return formValue !== '' && !Number.isNaN(Number.parseFloat(formValue))
+    }
+    if (attribute.attributeType === 'json') {
+      return formJsonValue?.json !== undefined && formJsonValue?.json !== null
+    }
+    if (attribute.attributeType === 'link') {
+      return formValue !== '' // URL is required, label is optional
+    }
+    return formValue !== ''
+  }
+
+  const resetForm = () => {
+    setFormValue('')
+    setFormLinkLabel('')
+    setFormJsonValue(undefined)
+  }
+
   const handleAddChoice = async () => {
-    if (!formData.label) return
+    if (!isFormValid()) return
 
     try {
       const newChoice = await createAssetTypeAttributeChoice(
@@ -91,14 +132,13 @@ export default function AttributeChoicesSection({
         assetTypeId,
         attribute.id,
         {
-          value: formData.value || formData.label,
-          label: formData.label,
+          value: getTypedValue(),
           order: choices.length
         }
       )
       setChoices(prev => [...prev, newChoice])
       setDialogOpen(false)
-      setFormData({ value: '', label: '' })
+      resetForm()
     } catch (error) {
       console.error('Failed to add choice:', error)
       alert('Failed to add choice')
@@ -106,7 +146,8 @@ export default function AttributeChoicesSection({
   }
 
   const handleDeleteChoice = async (choice: AssetTypeAttributeChoice) => {
-    if (!confirm(`Are you sure you want to delete the choice "${choice.label}"?`)) return
+    const displayValue = typeof choice.value === 'object' ? JSON.stringify(choice.value) : String(choice.value)
+    if (!confirm(`Are you sure you want to delete the choice "${displayValue}"?`)) return
 
     try {
       await deleteAssetTypeAttributeChoice(workspaceId, assetTypeId, attribute.id, choice.id)
@@ -138,23 +179,46 @@ export default function AttributeChoicesSection({
     }
   }
 
+  // Render choice value based on attribute type
+  const renderChoiceValue = (choice: AssetTypeAttributeChoice) => {
+    const value = choice.value
+
+    switch (attribute.attributeType) {
+      case 'number':
+        return <NumberRenderer value={value} unit={attribute.unit} showCopyButton={false} compact />
+      case 'date':
+        return <DateRenderer value={value} includeTime={false} showCopyButton={false} compact />
+      case 'datetime':
+        return <DateRenderer value={value} includeTime showCopyButton={false} compact />
+      case 'json':
+        return <JsonRenderer value={value} maxLines={1} />
+      case 'link':
+        return <LinkRenderer value={value} showCopyButton={false} compact />
+      case 'text':
+      default:
+        return <TextRenderer value={String(value)} maxLines={1} showCopyButton={false} compact />
+    }
+  }
+
   const columns: ColumnDef<AssetTypeAttributeChoice>[] = useMemo(() => [
-    {
-      key: 'label',
-      header: 'Label',
-      render: (choice: AssetTypeAttributeChoice) => (
-        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {choice.label}
-        </Typography>
-      )
-    },
     {
       key: 'value',
       header: 'Value',
       render: (choice: AssetTypeAttributeChoice) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-          {String(choice.value)}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {choice.color && (
+            <Box
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                bgcolor: choice.color,
+                flexShrink: 0,
+              }}
+            />
+          )}
+          {renderChoiceValue(choice)}
+        </Box>
       )
     },
     ...(!readOnly ? [{
@@ -173,7 +237,7 @@ export default function AttributeChoicesSection({
         </IconButton>
       )
     }] : [])
-  ], [handleDeleteChoice, readOnly])
+  ], [handleDeleteChoice, readOnly, attribute.attributeType, attribute.unit])
 
   return (
     <>
@@ -216,7 +280,7 @@ export default function AttributeChoicesSection({
               Choices {loaded ? `(${choices.length})` : ''}
             </Typography>
           </Box>
-          {!readOnly && (
+          {!readOnly && attribute.attributeType !== 'boolean' && (
             <IconButton
               size="small"
               color="primary"
@@ -231,7 +295,13 @@ export default function AttributeChoicesSection({
         </Box>
         <Collapse in={expanded}>
           <Box sx={{ height: 300, mt: 1, display: 'flex', flexDirection: 'column' }}>
-            {loading ? (
+            {attribute.attributeType === 'boolean' ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  Choices are not available for Boolean attributes
+                </Typography>
+              </Box>
+            ) : loading ? (
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
                 <CircularProgress size={24} />
               </Box>
@@ -247,29 +317,85 @@ export default function AttributeChoicesSection({
         </Collapse>
       </Box>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth={attribute.attributeType === 'json' ? 'sm' : 'xs'} fullWidth>
         <DialogTitle>Add Choice</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Label"
-              fullWidth
-              value={formData.label}
-              onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-              helperText="Display text for this choice"
-            />
-            <TextField
-              label="Value"
-              fullWidth
-              value={formData.value}
-              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-              helperText="Value stored when selected (defaults to label if empty)"
-            />
+            {attribute.attributeType === 'number' ? (
+              <TextField
+                label="Value"
+                fullWidth
+                type="number"
+                value={formValue}
+                onChange={(e) => setFormValue(e.target.value)}
+                InputProps={attribute.unit ? {
+                  endAdornment: <InputAdornment position="end">{attribute.unit}</InputAdornment>
+                } : undefined}
+                helperText="Number value for this choice"
+              />
+            ) : attribute.attributeType === 'date' ? (
+              <TextField
+                label="Value"
+                fullWidth
+                type="date"
+                value={formValue}
+                onChange={(e) => setFormValue(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                helperText="Date value for this choice"
+              />
+            ) : attribute.attributeType === 'datetime' ? (
+              <TextField
+                label="Value"
+                fullWidth
+                type="datetime-local"
+                value={formValue}
+                onChange={(e) => setFormValue(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                helperText="Date and time value for this choice"
+              />
+            ) : attribute.attributeType === 'json' ? (
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  JSON Value
+                </Typography>
+                <JsonEditor
+                  value={formJsonValue}
+                  onChange={(val) => setFormJsonValue(val)}
+                  placeholder="Enter JSON value..."
+                />
+              </Box>
+            ) : attribute.attributeType === 'link' ? (
+              <>
+                <TextField
+                  label="URL"
+                  fullWidth
+                  type="url"
+                  value={formValue}
+                  onChange={(e) => setFormValue(e.target.value)}
+                  helperText="URL for this choice"
+                />
+                <TextField
+                  label="Label"
+                  fullWidth
+                  value={formLinkLabel}
+                  onChange={(e) => setFormLinkLabel(e.target.value)}
+                  helperText="Display text (optional, defaults to URL)"
+                />
+              </>
+            ) : (
+              <TextField
+                label="Value"
+                fullWidth
+                value={formValue}
+                onChange={(e) => setFormValue(e.target.value)}
+                helperText="Text value for this choice"
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAddChoice} variant="contained" color="primary" disabled={!formData.label}>
+          <Button onClick={handleAddChoice} variant="contained" color="primary" disabled={!isFormValid()}>
             Add
           </Button>
         </DialogActions>
