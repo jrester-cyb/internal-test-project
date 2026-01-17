@@ -16,7 +16,7 @@ const WorkspaceLayout = lazy(() => import('./pages/WorkspaceLayout.tsx'))
 const WorkspaceSettingsPage = lazy(() => import('./pages/WorkspaceSettingsPage.tsx'))
 const AssetTypesPage = lazy(() => import('./pages/AssetTypesPage.tsx'))
 const MapPage = lazy(() => import('./pages/MapPage.tsx'))
-const AssetListPage = lazy(() => import('./pages/AssetListPage.tsx'))
+const AssetGridPage = lazy(() => import('./pages/AssetGridPage.tsx'))
 const AssetDetailPage = lazy(() => import('./pages/AssetDetailPage.tsx'))
 const AssetTypeLayout = lazy(() => import('./pages/AssetTypeLayout.tsx'))
 const AssetTypeAboutPage = lazy(() => import('./pages/AssetTypeAboutPage.tsx'))
@@ -414,7 +414,7 @@ const router = createBrowserRouter([
                     children: [
                       {
                         index: true,
-                        element: <AssetListPage />,
+                        element: <AssetGridPage />,
                         loader: async ({ params }) => {
                           const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
 
@@ -433,6 +433,10 @@ const router = createBrowserRouter([
                             pageSize: PAGE_SIZE,
                             workspaceId: params.workspaceId
                           };
+                        },
+                        // Don't revalidate when clicking the same tab (prevents losing unsaved changes)
+                        shouldRevalidate: ({ currentUrl, nextUrl }) => {
+                          return currentUrl.pathname !== nextUrl.pathname
                         },
                       },
                       {

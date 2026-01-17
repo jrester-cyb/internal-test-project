@@ -4,7 +4,7 @@ import { Outlet, useLocation, useParams, Link, useMatches, useNavigation } from 
 import {
   preloadAssetTypeAboutPage,
   preloadAssetTypeAttributesPage,
-  preloadAssetListPage,
+  preloadAssetGridPage,
 } from "../utils/preload";
 
 // Map path segments to tab indices
@@ -111,7 +111,7 @@ const TabBar = memo(function TabBar({
           component={Link}
           to="assets"
           value={1}
-          onMouseEnter={preloadAssetListPage}
+          onMouseEnter={preloadAssetGridPage}
           onClick={() => onTabClick(1)}
         />
         <Tab

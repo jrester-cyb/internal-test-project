@@ -3,7 +3,7 @@
 
 export const preloadAssetTypeAboutPage = () => import('../pages/AssetTypeAboutPage')
 export const preloadAssetTypeAttributesPage = () => import('../pages/AssetTypeAttributesPage')
-export const preloadAssetListPage = () => import('../pages/AssetListPage')
+export const preloadAssetGridPage = () => import('../pages/AssetGridPage')
 export const preloadAssetDetailPage = () => import('../pages/AssetDetailPage')
 export const preloadMapPage = () => import('../pages/MapPage')
 export const preloadLibraryPage = () => import('../pages/LibraryPage')

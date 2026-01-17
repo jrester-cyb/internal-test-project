@@ -22,16 +22,33 @@ class AssetType(SoftDeleteMixin):
         Returns a list of AssetTypeAttribute objects for this asset type, merging global and workspace-specific attributes.
         If a workspace-specific attribute exists for the same api_key, it overrides the global one.
         """
-        base_qs = self.attributes.filter(
-            workspace__isnull=True, deleted_at__isnull=True
+        from .asset_type_attribute import (
+            GlobalAssetTypeAttribute,
+            WorkspaceLocalAssetTypeAttribute,
+            WorkspaceOverrideAssetTypeAttribute,
+        )
+
+        # Get global attributes (no workspace field on these)
+        base_qs = GlobalAssetTypeAttribute.objects.filter(
+            asset_type=self, deleted_at__isnull=True
         )
         if workspace is None:
             return list(base_qs)
-        ext_qs = self.attributes.filter(workspace=workspace, deleted_at__isnull=True)
-        # Build dict by api_key for fast override
+
+        # Get workspace-specific attributes (local + overrides)
+        local_qs = WorkspaceLocalAssetTypeAttribute.objects.filter(
+            asset_type=self, workspace=workspace, deleted_at__isnull=True
+        )
+        override_qs = WorkspaceOverrideAssetTypeAttribute.objects.filter(
+            asset_type=self, workspace=workspace, deleted_at__isnull=True
+        )
+
+        # Build dict by api_key - global first, then override with workspace-specific
         attr_map = {a.api_key: a for a in base_qs}
-        for ext in ext_qs:
+        for ext in local_qs:
             attr_map[ext.api_key] = ext
+        for override in override_qs:
+            attr_map[override.api_key] = override
         return list(attr_map.values())
 
     class Meta(SoftDeleteMixin.Meta):

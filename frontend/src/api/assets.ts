@@ -525,6 +525,28 @@ export async function moveFileNodes(workspaceId: string, fileIds: string[], dest
   return response.json()
 }
 
+export async function updateAsset(
+  workspaceId: string,
+  assetId: string,
+  data: { name?: string; description?: string; attributes?: Record<string, any> }
+) {
+  const response = await fetch(
+    workspaceUrl(workspaceId, `assets/${assetId}/`),
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    }
+  )
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to update asset')
+  }
+  return response.json()
+}
+
 export async function updateAssetAttributeValue(
   workspaceId: string,
   assetTypeId: string,

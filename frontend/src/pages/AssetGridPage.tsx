@@ -1,18 +1,27 @@
-import { Box, Typography, Stack, Switch as MuiSwitch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover, MenuItem, Select } from '@mui/material'
+import { Box, Typography, Stack, Switch as MuiSwitch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover, MenuItem, Select, CircularProgress, Snackbar, Alert } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import EditOffIcon from '@mui/icons-material/EditOff'
+import SaveIcon from '@mui/icons-material/Save'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import CloseIcon from '@mui/icons-material/Close'
 import CheckIcon from '@mui/icons-material/Check'
 import ClearIcon from '@mui/icons-material/Clear'
+import MapIcon from '@mui/icons-material/Map'
 import type { Asset, AssetTypeAttribute } from '../types'
-import { useLoaderData, useLocation, useParams, Link as RouterLink } from 'react-router-dom'
+import { useLoaderData, useLocation, useParams, Link as RouterLink, useBlocker, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { fetchAssetsByType } from '../api/assets'
+import { fetchAssetsByType, updateAsset } from '../api/assets'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '../components/VirtualizedGrid'
 
-export default function AssetListPage() {
+// Type for tracking pending changes per asset
+// Stores name change and/or attribute changes (keyed by apiKey)
+interface AssetChanges {
+  name?: string
+  attributes?: Record<string, any>  // keyed by apiKey
+}
+
+export default function AssetGridPage() {
   const initialData = useLoaderData() as {
     assets: Asset[],
     attributes?: AssetTypeAttribute[],
@@ -23,6 +32,7 @@ export default function AssetListPage() {
 
   const { assetTypeId } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
 
   // Convert initial assets array to Map for VirtualizedGrid
   const initialItemsMap = useMemo(() => {
@@ -41,6 +51,20 @@ export default function AssetListPage() {
   const [showHidden, setShowHidden] = useState(false)
   const [editingEnabled, setEditingEnabled] = useState(false)
 
+  // State for tracking pending changes and save status
+  const [pendingChanges, setPendingChanges] = useState<Map<string, AssetChanges>>(new Map())
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false)
+
+  // Track the last saved state - used for discarding unsaved changes
+  // This gets updated after each successful save
+  const lastSavedItemsRef = useRef<Map<number, Asset>>(initialItemsMap)
+
+  // Track if there are unsaved changes
+  const hasUnsavedChanges = pendingChanges.size > 0
+
   // Filter attributes based on showHidden toggle
   const hiddenCount = useMemo(() => attributes.filter(attr => attr.isHidden).length, [attributes])
   const displayAttributes = useMemo(
@@ -48,15 +72,42 @@ export default function AssetListPage() {
     [attributes, showHidden]
   )
 
-  // Reset when route changes (different asset type)
+  // Track the previous initialData to detect actual route changes
+  const prevInitialDataRef = useRef(initialData)
+
+  // Reset when route changes (different asset type) - but not if we have unsaved changes
   useEffect(() => {
+    // Only reset if initialData actually changed (route change), not just on re-render
+    if (prevInitialDataRef.current === initialData) return
+    prevInitialDataRef.current = initialData
+
+    // Don't reset if we have unsaved changes - the blocker dialog should handle navigation
+    if (pendingChanges.size > 0) return
+
     const map = new Map<number, Asset>()
     initialData.assets?.forEach((asset, index) => {
       map.set(index, asset)
     })
     setItems(map)
     setTotalCount(initialData.totalCount)
-  }, [initialData])
+    // Also update the last saved state ref for the new route
+    lastSavedItemsRef.current = map
+  }, [initialData, pendingChanges.size])
+
+  // Warn user before closing browser/tab with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        // Modern browsers ignore custom messages, but we still need to set returnValue
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
 
   // Load a range of items
   const handleLoadRange = useCallback(async (startIndex: number, endIndex: number) => {
@@ -88,11 +139,63 @@ export default function AssetListPage() {
     }
   }, [assetTypeId, initialData.workspaceId, isLoading])
 
-  // Handle cell edit
+  // Helper to convert value based on attribute type
+  const convertValueForAttribute = useCallback((newValue: string, attributeType: string): any => {
+    let valueToStore: any = newValue.trim() === '' ? null : newValue
+
+    if (valueToStore !== null) {
+      switch (attributeType) {
+        case 'boolean':
+          valueToStore = newValue === 'true'
+          break
+        case 'number':
+          valueToStore = Number.parseFloat(newValue) || null
+          break
+        case 'date':
+        case 'datetime': {
+          // Store as ISO string, handle invalid dates
+          if (newValue) {
+            const date = new Date(newValue)
+            valueToStore = Number.isNaN(date.getTime()) ? null : date.toISOString()
+          } else {
+            valueToStore = null
+          }
+          break
+        }
+        case 'link':
+          // Try to parse as JSON object {url, text}, otherwise keep as string URL
+          try {
+            const parsed = JSON.parse(newValue)
+            if (typeof parsed === 'object' && parsed.url !== undefined) {
+              valueToStore = parsed
+            }
+          } catch {
+            // Keep as string URL
+          }
+          break
+        // 'json', 'text', 'string' stay as strings
+      }
+    }
+    return valueToStore
+  }, [])
+
+  // Helper to check if two values are equal (handles null, undefined, objects)
+  const valuesAreEqual = useCallback((a: any, b: any): boolean => {
+    if (a === b) return true
+    if (a == null && b == null) return true
+    if (a == null || b == null) return false
+    if (typeof a === 'object' && typeof b === 'object') {
+      return JSON.stringify(a) === JSON.stringify(b)
+    }
+    return false
+  }, [])
+
+  // Handle cell edit - updates local state and tracks pending changes
   const handleCellEdit = useCallback((asset: Asset, columnKey: string, newValue: string, rowIndex: number) => {
-    console.log('Cell edited:', { asset, columnKey, newValue, rowIndex })
-    // TODO: Implement actual save logic (API call)
-    // For now, just update local state
+    // Get the original value from last saved state
+    const originalAsset = lastSavedItemsRef.current.get(rowIndex)
+
+    // Update local state for immediate UI feedback
     setItems(prev => {
       const updated = new Map(prev)
       const existingAsset = updated.get(rowIndex)
@@ -102,42 +205,8 @@ export default function AssetListPage() {
           const attrId = columnKey.replace('attr-', '')
           const attribute = attributes.find(a => a.id === attrId)
           if (attribute) {
-            // Convert value based on attribute type
-            let valueToStore: any = newValue.trim() === '' ? null : newValue
-
-            if (valueToStore !== null) {
-              switch (attribute.attributeType) {
-                case 'boolean':
-                  valueToStore = newValue === 'true'
-                  break
-                case 'number':
-                  valueToStore = parseFloat(newValue) || null
-                  break
-                case 'date':
-                case 'datetime': {
-                  // Store as ISO string, handle invalid dates
-                  if (newValue) {
-                    const date = new Date(newValue)
-                    valueToStore = isNaN(date.getTime()) ? null : date.toISOString()
-                  } else {
-                    valueToStore = null
-                  }
-                  break
-                }
-                case 'link':
-                  // Try to parse as JSON object {url, text}, otherwise keep as string URL
-                  try {
-                    const parsed = JSON.parse(newValue)
-                    if (typeof parsed === 'object' && parsed.url !== undefined) {
-                      valueToStore = parsed
-                    }
-                  } catch {
-                    // Keep as string URL
-                  }
-                  break
-                // 'json', 'text', 'string' stay as strings
-              }
-            }
+            const valueToStore = convertValueForAttribute(newValue, attribute.attributeType)
+            const originalValue = originalAsset?.attributes?.[attribute.apiKey]
 
             updated.set(rowIndex, {
               ...existingAsset,
@@ -146,23 +215,81 @@ export default function AssetListPage() {
                 [attribute.apiKey]: valueToStore
               }
             })
+
+            // Track or remove the change based on whether it matches original
+            setPendingChanges(prevChanges => {
+              const newChanges = new Map(prevChanges)
+              const assetChanges = newChanges.get(asset.id) || {}
+              const newAttributes = { ...assetChanges.attributes }
+
+              if (valuesAreEqual(valueToStore, originalValue)) {
+                // Value reverted to original - remove this attribute from pending changes
+                delete newAttributes[attribute.apiKey]
+              } else {
+                // Value changed - track it
+                newAttributes[attribute.apiKey] = valueToStore
+              }
+
+              // Check if there are any remaining changes for this asset
+              const hasNameChange = assetChanges.name !== undefined && !valuesAreEqual(assetChanges.name, originalAsset?.name)
+              const hasAttrChanges = Object.keys(newAttributes).length > 0
+
+              if (!hasNameChange && !hasAttrChanges) {
+                // No changes left for this asset - remove it entirely
+                newChanges.delete(asset.id)
+              } else {
+                newChanges.set(asset.id, {
+                  ...(hasNameChange ? { name: assetChanges.name } : {}),
+                  ...(hasAttrChanges ? { attributes: newAttributes } : {})
+                })
+              }
+              return newChanges
+            })
           }
         } else if (columnKey === 'name') {
+          const originalName = originalAsset?.name
           updated.set(rowIndex, { ...existingAsset, name: newValue })
+
+          // Track or remove the change based on whether it matches original
+          setPendingChanges(prevChanges => {
+            const newChanges = new Map(prevChanges)
+            const assetChanges = newChanges.get(asset.id) || {}
+
+            if (valuesAreEqual(newValue, originalName)) {
+              // Value reverted to original - remove name from pending changes
+              const { name: _, ...rest } = assetChanges
+              const hasAttrChanges = rest.attributes && Object.keys(rest.attributes).length > 0
+
+              if (!hasAttrChanges) {
+                // No changes left for this asset - remove it entirely
+                newChanges.delete(asset.id)
+              } else {
+                newChanges.set(asset.id, rest)
+              }
+            } else {
+              // Value changed - track it
+              newChanges.set(asset.id, {
+                ...assetChanges,
+                name: newValue
+              })
+            }
+            return newChanges
+          })
         }
       }
       return updated
     })
-  }, [attributes])
+  }, [attributes, convertValueForAttribute, valuesAreEqual])
 
   // Handle paste range - paste data into multiple cells, tiling to fill the selection
   // If clipboard data is larger than selection, paste all the data (extending beyond selection)
   // If clipboard data is smaller than selection, tile/repeat to fill the selection
   // Column layout: [name, coordinates, ...displayAttributes]
   const handlePasteRange = useCallback((data: string[][], startRow: number, startCol: number, endRow: number, endCol: number) => {
-    console.log('Paste range:', { data, startRow, startCol, endRow, endCol })
-
     if (data.length === 0 || !data[0] || data[0].length === 0) return
+
+    // Track changes to batch update pendingChanges
+    const pasteChanges = new Map<string, AssetChanges>()
 
     setItems(prev => {
       const updated = new Map(prev)
@@ -179,8 +306,6 @@ export default function AssetListPage() {
       const dataCols = data[0].length
 
       // Use the larger of selection or data dimensions
-      // This allows pasting all data even if it's larger than selection,
-      // and tiling if data is smaller than selection
       const rowsToProcess = Math.max(selectionRows, dataRows)
       const colsToProcess = Math.max(selectionCols, dataCols)
 
@@ -190,34 +315,34 @@ export default function AssetListPage() {
       // Iterate over the paste range
       for (let rowOffset = 0; rowOffset < rowsToProcess; rowOffset++) {
         const targetRow = startRow + rowOffset
-        if (targetRow >= totalCount) continue // Don't paste beyond grid row bounds
+        if (targetRow >= totalCount) continue
 
         const existingAsset = updated.get(targetRow)
-        if (!existingAsset) continue // Skip if row not loaded
+        if (!existingAsset) continue
 
         let updatedAsset = { ...existingAsset }
+        let assetChanges = pasteChanges.get(existingAsset.id) || {}
 
-        // Get the source row by wrapping around (tiling)
         const sourceRowIndex = rowOffset % dataRows
         const sourceRow = data[sourceRowIndex]
 
         for (let colOffset = 0; colOffset < colsToProcess; colOffset++) {
           const targetCol = startCol + colOffset
-          if (targetCol >= totalCols) continue // Don't paste beyond grid column bounds
+          if (targetCol >= totalCols) continue
 
-          // Get the source column by wrapping around (tiling)
           const sourceColIndex = colOffset % dataCols
           const cellValue = sourceRow[sourceColIndex] ?? ''
 
           // Handle name column (index 0, editable when editing is enabled)
           if (targetCol === 0 && editingEnabled) {
             updatedAsset = { ...updatedAsset, name: cellValue }
+            assetChanges = { ...assetChanges, name: cellValue }
             continue
           }
 
           // Handle coordinates column (index 1, not editable)
           if (targetCol === 1) {
-            continue // Skip - coordinates not editable
+            continue
           }
 
           // Handle attribute columns (index 2+)
@@ -226,37 +351,14 @@ export default function AssetListPage() {
             const attribute = displayAttributes[attrIndex]
             if (!attribute) continue
 
-            // Convert value based on attribute type
+            // Convert value based on attribute type (special handling for paste boolean values)
             let valueToStore: any = cellValue.trim() === '' ? null : cellValue
-
             if (valueToStore !== null) {
-              switch (attribute.attributeType) {
-                case 'boolean':
-                  valueToStore = cellValue.toLowerCase() === 'true' || cellValue.toLowerCase() === 'yes' || cellValue === '1'
-                  break
-                case 'number':
-                  valueToStore = parseFloat(cellValue) || null
-                  break
-                case 'date':
-                case 'datetime': {
-                  if (cellValue) {
-                    const date = new Date(cellValue)
-                    valueToStore = isNaN(date.getTime()) ? null : date.toISOString()
-                  } else {
-                    valueToStore = null
-                  }
-                  break
-                }
-                case 'link':
-                  try {
-                    const parsed = JSON.parse(cellValue)
-                    if (typeof parsed === 'object' && parsed.url !== undefined) {
-                      valueToStore = parsed
-                    }
-                  } catch {
-                    // Keep as string URL
-                  }
-                  break
+              if (attribute.attributeType === 'boolean') {
+                // More flexible boolean parsing for paste
+                valueToStore = cellValue.toLowerCase() === 'true' || cellValue.toLowerCase() === 'yes' || cellValue === '1'
+              } else {
+                valueToStore = convertValueForAttribute(cellValue, attribute.attributeType)
               }
             }
 
@@ -267,15 +369,131 @@ export default function AssetListPage() {
                 [attribute.apiKey]: valueToStore
               }
             }
+            assetChanges = {
+              ...assetChanges,
+              attributes: {
+                ...assetChanges.attributes,
+                [attribute.apiKey]: valueToStore
+              }
+            }
           }
         }
 
         updated.set(targetRow, updatedAsset)
+        if (assetChanges.name !== undefined || assetChanges.attributes) {
+          pasteChanges.set(existingAsset.id, assetChanges)
+        }
       }
 
       return updated
     })
-  }, [displayAttributes, totalCount, editingEnabled])
+
+    // Batch update pending changes
+    if (pasteChanges.size > 0) {
+      setPendingChanges(prevChanges => {
+        const newChanges = new Map(prevChanges)
+        pasteChanges.forEach((changes, assetId) => {
+          const existing = newChanges.get(assetId) || {}
+          newChanges.set(assetId, {
+            ...existing,
+            ...changes,
+            attributes: {
+              ...existing.attributes,
+              ...changes.attributes
+            }
+          })
+        })
+        return newChanges
+      })
+    }
+  }, [displayAttributes, totalCount, editingEnabled, convertValueForAttribute])
+
+  // Save all pending changes to the server
+  const saveChanges = useCallback(async () => {
+    if (pendingChanges.size === 0) return
+
+    setIsSaving(true)
+    setSaveError(null)
+
+    const errors: string[] = []
+    const savePromises: Promise<void>[] = []
+
+    pendingChanges.forEach((changes, assetId) => {
+      const savePromise = (async () => {
+        try {
+          // Build the update payload
+          const payload: { name?: string; attributes?: Record<string, any> } = {}
+
+          if (changes.name !== undefined) {
+            payload.name = changes.name
+          }
+
+          if (changes.attributes && Object.keys(changes.attributes).length > 0) {
+            payload.attributes = changes.attributes
+          }
+
+          if (Object.keys(payload).length > 0) {
+            // We don't need to use the response - local state already has the correct values
+            // from the optimistic update when the user edited the cell
+            await updateAsset(initialData.workspaceId, assetId, payload)
+          }
+        } catch (error) {
+          errors.push(`Failed to save asset: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      })()
+
+      savePromises.push(savePromise)
+    })
+
+    await Promise.all(savePromises)
+
+    setIsSaving(false)
+
+    if (errors.length > 0) {
+      setSaveError(errors.join('\n'))
+    } else {
+      // Local state already has the correct values from optimistic updates
+      // Update the last saved state ref so discard will revert to this state
+      lastSavedItemsRef.current = new Map(items)
+      // Clear pending changes on success
+      setPendingChanges(new Map())
+      setSaveSuccess(true)
+      setEditingEnabled(false)
+    }
+  }, [pendingChanges, initialData.workspaceId, items])
+
+  // Handle Done Editing button - save changes or show discard dialog
+  const handleDoneEditing = useCallback(() => {
+    if (hasUnsavedChanges) {
+      saveChanges()
+    } else {
+      setEditingEnabled(false)
+    }
+  }, [hasUnsavedChanges, saveChanges])
+
+  // Handle discarding changes
+  const handleDiscardChanges = useCallback(() => {
+    // Revert to the last saved state (not the original loader data)
+    setItems(new Map(lastSavedItemsRef.current))
+    setPendingChanges(new Map())
+    setDiscardDialogOpen(false)
+    setEditingEnabled(false)
+  }, [])
+
+  // Handle clicking Edit button when changes exist (to cancel)
+  const handleEditToggle = useCallback(() => {
+    if (editingEnabled && hasUnsavedChanges) {
+      setDiscardDialogOpen(true)
+    } else {
+      setEditingEnabled(!editingEnabled)
+    }
+  }, [editingEnabled, hasUnsavedChanges])
+
+  // Block navigation when there are unsaved changes
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
+  )
 
   const formatCoordinates = (assetLocation: any) => {
     if (!assetLocation?.coordinates) {
@@ -1175,11 +1393,34 @@ export default function AssetListPage() {
       {
         key: 'name',
         header: <Box sx={{ px: 2 }}>Name</Box>,
-        width: 200,
-        minWidth: 150,
+        width: 250,
+        minWidth: 180,
         editable: editingEnabled,
         render: (asset) => (
-          <Box sx={{ px: 2 }}>
+          <Box sx={{ px: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title="View on Map" arrow placement="right">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Open map in new window with asset centered
+                  const coords = asset.location?.coordinates
+                  const basePath = window.location.pathname.replace(/\/asset-types\/.*/, '/map')
+                  if (coords && coords.length >= 2) {
+                    window.open(`${basePath}?lat=${coords[1]}&lng=${coords[0]}&zoom=16&assetId=${asset.id}`, '_blank')
+                  } else {
+                    window.open(`${basePath}?assetId=${asset.id}`, '_blank')
+                  }
+                }}
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main' }
+                }}
+              >
+                <MapIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             {editingEnabled ? (
               asset.name
             ) : (
@@ -1269,7 +1510,7 @@ export default function AssetListPage() {
     }))
 
     return [...baseColumns, ...attributeColumns]
-  }, [displayAttributes, location.state, editingEnabled, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor, createChoicesCellEditor])
+  }, [displayAttributes, location.state, editingEnabled, navigate, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor, createChoicesCellEditor])
 
   // Cell placeholder for loading state
   const cellPlaceholder = (
@@ -1282,17 +1523,48 @@ export default function AssetListPage() {
   const header = (
     <Box sx={{ flexShrink: 0, p: 3, pb: 2 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h5" component="h2">Assets</Typography>
         <Stack direction="row" alignItems="center" spacing={2}>
-          <Button
-            size="small"
-            variant={editingEnabled ? 'contained' : 'outlined'}
-            color={editingEnabled ? 'primary' : 'inherit'}
-            startIcon={editingEnabled ? <EditOffIcon /> : <EditIcon />}
-            onClick={() => setEditingEnabled(!editingEnabled)}
-          >
-            {editingEnabled ? 'Done Editing' : 'Edit'}
-          </Button>
+          <Typography variant="h5" component="h2">Assets</Typography>
+          {hasUnsavedChanges && (
+            <Typography variant="body2" color="warning.main" sx={{ fontWeight: 500 }}>
+              {pendingChanges.size} unsaved change{pendingChanges.size !== 1 ? 's' : ''}
+            </Typography>
+          )}
+        </Stack>
+        <Stack direction="row" alignItems="center" spacing={2}>
+          {editingEnabled ? (
+            <>
+              <Button
+                size="small"
+                variant="outlined"
+                color="inherit"
+                onClick={handleEditToggle}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                onClick={handleDoneEditing}
+                disabled={isSaving || !hasUnsavedChanges}
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              startIcon={<EditIcon />}
+              onClick={handleEditToggle}
+            >
+              Edit
+            </Button>
+          )}
           {hiddenCount > 0 && (
             <FormControlLabel
               control={
@@ -1309,41 +1581,102 @@ export default function AssetListPage() {
               }
             />
           )}
-          <Typography color="text.secondary">
-            {items.size} of {totalCount}
-          </Typography>
         </Stack>
       </Stack>
     </Box>
   )
 
   return (
-    <Box sx={{
-      flexGrow: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      bgcolor: 'background.default',
-      height: '100%',
-      minHeight: 0,
-      pb: 2
-    }}>
-      <VirtualizedGrid<Asset>
-        items={items}
-        totalCount={totalCount}
-        getRowKey={(asset) => asset.id}
-        columns={columns}
-        onLoadRange={handleLoadRange}
-        isLoading={isLoading}
-        estimatedRowHeight={52}
-        emptyMessage="No assets found"
-        header={header}
-        loadingPlaceholder={cellPlaceholder}
-        stickyHeader
-        headerHeight={48}
-        onCellEdit={editingEnabled ? handleCellEdit : undefined}
-        onPasteRange={editingEnabled ? handlePasteRange : undefined}
-      />
-    </Box>
+    <>
+      <Box sx={{
+        flexGrow: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        bgcolor: 'background.default',
+        height: '100%',
+        minHeight: 0,
+        pb: 2
+      }}>
+        <VirtualizedGrid<Asset>
+          items={items}
+          totalCount={totalCount}
+          getRowKey={(asset) => asset.id}
+          columns={columns}
+          onLoadRange={handleLoadRange}
+          isLoading={isLoading}
+          estimatedRowHeight={52}
+          emptyMessage="No assets found"
+          header={header}
+          loadingPlaceholder={cellPlaceholder}
+          stickyHeader
+          headerHeight={48}
+          onCellEdit={editingEnabled ? handleCellEdit : undefined}
+          onPasteRange={editingEnabled ? handlePasteRange : undefined}
+        />
+      </Box>
+
+      {/* Discard changes confirmation dialog */}
+      <Dialog open={discardDialogOpen} onClose={() => setDiscardDialogOpen(false)}>
+        <DialogTitle>Discard Changes?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            You have {pendingChanges.size} unsaved change{pendingChanges.size !== 1 ? 's' : ''}.
+            Are you sure you want to discard them?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDiscardDialogOpen(false)}>Keep Editing</Button>
+          <Button onClick={handleDiscardChanges} color="error">Discard</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Navigation blocker dialog */}
+      <Dialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()}>
+        <DialogTitle>Unsaved Changes</DialogTitle>
+        <DialogContent>
+          <Typography>
+            You have unsaved changes. Do you want to save them before leaving?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => blocker.reset?.()}>Cancel</Button>
+          <Button onClick={() => { blocker.proceed?.() }} color="error">Leave Without Saving</Button>
+          <Button
+            onClick={async () => {
+              await saveChanges()
+              blocker.proceed?.()
+            }}
+            variant="contained"
+          >
+            Save and Leave
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Success snackbar */}
+      <Snackbar
+        open={saveSuccess}
+        autoHideDuration={3000}
+        onClose={() => setSaveSuccess(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSaveSuccess(false)} severity="success" variant="filled">
+          Changes saved successfully
+        </Alert>
+      </Snackbar>
+
+      {/* Error snackbar */}
+      <Snackbar
+        open={!!saveError}
+        autoHideDuration={6000}
+        onClose={() => setSaveError(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSaveError(null)} severity="error" variant="filled">
+          {saveError}
+        </Alert>
+      </Snackbar>
+    </>
   )
 }
