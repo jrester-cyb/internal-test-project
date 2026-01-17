@@ -41,6 +41,7 @@ export interface AssetTypeAttribute {
   scope?: 'global' | 'override' | 'local'
   baseAttributeId?: string | null
   isHidden?: boolean
+  isOverride?: boolean
 }
 
 export interface UnitInfo {

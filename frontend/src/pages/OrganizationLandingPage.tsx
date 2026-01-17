@@ -81,7 +81,7 @@ export default function OrganizationLandingPage() {
       ) : (
         <Grid container spacing={3}>
           {workspaces.map((workspace) => (
-            <Grid item xs={12} sm={6} md={4} key={workspace.id}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={workspace.id}>
               <Card
                 elevation={2}
                 sx={{

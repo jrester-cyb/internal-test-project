@@ -550,15 +550,15 @@ export default function AssetTypeAttributesPage() {
       setAllAttributes(updatedAttributes)
 
       // Update orders in the backend - send just the IDs in order
-      try {
-        const updates = updatedAttributes.map(attr => attr.id)
-        await reorderAssetTypeAttributes(workspaceId!, assetTypeId!, updates)
-      } catch (error) {
-        console.error('Failed to update attribute order:', error)
-        alert('Failed to update attribute order')
-        // Revert local state on error
-        setAllAttributes(allAttributes)
-      }
+      // try {
+      //   const updates = updatedAttributes.map(attr => attr.id)
+      //   await reorderAssetTypeAttributes(workspaceId!, assetTypeId!, updates)
+      // } catch (error) {
+      //   console.error('Failed to update attribute order:', error)
+      //   alert('Failed to update attribute order')
+      //   // Revert local state on error
+      //   setAllAttributes(allAttributes)
+      // }
     }
   }
 

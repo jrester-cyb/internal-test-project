@@ -181,7 +181,7 @@ export default function AssetDetailPage() {
                   id: currentAsset.id,
                   name: currentAsset.name,
                   assetType: currentAsset.assetType,
-                  assetTypeName: currentAsset.assetType?.name || 'Unknown',
+                  assetTypeName: 'Unknown',
                   hasChildren: relatedAssets?.children.length > 0 || false,
                   relatedUrl: '' // Not needed for root
                 }}
