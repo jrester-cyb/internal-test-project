@@ -13,8 +13,8 @@ These tests ensure that the attribute filtering logic works correctly for:
 
 import pytest
 from django.db.models import Q
-from datetime import date, datetime, timezone
 
+from assets.models.attribute_value import WorkspaceAttributeValueOverride
 from assets.filter_serializers import FilterSerializer, FilterGroupSerializer
 from assets.models import (
     AssetType,
@@ -24,7 +24,6 @@ from assets.models import (
     TextAttributeValue,
     NumberAttributeValue,
     BooleanAttributeValue,
-    DateAttributeValue,
     LinkAttributeValue,
     JSONAttributeValue,
 )
@@ -640,6 +639,56 @@ class TestAttributeFilterExecution:
         results = Asset.objects.filter(q)
         assert results.count() == 1
         assert results.first() == asset1
+
+    def test_workspace_overrides_global_attribute_filter(
+        self, organization, asset_type, workspace, workspace_local_attribute
+    ):
+        # Test that an attribute value defined in the workspace overrides the global one
+        global_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Status",
+            api_key="status",
+            attribute_type="text",
+        )
+
+        asset1 = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset 1"
+        )
+        global_value = TextAttributeValue.objects.create(
+            asset=asset1, asset_type_attribute=global_attr, value="global_value"
+        )
+        local_attribute_value = TextAttributeValue.objects.create(
+            asset=asset1,
+            asset_type_attribute=global_attr,
+            value="local_value",
+        )
+
+        # Create a workspace-local attribute value pointing at the global attribute
+        WorkspaceAttributeValueOverride.objects.create(
+            asset_type_attribute=global_attr,
+            base_value=global_value,
+            override_value=local_attribute_value,
+            workspace=workspace,
+        )
+
+        # Filter for local_value should find the asset
+        data = {
+            "field": "attributes.status",
+            "value": "local_value",
+            "operator": "exact",
+        }
+
+        serializer = FilterGroupSerializer(data=data, context={"workspace": workspace})
+        q = serializer.build_filter_query()
+        results = Asset.objects.filter(q)
+        assert results.count() == 1
+        assert results.first() == asset1
+
+        # Test that if we're not in the workspace context, global value is used
+        serializer_global = FilterGroupSerializer(data=data)
+        q_global = serializer_global.build_filter_query()
+        results_global = Asset.objects.filter(q_global)
+        assert results_global.count() == 0
 
     def test_link_attribute_filter_searches_url(
         self, organization, asset_type, global_link_attribute
@@ -1754,7 +1803,6 @@ class TestAttributeFilterRegressions:
         assert type1_inactive not in results
         assert type2_inactive not in results
 
-
     def test_choice_attribute_filter(self, organization):
         """
         Test that filtering by choice attribute values works correctly.
@@ -1809,7 +1857,9 @@ class TestAttributeFilterRegressions:
             organization=organization, asset_type=asset_type, name="Inactive Asset"
         )
         ChoiceAttributeValue.objects.create(
-            asset=asset_inactive, asset_type_attribute=status_attr, choice=choice_inactive
+            asset=asset_inactive,
+            asset_type_attribute=status_attr,
+            choice=choice_inactive,
         )
 
         asset_pending = Asset.objects.create(
@@ -1821,6 +1871,7 @@ class TestAttributeFilterRegressions:
 
         # Clear the cache to ensure we get fresh attribute definitions with has_choices
         from django.core.cache import cache
+
         cache.clear()
 
         # Test 1: Filter for exact value "Active"
@@ -1836,7 +1887,9 @@ class TestAttributeFilterRegressions:
         result_names = list(results.values_list("name", flat=True))
         print(f"Exact filter results: {result_names}")
 
-        assert results.count() == 1, f"Expected 1 result for exact 'Active', got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result for exact 'Active', got {results.count()}: {result_names}"
         assert asset_active in results
 
         # Test 2: Filter to exclude "Inactive" (nin operator)
@@ -1853,7 +1906,9 @@ class TestAttributeFilterRegressions:
         print(f"Nin filter results: {result_names}")
 
         # Should include: Active, Pending (not Inactive)
-        assert results.count() == 2, f"Expected 2 results for nin 'Inactive', got {results.count()}: {result_names}"
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results for nin 'Inactive', got {results.count()}: {result_names}"
         assert asset_active in results
         assert asset_pending in results
         assert asset_inactive not in results
@@ -1872,7 +1927,9 @@ class TestAttributeFilterRegressions:
         print(f"In filter results: {result_names}")
 
         # Should include: Active, Pending
-        assert results.count() == 2, f"Expected 2 results for in ['Active', 'Pending'], got {results.count()}: {result_names}"
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results for in ['Active', 'Pending'], got {results.count()}: {result_names}"
         assert asset_active in results
         assert asset_pending in results
         assert asset_inactive not in results
@@ -1916,10 +1973,14 @@ class TestAttributeFilterRegressions:
 
         # Create an asset with the "Residential" choice
         asset_with_choice = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Residential Building"
+            organization=organization,
+            asset_type=asset_type,
+            name="Residential Building",
         )
         ChoiceAttributeValue.objects.create(
-            asset=asset_with_choice, asset_type_attribute=category_attr, choice=choice_residential
+            asset=asset_with_choice,
+            asset_type_attribute=category_attr,
+            choice=choice_residential,
         )
 
         # Create another asset with a different choice
@@ -1927,11 +1988,14 @@ class TestAttributeFilterRegressions:
             organization=organization, asset_type=asset_type, name="Commercial Building"
         )
         ChoiceAttributeValue.objects.create(
-            asset=asset_commercial, asset_type_attribute=category_attr, choice=choice_commercial
+            asset=asset_commercial,
+            asset_type_attribute=category_attr,
+            choice=choice_commercial,
         )
 
         # Clear the cache to ensure we get fresh attribute definitions with has_choices
         from django.core.cache import cache
+
         cache.clear()
 
         # This is what the frontend sends when the user selects just "Residential"
@@ -1950,7 +2014,9 @@ class TestAttributeFilterRegressions:
         print(f"Filter results: {result_names}")
 
         # Should find the asset with "Residential" choice
-        assert results.count() == 1, f"Expected 1 result for in ['Residential'], got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result for in ['Residential'], got {results.count()}: {result_names}"
         assert asset_with_choice in results
         assert asset_commercial not in results
 
@@ -1993,6 +2059,7 @@ class TestAttributeFilterRegressions:
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Get attribute definitions
@@ -2000,7 +2067,9 @@ class TestAttributeFilterRegressions:
         print(f"Attribute definitions: {attrs}")
 
         for attr in attrs:
-            print(f"  Attr ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices', 'N/A')}")
+            print(
+                f"  Attr ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices', 'N/A')}"
+            )
 
         # Build filter
         data = {
@@ -2021,7 +2090,9 @@ class TestAttributeFilterRegressions:
         result_names = list(results.values_list("name", flat=True))
         print(f"Results: {result_names}")
 
-        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result, got {results.count()}: {result_names}"
         assert asset in results
 
     def test_choice_attribute_filter_with_stale_cache(self, organization):
@@ -2055,12 +2126,15 @@ class TestAttributeFilterRegressions:
 
         # Clear the cache and then query to populate it WITHOUT has_choices
         from django.core.cache import cache
+
         cache.clear()
 
         # This caches the attribute WITHOUT has_choices=True (because no choices exist yet)
         attrs_before = get_attributes_by_api_key("stale_status")
         print(f"Attrs BEFORE adding choices: {attrs_before}")
-        assert attrs_before[0].get("has_choices") == False, "Should be False since no choices exist"
+        assert (
+            attrs_before[0].get("has_choices") == False
+        ), "Should be False since no choices exist"
 
         # NOW add choices to the attribute (simulating a later modification)
         choice_active = TextAttributeChoice.objects.create(
@@ -2109,7 +2183,9 @@ class TestAttributeFilterRegressions:
         cache.clear()
         attrs_after = get_attributes_by_api_key("stale_status")
         print(f"Attrs AFTER cache clear: {attrs_after}")
-        assert attrs_after[0].get("has_choices") == True, "Should be True since choices exist now"
+        assert (
+            attrs_after[0].get("has_choices") == True
+        ), "Should be True since choices exist now"
 
         # Build filter again with fresh cache
         serializer = FilterGroupSerializer(data=data)
@@ -2121,10 +2197,14 @@ class TestAttributeFilterRegressions:
         print(f"Results with fresh cache: {result_names}")
 
         # With fresh cache, should work
-        assert results.count() == 1, f"Expected 1 result with fresh cache, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result with fresh cache, got {results.count()}: {result_names}"
         assert asset in results
 
-    def test_choice_attribute_nin_null_excludes_asset_without_choice(self, organization):
+    def test_choice_attribute_nin_null_excludes_asset_without_choice(
+        self, organization
+    ):
         """
         User scenario: Two assets - one with a choice attribute set, one without.
         Filter: nin [null] to exclude assets without a value.
@@ -2163,11 +2243,14 @@ class TestAttributeFilterRegressions:
 
         # Asset 2: Does NOT have any value for the attribute (null)
         asset_without_value = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset WITHOUT choice"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset WITHOUT choice",
         )
 
         # Clear the cache to get fresh attribute definitions
         from django.core.cache import cache
+
         cache.clear()
 
         # Filter: exclude null - should return only assets that HAVE a value
@@ -2187,7 +2270,9 @@ class TestAttributeFilterRegressions:
 
         # Should include only the asset WITH a choice value
         # Should exclude the asset WITHOUT a value (null)
-        assert results.count() == 1, f"Expected 1 result (asset with choice), got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result (asset with choice), got {results.count()}: {result_names}"
         assert asset_with_choice in results
         assert asset_without_value not in results
 
@@ -2249,6 +2334,7 @@ class TestAttributeFilterRegressions:
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Exclude "Choice B" - should return asset_a and asset_none
@@ -2269,7 +2355,9 @@ class TestAttributeFilterRegressions:
         # Should include asset_a (has Choice A, not Choice B)
         # Should include asset_none (has no value, not Choice B)
         # Should exclude asset_b (has Choice B)
-        assert results.count() == 2, f"Expected 2 results, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results, got {results.count()}: {result_names}"
         assert asset_a in results
         assert asset_none in results
         assert asset_b not in results
@@ -2332,6 +2420,7 @@ class TestAttributeFilterRegressions:
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Select only "Choice A"
@@ -2350,7 +2439,9 @@ class TestAttributeFilterRegressions:
         print(f"Results: {result_names}")
 
         # Should include ONLY asset_a (has Choice A)
-        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result, got {results.count()}: {result_names}"
         assert asset_a in results
         assert asset_b not in results
         assert asset_none not in results
@@ -2402,26 +2493,36 @@ class TestAttributeFilterRegressions:
         )
 
         asset_inactive = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Inactive Local Asset"
+            organization=organization,
+            asset_type=asset_type,
+            name="Inactive Local Asset",
         )
         ChoiceAttributeValue.objects.create(
-            asset=asset_inactive, asset_type_attribute=local_attr, choice=choice_inactive
+            asset=asset_inactive,
+            asset_type_attribute=local_attr,
+            choice=choice_inactive,
         )
 
         asset_no_value = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="No Value Local Asset"
+            organization=organization,
+            asset_type=asset_type,
+            name="No Value Local Asset",
         )
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Check what the cache returns
         from assets.filter_serializers import get_attributes_by_api_key
+
         attrs = get_attributes_by_api_key("local_status")
         print(f"Cached attrs for local_status: {attrs}")
         for attr in attrs:
-            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+            print(
+                f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}"
+            )
 
         # Filter for "Active" choice
         data = {
@@ -2439,7 +2540,9 @@ class TestAttributeFilterRegressions:
         print(f"Results: {result_names}")
 
         # Should find only the active asset
-        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result, got {results.count()}: {result_names}"
         assert asset_active in results
         assert asset_inactive not in results
         assert asset_no_value not in results
@@ -2479,7 +2582,9 @@ class TestAttributeFilterRegressions:
 
         # Asset WITH a choice value
         asset_with_choice = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset WITH local choice"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset WITH local choice",
         )
         ChoiceAttributeValue.objects.create(
             asset=asset_with_choice, asset_type_attribute=local_attr, choice=choice_a
@@ -2487,19 +2592,25 @@ class TestAttributeFilterRegressions:
 
         # Asset WITHOUT any value
         asset_without_value = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset WITHOUT local choice"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset WITHOUT local choice",
         )
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Check what the cache returns
         from assets.filter_serializers import get_attributes_by_api_key
+
         attrs = get_attributes_by_api_key("lk_local")
         print(f"Cached attrs for lk_local: {attrs}")
         for attr in attrs:
-            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+            print(
+                f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}"
+            )
 
         # Filter: exclude null
         data = {
@@ -2517,11 +2628,15 @@ class TestAttributeFilterRegressions:
         print(f"Results: {result_names}")
 
         # Should include only the asset WITH a choice value
-        assert results.count() == 1, f"Expected 1 result (asset with choice), got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result (asset with choice), got {results.count()}: {result_names}"
         assert asset_with_choice in results
         assert asset_without_value not in results
 
-    def test_workspace_local_choice_attribute_nin_specific_value(self, organization, workspace):
+    def test_workspace_local_choice_attribute_nin_specific_value(
+        self, organization, workspace
+    ):
         """
         Test nin with specific value on a single workspace local attribute with choices.
 
@@ -2585,14 +2700,18 @@ class TestAttributeFilterRegressions:
 
         # Clear cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Check cached attrs
         from assets.filter_serializers import get_attributes_by_api_key
+
         attrs = get_attributes_by_api_key("lk_single")
         print(f"Cached attrs: {attrs}")
         for attr in attrs:
-            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+            print(
+                f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}"
+            )
 
         # Filter: nin ["m"] - should exclude asset with "m", include "n" and no value
         data = {
@@ -2612,12 +2731,22 @@ class TestAttributeFilterRegressions:
         # Should EXCLUDE asset_m (has choice "m")
         # Should INCLUDE asset_n (has choice "n", not "m")
         # Should INCLUDE asset_none (no value, not "m")
-        assert asset_m not in results, f"Asset with 'm' should be EXCLUDED, got: {result_names}"
-        assert asset_n in results, f"Asset with 'n' should be INCLUDED, got: {result_names}"
-        assert asset_none in results, f"Asset without value should be INCLUDED, got: {result_names}"
-        assert results.count() == 2, f"Expected 2 results, got {results.count()}: {result_names}"
+        assert (
+            asset_m not in results
+        ), f"Asset with 'm' should be EXCLUDED, got: {result_names}"
+        assert (
+            asset_n in results
+        ), f"Asset with 'n' should be INCLUDED, got: {result_names}"
+        assert (
+            asset_none in results
+        ), f"Asset without value should be INCLUDED, got: {result_names}"
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results, got {results.count()}: {result_names}"
 
-    def test_workspace_local_choice_attribute_cross_workspace_conflict(self, organization):
+    def test_workspace_local_choice_attribute_cross_workspace_conflict(
+        self, organization
+    ):
         """
         Test the case where TWO workspaces have local attributes with the SAME api_key,
         but only ONE has choices. This demonstrates the current bug where filtering
@@ -2676,7 +2805,9 @@ class TestAttributeFilterRegressions:
 
         # Create asset in Workspace A with a CHOICE value
         asset_with_choice = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset in Workspace A"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset in Workspace A",
         )
         asset_with_choice.workspace_memberships.create(workspace=workspace_a)
         ChoiceAttributeValue.objects.create(
@@ -2685,26 +2816,36 @@ class TestAttributeFilterRegressions:
 
         # Create asset in Workspace B with a plain TEXT value (no choice)
         asset_with_text = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset in Workspace B"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset in Workspace B",
         )
         asset_with_text.workspace_memberships.create(workspace=workspace_b)
         TextAttributeValue.objects.create(
-            asset=asset_with_text, asset_type_attribute=local_attr_b, value="Plain Text Value"
+            asset=asset_with_text,
+            asset_type_attribute=local_attr_b,
+            value="Plain Text Value",
         )
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Check what the cache returns - it will return BOTH attributes!
         from assets.filter_serializers import get_attributes_by_api_key
+
         attrs = get_attributes_by_api_key("lk_cross")
         print(f"Cached attrs for lk_cross: {attrs}")
         for attr in attrs:
-            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+            print(
+                f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}"
+            )
 
         # This shows the bug: we get BOTH attributes, one with choices, one without
-        assert len(attrs) == 2, f"Expected 2 attributes (from both workspaces), got {len(attrs)}"
+        assert (
+            len(attrs) == 2
+        ), f"Expected 2 attributes (from both workspaces), got {len(attrs)}"
 
         # Now filter for "Choice Value"
         data = {
@@ -2726,7 +2867,9 @@ class TestAttributeFilterRegressions:
         print(f"Results: {result_names}")
 
         # Should find the asset with the choice value
-        assert asset_with_choice in results, f"Expected to find asset_with_choice, got: {result_names}"
+        assert (
+            asset_with_choice in results
+        ), f"Expected to find asset_with_choice, got: {result_names}"
         # Should NOT find the asset with plain text (different value)
         assert asset_with_text not in results, f"Should not find asset_with_text"
 
@@ -2786,7 +2929,9 @@ class TestAttributeFilterRegressions:
 
         # Create asset in Workspace A with a CHOICE value
         asset_with_choice = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset with choice value"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with choice value",
         )
         asset_with_choice.workspace_memberships.create(workspace=workspace_a)
         ChoiceAttributeValue.objects.create(
@@ -2801,14 +2946,18 @@ class TestAttributeFilterRegressions:
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Check what the cache returns
         from assets.filter_serializers import get_attributes_by_api_key
+
         attrs = get_attributes_by_api_key("lk_nin_cross")
         print(f"Cached attrs for lk_nin_cross: {attrs}")
         for attr in attrs:
-            print(f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}")
+            print(
+                f"  ID: {attr['id']}, Type: {attr['attribute_type']}, Has Choices: {attr.get('has_choices')}"
+            )
 
         # Filter: nin [null] - should return only assets WITH a value
         data = {
@@ -2835,7 +2984,9 @@ class TestAttributeFilterRegressions:
         )
         assert asset_without_value not in results
 
-    def test_number_attribute_nin_null_with_asset_type_filter(self, organization, workspace):
+    def test_number_attribute_nin_null_with_asset_type_filter(
+        self, organization, workspace
+    ):
         """
         Test the exact scenario from the user's filter JSON:
         {"filters":[{"logic":"AND","filters":[
@@ -2885,11 +3036,14 @@ class TestAttributeFilterRegressions:
 
         # Asset WITHOUT any value (null)
         asset_without_value = Asset.objects.create(
-            organization=organization, asset_type=asset_type, name="Asset WITHOUT number"
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset WITHOUT number",
         )
 
         # Clear the cache
         from django.core.cache import cache
+
         cache.clear()
 
         # This is the EXACT filter structure from the user's JSON
@@ -2924,7 +3078,9 @@ class TestAttributeFilterRegressions:
         print(f"Results: {result_names}")
 
         # Should return exactly 1 asset - the one WITH a value
-        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 1
+        ), f"Expected 1 result, got {results.count()}: {result_names}"
         assert asset_with_value in results
         assert asset_without_value not in results
 
@@ -3067,17 +3223,21 @@ class TestAttributeValuesEndpoint:
 
         # Should return: Blank, Active, Pending (only USED choices, in order)
         # Note: Inactive should NOT be in results because no asset uses it
-        assert results[0] == "Blank", f"Expected 'Blank' as first result, got {results[0]}"
+        assert (
+            results[0] == "Blank"
+        ), f"Expected 'Blank' as first result, got {results[0]}"
         assert "Active" in results, "Expected 'Active' in results (it's used)"
         assert "Pending" in results, "Expected 'Pending' in results (it's used)"
-        assert "Inactive" not in results, "Inactive should NOT be in results (it's not used)"
+        assert (
+            "Inactive" not in results
+        ), "Inactive should NOT be in results (it's not used)"
 
         # Verify order: Active (order=0) should come before Pending (order=2)
         active_idx = results.index("Active")
         pending_idx = results.index("Pending")
-        assert active_idx < pending_idx, (
-            f"Expected Active before Pending, got indices: {active_idx}, {pending_idx}"
-        )
+        assert (
+            active_idx < pending_idx
+        ), f"Expected Active before Pending, got indices: {active_idx}, {pending_idx}"
 
     @pytest.mark.django_db
     def test_values_endpoint_returns_link_with_url_and_text(
@@ -3125,21 +3285,31 @@ class TestAttributeValuesEndpoint:
         print(f"Link values endpoint results: {results}")
 
         # First should be "Blank"
-        assert results[0] == "Blank", f"Expected 'Blank' as first result, got {results[0]}"
+        assert (
+            results[0] == "Blank"
+        ), f"Expected 'Blank' as first result, got {results[0]}"
 
         # The link values should be objects with url and text fields
         link_values = [r for r in results if isinstance(r, dict)]
         assert len(link_values) == 2, f"Expected 2 link values, got {len(link_values)}"
 
         # Find the example.com link
-        example_link = next((l for l in link_values if l.get("url") == "https://example.com"), None)
+        example_link = next(
+            (l for l in link_values if l.get("url") == "https://example.com"), None
+        )
         assert example_link is not None, "Expected to find example.com link"
-        assert example_link["text"] == "Example Site", f"Expected text 'Example Site', got {example_link['text']}"
+        assert (
+            example_link["text"] == "Example Site"
+        ), f"Expected text 'Example Site', got {example_link['text']}"
 
         # Find the google.com link (no display_text, should fall back to URL)
-        google_link = next((l for l in link_values if l.get("url") == "https://google.com"), None)
+        google_link = next(
+            (l for l in link_values if l.get("url") == "https://google.com"), None
+        )
         assert google_link is not None, "Expected to find google.com link"
-        assert google_link["text"] == "https://google.com", f"Expected text to fall back to URL, got {google_link['text']}"
+        assert (
+            google_link["text"] == "https://google.com"
+        ), f"Expected text to fall back to URL, got {google_link['text']}"
 
     @pytest.mark.django_db
     def test_values_endpoint_returns_link_choices_with_url_and_text(
@@ -3209,22 +3379,37 @@ class TestAttributeValuesEndpoint:
         print(f"Link choice values endpoint results: {results}")
 
         # First should be "Blank"
-        assert results[0] == "Blank", f"Expected 'Blank' as first result, got {results[0]}"
+        assert (
+            results[0] == "Blank"
+        ), f"Expected 'Blank' as first result, got {results[0]}"
 
         # The link values should be objects with url and text fields
         link_values = [r for r in results if isinstance(r, dict)]
-        assert len(link_values) == 2, f"Expected 2 link values (unused choice excluded), got {len(link_values)}"
+        assert (
+            len(link_values) == 2
+        ), f"Expected 2 link values (unused choice excluded), got {len(link_values)}"
 
         # Find the docs link
-        docs_link = next((l for l in link_values if l.get("url") == "https://docs.example.com"), None)
+        docs_link = next(
+            (l for l in link_values if l.get("url") == "https://docs.example.com"), None
+        )
         assert docs_link is not None, "Expected to find docs.example.com link"
-        assert docs_link["text"] == "Documentation", f"Expected text 'Documentation', got {docs_link['text']}"
+        assert (
+            docs_link["text"] == "Documentation"
+        ), f"Expected text 'Documentation', got {docs_link['text']}"
 
         # Find the support link (no display_text, should fall back to URL)
-        support_link = next((l for l in link_values if l.get("url") == "https://support.example.com"), None)
+        support_link = next(
+            (l for l in link_values if l.get("url") == "https://support.example.com"),
+            None,
+        )
         assert support_link is not None, "Expected to find support.example.com link"
-        assert support_link["text"] == "https://support.example.com", f"Expected text to fall back to URL, got {support_link['text']}"
+        assert (
+            support_link["text"] == "https://support.example.com"
+        ), f"Expected text to fall back to URL, got {support_link['text']}"
 
         # Verify unused choice is NOT in results
         unused_urls = [l.get("url") for l in link_values]
-        assert "https://unused.example.com" not in unused_urls, "Unused choice should NOT be in results"
+        assert (
+            "https://unused.example.com" not in unused_urls
+        ), "Unused choice should NOT be in results"
