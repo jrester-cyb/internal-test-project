@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from "react";
+import { memo } from "react";
 import { Box, Tabs, Tab, Container, Skeleton, Stack } from "@mui/material";
 import { Outlet, useLocation, useParams, Link, useMatches, useNavigation } from "react-router-dom";
 import {
@@ -71,12 +71,10 @@ const AttributesSkeleton = () => (
 // Memoized tab bar to prevent unnecessary re-renders
 const TabBar = memo(function TabBar({
   currentTab,
-  hideNavbar,
-  onTabClick
+  hideNavbar
 }: {
   currentTab: number
   hideNavbar: boolean
-  onTabClick: (tab: number) => void
 }) {
   return (
     <Box sx={{
@@ -104,7 +102,6 @@ const TabBar = memo(function TabBar({
           to="about"
           value={0}
           onMouseEnter={preloadAssetTypeAboutPage}
-          onClick={() => onTabClick(0)}
         />
         <Tab
           label="Assets"
@@ -112,7 +109,6 @@ const TabBar = memo(function TabBar({
           to="assets"
           value={1}
           onMouseEnter={preloadAssetGridPage}
-          onClick={() => onTabClick(1)}
         />
         <Tab
           label="Attributes"
@@ -120,7 +116,6 @@ const TabBar = memo(function TabBar({
           to="attributes"
           value={2}
           onMouseEnter={preloadAssetTypeAttributesPage}
-          onClick={() => onTabClick(2)}
         />
       </Tabs>
     </Box>
@@ -157,20 +152,18 @@ export default function AssetTypeLayout() {
   // Show navbar if current route shows it OR if navigating to a route that shows it
   const hideNavbar = currentRouteHidesNavbar && !pendingShowsNavbar
 
-  // Track selected tab locally for instant visual feedback
-  const [selectedTab, setSelectedTab] = useState(() => getTabFromPath(location.pathname, params.assetId))
-
-  // Sync with actual route when navigation completes (handles browser back/forward)
-  useEffect(() => {
-    setSelectedTab(getTabFromPath(location.pathname, params.assetId))
-  }, [location.pathname, params.assetId])
+  // Derive selected tab from current location (or pending location if navigating)
+  // This ensures the tab always reflects the actual/pending route and reverts if navigation is blocked
+  const currentTab = getTabFromPath(location.pathname, params.assetId)
+  const pendingTab = pendingLocation ? getTabFromPath(pendingLocation.pathname) : null
+  const selectedTab = pendingTab ?? currentTab
 
   // Show skeleton when navigating to a new route
   const isNavigating = navigation.state === 'loading'
 
   return (
     <Container maxWidth={false} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <TabBar currentTab={selectedTab} hideNavbar={hideNavbar} onTabClick={setSelectedTab} />
+      <TabBar currentTab={selectedTab} hideNavbar={hideNavbar} />
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {isNavigating ? (
           <Box sx={{ flexGrow: 1, bgcolor: 'background.paper', borderRadius: 1, m: 2, overflow: 'hidden' }}>
