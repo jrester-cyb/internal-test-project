@@ -1,6 +1,9 @@
 import { useMemo, useEffect } from 'react'
 import { MapContainer, TileLayer, ZoomControl, useMap, Pane } from 'react-leaflet'
 import L from 'leaflet'
+
+// Create a shared canvas renderer for better performance with many vector elements
+const canvasRenderer = L.canvas({ padding: 0.5 })
 import { Box, IconButton, Tooltip } from '@mui/material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
 import ScatterPlotIcon from '@mui/icons-material/ScatterPlot'
@@ -195,6 +198,7 @@ export default function MapView({
           onAssetClick={openAssetDrawer}
           onClusterClick={openClusterDrawer}
           disableClustering={clusteringDisabled}
+          canvasRenderer={canvasRenderer}
         />
       </MapContainer>
 

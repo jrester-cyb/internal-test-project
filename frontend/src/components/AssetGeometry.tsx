@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet'
+import { useMemo, memo } from 'react'
+import { Marker, Polygon, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Asset } from '../types'
 
@@ -15,29 +15,10 @@ interface AssetGeometryProps {
   onAssetClick: (asset: Asset) => void
   /** Minimum pixel size before collapsing to pin. Default 50 for area, 30 for length */
   minPixelSize?: number
-}
-
-// Calculate the centroid of a polygon
-function getPolygonCentroid(coordinates: number[][]): [number, number] {
-  let sumLat = 0
-  let sumLng = 0
-  const n = coordinates.length
-  for (const [lng, lat] of coordinates) {
-    sumLat += lat
-    sumLng += lng
-  }
-  return [sumLat / n, sumLng / n]
-}
-
-// Calculate the midpoint of a polyline
-function getPolylineMidpoint(coordinates: number[][]): [number, number] {
-  if (coordinates.length === 0) return [0, 0]
-  if (coordinates.length === 1) return [coordinates[0][1], coordinates[0][0]]
-
-  // Find the middle segment
-  const midIndex = Math.floor(coordinates.length / 2)
-  const [lng, lat] = coordinates[midIndex]
-  return [lat, lng]
+  /** Current zoom level - passed from parent to avoid individual event listeners */
+  currentZoom?: number
+  /** Canvas renderer for better performance with many vector elements */
+  canvasRenderer?: L.Canvas
 }
 
 // Calculate the pixel bounding box diagonal of a polygon
@@ -76,7 +57,7 @@ function getPolylinePixelLength(map: L.Map, coordinates: number[][]): number {
   return totalLength
 }
 
-export default function AssetGeometry({
+function AssetGeometryInner({
   asset,
   isSelected,
   markerIcon,
@@ -86,15 +67,14 @@ export default function AssetGeometry({
   polygonStrokeColor,
   polylineColor,
   onAssetClick,
-  minPixelSize = 50
+  minPixelSize = 50,
+  currentZoom,
+  canvasRenderer
 }: Readonly<AssetGeometryProps>) {
   const map = useMap()
 
-  // Track zoom to trigger re-renders when zoom changes
-  const [zoom, setZoom] = useState(map.getZoom())
-  useMapEvents({
-    zoomend: () => setZoom(map.getZoom())
-  })
+  // Use currentZoom prop if provided (from parent), otherwise fall back to map zoom
+  const zoom = currentZoom ?? map.getZoom()
 
   // Determine what to render based on geometry type and pixel size
   const renderInfo = useMemo(() => {
@@ -113,13 +93,9 @@ export default function AssetGeometry({
       const coords = coordinates[0] as unknown as number[][]
       const pixelSize = getPolygonPixelSize(map, coords)
 
+      // Skip rendering if too small
       if (pixelSize < minPixelSize) {
-        // Collapse to pin at centroid
-        return {
-          type: 'collapsed-polygon' as const,
-          position: getPolygonCentroid(coords),
-          originalCoords: coords
-        }
+        return null
       }
 
       return {
@@ -132,14 +108,9 @@ export default function AssetGeometry({
       const coords = coordinates as unknown as number[][]
       const pixelLength = getPolylinePixelLength(map, coords)
 
-      // Use a smaller threshold for lines since they're 1D
+      // Skip rendering if too small (use smaller threshold for lines since they're 1D)
       if (pixelLength < (minPixelSize * 0.6)) {
-        // Collapse to pin at midpoint
-        return {
-          type: 'collapsed-polyline' as const,
-          position: getPolylineMidpoint(coords),
-          originalCoords: coords
-        }
+        return null
       }
 
       return {
@@ -168,31 +139,7 @@ export default function AssetGeometry({
     )
   }
 
-  // Collapsed polygon - render as marker at centroid
-  if (renderInfo.type === 'collapsed-polygon') {
-    return (
-      <Marker
-        position={renderInfo.position}
-        icon={isSelected ? selectedMarkerIcon : markerIcon}
-        zIndexOffset={isSelected ? 1000 : 0}
-        eventHandlers={{ click: handleClick }}
-      />
-    )
-  }
-
-  // Collapsed polyline - render as marker at midpoint
-  if (renderInfo.type === 'collapsed-polyline') {
-    return (
-      <Marker
-        position={renderInfo.position}
-        icon={isSelected ? selectedMarkerIcon : markerIcon}
-        zIndexOffset={isSelected ? 1000 : 0}
-        eventHandlers={{ click: handleClick }}
-      />
-    )
-  }
-
-  // Full polygon
+  // Polygon - use canvas renderer for better performance
   if (renderInfo.type === 'polygon') {
     return (
       <>
@@ -205,7 +152,8 @@ export default function AssetGeometry({
               fillColor: 'transparent',
               weight: 12,
               opacity: 0.4,
-              fillOpacity: 0
+              fillOpacity: 0,
+              renderer: canvasRenderer
             }}
           />
         )}
@@ -216,14 +164,15 @@ export default function AssetGeometry({
             color: polygonStrokeColor,
             fillColor: polygonFillColor,
             weight: 2,
-            fillOpacity: 0.2
+            fillOpacity: 0.2,
+            renderer: canvasRenderer
           }}
         />
       </>
     )
   }
 
-  // Full polyline
+  // Full polyline - use canvas renderer for better performance
   if (renderInfo.type === 'polyline') {
     return (
       <>
@@ -236,7 +185,8 @@ export default function AssetGeometry({
               weight: 11,
               opacity: 0.5,
               lineCap: 'round',
-              lineJoin: 'round'
+              lineJoin: 'round',
+              renderer: canvasRenderer
             }}
           />
         )}
@@ -245,7 +195,8 @@ export default function AssetGeometry({
           eventHandlers={{ click: handleClick }}
           pathOptions={{
             color: polylineColor,
-            weight: 3
+            weight: 3,
+            renderer: canvasRenderer
           }}
         />
       </>
@@ -254,3 +205,22 @@ export default function AssetGeometry({
 
   return null
 }
+
+// Memoize to prevent re-renders when parent updates but props haven't changed
+const AssetGeometry = memo(AssetGeometryInner, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if these specific props change
+  return (
+    prevProps.asset.id === nextProps.asset.id &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.currentZoom === nextProps.currentZoom &&
+    prevProps.markerIcon === nextProps.markerIcon &&
+    prevProps.selectedMarkerIcon === nextProps.selectedMarkerIcon &&
+    prevProps.glowColor === nextProps.glowColor &&
+    prevProps.polygonFillColor === nextProps.polygonFillColor &&
+    prevProps.polygonStrokeColor === nextProps.polygonStrokeColor &&
+    prevProps.polylineColor === nextProps.polylineColor &&
+    prevProps.canvasRenderer === nextProps.canvasRenderer
+  )
+})
+
+export default AssetGeometry

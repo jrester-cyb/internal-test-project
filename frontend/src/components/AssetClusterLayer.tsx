@@ -24,6 +24,8 @@ interface AssetClusterLayerProps {
   maxClusterZoom?: number
   /** When true, disables client-side clustering and shows all assets individually */
   disableClustering?: boolean
+  /** Canvas renderer for better performance with many vector elements */
+  canvasRenderer?: L.Canvas
 }
 
 type PointFeature = {
@@ -142,7 +144,8 @@ export default function AssetClusterLayer({
   onClusterClick,
   clusterRadius = 60,
   maxClusterZoom = 18,
-  disableClustering = false
+  disableClustering = false,
+  canvasRenderer
 }: Readonly<AssetClusterLayerProps>) {
   const map = useMap()
   const { isDarkMode } = useTheme()
@@ -278,11 +281,43 @@ export default function AssetClusterLayer({
     })
   }, [bgColor, textColor, outlineColor])
 
-  // When clustering is disabled, render all assets directly without going through Supercluster
+  // Filter assets to only those visible in current viewport (with buffer)
+  const visibleAssets = useMemo(() => {
+    if (!disableClustering) return assets // When clustering, supercluster handles this
+
+    const bounds = mapState.bounds
+    // Add a buffer to avoid popping at edges (roughly 10% of viewport)
+    const latBuffer = (bounds.getNorth() - bounds.getSouth()) * 0.1
+    const lngBuffer = (bounds.getEast() - bounds.getWest()) * 0.1
+
+    const bufferedBounds = {
+      north: bounds.getNorth() + latBuffer,
+      south: bounds.getSouth() - latBuffer,
+      east: bounds.getEast() + lngBuffer,
+      west: bounds.getWest() - lngBuffer
+    }
+
+    return assets.filter(asset => {
+      if (!asset.geometry) return false
+
+      const centroid = getGeometryCentroid(asset)
+      if (!centroid) return false
+
+      const [lng, lat] = centroid
+      return (
+        lat >= bufferedBounds.south &&
+        lat <= bufferedBounds.north &&
+        lng >= bufferedBounds.west &&
+        lng <= bufferedBounds.east
+      )
+    })
+  }, [assets, mapState.bounds, disableClustering])
+
+  // When clustering is disabled, render visible assets directly without going through Supercluster
   if (disableClustering) {
     return (
       <>
-        {assets.map((asset) => (
+        {visibleAssets.map((asset) => (
           <AssetGeometry
             key={asset.id}
             asset={asset}
@@ -294,6 +329,8 @@ export default function AssetClusterLayer({
             polygonStrokeColor={polygonStrokeColor}
             polylineColor={polylineColor}
             onAssetClick={onAssetClick}
+            currentZoom={mapState.zoom}
+            canvasRenderer={canvasRenderer}
           />
         ))}
       </>
@@ -335,6 +372,8 @@ export default function AssetClusterLayer({
               polygonStrokeColor={polygonStrokeColor}
               polylineColor={polylineColor}
               onAssetClick={onAssetClick}
+              currentZoom={mapState.zoom}
+              canvasRenderer={canvasRenderer}
             />
           )
         }
