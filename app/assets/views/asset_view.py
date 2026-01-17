@@ -5,7 +5,9 @@ from rest_framework.pagination import PageNumberPagination, CursorPagination
 from django.db.models import Q, Count, Prefetch
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
-from django.contrib.gis.db.models.functions import Centroid, Distance
+from django.contrib.gis.db.models.functions import Centroid
+from django.db.models import FloatField
+from django.db.models.functions import Abs
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
 from silk.profiling.profiler import silk_profile
@@ -1249,9 +1251,16 @@ Format the output as follows:
                 pass
 
         # Order by distance from center of viewport (closest first), with id as tiebreaker
+        # Use simple Euclidean distance on coordinates to avoid spatial_ref_sys dependency
         if center_point:
+            from django.db.models.expressions import RawSQL
+            # Calculate approximate distance using ST_Distance on centroids
+            # This works without spatial_ref_sys because we're not converting units
             queryset = queryset.annotate(
-                distance_from_center=Distance(Centroid("geometry"), center_point)
+                distance_from_center=RawSQL(
+                    "ST_Distance(ST_Centroid(geometry), ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                    (center_point.x, center_point.y)
+                )
             ).order_by("distance_from_center", "id")
         else:
             queryset = queryset.order_by("id")
