@@ -684,8 +684,10 @@ class TestAttributeFilterExecution:
         assert results.count() == 1
         assert results.first() == asset1
 
-        # Test that if we're not in the workspace context, global value is used
-        serializer_global = FilterGroupSerializer(data=data)
+        # Test that if we're in the workspace but filter for global_value, we get no results
+        serializer_global = FilterGroupSerializer(
+            data=data, context={"workspace": workspace}
+        )
         q_global = serializer_global.build_filter_query()
         results_global = Asset.objects.filter(q_global)
         assert results_global.count() == 0
