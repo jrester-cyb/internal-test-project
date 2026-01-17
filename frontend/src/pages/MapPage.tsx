@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useLoaderData } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { fetchClusters, fetchTiles, fetchTilesFromUrl } from '../api/assets'
+import { fetchClusters, fetchTiles } from '../api/assets'
 import type { Asset, Cluster } from '../types'
 import type { AttributeFilter } from '../components/FilterBuilder'
 import { MapProvider, useMapContext } from '../contexts/MapContext'
@@ -174,66 +174,91 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         setClusters(realClusters)
         setAssets(geojsonAssets)
       } else {
-        // Fetch tiles with pagination - render progressively as each page arrives
+        // Fetch tiles with pagination - render progressively as pages arrive
+        // Use parallel fetching for better performance (3 concurrent requests)
         setClusters([])
 
         // When clustering is disabled, pass zoom level to server for filtering small geometries
         // This reduces data transfer since small polygons/lines won't be visible anyway
         const serverZoom = clusteringDisabled ? zoom : undefined
-        let tileData = await fetchTiles(workspaceId, bounds, 100, mergedFilters, abortController.signal, 0, serverZoom)
+        const pageSize = 250
+        const parallelRequests = 3
+
+        // Fetch first page to get total count
+        const firstPageData = await fetchTiles(workspaceId, bounds, pageSize, mergedFilters, abortController.signal, 0, serverZoom)
 
         // Check if aborted before processing
         if (abortController.signal.aborted) return
 
         // Parse first batch of assets
-        const firstBatch: Asset[] = []
-        for (const f of tileData.features) {
-          firstBatch.push({
+        const parseFeatures = (features: any[]): Asset[] => {
+          return features.map(f => ({
             id: f.id,
             name: f.properties.name,
             assetType: f.properties.assetTypeId,
             h3Index: f.properties.h3Index,
             geometry: f.geometry
-          })
+          }))
         }
 
-        // Build a set of new asset IDs for deduplication
-        const newAssetIds = new Set(firstBatch.map(a => a.id))
+        const firstBatch = parseFeatures(firstPageData.features)
+        let allNewAssets = [...firstBatch]
 
-        // Always merge new assets with existing - don't remove anything yet
-        // This keeps existing assets visible while loading
+        // Update UI with first batch immediately
+        const newAssetIds = new Set(firstBatch.map(a => a.id))
         setAssets(prev => {
           const merged = [...prev.filter(a => !newAssetIds.has(a.id)), ...firstBatch]
           return merged
         })
 
-        // Fetch additional pages if available, appending progressively
-        let allNewAssets = [...firstBatch]
-        while (tileData.next && !abortController.signal.aborted) {
-          tileData = await fetchTilesFromUrl(tileData.next, mergedFilters, abortController.signal)
+        // Calculate remaining pages needed
+        const total = firstPageData.total
+        const remainingCount = total - firstPageData.features.length
 
-          // Check if aborted before processing
-          if (abortController.signal.aborted) return
-
-          const pageAssets: Asset[] = []
-          for (const f of tileData.features) {
-            pageAssets.push({
-              id: f.id,
-              name: f.properties.name,
-              assetType: f.properties.assetTypeId,
-              h3Index: f.properties.h3Index,
-              geometry: f.geometry
-            })
+        if (remainingCount > 0 && !abortController.signal.aborted) {
+          // Calculate all remaining offsets
+          const offsets: number[] = []
+          for (let offset = pageSize; offset < total; offset += pageSize) {
+            offsets.push(offset)
           }
 
-          allNewAssets = [...allNewAssets, ...pageAssets]
-          const allNewIds = new Set(allNewAssets.map(a => a.id))
+          // Fetch remaining pages in parallel batches
+          for (let i = 0; i < offsets.length && !abortController.signal.aborted; i += parallelRequests) {
+            const batchOffsets = offsets.slice(i, i + parallelRequests)
 
-          // Merge new assets with existing - don't remove anything yet
-          setAssets(prev => {
-            const merged = [...prev.filter(a => !allNewIds.has(a.id)), ...allNewAssets]
-            return merged
-          })
+            // Fetch batch in parallel
+            const batchPromises = batchOffsets.map(offset =>
+              fetchTiles(workspaceId, bounds, pageSize, mergedFilters, abortController.signal, offset, serverZoom)
+            )
+
+            try {
+              const batchResults = await Promise.all(batchPromises)
+
+              // Check if aborted after batch completes
+              if (abortController.signal.aborted) return
+
+              // Parse and collect all assets from this batch
+              const batchAssets: Asset[] = []
+              for (const pageData of batchResults) {
+                batchAssets.push(...parseFeatures(pageData.features))
+              }
+
+              allNewAssets = [...allNewAssets, ...batchAssets]
+              const allNewIds = new Set(allNewAssets.map(a => a.id))
+
+              // Merge new assets with existing - don't remove anything yet
+              setAssets(prev => {
+                const merged = [...prev.filter(a => !allNewIds.has(a.id)), ...allNewAssets]
+                return merged
+              })
+            } catch (error) {
+              // If any request in the batch was aborted, stop processing
+              if (error instanceof Error && error.name === 'AbortError') {
+                return
+              }
+              throw error
+            }
+          }
         }
 
         // After all pages loaded: remove assets not in the new set
