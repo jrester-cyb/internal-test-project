@@ -1,18 +1,19 @@
-import { Box, Typography, Stack, Switch as MuiSwitch, FormControlLabel, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover, MenuItem, Select, CircularProgress, Snackbar, Alert } from '@mui/material'
-import EditIcon from '@mui/icons-material/Edit'
-import EditOffIcon from '@mui/icons-material/EditOff'
-import SaveIcon from '@mui/icons-material/Save'
+import { Box, Typography, Stack, Link, Skeleton, Button, TextField, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, ToggleButton, ToggleButtonGroup, Popover, MenuItem, Select, Snackbar, Alert, CircularProgress } from '@mui/material'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import CloseIcon from '@mui/icons-material/Close'
 import CheckIcon from '@mui/icons-material/Check'
 import ClearIcon from '@mui/icons-material/Clear'
 import MapIcon from '@mui/icons-material/Map'
+import { VisibilityOff as VisibilityOffIcon, Save as SaveIcon, Undo as DiscardIcon, Cancel as CancelIcon, Lock as LockClosedIcon, Visibility as VisibilityIcon } from '@mui/icons-material'
+
 import type { Asset, AssetTypeAttribute } from '../types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink, useBlocker, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { fetchAssetsByType, updateAsset } from '../api/assets'
 import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '../components/VirtualizedGrid'
+import ActionButtons from '../components/ActionButtons'
+import { useSidebar } from '../contexts/SidebarContext'
 
 // Type for tracking pending changes per asset
 // Stores name change and/or attribute changes (keyed by apiKey)
@@ -29,6 +30,9 @@ export default function AssetGridPage() {
     pageSize: number,
     workspaceId: string
   }
+
+  const { isOpen, setIsOpen, isMobile, windowWidth } = useSidebar()
+
 
   const { assetTypeId } = useParams()
   const location = useLocation()
@@ -1519,6 +1523,64 @@ export default function AssetGridPage() {
     </Box>
   )
 
+
+  const actionButtons = useMemo(() => {
+    const standardButtons = [
+      {
+        label: showHidden ? 'Hide Hidden Attributes' : 'View Hidden Attributes',
+        icon: showHidden ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />,
+        onClick: () => setShowHidden((prev) => !prev),
+        color: 'inherit' as const,
+        variant: 'text' as const,
+        minWidth: Infinity,
+      },
+      {
+        label: 'Download as CSV',
+        icon: <SaveIcon fontSize="small" />,
+        onClick: () => console.log('Download as CSV clicked'),
+        color: 'inherit' as const,
+        variant: 'text' as const,
+        minWidth: Infinity,
+      }
+    ]
+    if (editingEnabled) {
+      return [
+        {
+          label: pendingChanges.size > 0 ? 'Discard' : 'Cancel',
+          icon: pendingChanges.size > 0 ? <DiscardIcon fontSize="small" /> : <CancelIcon fontSize="small" />,
+          onClick: () => pendingChanges.size > 0 ? setDiscardDialogOpen(true) : setEditingEnabled(false),
+          color: pendingChanges.size > 0 ? 'error' as const : 'inherit' as const,
+          variant: 'outlined' as const,
+          minWidth: 350,
+        },
+        {
+          label: 'Save',
+          icon: isSaving ? <CircularProgress size={20} /> : <SaveIcon fontSize="small" />,
+          onClick: async () => {
+            await saveChanges()
+          },
+          color: 'primary' as const,
+          variant: 'contained' as const,
+          minWidth: 350,
+          disabled: pendingChanges.size === 0 || isSaving,
+        },
+        ...standardButtons
+      ]
+    }
+    return [
+      {
+        label: 'Unlock Table',
+        icon: <LockClosedIcon fontSize="small" />,
+        onClick: () => setEditingEnabled(true),
+        color: 'primary' as const,
+        variant: 'contained' as const,
+        minWidth: 350,
+      },
+      ...standardButtons
+    ]
+
+  }, [editingEnabled, pendingChanges.size, showHidden, isSaving, saveChanges]);
+
   // Header with title and controls
   const header = (
     <Box sx={{ flexShrink: 0, p: 3, pb: 2 }}>
@@ -1526,60 +1588,19 @@ export default function AssetGridPage() {
         <Stack direction="row" alignItems="center" spacing={2}>
           {hasUnsavedChanges && (
             <Typography variant="body2" color="warning.main" sx={{ fontWeight: 500 }}>
-              {pendingChanges.size} unsaved change{pendingChanges.size !== 1 ? 's' : ''}
+              Pending changes
             </Typography>
           )}
         </Stack>
         <Stack direction="row" alignItems="center" spacing={2}>
-          {editingEnabled ? (
-            <>
-              <Button
-                size="small"
-                variant="outlined"
-                color="inherit"
-                onClick={handleEditToggle}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
-                onClick={handleDoneEditing}
-                disabled={isSaving || !hasUnsavedChanges}
-              >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </>
-          ) : (
-            <Button
-              size="small"
-              variant="outlined"
-              color="inherit"
-              startIcon={<EditIcon />}
-              onClick={handleEditToggle}
-            >
-              Edit
-            </Button>
-          )}
-          {hiddenCount > 0 && (
-            <FormControlLabel
-              control={
-                <MuiSwitch
-                  size="small"
-                  checked={showHidden}
-                  onChange={(e) => setShowHidden(e.target.checked)}
-                />
-              }
-              label={
-                <Typography variant="body2" color="text.secondary">
-                  Show hidden ({hiddenCount})
-                </Typography>
-              }
-            />
-          )}
+          <ActionButtons
+            actions={
+              actionButtons
+            }
+            size="small"
+            spacing={0.5}
+            width={windowWidth}
+          />
         </Stack>
       </Stack>
     </Box>

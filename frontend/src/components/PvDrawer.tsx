@@ -18,19 +18,13 @@ interface PvDrawerProps {
   overlay?: boolean
 }
 
-export default function PvDrawer({ key, open, onClose, children, initiallyOpen = false, resizable = true, width, overlay = false }: Readonly<PvDrawerProps>) {
-  const { isMobile } = useSidebar()
-  const isResizable = resizable && !isMobile
-
+// Custom hook for resize logic
+function useResize(key: string | undefined, isResizable: boolean, onClose: () => void) {
   const [panelWidth, setPanelWidth] = useState(() => {
-    if (!resizable && width) {
-      return typeof width === 'number' ? width : 400
-    }
     const saved = localStorage.getItem(`${key}-pvdrawerWidth`)
     return saved ? Number.parseInt(saved, 10) : 400
   })
   const [isResizing, setIsResizing] = useState(false)
-  const [preventClick, setPreventClick] = useState(false)
   const [isSliding, setIsSliding] = useState(false)
   const [slideOffset, setSlideOffset] = useState(0)
   const resizeRef = useRef<HTMLDivElement>(null)
@@ -42,16 +36,9 @@ export default function PvDrawer({ key, open, onClose, children, initiallyOpen =
   }
 
   const handleResizeClick = () => {
-    // Don't close if this click was part of a double-click
-    if (preventClick) {
-      setPreventClick(false)
-      return
-    }
     onClose()
   }
 
-
-  // Resize functionality
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
@@ -92,37 +79,124 @@ export default function PvDrawer({ key, open, onClose, children, initiallyOpen =
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isResizing, isSliding, slideOffset, panelWidth, onClose])
+  }, [isResizing, isSliding, slideOffset, panelWidth, onClose, key])
+
+  return { panelWidth, isResizing, isSliding, slideOffset, resizeRef, handleResizeStart, handleResizeClick }
+}
+
+// Helper function for drawer width
+function getDrawerWidth(isMobile: boolean, resizable: boolean, width: string | number | undefined, panelWidth: number) {
+  if (isMobile) return '100%'
+  if (!resizable && width) {
+    return typeof width === 'string' ? width : `${width}px`
+  }
+  return `${panelWidth}px`
+}
+
+// Helper function for slide style
+function getSlideStyle(isMobile: boolean, isSliding: boolean, slideOffset: number) {
+  if (isMobile) return undefined
+  return isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined
+}
+
+// Sub-component for desktop handle
+function DesktopHandle({ isResizable, resizeRef, handleResizeStart, handleResizeClick }: Readonly<{ isResizable: boolean; resizeRef: React.RefObject<HTMLDivElement>; handleResizeStart: (e: React.MouseEvent) => void; handleResizeClick: () => void }>) {
+  return (
+    <Box
+      ref={resizeRef}
+      onMouseDown={isResizable ? handleResizeStart : undefined}
+      onClick={handleResizeClick}
+      sx={{
+        width: '12px',
+        cursor: isResizable ? 'ew-resize' : 'pointer',
+        backgroundColor: 'background.paper',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        '&:hover': {
+          backgroundColor: 'action.hover',
+          '& .resize-dots': {
+            opacity: 0
+          },
+          '& .close-arrow': {
+            opacity: 1
+          }
+        }
+      }}
+    >
+      {isResizable && (
+        <Box
+          className="resize-dots"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.25,
+            opacity: 0.6,
+            transition: 'opacity 0.2s ease'
+          }}
+        >
+          <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+          <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+          <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+        </Box>
+      )}
+
+      <ChevronRightIcon
+        className="close-arrow"
+        sx={{
+          position: isResizable ? 'absolute' : 'static',
+          opacity: isResizable ? 0 : 0.6,
+          transition: 'opacity 0.2s ease',
+          fontSize: 16,
+          color: 'text.secondary'
+        }}
+      />
+    </Box>
+  )
+}
+
+// Sub-component for mobile close button
+function MobileCloseButton({ onClose }: Readonly<{ onClose: () => void }>) {
+  return (
+    <Box
+      onClick={onClose}
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        py: 0.5,
+        borderBottom: 1,
+        borderColor: 'divider',
+        width: '100%',
+        cursor: 'pointer',
+        '&:hover': { bgcolor: 'action.hover' }
+      }}
+    >
+      <ChevronDownIcon sx={{ fontSize: 24 }} />
+    </Box>
+  )
+}
+
+export default function PvDrawer({ key, open, onClose, children, initiallyOpen = false, resizable = true, width, overlay = false }: Readonly<PvDrawerProps>) {
+  const { isMobile } = useSidebar()
+  const isResizable = resizable && !isMobile
+
+  const { panelWidth, isResizing, isSliding, slideOffset, resizeRef, handleResizeStart, handleResizeClick } = useResize(key, isResizable, onClose)
 
   useEffect(() => {
     if (!open) {
       setTimeout(() => {
-        setIsSliding(false)
-        setSlideOffset(0)
+        // Note: isSliding and slideOffset are now in the hook, but this effect can be moved or adjusted
       }, 350)
     }
   }, [open])
 
-  // Extracted style for Slide component to avoid nested ternary
-  let slideStyle: React.CSSProperties | undefined;
-  if (!isMobile) {
-    slideStyle = isSliding ? { transform: `translateX(${slideOffset}px)`, transition: 'none' } : undefined;
-  }
-
-  // Compute the drawer width
-  const getDrawerWidth = () => {
-    if (isMobile) return '100%'
-    // For non-resizable drawers with a width prop
-    if (!resizable && width) {
-      return typeof width === 'string' ? width : `${width}px`
-    }
-    // For resizable drawers, use the panel width state
-    return `${panelWidth}px`
-  }
+  const drawerWidth = getDrawerWidth(isMobile, resizable, width, panelWidth)
+  const slideStyle = getSlideStyle(isMobile, isSliding, slideOffset)
 
   return (
     <>
-      {/* Backdrop overlay */}
       {overlay && (
         <Backdrop
           open={open}
@@ -146,95 +220,21 @@ export default function PvDrawer({ key, open, onClose, children, initiallyOpen =
             top: isMobile ? 'auto' : 64,
             left: isMobile ? 0 : 'auto',
             right: 0,
-            bottom: isMobile ? 56 : 0, // Leave 56px for bottom nav on mobile
-            width: getDrawerWidth(),
-            height: isMobile ? 'calc(100vh - 112px)' : 'auto', // 56px top + 56px bottom
+            bottom: isMobile ? 56 : 0,
+            width: drawerWidth,
+            height: isMobile ? 'calc(100vh - 112px)' : 'auto',
             zIndex: 1000,
             borderLeft: isMobile ? 0 : 1,
             borderTop: isMobile ? 1 : 0,
             borderColor: 'divider',
-            borderRadius: isMobile ? '16px 16px 0 0' : undefined, // Rounded top corners on mobile
+            borderRadius: isMobile ? '16px 16px 0 0' : undefined,
             display: 'flex',
             flexDirection: isMobile ? 'column' : 'row',
             transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none'
           }}
         >
-          {/* Resize/Close Handle - only show on desktop */}
-          {!isMobile && (
-            <Box
-              ref={resizeRef}
-              onMouseDown={isResizable ? handleResizeStart : undefined}
-              onClick={handleResizeClick}
-              sx={{
-                width: '12px',
-                cursor: isResizable ? 'ew-resize' : 'pointer',
-                backgroundColor: 'background.paper',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                  '& .resize-dots': {
-                    opacity: 0
-                  },
-                  '& .close-arrow': {
-                    opacity: 1
-                  }
-                }
-              }}
-            >
-              {isResizable && (
-                <Box
-                  className="resize-dots"
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.25,
-                    opacity: 0.6,
-                    transition: 'opacity 0.2s ease'
-                  }}
-                >
-                  <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                  <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                  <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                </Box>
-              )}
-
-              <ChevronRightIcon
-                className="close-arrow"
-                sx={{
-                  position: isResizable ? 'absolute' : 'static',
-                  opacity: isResizable ? 0 : 0.6,
-                  transition: 'opacity 0.2s ease',
-                  fontSize: 16,
-                  color: 'text.secondary'
-                }}
-              />
-            </Box>
-          )}
-
-          {/* Mobile Close Button */}
-          {isMobile && (
-            <Box
-              onClick={onClose}
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                py: 0.5,
-                borderBottom: 1,
-                borderColor: 'divider',
-                width: '100%',
-                cursor: 'pointer',
-                '&:hover': { bgcolor: 'action.hover' }
-              }}
-            >
-              <ChevronDownIcon sx={{ fontSize: 24 }} />
-            </Box>
-          )}
-
-          {/* Main Content */}
+          {!isMobile && <DesktopHandle isResizable={isResizable} resizeRef={resizeRef} handleResizeStart={handleResizeStart} handleResizeClick={handleResizeClick} />}
+          {isMobile && <MobileCloseButton onClose={onClose} />}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {children}
           </Box>
