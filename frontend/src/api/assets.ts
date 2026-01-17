@@ -313,12 +313,39 @@ export async function fetchAllAssetAttributeDefinitions(workspaceId: string, ass
   return data.results || []
 }
 
-export async function fetchAttributeValues(workspaceId: string, assetTypeId: string, attributeDefinitionId: string) {
-  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/?page_size=1000`))
+export interface AttributeValuesResponse {
+  results: any[]
+  count: number
+  next: string | null
+  previous: string | null
+}
+
+export async function fetchAttributeValues(
+  workspaceId: string,
+  assetTypeId: string,
+  attributeDefinitionId: string,
+  options?: { limit?: number; offset?: number }
+): Promise<AttributeValuesResponse> {
+  const params = new URLSearchParams()
+  if (options?.limit) {
+    params.append('page_size', String(options.limit))
+  }
+  if (options?.offset) {
+    // Convert offset to page number (1-indexed)
+    const pageSize = options.limit || 20
+    const page = Math.floor(options.offset / pageSize) + 1
+    params.append('page', String(page))
+  }
+  const queryString = params.toString() ? `?${params.toString()}` : ''
+  const response = await fetch(workspaceUrl(workspaceId, `asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/${queryString}`))
   if (!response.ok) throw new Error('Failed to fetch attribute values')
   const data = await response.json()
-  // Return the values array directly (no longer wrapped in {value, type} objects)
-  return data.results || []
+  return {
+    results: data.results || [],
+    count: data.count || 0,
+    next: data.next || null,
+    previous: data.previous || null
+  }
 }
 
 export async function updateAssetTypeAttribute(workspaceId: string, assetTypeId: string, attributeId: string, data: any) {

@@ -180,6 +180,98 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   const currentBoundsRef = useRef(currentBounds)
   currentBoundsRef.current = currentBounds
 
+  const selectedAssetTypesRef = useRef(selectedAssetTypes)
+  selectedAssetTypesRef.current = selectedAssetTypes
+
+  const attributeFiltersRef = useRef(attributeFilters)
+  attributeFiltersRef.current = attributeFilters
+
+  const nameFilterRef = useRef(nameFilter)
+  nameFilterRef.current = nameFilter
+
+  // Helper to build attribute filters for cluster search
+  const buildAttributeFilters = useCallback(() => {
+    const currentSelectedAssetTypes = selectedAssetTypesRef.current
+    const currentAttributeFilters = attributeFiltersRef.current
+    const currentNameFilter = nameFilterRef.current
+
+    const filterGroups: any[] = []
+
+    // Name filter
+    if (currentNameFilter.trim()) {
+      filterGroups.push({
+        field: 'name',
+        value: currentNameFilter.trim(),
+        operator: 'icontains'
+      })
+    }
+
+    // Group attribute filters by asset type
+    const attributesByType: Record<string, any[]> = {}
+    currentAttributeFilters.forEach(af => {
+      if (!attributesByType[af.assetTypeId]) {
+        attributesByType[af.assetTypeId] = []
+      }
+      attributesByType[af.assetTypeId].push({
+        field: `attributes.${af.attributeKey}`,
+        value: af.value,
+        operator: af.operator
+      })
+    })
+
+    if (currentSelectedAssetTypes.length > 0) {
+      // When specific asset types are selected, build OR group:
+      // (typeA exact AND its filters) OR (typeB exact) OR ...
+      const orFilters: any[] = []
+
+      currentSelectedAssetTypes.forEach(typeId => {
+        if (attributesByType[typeId]) {
+          // Type has attribute filters - AND them together
+          const typeFilters: any[] = [
+            { field: 'assetTypeId', value: typeId, operator: 'exact' },
+            ...attributesByType[typeId]
+          ]
+          orFilters.push({ logic: 'AND', filters: typeFilters })
+        } else {
+          // Type has no attribute filters - just match the type
+          orFilters.push({ field: 'assetTypeId', value: typeId, operator: 'exact' })
+        }
+      })
+
+      if (orFilters.length === 1) {
+        filterGroups.push(orFilters[0])
+      } else {
+        filterGroups.push({ logic: 'OR', filters: orFilters })
+      }
+    } else if (Object.keys(attributesByType).length > 0) {
+      // When all asset types are shown but we have attribute filters,
+      // build OR group: (type1 exact AND its filters) OR (type2 exact AND its filters) OR (nin filtered types)
+      const filteredTypeIds = Object.keys(attributesByType)
+      const orFilters: any[] = []
+
+      // Add filter groups for each type with attribute filters
+      Object.entries(attributesByType).forEach(([typeId, attrFilters]) => {
+        const typeFilters: any[] = [
+          { field: 'assetTypeId', value: typeId, operator: 'exact' },
+          ...attrFilters
+        ]
+        orFilters.push({ logic: 'AND', filters: typeFilters })
+      })
+
+      // Add a filter for asset types that are NOT being filtered (so they still appear)
+      orFilters.push({
+        field: 'assetTypeId',
+        value: filteredTypeIds,
+        operator: 'nin'
+      })
+
+      // Wrap in OR logic
+      filterGroups.push({ logic: 'OR', filters: orFilters })
+    }
+
+    return filterGroups
+  }, [])
+
   const openAssetDrawer = useCallback((asset: Asset, attributes?: AssetTypeAttribute[]) => {
     // Enrich asset with cached asset type name if not already present
     const enrichedAsset = { ...asset }
@@ -263,6 +355,10 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       }
     }
 
+    // Add attribute filters (asset type, attribute values, name filter)
+    const attributeFilterGroups = buildAttributeFilters()
+    filters.push(...attributeFilterGroups)
+
     // Fetch initial count and first batch
     searchAssets(workspaceId, {
       filters,
@@ -306,7 +402,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
           return prev
         })
       })
-  }, [workspaceId, drawerState.isOpen, drawerState.content])
+  }, [workspaceId, drawerState.isOpen, drawerState.content, buildAttributeFilters])
 
   const closeDrawer = useCallback(() => {
     setDrawerState(prev => ({
@@ -380,6 +476,10 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       }
     }
 
+    // Add attribute filters (asset type, attribute values, name filter)
+    const attributeFilterGroups = buildAttributeFilters()
+    filters.push(...attributeFilterGroups)
+
     // Fetch the specific range
     searchAssets(currentWorkspaceId, {
       filters,
@@ -422,7 +522,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
           return prev
         })
       })
-  }, [])
+  }, [buildAttributeFilters])
 
   // Sync drawer state to URL
   useEffect(() => {

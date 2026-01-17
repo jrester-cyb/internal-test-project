@@ -6,7 +6,7 @@ from django.contrib.gis.geos import GEOSGeometry
 import json
 from datetime import date, datetime
 
-from assets.models import GlobalAssetTypeAttribute
+from assets.models import GlobalAssetTypeAttribute, WorkspaceLocalAssetTypeAttribute
 from utils.units.helpers.unit_conversion import convert_value, validate_unit
 
 
@@ -21,12 +21,14 @@ class FilterGroupSerializer(serializers.Serializer):
             "icontains",
             "istartswith",
             "iendswith",
+            "in",
+            "nin",
         ],
-        "number": ["exact", "lt", "lte", "gt", "gte", "range", "ne"],
-        "boolean": ["exact"],
-        "date": ["exact", "lt", "lte", "gt", "gte", "range"],
-        "datetime": ["exact", "lt", "lte", "gt", "gte", "range"],
-        "json": ["exact", "contains"],
+        "number": ["exact", "lt", "lte", "gt", "gte", "range", "ne", "in", "nin"],
+        "boolean": ["exact", "in", "nin"],
+        "date": ["exact", "lt", "lte", "gt", "gte", "range", "in", "nin"],
+        "datetime": ["exact", "lt", "lte", "gt", "gte", "range", "in", "nin"],
+        "json": ["exact", "contains", "in", "nin"],
         "link": [
             "exact",
             "contains",
@@ -36,6 +38,8 @@ class FilterGroupSerializer(serializers.Serializer):
             "icontains",
             "istartswith",
             "iendswith",
+            "in",
+            "nin",
         ],
         "geometry": ["within", "intersects", "contains", "exact"],
         "h3_index": ["exact", "startswith"],
@@ -100,11 +104,21 @@ class FilterGroupSerializer(serializers.Serializer):
             if len(parts) == 2:
                 api_key = parts[1]
                 # Get the model type and unit based on the api_key
-                asset_attribute_type_qs = GlobalAssetTypeAttribute.objects.filter(
+                # Check both GlobalAssetTypeAttribute and WorkspaceLocalAssetTypeAttribute
+                from itertools import chain
+                global_attrs = GlobalAssetTypeAttribute.objects.filter(
                     api_key=api_key
-                ).only("attribute_type", "unit")
+                ).only("id", "attribute_type", "unit")
+                local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
+                    api_key=api_key
+                ).only("id", "attribute_type", "unit")
+
                 q = None
-                for attr in asset_attribute_type_qs:
+                # Handle nin (not in) operator - convert to 'in' with negation
+                is_negated = operator == "nin"
+                actual_operator = "in" if is_negated else operator
+
+                for attr in chain(global_attrs, local_attrs):
                     attr_type = attr.attribute_type
                     filter_value = value
 
@@ -118,34 +132,43 @@ class FilterGroupSerializer(serializers.Serializer):
                             pass
 
                     # Link type searches both url and display_text fields
+                    # Use the attribute ID directly since api_key is not on the base table
                     if attr_type == "link":
                         new_q = Q(
                             **{
-                                "attributes__asset_type_attribute__api_key": api_key,
+                                "attributes__asset_type_attribute_id": attr.id,
                             }
                         ) & (
                             Q(
                                 **{
-                                    f"attributes__linkattributevalue__url__{operator}": filter_value
+                                    f"attributes__linkattributevalue__url__{actual_operator}": filter_value
                                 }
                             )
                             | Q(
                                 **{
-                                    f"attributes__linkattributevalue__display_text__{operator}": filter_value
+                                    f"attributes__linkattributevalue__display_text__{actual_operator}": filter_value
                                 }
                             )
                         )
                     else:
                         new_q = Q(
                             **{
-                                "attributes__asset_type_attribute__api_key": api_key,
-                                f"attributes__{self.LOOKUP_MAP[attr_type]}__{operator}": filter_value,
+                                "attributes__asset_type_attribute_id": attr.id,
+                                f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value,
                             }
                         )
+
                     if q is None:
                         q = new_q
                     else:
+                        # Always OR the attribute definitions together
+                        # (asset matches if ANY attribute definition matches)
                         q |= new_q
+
+                # Apply negation AFTER combining all attribute matches with OR
+                # For nin: we want NOT(has value in attr1 OR has value in attr2)
+                if is_negated and q is not None:
+                    q = ~q
 
                 if q is None:
                     return Q()
@@ -156,9 +179,22 @@ class FilterGroupSerializer(serializers.Serializer):
                 # For deeper paths, only JSONField supports nested lookups
                 api_key = parts[1]
                 json_path = "__".join(parts[2:])
+                # Get attribute IDs for the api_key
+                from itertools import chain
+                global_attrs = GlobalAssetTypeAttribute.objects.filter(
+                    api_key=api_key
+                ).only("id")
+                local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
+                    api_key=api_key
+                ).only("id")
+
+                attr_ids = [attr.id for attr in chain(global_attrs, local_attrs)]
+                if not attr_ids:
+                    return Q()
+
                 q = Q(
                     **{
-                        "attributes__asset_type_attribute__api_key": api_key,
+                        "attributes__asset_type_attribute_id__in": attr_ids,
                         f"attributes__jsonattributevalue__value__{json_path}__{operator}": value,
                     }
                 )
@@ -166,7 +202,11 @@ class FilterGroupSerializer(serializers.Serializer):
                     q = ~q
                 return q
 
-        query_obj = Q(**{f"{field}__{operator}": value})
+        # Handle nin (not in) operator for regular fields
+        if operator == "nin":
+            query_obj = ~Q(**{f"{field}__in": value})
+        else:
+            query_obj = Q(**{f"{field}__{operator}": value})
         if self.validated_data.get("inverse", False):
             query_obj = ~query_obj
         return query_obj
@@ -179,24 +219,33 @@ class FilterSerializer(serializers.Serializer):
     def build_filter_group(self, group_data):
         logic = group_data.get("logic", "AND").upper()
         filters = group_data.get("filters", [])
-        q_object = None
 
+        # Collect all Q objects for this group
+        q_objects = []
         for item in filters:
             # If item has "logic", it's a nested group
             if "logic" in item:
                 new_q_object = FilterSerializer(data=item).build_query()
             else:
                 new_q_object = FilterGroupSerializer(data=item).build_filter_query()
+            q_objects.append(new_q_object)
 
-            if q_object is None:
-                q_object = new_q_object
-            else:
-                if logic == "AND":
-                    q_object &= new_q_object
-                elif logic == "OR":
-                    q_object |= new_q_object
+        if not q_objects:
+            return Q()
 
-        return q_object if q_object is not None else Q()
+        # Create a Q object with the correct connector
+        if logic == "OR":
+            # Use Q with OR connector
+            result = Q()
+            result.connector = Q.OR
+            result.children = list(q_objects)
+            return result
+        else:
+            # AND logic - combine with &
+            result = q_objects[0]
+            for q in q_objects[1:]:
+                result &= q
+            return result
 
     def validate_filters(self, value):
         # Each filter can be either a FilterGroup or a FilterSerializer
