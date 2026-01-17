@@ -17,7 +17,8 @@ import {
   InputLabel,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Slide
 } from '@mui/material'
 import { Close as CloseIcon, FilterList as FilterListIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues } from '../api/assets'
@@ -451,31 +452,9 @@ export default function FilterBuilder({
 
   const totalFilters = selectedAssetTypes.length + attributeFilters.length
 
-  return (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        transition: 'transform 0.3s ease-in-out',
-        transform: open ? 'translateY(0)' : 'translateY(calc(-100% + 32px))',
-        bgcolor: 'rgba(0, 0, 0, 0.6)',
-        color: '#ffffff',
-        borderBottomLeftRadius: '4px',
-        borderBottomRightRadius: '4px',
-        boxShadow: 3,
-        maxHeight: '50vh',
-        display: 'flex',
-        flexDirection: 'column'
-      }}
-    >
-      <Box sx={{ px: 3, pt: 2, pb: 3, mb: 2, overflowY: 'auto', flexGrow: 1 }}>
-        <Box sx={{ mb: 1 }}>
-          <Typography variant="h6">Filters</Typography>
-        </Box>
-
-        <Divider sx={{ mb: 2 }} />
+  const filterContent = (
+    <Box sx={{ px: 3, py: 2 }}>
+      <Divider sx={{ mb: 2 }} />
 
         {/* Name Filter */}
         <Box sx={{ mb: 3 }}>
@@ -488,27 +467,6 @@ export default function FilterBuilder({
             placeholder="Filter by asset name..."
             value={nameFilter}
             onChange={(e) => onNameFilterChange?.(e.target.value)}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                bgcolor: 'rgba(255, 255, 255, 0.1)',
-                '& fieldset': {
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                },
-                '&:hover fieldset': {
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'primary.main',
-                },
-              },
-              '& .MuiOutlinedInput-input': {
-                color: 'white',
-                '&::placeholder': {
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  opacity: 1,
-                },
-              },
-            }}
           />
         </Box>
 
@@ -719,32 +677,61 @@ export default function FilterBuilder({
             )}
           </Box>
         )}
-      </Box>
+    </Box>
+  )
 
-      <Button
-        onClick={onToggle || (() => setInternalOpen(!internalOpen))}
-        variant="contained"
-        startIcon={
-          <FilterListIcon
-            sx={{
-              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}
-          />
-        }
-        fullWidth
+  // Calculate the height of the filter content for the slide offset
+  // The drawer slides from above the viewport, so we position it off-screen initially
+  return (
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
         sx={{
-          borderRadius: 0,
-          py: 0.5,
-          boxShadow: 'none',
-          backgroundColor: '#666464',
-          color: '#ffffff',
-          '&:hover': {
-            backgroundColor: '#898989',
-          }
+          display: 'flex',
+          flexDirection: 'column',
+          transform: open ? 'translateY(0)' : 'translateY(calc(-100% + 36px))',
+          transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        Filters {totalFilters > 0 && `(${totalFilters})`}
-      </Button>
+        {/* Filter content */}
+        <Box
+          sx={{
+            pointerEvents: open ? 'auto' : 'none',
+            bgcolor: 'background.paper',
+            boxShadow: 3,
+            maxHeight: 'calc(50vh - 48px)',
+            overflowY: 'auto',
+            pb: 0.5,
+          }}
+        >
+          {filterContent}
+        </Box>
+
+        {/* Toggle button - moves with content */}
+        <Button
+          onClick={onToggle || (() => setInternalOpen(!internalOpen))}
+          variant="contained"
+          startIcon={<FilterListIcon />}
+          fullWidth
+          sx={{
+            pointerEvents: 'auto',
+            borderRadius: 0,
+            py: 0.75,
+            justifyContent: 'center',
+            boxShadow: 1,
+          }}
+        >
+          Filters {totalFilters > 0 && `(${totalFilters})`}
+        </Button>
+      </Box>
     </Box>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useMemo, useEffect } from 'react'
 import { MapContainer, TileLayer, ZoomControl, useMap, Pane } from 'react-leaflet'
 import L from 'leaflet'
 import { Box } from '@mui/material'
@@ -6,7 +6,6 @@ import { useTheme as useMuiTheme } from '@mui/material/styles'
 import { useTheme } from '../contexts/ThemeContext'
 import { useMapContext } from '../contexts/MapContext'
 import ClusterMarkers from './ClusterMarkers'
-import FilterBuilder from './FilterBuilder'
 import AssetClusterLayer from './AssetClusterLayer'
 import type { AttributeFilter } from './FilterBuilder'
 import type { Asset, Cluster } from '../types'
@@ -20,15 +19,10 @@ interface MapViewProps {
   activeFilters: any
   selectedAssetTypes: string[]
   attributeFilters: AttributeFilter[]
-  nameFilter: string
   hasInitialData?: boolean
-  setSelectedAssetTypes: (types: string[]) => void
-  setAttributeFilters: (filters: AttributeFilter[]) => void
-  setNameFilter: (name: string) => void
   loadMapData: (bounds: number[], zoom: number, filters?: any) => void
   onCenterChange?: (center: [number, number]) => void
   onZoomChange?: (zoom: number) => void
-  workspaceId: string
   MapEvents: React.ComponentType<any>
   flyToLocation?: { coords: [number, number]; zoom: number } | null
 }
@@ -56,22 +50,16 @@ export default function MapView({
   activeFilters,
   selectedAssetTypes,
   attributeFilters,
-  nameFilter,
   hasInitialData = false,
-  setSelectedAssetTypes,
-  setAttributeFilters,
-  setNameFilter,
   loadMapData,
   onCenterChange,
   onZoomChange,
-  workspaceId,
   MapEvents,
   flyToLocation
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
   const theme = useMuiTheme()
   const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId } = useMapContext()
-  const [filterOpen, setFilterOpen] = useState(false)
 
   const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
   const strokeColor = isDarkMode ? theme.palette.secondary.main : "black"
@@ -160,63 +148,50 @@ export default function MapView({
         width: '100%',
       }}
       className={isDarkMode ? 'dark-mode' : ''}
+    >
+      <MapContainer
+        center={center}
+        zoom={zoom}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
       >
-        <FilterBuilder
-          workspaceId={workspaceId}
-          selectedAssetTypes={selectedAssetTypes}
-          onAssetTypesChange={setSelectedAssetTypes}
-          attributeFilters={attributeFilters}
-          onAttributeFiltersChange={setAttributeFilters}
-          nameFilter={nameFilter}
-          onNameFilterChange={setNameFilter}
-          open={filterOpen}
-          onClose={() => setFilterOpen(false)}
-          onToggle={() => setFilterOpen(!filterOpen)}
+        <TileLayer
+          attribution={isDarkMode
+            ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }
+          url={isDarkMode
+            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          }
+        />
+        <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
+        <FlyToHandler flyToLocation={flyToLocation ?? null} />
+
+        {/* Custom pane for glow effects - z-index 399 is below overlayPane (400) */}
+        <Pane name="glowPane" style={{ zIndex: 399 }} />
+
+        <ClusterMarkers
+          clusters={clusters}
+          selectedClusterId={selectedClusterId}
+          onClusterClick={openClusterDrawer}
         />
 
-        <MapContainer
-          center={center}
-          zoom={zoom}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-        >
-          <TileLayer
-            attribution={isDarkMode
-              ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }
-            url={isDarkMode
-              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            }
-          />
-          <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
-          <FlyToHandler flyToLocation={flyToLocation ?? null} />
+        <ZoomControl position="bottomright" />
 
-          {/* Custom pane for glow effects - z-index 399 is below overlayPane (400) */}
-          <Pane name="glowPane" style={{ zIndex: 399 }} />
-
-          <ClusterMarkers
-            clusters={clusters}
-            selectedClusterId={selectedClusterId}
-            onClusterClick={openClusterDrawer}
-          />
-
-          <ZoomControl position="bottomright" />
-
-          <AssetClusterLayer
-            assets={assets}
-            selectedAssetId={selectedAssetId}
-            markerIcon={markerIcon}
-            selectedMarkerIcon={selectedMarkerIcon}
-            glowColor={glowColor}
-            polygonFillColor={polygonFillColor}
-            polygonStrokeColor={polygonStrokeColor}
-            polylineColor={polylineColor}
-            onAssetClick={openAssetDrawer}
-            onClusterClick={openClusterDrawer}
-          />
-        </MapContainer>
+        <AssetClusterLayer
+          assets={assets}
+          selectedAssetId={selectedAssetId}
+          markerIcon={markerIcon}
+          selectedMarkerIcon={selectedMarkerIcon}
+          glowColor={glowColor}
+          polygonFillColor={polygonFillColor}
+          polygonStrokeColor={polygonStrokeColor}
+          polylineColor={polylineColor}
+          onAssetClick={openAssetDrawer}
+          onClusterClick={openClusterDrawer}
+        />
+      </MapContainer>
     </Box>
   )
 }

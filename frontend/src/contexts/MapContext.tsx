@@ -1,9 +1,13 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useSearchParams, useLoaderData } from 'react-router-dom'
+import { Box } from '@mui/material'
 import type { Asset, AssetTypeAttribute, Cluster } from '../types'
 import { searchAssets, fetchAssetTypes } from '../api/assets'
+import { useSidebar } from './SidebarContext'
 import MapDetailsDrawer from '../components/MapDetailsDrawer'
+import FilterBuilder from '../components/FilterBuilder'
+import type { AttributeFilter } from '../components/FilterBuilder'
 
 // Cache for asset type names: assetTypeId -> name
 type AssetTypeCache = Map<string, string>
@@ -55,6 +59,16 @@ interface MapContextType {
   selectedAssetId: string | null
   selectedClusterId: string | null
 
+  // Filter state
+  filterOpen: boolean
+  setFilterOpen: (open: boolean) => void
+  selectedAssetTypes: string[]
+  setSelectedAssetTypes: (types: string[]) => void
+  attributeFilters: AttributeFilter[]
+  setAttributeFilters: (filters: AttributeFilter[]) => void
+  nameFilter: string
+  setNameFilter: (name: string) => void
+
   // Drawer actions
   openAssetDrawer: (asset: Asset, attributes?: AssetTypeAttribute[]) => void
   openClusterDrawer: (cluster: Cluster) => void
@@ -84,6 +98,18 @@ interface MapProviderProps {
 export function MapProvider({ children, organizationId, workspaceId, onZoomToAsset, currentBounds }: MapProviderProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const loaderData = useLoaderData() as MapLoaderData | null
+  const { isOpen: sidebarOpen, isMobile } = useSidebar()
+
+  // Calculate sidebar width for overlay positioning
+  const sidebarWidth = isMobile ? 0 : (sidebarOpen ? 240 : 64)
+
+  // Filter state
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
+  const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
+  const [nameFilter, setNameFilter] = useState('')
+
+
 
   // Cache for asset type names
   const assetTypeCache = useRef<AssetTypeCache>(new Map())
@@ -144,6 +170,16 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
 
   const [drawerState, setDrawerState] = useState<DrawerState>(getInitialDrawerState)
 
+  // Refs to track values without causing callback recreation
+  const drawerStateRef = useRef(drawerState)
+  drawerStateRef.current = drawerState
+
+  const workspaceIdRef = useRef(workspaceId)
+  workspaceIdRef.current = workspaceId
+
+  const currentBoundsRef = useRef(currentBounds)
+  currentBoundsRef.current = currentBounds
+
   const openAssetDrawer = useCallback((asset: Asset, attributes?: AssetTypeAttribute[]) => {
     // Enrich asset with cached asset type name if not already present
     const enrichedAsset = { ...asset }
@@ -168,6 +204,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
         attributes
       }
     })
+    // Note: effective width will be updated by PvDrawer's animation tracking
   }, [])
 
   const openClusterDrawer = useCallback((cluster: Cluster) => {
@@ -190,6 +227,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
         loadingMore: false
       }
     })
+    // Note: effective width will be updated by PvDrawer's animation tracking
 
     // Build filters based on whether cluster has a specific bbox (client-side cluster)
     // or needs to use h3 prefix (server-side cluster)
@@ -211,9 +249,11 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
         value: cluster.h3Index,
         operator: 'startswith'
       })
-      if (currentBounds?.length === 4) {
+      // Use ref to get latest bounds value
+      const bounds = currentBoundsRef.current
+      if (bounds?.length === 4) {
         // Convert bbox to WKT polygon for geometry intersects filter
-        const [minLon, minLat, maxLon, maxLat] = currentBounds
+        const [minLon, minLat, maxLon, maxLat] = bounds
         const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
         filters.push({
           field: 'geometry',
@@ -273,23 +313,12 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       ...prev,
       isOpen: false
     }))
+    // Note: effective width will be updated by PvDrawer's animation tracking
   }, [])
 
   const zoomToAsset = useCallback((asset: Asset) => {
     onZoomToAsset?.(asset)
   }, [onZoomToAsset])
-
-  // Ref to track drawer state for loadClusterAssetsRange without causing recreation
-  const drawerStateRef = useRef(drawerState)
-  drawerStateRef.current = drawerState
-
-  // Store workspaceId in ref for loadClusterAssetsRange
-  const workspaceIdRef = useRef(workspaceId)
-  workspaceIdRef.current = workspaceId
-
-  // Store currentBounds in ref for loadClusterAssetsRange
-  const currentBoundsRef = useRef(currentBounds)
-  currentBoundsRef.current = currentBounds
 
   const loadClusterAssetsRange = useCallback((startIndex: number, endIndex: number) => {
     // Read from ref to avoid dependency on drawerState
@@ -467,6 +496,14 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       drawerState,
       selectedAssetId,
       selectedClusterId,
+      filterOpen,
+      setFilterOpen,
+      selectedAssetTypes,
+      setSelectedAssetTypes,
+      attributeFilters,
+      setAttributeFilters,
+      nameFilter,
+      setNameFilter,
       openAssetDrawer,
       openClusterDrawer,
       closeDrawer,
@@ -474,7 +511,37 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       loadClusterAssetsRange
     }}>
       {children}
-      {drawerProps && <MapDetailsDrawer {...drawerProps} />}
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 64,  // AppBar height
+          left: sidebarWidth,
+          right: 0,
+          bottom: isMobile ? 56 : 0,  // Bottom nav height on mobile
+          pointerEvents: 'none',
+          overflow: 'hidden',
+          zIndex: 1000,
+          transition: 'left 225ms cubic-bezier(0.4, 0, 0.6, 1)',
+        }}
+      >
+        <FilterBuilder
+          workspaceId={workspaceId}
+          selectedAssetTypes={selectedAssetTypes}
+          onAssetTypesChange={setSelectedAssetTypes}
+          attributeFilters={attributeFilters}
+          onAttributeFiltersChange={setAttributeFilters}
+          nameFilter={nameFilter}
+          onNameFilterChange={setNameFilter}
+          open={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          onToggle={() => setFilterOpen(!filterOpen)}
+        />
+        {drawerProps && (
+          <MapDetailsDrawer
+            {...drawerProps}
+          />
+        )}
+      </Box>
     </MapContext.Provider>
   )
 }

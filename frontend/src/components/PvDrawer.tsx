@@ -16,14 +16,29 @@ interface PvDrawerProps {
   width?: string | number
   /** Whether to show a backdrop overlay when open. Defaults to false. */
   overlay?: boolean
+  /** When true, use relative positioning to participate in flex layouts instead of fixed positioning. Defaults to false. */
+  inline?: boolean
+  /** Background color for the drawer. Defaults to theme's background.paper. */
+  bgcolor?: string
 }
 
 // Custom hook for resize logic
-function useResize(key: string | undefined, isResizable: boolean, onClose: () => void) {
-  const [panelWidth, setPanelWidth] = useState(() => {
+function useResize(
+  key: string | undefined,
+  isResizable: boolean,
+  onClose: () => void,
+  containerRef: React.RefObject<HTMLElement | null>
+) {
+  const [panelWidth, setPanelWidthState] = useState(() => {
     const saved = localStorage.getItem(`${key}-pvdrawerWidth`)
     return saved ? Number.parseInt(saved, 10) : 400
   })
+
+  const setPanelWidth = (width: number) => {
+    setPanelWidthState(width)
+    localStorage.setItem(`${key}-pvdrawerWidth`, width.toString())
+  }
+
   const [isResizing, setIsResizing] = useState(false)
   const [isSliding, setIsSliding] = useState(false)
   const [slideOffset, setSlideOffset] = useState(0)
@@ -42,20 +57,32 @@ function useResize(key: string | undefined, isResizable: boolean, onClose: () =>
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
-      const newWidth = window.innerWidth - e.clientX
+
+      // Calculate width based on container's right edge if available, otherwise use window
+      let rightEdge = window.innerWidth
+      if (containerRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect()
+        rightEdge = containerRect.right
+      }
+
+      const newWidth = rightEdge - e.clientX
       const minWidth = 420
       if (newWidth < minWidth) {
         if (!isSliding) {
           setIsSliding(true)
         }
-        setSlideOffset(minWidth - newWidth)
+        const newSlideOffset = minWidth - newWidth
+        setSlideOffset(newSlideOffset)
       } else {
         if (isSliding) {
           setIsSliding(false)
+          setSlideOffset(0)
         }
-        const clampedWidth = Math.max(minWidth, Math.min(window.innerWidth - 200, newWidth))
+        const maxWidth = containerRef.current
+          ? containerRef.current.getBoundingClientRect().width - 200
+          : window.innerWidth - 200
+        const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth))
         setPanelWidth(clampedWidth)
-        localStorage.setItem(`${key}-pvdrawerWidth`, clampedWidth.toString())
       }
     }
 
@@ -64,6 +91,8 @@ function useResize(key: string | undefined, isResizable: boolean, onClose: () =>
         onClose()
       }
       setIsResizing(false)
+      setIsSliding(false)
+      setSlideOffset(0)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
@@ -79,7 +108,7 @@ function useResize(key: string | undefined, isResizable: boolean, onClose: () =>
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isResizing, isSliding, slideOffset, panelWidth, onClose, key])
+  }, [isResizing, isSliding, slideOffset, panelWidth, onClose, key, containerRef])
 
   return { panelWidth, isResizing, isSliding, slideOffset, resizeRef, handleResizeStart, handleResizeClick }
 }
@@ -100,7 +129,7 @@ function getSlideStyle(isMobile: boolean, isSliding: boolean, slideOffset: numbe
 }
 
 // Sub-component for desktop handle
-function DesktopHandle({ isResizable, resizeRef, handleResizeStart, handleResizeClick }: Readonly<{ isResizable: boolean; resizeRef: React.RefObject<HTMLDivElement>; handleResizeStart: (e: React.MouseEvent) => void; handleResizeClick: () => void }>) {
+function DesktopHandle({ isResizable, resizeRef, handleResizeStart, handleResizeClick, bgcolor }: Readonly<{ isResizable: boolean; resizeRef: React.RefObject<HTMLDivElement>; handleResizeStart: (e: React.MouseEvent) => void; handleResizeClick: () => void; bgcolor?: string }>) {
   return (
     <Box
       ref={resizeRef}
@@ -109,13 +138,13 @@ function DesktopHandle({ isResizable, resizeRef, handleResizeStart, handleResize
       sx={{
         width: '12px',
         cursor: isResizable ? 'ew-resize' : 'pointer',
-        backgroundColor: 'background.paper',
+        backgroundColor: bgcolor || 'background.paper',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
         '&:hover': {
-          backgroundColor: 'action.hover',
+          backgroundColor: bgcolor ? 'rgba(255, 255, 255, 0.1)' : 'action.hover',
           '& .resize-dots': {
             opacity: 0
           },
@@ -136,9 +165,9 @@ function DesktopHandle({ isResizable, resizeRef, handleResizeStart, handleResize
             transition: 'opacity 0.2s ease'
           }}
         >
-          <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-          <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-          <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+          <Box sx={{ width: '2px', height: '2px', bgcolor: bgcolor ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary', borderRadius: '50%' }} />
+          <Box sx={{ width: '2px', height: '2px', bgcolor: bgcolor ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary', borderRadius: '50%' }} />
+          <Box sx={{ width: '2px', height: '2px', bgcolor: bgcolor ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary', borderRadius: '50%' }} />
         </Box>
       )}
 
@@ -149,7 +178,7 @@ function DesktopHandle({ isResizable, resizeRef, handleResizeStart, handleResize
           opacity: isResizable ? 0 : 0.6,
           transition: 'opacity 0.2s ease',
           fontSize: 16,
-          color: 'text.secondary'
+          color: bgcolor ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'
         }}
       />
     </Box>
@@ -178,19 +207,40 @@ function MobileCloseButton({ onClose }: Readonly<{ onClose: () => void }>) {
   )
 }
 
-export default function PvDrawer({ key, open, onClose, children, initiallyOpen = false, resizable = true, width, overlay = false }: Readonly<PvDrawerProps>) {
+export default function PvDrawer({
+  key,
+  open,
+  onClose,
+  children,
+  initiallyOpen = false,
+  resizable = true,
+  width,
+  overlay = false,
+  inline = false,
+  bgcolor
+}: Readonly<PvDrawerProps>) {
   const { isMobile } = useSidebar()
   const isResizable = resizable && !isMobile
+  const paperRef = useRef<HTMLDivElement>(null)
 
-  const { panelWidth, isResizing, isSliding, slideOffset, resizeRef, handleResizeStart, handleResizeClick } = useResize(key, isResizable, onClose)
+  // For inline mode, use the Paper's parent as the container for resize calculations
+  const containerRef = useRef<HTMLElement | null>(null)
 
+  // Update containerRef when Paper is mounted
   useEffect(() => {
-    if (!open) {
-      setTimeout(() => {
-        // Note: isSliding and slideOffset are now in the hook, but this effect can be moved or adjusted
-      }, 350)
+    if (inline && paperRef.current?.parentElement) {
+      containerRef.current = paperRef.current.parentElement
+    } else {
+      containerRef.current = null
     }
-  }, [open])
+  }, [inline, open])
+
+  const { panelWidth, isResizing, isSliding, slideOffset, resizeRef, handleResizeStart, handleResizeClick } = useResize(
+    key,
+    isResizable,
+    onClose,
+    containerRef
+  )
 
   const drawerWidth = getDrawerWidth(isMobile, resizable, width, panelWidth)
   const slideStyle = getSlideStyle(isMobile, isSliding, slideOffset)
@@ -213,27 +263,33 @@ export default function PvDrawer({ key, open, onClose, children, initiallyOpen =
         style={slideStyle}
       >
         <Paper
+          ref={paperRef}
           elevation={isMobile ? 8 : 0}
           sx={{
             pointerEvents: 'auto',
-            position: 'fixed',
-            top: isMobile ? 'auto' : 64,
-            left: isMobile ? 0 : 'auto',
-            right: 0,
-            bottom: isMobile ? 56 : 0,
+            // On mobile, always use fixed positioning for bottom sheet
+            // On desktop, use relative positioning if inline, otherwise fixed
+            position: isMobile ? 'fixed' : (inline ? 'relative' : 'fixed'),
+            top: isMobile ? 'auto' : (inline ? undefined : 64),
+            left: isMobile ? 0 : (inline ? undefined : 'auto'),
+            right: isMobile ? 0 : (inline ? undefined : 0),
+            bottom: isMobile ? 56 : (inline ? undefined : 0),
             width: drawerWidth,
-            height: isMobile ? 'calc(100vh - 112px)' : 'auto',
-            zIndex: 1000,
-            borderLeft: isMobile ? 0 : 1,
+            height: isMobile ? 'calc(100vh - 112px)' : (inline ? '100%' : 'auto'),
+            flexShrink: 0,  // Don't shrink when in flex container
+            zIndex: isMobile ? 1000 : (inline ? undefined : 1000),
+            borderLeft: isMobile ? 0 : (bgcolor ? 0 : 1),
             borderTop: isMobile ? 1 : 0,
             borderColor: 'divider',
             borderRadius: isMobile ? '16px 16px 0 0' : undefined,
             display: 'flex',
             flexDirection: isMobile ? 'column' : 'row',
-            transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none'
+            transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none',
+            bgcolor: bgcolor || 'background.paper',
+            color: bgcolor ? '#ffffff' : undefined
           }}
         >
-          {!isMobile && <DesktopHandle isResizable={isResizable} resizeRef={resizeRef} handleResizeStart={handleResizeStart} handleResizeClick={handleResizeClick} />}
+          {!isMobile && <DesktopHandle isResizable={isResizable} resizeRef={resizeRef} handleResizeStart={handleResizeStart} handleResizeClick={handleResizeClick} bgcolor={bgcolor} />}
           {isMobile && <MobileCloseButton onClose={onClose} />}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {children}
