@@ -2,12 +2,12 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import type { ReactNode } from 'react'
 import { useSearchParams, useLoaderData } from 'react-router-dom'
 import { Box } from '@mui/material'
-import type { Asset, AssetTypeAttribute, Cluster } from '../types'
-import { searchAssets, fetchAssetTypes } from '../api/assets'
-import { useSidebar } from './SidebarContext'
-import MapDetailsDrawer from '../components/MapDetailsDrawer'
-import FilterBuilder from '../components/FilterBuilder'
-import type { AttributeFilter } from '../components/FilterBuilder'
+import type { Asset, AssetTypeAttribute, Cluster } from '@app/types'
+import { searchAssets, fetchAssetTypes } from '@app/api/assets'
+import { useSidebar } from '@app/contexts/SidebarContext'
+import MapDetailsDrawer from '@app/components/MapDetailsDrawer'
+import FilterBuilder from '@app/components/FilterBuilder'
+import type { AttributeFilter } from '@app/components/FilterBuilder'
 
 // Cache for asset type names: assetTypeId -> name
 type AssetTypeCache = Map<string, string>

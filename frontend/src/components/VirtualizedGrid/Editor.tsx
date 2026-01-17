@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Box, TextField } from '@mui/material'
 import type { CSSProperties } from 'react'
-import type { SelectionBorders, ColumnDefinition } from './types'
+import type { SelectionBorders, ColumnDefinition } from '@app/components/VirtualizedGrid/types'
 
 export interface EditorProps<T> {
   /** The current value to edit */

@@ -8,8 +8,8 @@ import {
   renameFileNode,
   type DirectoryResponse,
   type FileNode,
-} from '../api/assets'
-import FileExplorer, { type Breadcrumb } from '../components/FileExplorer'
+} from '@app/api/assets'
+import FileExplorer, { type Breadcrumb } from '@app/components/FileExplorer'
 
 export default function LibraryPage() {
   const currentDir = useLoaderData<DirectoryResponse>()

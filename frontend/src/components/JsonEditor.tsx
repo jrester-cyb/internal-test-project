@@ -14,8 +14,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import ContentCutIcon from '@mui/icons-material/ContentCut'
 import ContentPasteIcon from '@mui/icons-material/ContentPaste'
 import SelectAllIcon from '@mui/icons-material/SelectAll'
-import { Editor, TextRenderer, useTextRenderer } from './TextRenderer'
-import { JsonFormatter, stripJsonComments, formatJsonc } from './JsonFormatter'
+import { Editor, TextRenderer, useTextRenderer } from '@app/components/TextRenderer'
+import { JsonFormatter, stripJsonComments, formatJsonc } from '@app/components/JsonFormatter'
 
 interface JsonEditorProps {
   value: { json: any; rawJson?: string } | any

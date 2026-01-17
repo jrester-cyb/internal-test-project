@@ -1,7 +1,7 @@
 import { useMemo, memo } from 'react'
 import { Marker, Polygon, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import type { Asset } from '../types'
+import type { Asset } from '@app/types'
 
 interface AssetGeometryProps {
   asset: Asset

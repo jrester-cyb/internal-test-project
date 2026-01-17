@@ -5,7 +5,7 @@ import {
   preloadAssetTypeAboutPage,
   preloadAssetTypeAttributesPage,
   preloadAssetGridPage,
-} from "../utils/preload";
+} from "@app/utils/preload";
 
 // Map path segments to tab indices
 const getTabFromPath = (pathname: string, assetId?: string): number => {

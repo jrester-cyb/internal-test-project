@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material'
 import { FixedSizeList as VirtualList } from 'react-window'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
-import type { FileNode } from '../api/assets'
+import type { FileNode } from '@app/api/assets'
 
 const resourceTypeIcons: Record<string, React.ReactElement> = {
   directory: <FolderIcon />,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Autocomplete, TextField, Box, Typography, CircularProgress, Stack, FormControl, InputLabel, Select, MenuItem } from '@mui/material'
-import { fetchUnitCategories } from '../api/assets'
-import type { UnitCategory } from '../types'
+import { fetchUnitCategories } from '@app/api/assets'
+import type { UnitCategory } from '@app/types'
 
 interface UnitOption {
   code: string

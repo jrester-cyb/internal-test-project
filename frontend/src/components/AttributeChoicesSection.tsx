@@ -21,11 +21,11 @@ import {
   Delete as DeleteIcon,
   DragIndicator as DragIndicatorIcon
 } from '@mui/icons-material'
-import type { AssetTypeAttribute, AssetTypeAttributeChoice } from '../types'
-import { createAssetTypeAttributeChoice, deleteAssetTypeAttributeChoice, fetchAssetTypeAttributeChoices, reorderAssetTypeAttributeChoices } from '../api/assets'
-import SimpleTable, { type ColumnDef } from './SimpleTable'
-import { JsonRenderer, DateRenderer, LinkRenderer, NumberRenderer, TextRenderer } from './AttributeValueRenderer'
-import JsonEditor from './JsonEditor'
+import type { AssetTypeAttribute, AssetTypeAttributeChoice } from '@app/types'
+import { createAssetTypeAttributeChoice, deleteAssetTypeAttributeChoice, fetchAssetTypeAttributeChoices, reorderAssetTypeAttributeChoices } from '@app/api/assets'
+import SimpleTable, { type ColumnDef } from '@app/components/SimpleTable'
+import { JsonRenderer, DateRenderer, LinkRenderer, NumberRenderer, TextRenderer } from '@app/components/AttributeValueRenderer'
+import JsonEditor from '@app/components/JsonEditor'
 
 interface AttributeChoicesSectionProps {
   attribute: AssetTypeAttribute

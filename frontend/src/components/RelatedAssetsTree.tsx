@@ -21,8 +21,8 @@ import {
   OpenInNew as OpenIcon,
   Circle as LeafIcon,
 } from '@mui/icons-material'
-import CopyableText from './CopyableText'
-import type { RelatedAsset, RelatedAssetsResponse } from '../api/assets'
+import CopyableText from '@app/components/CopyableText'
+import type { RelatedAsset, RelatedAssetsResponse } from '@app/api/assets'
 
 const PAGE_SIZE = 50
 

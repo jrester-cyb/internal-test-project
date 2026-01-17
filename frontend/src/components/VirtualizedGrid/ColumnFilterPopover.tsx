@@ -14,7 +14,7 @@ import {
   InputAdornment,
 } from '@mui/material'
 import { Clear as ClearIcon } from '@mui/icons-material'
-import type { ColumnDefinition, ColumnFilterValue } from './types'
+import type { ColumnDefinition, ColumnFilterValue } from '@app/components/VirtualizedGrid/types'
 
 export interface ColumnFilterPopoverProps {
   column: ColumnDefinition<any>

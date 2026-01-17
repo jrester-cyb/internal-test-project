@@ -28,9 +28,9 @@ import {
   ViewList as ViewListIcon,
   ViewModule as ViewModuleIcon,
 } from '@mui/icons-material'
-import FileGalleryView from './FileGalleryView'
-import FileListView from './FileListView'
-import type { FileNode } from '../api/assets'
+import FileGalleryView from '@app/components/FileGalleryView'
+import FileListView from '@app/components/FileListView'
+import type { FileNode } from '@app/api/assets'
 
 export interface Breadcrumb {
   id: string

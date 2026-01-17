@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Box, Typography, Chip, IconButton, Popover, Switch, FormControlLabel, Autocomplete, TextField, Tooltip, Stack, CircularProgress, Badge } from '@mui/material'
 import { FilterList as FilterIcon } from '@mui/icons-material'
-import { fetchAttributeTypes } from '../api/assets'
+import { fetchAttributeTypes } from '@app/api/assets'
 
 export interface AttributeFilterOptions {
   showHidden: boolean

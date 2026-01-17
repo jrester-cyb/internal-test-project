@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import type { VariableSizeGrid as Grid } from 'react-window'
-import type { CellPosition, SelectionRange, ColumnDefinition } from './types'
+import type { CellPosition, SelectionRange, ColumnDefinition } from '@app/components/VirtualizedGrid/types'
 
 export interface UseGridKeyboardNavigationOptions<T> {
   /** Ref to the current selection */

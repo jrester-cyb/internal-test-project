@@ -1,8 +1,8 @@
 import { Marker } from 'react-leaflet'
 import { divIcon } from 'leaflet'
-import type { Cluster } from '../types'
-import { useTheme } from '../contexts/ThemeContext'
-import { lightTheme, darkTheme } from '../theme'
+import type { Cluster } from '@app/types'
+import { useTheme } from '@app/contexts/ThemeContext'
+import { lightTheme, darkTheme } from '@app/theme'
 
 interface ClusterMarkersProps {
   clusters: Cluster[]

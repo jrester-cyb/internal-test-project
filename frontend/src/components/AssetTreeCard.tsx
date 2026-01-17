@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, Box, Typography, CircularProgress, Tooltip } from '@mui/material'
 import { Error as ErrorIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
-import RelatedAssetsTree from './RelatedAssetsTree'
-import type { RelatedAssetsResponse, RelatedAsset } from '../api/assets'
+import RelatedAssetsTree from '@app/components/RelatedAssetsTree'
+import type { RelatedAssetsResponse, RelatedAsset } from '@app/api/assets'
 
 interface AssetTreeCardProps {
   assetId: string

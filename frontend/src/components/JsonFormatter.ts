@@ -1,4 +1,4 @@
-import type { TextFormatter } from './TextRenderer/types'
+import type { TextFormatter } from '@app/components/TextRenderer/types'
 
 // Strip JSONC comments (// and /* */) for parsing
 // Set preservePositions=true to replace comments with spaces (for error position mapping)

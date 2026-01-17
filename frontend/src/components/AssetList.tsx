@@ -1,5 +1,5 @@
 import { Box, Typography, Paper, Button, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material'
-import type { Asset } from '../types'
+import type { Asset } from '@app/types'
 
 interface AssetListProps {
   assets: Asset[]

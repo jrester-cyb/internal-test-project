@@ -8,7 +8,7 @@ import React, {
   type ReactNode,
   type RefObject,
 } from 'react'
-import type { CellPosition, SelectionRange, ColumnDefinition } from './types'
+import type { CellPosition, SelectionRange, ColumnDefinition } from '@app/components/VirtualizedGrid/types'
 
 export interface CellSelectionContextValue {
   /** Current selection range */

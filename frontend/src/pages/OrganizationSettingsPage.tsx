@@ -1,6 +1,6 @@
 import { Container, Typography, Box } from '@mui/material'
 import { useParams } from 'react-router-dom'
-import { useOrganization } from '../contexts/OrganizationContext'
+import { useOrganization } from '@app/contexts/OrganizationContext'
 
 export default function OrganizationSettingsPage() {
   const { organizationId } = useParams()

@@ -1,4 +1,4 @@
-import type { KeyboardShortcut, ShortcutContext, ShortcutResult } from './types'
+import type { KeyboardShortcut, ShortcutContext, ShortcutResult } from '@app/components/TextRenderer/types'
 
 /**
  * Parse a shortcut string into its component parts

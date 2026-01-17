@@ -4,7 +4,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
-import { useTextRenderer } from './context'
+import { useTextRenderer } from '@app/components/TextRenderer/context'
 
 interface TextRendererToolbarProps {
   enableFullscreen?: boolean

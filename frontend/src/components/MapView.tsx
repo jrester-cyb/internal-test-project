@@ -7,12 +7,12 @@ const canvasRenderer = L.canvas({ padding: 0.5 })
 import { Box, IconButton, Tooltip } from '@mui/material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
 import ScatterPlotIcon from '@mui/icons-material/ScatterPlot'
-import { useTheme } from '../contexts/ThemeContext'
-import { useMapContext } from '../contexts/MapContext'
-import ClusterMarkers from './ClusterMarkers'
-import AssetClusterLayer from './AssetClusterLayer'
-import type { AttributeFilter } from './FilterBuilder'
-import type { Asset, Cluster } from '../types'
+import { useTheme } from '@app/contexts/ThemeContext'
+import { useMapContext } from '@app/contexts/MapContext'
+import ClusterMarkers from '@app/components/ClusterMarkers'
+import AssetClusterLayer from '@app/components/AssetClusterLayer'
+import type { AttributeFilter } from '@app/components/FilterBuilder'
+import type { Asset, Cluster } from '@app/types'
 import './MapView.css'
 
 interface MapViewProps {

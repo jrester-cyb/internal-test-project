@@ -1,5 +1,5 @@
 import type { ReactNode, CSSProperties } from 'react'
-import type { KeyboardAction } from './KeyboardShortcuts'
+import type { KeyboardAction } from '@app/components/VirtualizedGrid/KeyboardShortcuts'
 
 /** Props passed to custom cell renderers */
 export interface CellRendererProps<T> {

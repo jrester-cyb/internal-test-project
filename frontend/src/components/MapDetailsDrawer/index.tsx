@@ -1,7 +1,7 @@
-import type { Asset, AssetTypeAttribute, Cluster } from '../../types'
-import ClusterContent from './ClusterContent'
-import AssetContent from './AssetContent'
-import PvDrawer from '../PvDrawer'
+import type { Asset, AssetTypeAttribute, Cluster } from '@app/types'
+import ClusterContent from '@app/components/MapDetailsDrawer/ClusterContent'
+import AssetContent from '@app/components/MapDetailsDrawer/AssetContent'
+import PvDrawer from '@app/components/PvDrawer'
 
 // Cluster details props
 interface ClusterDetailsProps {
@@ -79,7 +79,7 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
 }
 
 // Re-export content components for direct use if needed
-export { default as ClusterContent } from './ClusterContent'
-export { default as AssetContent } from './AssetContent'
-export type { ClusterContentProps } from './ClusterContent'
-export type { AssetContentProps } from './AssetContent'
+export { default as ClusterContent } from '@app/components/MapDetailsDrawer/ClusterContent'
+export { default as AssetContent } from '@app/components/MapDetailsDrawer/AssetContent'
+export type { ClusterContentProps } from '@app/components/MapDetailsDrawer/ClusterContent'
+export type { AssetContentProps } from '@app/components/MapDetailsDrawer/AssetContent'

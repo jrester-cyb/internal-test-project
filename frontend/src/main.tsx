@@ -1,12 +1,12 @@
 import { StrictMode, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Navigate, RouterProvider, type Params } from 'react-router-dom'
-import { ThemeProvider } from './contexts/ThemeContext'
-import { OrganizationProvider } from './contexts/OrganizationContext'
-import { SidebarProvider } from './contexts/SidebarContext'
-import { ChoicesProvider } from './contexts/ChoicesContext'
+import { ThemeProvider } from '@app/contexts/ThemeContext'
+import { OrganizationProvider } from '@app/contexts/OrganizationContext'
+import { SidebarProvider } from '@app/contexts/SidebarContext'
+import { ChoicesProvider } from '@app/contexts/ChoicesContext'
 import './index.css'
-import App from './App.tsx'
+import App from '@app/App'
 
 // Lazy load route components
 const OrganizationsPage = lazy(() => import('./pages/OrganizationsPage.tsx'))

@@ -9,9 +9,9 @@ import {
   Container,
 } from '@mui/material'
 import { Business as BusinessIcon } from '@mui/icons-material'
-import { useOrganization } from '../contexts/OrganizationContext'
+import { useOrganization } from '@app/contexts/OrganizationContext'
 import { useEffect, useState } from 'react'
-import { fetchWorkspaces } from '../api/assets'
+import { fetchWorkspaces } from '@app/api/assets'
 
 interface Workspace {
   id: string

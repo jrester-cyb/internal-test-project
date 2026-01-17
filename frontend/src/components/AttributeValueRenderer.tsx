@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Box, Typography, Chip, IconButton, Tooltip, Dialog, DialogTitle, DialogContent } from '@mui/material'
 import { OpenInNew as OpenInNewIcon, ContentCopy as CopyIcon, Fullscreen as FullscreenIcon, Close as CloseIcon } from '@mui/icons-material'
-import type { AssetTypeAttribute } from '../types'
-import TruncatedText from './TruncatedText'
-import { TextRenderer as TextRendererComponent } from './TextRenderer'
-import { JsonFormatter } from './JsonFormatter'
+import type { AssetTypeAttribute } from '@app/types'
+import TruncatedText from '@app/components/TruncatedText'
+import { TextRenderer as TextRendererComponent } from '@app/components/TextRenderer'
+import { JsonFormatter } from '@app/components/JsonFormatter'
 
 interface AttributeValueRendererProps {
   attribute: AssetTypeAttribute

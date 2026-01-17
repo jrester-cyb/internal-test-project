@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { fetchOrganizations } from '../api/assets'
+import { fetchOrganizations } from '@app/api/assets'
 
 interface Organization {
   id: string

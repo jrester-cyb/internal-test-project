@@ -1,6 +1,6 @@
 import { createContext, useContext, useCallback, useRef, useState, type ReactNode } from 'react'
-import type { AssetTypeAttributeChoice } from '../types'
-import { fetchAssetTypeAttributeChoices } from '../api/assets'
+import type { AssetTypeAttributeChoice } from '@app/types'
+import { fetchAssetTypeAttributeChoices } from '@app/api/assets'
 
 interface ChoicesCacheEntry {
   choices: AssetTypeAttributeChoice[]

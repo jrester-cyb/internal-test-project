@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { TextRendererContextValue } from './types'
+import type { TextRendererContextValue } from '@app/components/TextRenderer/types'
 
 export const TextRendererContext = createContext<TextRendererContextValue | null>(null)
 

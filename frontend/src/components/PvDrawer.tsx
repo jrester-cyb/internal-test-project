@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Backdrop, Box, Paper, Slide } from '@mui/material'
 import { ChevronRight as ChevronRightIcon, KeyboardArrowDown as ChevronDownIcon } from '@mui/icons-material'
-import { useSidebar } from '../contexts/SidebarContext'
+import { useSidebar } from '@app/contexts/SidebarContext'
 
 interface PvDrawerProps {
   key?: string

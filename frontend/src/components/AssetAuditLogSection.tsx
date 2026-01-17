@@ -18,7 +18,7 @@ import {
   Delete as DeleteIcon,
   Visibility as ViewIcon,
 } from '@mui/icons-material'
-import { fetchAssetAuditLog, fetchAssetTypeAuditLog, type AuditLogItem, type AuditLogEntry, type AuditLogResponse } from '../api/auditLog'
+import { fetchAssetAuditLog, fetchAssetTypeAuditLog, type AuditLogItem, type AuditLogEntry, type AuditLogResponse } from '@app/api/auditLog'
 
 interface AuditLogSectionProps {
   objectId: string

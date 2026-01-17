@@ -2,10 +2,10 @@ import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, Box, Typography, Tooltip } from '@mui/material'
 import { Article as ArticleIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
 import { VariableSizeList as List } from 'react-window'
-import type { Asset, AssetTypeAttribute } from '../types'
-import AttributeValueRenderer from './AttributeValueRenderer'
-import AttributeFilterPopover from './AttributeFilterPopover'
-import TagsDisplay from './TagsDisplay'
+import type { Asset, AssetTypeAttribute } from '@app/types'
+import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
+import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
+import TagsDisplay from '@app/components/TagsDisplay'
 
 interface AttributesCardProps {
   asset: Asset

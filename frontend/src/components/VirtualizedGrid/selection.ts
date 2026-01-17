@@ -1,4 +1,4 @@
-import type { CellPosition, SelectionRange, SelectionBorders } from './types'
+import type { CellPosition, SelectionRange, SelectionBorders } from '@app/components/VirtualizedGrid/types'
 
 // Helper to check if a cell is within a selection range
 export function isCellInRange(cell: CellPosition, range: SelectionRange): boolean {

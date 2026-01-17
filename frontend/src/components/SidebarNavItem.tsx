@@ -1,7 +1,7 @@
 import { ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import { NavLink } from 'react-router-dom'
 import { type ReactElement, useEffect, useState } from 'react'
-import { useSidebar } from '../contexts/SidebarContext'
+import { useSidebar } from '@app/contexts/SidebarContext'
 
 interface SidebarNavItemProps {
   to: string

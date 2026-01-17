@@ -1,12 +1,12 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
 import { Box, Typography, Modal, useTheme, Grow } from '@mui/material'
-import { TextRendererContext } from './context'
+import { TextRendererContext } from '@app/components/TextRenderer/context'
 import type {
   TextRendererProps,
   TextRendererContextValue,
-} from './types'
-import TextRendererToolbar from './TextRendererToolbar'
-import LineNumbers from './LineNumbers'
+} from '@app/components/TextRenderer/types'
+import TextRendererToolbar from '@app/components/TextRenderer/TextRendererToolbar'
+import LineNumbers from '@app/components/TextRenderer/LineNumbers'
 
 export default function TextRenderer({
   value,

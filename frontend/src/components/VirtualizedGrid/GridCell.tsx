@@ -1,8 +1,8 @@
 import React, { type CSSProperties, type RefObject } from 'react'
 import { Box } from '@mui/material'
-import type { SelectionRange, ColumnDefinition, SelectionBorders, CellPosition } from './types'
-import { getSelectionBorders } from './selection'
-import { Editor } from './Editor'
+import type { SelectionRange, ColumnDefinition, SelectionBorders, CellPosition } from '@app/components/VirtualizedGrid/types'
+import { getSelectionBorders } from '@app/components/VirtualizedGrid/selection'
+import { Editor } from '@app/components/VirtualizedGrid/Editor'
 
 export interface GridCellProps<T> {
   columnIndex: number

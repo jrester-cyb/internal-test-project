@@ -1,6 +1,6 @@
 // Main component
-export { default } from './VirtualizedGrid'
-export { default as VirtualizedGrid } from './VirtualizedGrid'
+export { default } from '@app/components/VirtualizedGrid/VirtualizedGrid'
+export { default as VirtualizedGrid } from '@app/components/VirtualizedGrid/VirtualizedGrid'
 
 // Types
 export type {
@@ -16,45 +16,45 @@ export type {
   GridHandle as VirtualizedGridHandle,
   CellRendererProps,
   CellEditorProps,
-} from './types'
+} from '@app/components/VirtualizedGrid/types'
 
 // Selection utilities
-export { isCellInRange, getSelectionBorders } from './selection'
+export { isCellInRange, getSelectionBorders } from '@app/components/VirtualizedGrid/selection'
 
 // Components
-export { ResizeHandle } from './ResizeHandle'
-export { ColumnFilterPopover } from './ColumnFilterPopover'
-export { default as GridCell, DefaultCellWrapper } from './GridCell'
-export type { GridCellProps, DefaultCellWrapperProps } from './GridCell'
-export { Editor } from './Editor'
-export type { EditorProps } from './Editor'
+export { ResizeHandle } from '@app/components/VirtualizedGrid/ResizeHandle'
+export { ColumnFilterPopover } from '@app/components/VirtualizedGrid/ColumnFilterPopover'
+export { default as GridCell, DefaultCellWrapper } from '@app/components/VirtualizedGrid/GridCell'
+export type { GridCellProps, DefaultCellWrapperProps } from '@app/components/VirtualizedGrid/GridCell'
+export { Editor } from '@app/components/VirtualizedGrid/Editor'
+export type { EditorProps } from '@app/components/VirtualizedGrid/Editor'
 export {
   StickyHeaderContext,
   defaultStickyHeaderContext,
   StickyInnerElement,
   StickyHeaderOuterElement,
-} from './StickyHeader'
-export type { StickyHeaderContextValue } from './StickyHeader'
+} from '@app/components/VirtualizedGrid/StickyHeader'
+export type { StickyHeaderContextValue } from '@app/components/VirtualizedGrid/StickyHeader'
 
 // Hooks
-export { useGridKeyboardNavigation } from './useGridKeyboardNavigation'
-export type { UseGridKeyboardNavigationOptions } from './useGridKeyboardNavigation'
+export { useGridKeyboardNavigation } from '@app/components/VirtualizedGrid/useGridKeyboardNavigation'
+export type { UseGridKeyboardNavigationOptions } from '@app/components/VirtualizedGrid/useGridKeyboardNavigation'
 
 // Cell Selection Context
 export {
   CellSelectionProvider,
   useCellSelection,
   useCellSelectionOptional,
-} from './CellSelectionContext'
-export type { CellSelectionContextValue, CellSelectionProviderProps } from './CellSelectionContext'
+} from '@app/components/VirtualizedGrid/CellSelectionContext'
+export type { CellSelectionContextValue, CellSelectionProviderProps } from '@app/components/VirtualizedGrid/CellSelectionContext'
 
 // Keyboard Shortcuts
 export {
   KeyboardShortcutsProvider,
   useKeyboardShortcuts,
-} from './KeyboardShortcuts'
+} from '@app/components/VirtualizedGrid/KeyboardShortcuts'
 export type {
   KeyboardAction,
   KeyboardShortcutsContextValue,
   KeyboardShortcutsProviderProps,
-} from './KeyboardShortcuts'
+} from '@app/components/VirtualizedGrid/KeyboardShortcuts'

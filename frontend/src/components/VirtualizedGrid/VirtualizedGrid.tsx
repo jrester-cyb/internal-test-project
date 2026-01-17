@@ -7,19 +7,19 @@ import type {
   ColumnFilterValue,
   VirtualizedGridProps,
   CellPosition,
-} from './types'
-import type { StickyHeaderContextValue } from './StickyHeader'
-import { useGridKeyboardNavigation } from './useGridKeyboardNavigation'
-import { CellSelectionProvider, useCellSelection } from './CellSelectionContext'
-import { KeyboardShortcutsProvider } from './KeyboardShortcuts'
-import { ColumnFilterPopover } from './ColumnFilterPopover'
+} from '@app/components/VirtualizedGrid/types'
+import type { StickyHeaderContextValue } from '@app/components/VirtualizedGrid/StickyHeader'
+import { useGridKeyboardNavigation } from '@app/components/VirtualizedGrid/useGridKeyboardNavigation'
+import { CellSelectionProvider, useCellSelection } from '@app/components/VirtualizedGrid/CellSelectionContext'
+import { KeyboardShortcutsProvider } from '@app/components/VirtualizedGrid/KeyboardShortcuts'
+import { ColumnFilterPopover } from '@app/components/VirtualizedGrid/ColumnFilterPopover'
 import {
   StickyHeaderContext,
   defaultStickyHeaderContext,
   StickyInnerElement,
   StickyHeaderOuterElement,
-} from './StickyHeader'
-import GridCell from './GridCell'
+} from '@app/components/VirtualizedGrid/StickyHeader'
+import GridCell from '@app/components/VirtualizedGrid/GridCell'
 
 
 // Default skeleton placeholder for loading cells

@@ -21,10 +21,10 @@ import {
   Tab,
   useTheme,
 } from '@mui/material'
-import type { Asset, AssetTypeAttribute, AssetTypeAttributeChoice } from '../types'
-import { updateAsset } from '../api/assets'
-import JsonEditor from './JsonEditor'
-import AttributeValueRenderer from './AttributeValueRenderer'
+import type { Asset, AssetTypeAttribute, AssetTypeAttributeChoice } from '@app/types'
+import { updateAsset } from '@app/api/assets'
+import JsonEditor from '@app/components/JsonEditor'
+import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 
 // Fetch choices from an attribute's choices URL
 async function fetchChoicesFromUrl(choicesUrl: string): Promise<AssetTypeAttributeChoice[]> {

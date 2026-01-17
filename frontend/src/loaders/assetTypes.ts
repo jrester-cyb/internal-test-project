@@ -1,4 +1,4 @@
-import { fetchAssetTypes } from '../api/assets'
+import { fetchAssetTypes } from '@app/api/assets'
 
 export async function assetTypesLoader(workspaceId: string) {
   const types = await fetchAssetTypes(workspaceId)

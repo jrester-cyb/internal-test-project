@@ -2,11 +2,11 @@ import { useMemo, useState, useCallback } from 'react'
 import { useMap, useMapEvents, Marker } from 'react-leaflet'
 import L from 'leaflet'
 import Supercluster from 'supercluster'
-import type { Asset, Cluster } from '../types'
-import AssetGeometry from './AssetGeometry'
-import { useTheme } from '../contexts/ThemeContext'
-import { useMapContext } from '../contexts/MapContext'
-import { lightTheme, darkTheme } from '../theme'
+import type { Asset, Cluster } from '@app/types'
+import AssetGeometry from '@app/components/AssetGeometry'
+import { useTheme } from '@app/contexts/ThemeContext'
+import { useMapContext } from '@app/contexts/MapContext'
+import { lightTheme, darkTheme } from '@app/theme'
 
 interface AssetClusterLayerProps {
   assets: Asset[]

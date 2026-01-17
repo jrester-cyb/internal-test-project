@@ -2,9 +2,9 @@ import { useCallback, useMemo } from 'react'
 // useMemo used for loadingPlaceholder
 import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItemButton, Tooltip, Card, CardContent, Container, LinearProgress, Typography } from '@mui/material'
 import { LocationOn as LocationIcon, OpenInNew as OpenInNewIcon, Place as PlaceIcon, Layers as LayersIcon, MyLocation as ZoomIcon, Share as ShareIcon } from '@mui/icons-material'
-import type { Asset, Cluster } from '../../types'
-import CopyableText from '../CopyableText'
-import VirtualizedList from '../VirtualizedList'
+import type { Asset, Cluster } from '@app/types'
+import CopyableText from '@app/components/CopyableText'
+import VirtualizedList from '@app/components/VirtualizedList'
 
 export interface ClusterContentProps {
   organizationId: string

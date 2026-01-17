@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
-import { useTextRenderer } from './context'
-import type { HistoryEntry, KeyboardShortcut } from './types'
-import { defaultShortcuts, matchesShortcut, buildShortcutContext } from './shortcuts'
-import TextRendererToolbar from './TextRendererToolbar'
+import { useTextRenderer } from '@app/components/TextRenderer/context'
+import type { HistoryEntry, KeyboardShortcut } from '@app/components/TextRenderer/types'
+import { defaultShortcuts, matchesShortcut, buildShortcutContext } from '@app/components/TextRenderer/shortcuts'
+import TextRendererToolbar from '@app/components/TextRenderer/TextRendererToolbar'
 
 // Stable empty array to avoid re-renders when no custom shortcuts provided
 const EMPTY_SHORTCUTS: KeyboardShortcut[] = []

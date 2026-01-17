@@ -10,8 +10,8 @@ import {
 } from '@mui/material'
 import { Folder as FolderIcon } from '@mui/icons-material'
 import { useEffect, useState } from 'react'
-import { fetchWorkspaces } from '../api/assets'
-import { useOrganization } from '../contexts/OrganizationContext'
+import { fetchWorkspaces } from '@app/api/assets'
+import { useOrganization } from '@app/contexts/OrganizationContext'
 
 interface Workspace {
   id: string

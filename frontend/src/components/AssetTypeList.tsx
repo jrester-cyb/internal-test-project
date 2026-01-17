@@ -1,5 +1,5 @@
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link } from '@mui/material'
-import type { AssetType } from '../types'
+import type { AssetType } from '@app/types'
 import { Link as RouterLink } from 'react-router-dom';
 
 interface AssetTypeListProps {

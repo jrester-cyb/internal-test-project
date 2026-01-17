@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useLoaderData } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { fetchClusters, fetchTiles } from '../api/assets'
-import type { Asset, Cluster } from '../types'
-import type { AttributeFilter } from '../components/FilterBuilder'
-import { MapProvider, useMapContext } from '../contexts/MapContext'
-import MapView from '../components/MapView'
-import MapEvents from '../components/MapEvents'
+import { fetchClusters, fetchTiles } from '@app/api/assets'
+import type { Asset, Cluster } from '@app/types'
+import type { AttributeFilter } from '@app/components/FilterBuilder'
+import { MapProvider, useMapContext } from '@app/contexts/MapContext'
+import MapView from '@app/components/MapView'
+import MapEvents from '@app/components/MapEvents'
 
 // Fix for default marker icon in Leaflet with React
 delete (L.Icon.Default.prototype as any)._getIconUrl

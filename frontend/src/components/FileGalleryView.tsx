@@ -9,7 +9,7 @@ import {
   AudioFile as AudioIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material'
-import type { FileNode } from '../api/assets'
+import type { FileNode } from '@app/api/assets'
 
 const resourceTypeIcons: Record<string, React.ReactElement> = {
   directory: <FolderIcon />,

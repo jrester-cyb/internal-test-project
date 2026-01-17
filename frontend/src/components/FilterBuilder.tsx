@@ -14,13 +14,13 @@ import {
 } from '@mui/material'
 import { FilterList as FilterListIcon } from '@mui/icons-material'
 import { ChevronRight as ChevronRightIcon } from '@mui/icons-material'
-import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues, type AttributeValuesResponse } from '../api/assets'
-import VirtualizedList from './VirtualizedList'
-import SearchableVirtualList from './SearchableVirtualList'
-import CopyableText from './CopyableText'
-import AttributeFilterPopover from './AttributeFilterPopover'
-import AttributeValueRenderer from './AttributeValueRenderer'
-import type { AssetType, AssetTypeAttribute } from '../types'
+import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues, type AttributeValuesResponse } from '@app/api/assets'
+import VirtualizedList from '@app/components/VirtualizedList'
+import SearchableVirtualList from '@app/components/SearchableVirtualList'
+import CopyableText from '@app/components/CopyableText'
+import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
+import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
+import type { AssetType, AssetTypeAttribute } from '@app/types'
 
 export interface AttributeFilter {
   assetTypeId: string

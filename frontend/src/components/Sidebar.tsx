@@ -1,8 +1,8 @@
 import { Box, List, Drawer, IconButton, Divider, Typography } from '@mui/material'
 import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Settings, FolderCopy as LibraryIcon, Business as BusinessIcon, Folder as FolderIcon } from '@mui/icons-material'
 import { useParams } from 'react-router-dom'
-import SidebarNavItem from './SidebarNavItem'
-import { useSidebar } from '../contexts/SidebarContext'
+import SidebarNavItem from '@app/components/SidebarNavItem'
+import { useSidebar } from '@app/contexts/SidebarContext'
 
 interface SidebarProps {
   isOpen: boolean

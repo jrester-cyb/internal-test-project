@@ -1,7 +1,7 @@
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom'
 import { Box, Typography } from '@mui/material'
-import AssetTypeList from '../components/AssetTypeList'
-import type { AssetType } from '../types'
+import AssetTypeList from '@app/components/AssetTypeList'
+import type { AssetType } from '@app/types'
 
 export default function AssetTypesPage() {
   const assetTypes = useLoaderData() as AssetType[]

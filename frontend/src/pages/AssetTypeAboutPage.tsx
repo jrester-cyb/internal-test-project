@@ -1,7 +1,7 @@
 // Setup a page for the about page
 import { useParams } from 'react-router-dom';
 import { Box, Typography, Grid } from '@mui/material';
-import { AssetTypeAuditLogSection } from '../components/AssetAuditLogSection';
+import { AssetTypeAuditLogSection } from '@app/components/AssetAuditLogSection';
 
 export default function AssetTypeAboutPage() {
   const { assetTypeId, workspaceId } = useParams<{ assetTypeId: string; workspaceId: string }>();

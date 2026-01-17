@@ -1,8 +1,8 @@
 import React, { forwardRef, createContext, useContext, type CSSProperties } from 'react'
 import { Box, IconButton, Badge } from '@mui/material'
 import { FilterList as FilterIcon } from '@mui/icons-material'
-import type { ColumnDefinition, ColumnFilters, SelectionRange } from './types'
-import { ResizeHandle } from './ResizeHandle'
+import type { ColumnDefinition, ColumnFilters, SelectionRange } from '@app/components/VirtualizedGrid/types'
+import { ResizeHandle } from '@app/components/VirtualizedGrid/ResizeHandle'
 
 // Context to pass header config to the custom outer element
 export interface StickyHeaderContextValue {

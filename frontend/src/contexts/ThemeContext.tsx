@@ -2,7 +2,7 @@ import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
-import { lightTheme, darkTheme } from '../theme'
+import { lightTheme, darkTheme } from '@app/theme'
 
 interface ThemeContextType {
   isDarkMode: boolean

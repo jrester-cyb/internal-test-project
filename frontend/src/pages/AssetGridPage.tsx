@@ -6,15 +6,15 @@ import ClearIcon from '@mui/icons-material/Clear'
 import MapIcon from '@mui/icons-material/Map'
 import { VisibilityOff as VisibilityOffIcon, Save as SaveIcon, Undo as DiscardIcon, Cancel as CancelIcon, Lock as LockClosedIcon, Visibility as VisibilityIcon } from '@mui/icons-material'
 
-import type { Asset, AssetTypeAttribute } from '../types'
+import type { Asset, AssetTypeAttribute } from '@app/types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink, useBlocker, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { fetchAssetsByType, updateAsset } from '../api/assets'
-import AttributeValueRenderer from '../components/AttributeValueRenderer'
-import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '../components/VirtualizedGrid'
-import ActionButtons from '../components/ActionButtons'
-import { useSidebar } from '../contexts/SidebarContext'
-import { useChoices } from '../contexts/ChoicesContext'
+import { fetchAssetsByType, updateAsset } from '@app/api/assets'
+import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
+import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '@app/components/VirtualizedGrid'
+import ActionButtons from '@app/components/ActionButtons'
+import { useSidebar } from '@app/contexts/SidebarContext'
+import { useChoices } from '@app/contexts/ChoicesContext'
 
 // Type for tracking pending changes per asset
 // Stores name change and/or attribute changes (keyed by apiKey)

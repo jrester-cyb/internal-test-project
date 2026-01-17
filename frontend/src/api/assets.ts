@@ -1,4 +1,4 @@
-import type { SearchRequest, UnitCategory } from '../types'
+import type { SearchRequest, UnitCategory } from '@app/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
 
