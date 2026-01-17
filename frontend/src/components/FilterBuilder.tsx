@@ -946,6 +946,7 @@ export default function FilterBuilder({
                             compact
                             maxLines={1}
                             showCopyButton={false}
+                            showUnit={false}
                           />
                         </Box>
                       </Box>

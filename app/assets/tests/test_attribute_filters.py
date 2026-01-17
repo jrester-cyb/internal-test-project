@@ -2835,6 +2835,99 @@ class TestAttributeFilterRegressions:
         )
         assert asset_without_value not in results
 
+    def test_number_attribute_nin_null_with_asset_type_filter(self, organization, workspace):
+        """
+        Test the exact scenario from the user's filter JSON:
+        {"filters":[{"logic":"AND","filters":[
+            {"field":"assetTypeId","value":"<uuid>","operator":"exact"},
+            {"field":"attributes.number","value":[null],"operator":"nin"}
+        ]}],"logic":"AND"}
+
+        Scenario:
+        - Asset type with a number attribute (has choices)
+        - One asset WITH a number value set
+        - One asset WITHOUT any value (null)
+        - Filter: asset type exact AND nin [null] on the number attribute
+        - Expected: Only the asset WITH the value should be returned (count = 1)
+        """
+        from assets.models import (
+            ChoiceAttributeValue,
+            NumberAttributeChoice,
+        )
+
+        # Create asset type
+        asset_type = AssetType.objects.create(
+            organization=organization, name="Type for number nin null"
+        )
+
+        # Create a number attribute WITH choices
+        number_attr = GlobalAssetTypeAttribute.objects.create(
+            asset_type=asset_type,
+            name="Number",
+            api_key="number",
+            attribute_type="number",
+        )
+
+        # Create a choice for the number attribute
+        choice_42 = NumberAttributeChoice.objects.create(
+            asset_type_attribute=number_attr,
+            value=42.0,
+            order=0,
+        )
+
+        # Asset WITH a number value
+        asset_with_value = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset WITH number"
+        )
+        ChoiceAttributeValue.objects.create(
+            asset=asset_with_value, asset_type_attribute=number_attr, choice=choice_42
+        )
+
+        # Asset WITHOUT any value (null)
+        asset_without_value = Asset.objects.create(
+            organization=organization, asset_type=asset_type, name="Asset WITHOUT number"
+        )
+
+        # Clear the cache
+        from django.core.cache import cache
+        cache.clear()
+
+        # This is the EXACT filter structure from the user's JSON
+        data = {
+            "logic": "AND",
+            "filters": [
+                {
+                    "logic": "AND",
+                    "filters": [
+                        {
+                            "field": "assetTypeId",
+                            "value": str(asset_type.id),
+                            "operator": "exact",
+                        },
+                        {
+                            "field": "attributes.number",
+                            "value": [None],
+                            "operator": "nin",
+                        },
+                    ],
+                }
+            ],
+        }
+
+        serializer = FilterSerializer(data=data)
+        q = serializer.build_query()
+
+        print(f"Generated Q: {q}")
+
+        results = Asset.objects.filter(q).filter(organization=organization)
+        result_names = list(results.values_list("name", flat=True))
+        print(f"Results: {result_names}")
+
+        # Should return exactly 1 asset - the one WITH a value
+        assert results.count() == 1, f"Expected 1 result, got {results.count()}: {result_names}"
+        assert asset_with_value in results
+        assert asset_without_value not in results
+
 
 class TestAttributeValuesEndpoint:
     """Test the attribute values endpoint that returns distinct values for filtering."""

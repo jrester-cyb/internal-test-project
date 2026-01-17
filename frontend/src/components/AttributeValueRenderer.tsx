@@ -16,6 +16,8 @@ interface AttributeValueRendererProps {
   showCopyButton?: boolean
   /** Compact mode - disables TruncatedText features like expand dialog (default: false) */
   compact?: boolean
+  /** Whether to show unit suffix for number values (default: true, set to false for filter value lists) */
+  showUnit?: boolean
 }
 
 // Compact JSON renderer with fullscreen button for grid cells
@@ -163,7 +165,25 @@ function JsonRenderer({ value, maxLines = 3, lineNumbers = 'both' }: { value: an
 }
 
 // Boolean renderer with chip
-function BooleanRenderer({ value, showCopyButton = true }: { value: boolean; showCopyButton?: boolean }) {
+function BooleanRenderer({ value, showCopyButton = true }: { value: boolean | null | undefined; showCopyButton?: boolean }) {
+  // Handle null/undefined as a distinct state
+  if (value === null || value === undefined) {
+    return (
+      <Chip
+        label="Blank"
+        size="small"
+        color="default"
+        variant="outlined"
+        sx={{ height: 22, fontStyle: 'italic' }}
+      />
+    )
+  }
+
+  // Normalize value to boolean (handle string "true"/"false" from backend)
+  const boolValue = typeof value === 'string'
+    ? value.toLowerCase() === 'true'
+    : Boolean(value)
+
   return (
     <Box
       sx={{
@@ -175,9 +195,9 @@ function BooleanRenderer({ value, showCopyButton = true }: { value: boolean; sho
       }}
     >
       <Chip
-        label={value ? 'Yes' : 'No'}
+        label={boolValue ? 'Yes' : 'No'}
         size="small"
-        color={value ? 'success' : 'default'}
+        color={boolValue ? 'success' : 'default'}
         variant="outlined"
         sx={{ height: 22 }}
       />
@@ -186,7 +206,7 @@ function BooleanRenderer({ value, showCopyButton = true }: { value: boolean; sho
           <IconButton
             className="copy-button"
             size="small"
-            onClick={() => navigator.clipboard.writeText(value ? 'True' : 'False')}
+            onClick={() => navigator.clipboard.writeText(boolValue ? 'True' : 'False')}
             sx={{
               p: 0.25,
               flexShrink: 0,
@@ -204,7 +224,30 @@ function BooleanRenderer({ value, showCopyButton = true }: { value: boolean; sho
 
 // Date/datetime renderer
 function DateRenderer({ value, includeTime = false, showCopyButton = true, compact = false }: { value: string; includeTime?: boolean; showCopyButton?: boolean; compact?: boolean }) {
+  // Handle invalid or empty values
+  if (!value) {
+    return <Typography variant="body2" color="text.disabled">—</Typography>
+  }
+
   const date = new Date(value)
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    // Try to display the raw value if it looks like a date string
+    if (compact) {
+      return (
+        <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {String(value)}
+        </Typography>
+      )
+    }
+    return (
+      <TruncatedText variant="body2" maxLines={1} title="Date" showCopy={showCopyButton}>
+        {String(value)}
+      </TruncatedText>
+    )
+  }
+
   const formatted = includeTime
     ? date.toLocaleString()
     : date.toLocaleDateString()
@@ -281,12 +324,12 @@ function LinkRenderer({ value, maxLines = 3, showCopyButton = true, compact = fa
 }
 
 // Number renderer with formatting and optional unit
-function NumberRenderer({ value, unit, showCopyButton = true, compact = false }: { value: number; unit?: string; showCopyButton?: boolean; compact?: boolean }) {
+function NumberRenderer({ value, unit, showCopyButton = true, compact = false, showUnit = true }: { value: number; unit?: string; showCopyButton?: boolean; compact?: boolean; showUnit?: boolean }) {
   const formatted = typeof value === 'number' && !Number.isInteger(value)
     ? value.toLocaleString(undefined, { maximumFractionDigits: 6 })
     : value.toLocaleString()
 
-  const displayText = unit ? `${formatted} ${unit}` : formatted
+  const displayText = unit && showUnit ? `${formatted} ${unit}` : formatted
 
   if (compact) {
     return (
@@ -304,12 +347,12 @@ function NumberRenderer({ value, unit, showCopyButton = true, compact = false }:
 }
 
 // Choice renderer - displays value with optional color indicator and unit
-function ChoiceRenderer({ value, choices, compact = false, unit }: { value: any; choices: NonNullable<AssetTypeAttribute['choices']>; compact?: boolean; unit?: string }) {
+function ChoiceRenderer({ value, choices, compact = false, unit, showUnit = true }: { value: any; choices: NonNullable<AssetTypeAttribute['choices']>; compact?: boolean; unit?: string; showUnit?: boolean }) {
   // Find the matching choice to get its color
   const choice = choices.find(c => c.value === value || String(c.value) === String(value))
   const baseDisplayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
-  // Append unit for number values
-  const displayValue = unit && typeof value === 'number' ? `${baseDisplayValue} ${unit}` : baseDisplayValue
+  // Append unit for number values (only if showUnit is true)
+  const displayValue = unit && showUnit && typeof value === 'number' ? `${baseDisplayValue} ${unit}` : baseDisplayValue
   const color = choice?.color
 
   if (compact) {
@@ -360,6 +403,11 @@ function ChoiceRenderer({ value, choices, compact = false, unit }: { value: any;
 
 // Default text renderer using TruncatedText
 function SimpleTextRenderer({ value, maxLines = 3, showCopyButton = true, compact = false }: { value: string; maxLines?: number; showCopyButton?: boolean; compact?: boolean }) {
+  // Handle empty string
+  if (!value && value !== 0) {
+    return <Typography variant="body2" color="text.disabled">—</Typography>
+  }
+
   if (compact) {
     return (
       <Typography
@@ -385,7 +433,12 @@ function SimpleTextRenderer({ value, maxLines = 3, showCopyButton = true, compac
   )
 }
 
-export default function AttributeValueRenderer({ attribute, value, maxLines = 3, lineNumbers = 'both', showCopyButton = true, compact = false }: AttributeValueRendererProps) {
+export default function AttributeValueRenderer({ attribute, value, maxLines = 3, lineNumbers = 'both', showCopyButton = true, compact = false, showUnit = true }: AttributeValueRendererProps) {
+  // Handle "Blank" string (used in filter value lists to represent null)
+  if (value === "Blank") {
+    return <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>Blank</Typography>
+  }
+
   // Handle null/undefined
   if (value === null || value === undefined) {
     return <Typography variant="body2" color="text.disabled">—</Typography>
@@ -393,7 +446,7 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
 
   // If attribute has choices, use the choice renderer regardless of type
   if (attribute.choices && attribute.choices.length > 0) {
-    return <ChoiceRenderer value={value} choices={attribute.choices} compact={compact} unit={attribute.unit} />
+    return <ChoiceRenderer value={value} choices={attribute.choices} compact={compact} unit={attribute.unit} showUnit={showUnit} />
   }
 
   // Render based on attribute type
@@ -402,7 +455,7 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
       return <JsonRenderer value={value.rawJson ?? value} maxLines={maxLines} lineNumbers={lineNumbers} />
 
     case 'boolean':
-      return <BooleanRenderer value={Boolean(value)} showCopyButton={showCopyButton} />
+      return <BooleanRenderer value={value} showCopyButton={showCopyButton} />
 
     case 'date':
       return <DateRenderer value={value} includeTime={false} showCopyButton={showCopyButton} compact={compact} />
@@ -411,7 +464,7 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
       return <DateRenderer value={value} includeTime={true} showCopyButton={showCopyButton} compact={compact} />
 
     case 'number':
-      return <NumberRenderer value={value} unit={attribute.unit} showCopyButton={showCopyButton} compact={compact} />
+      return <NumberRenderer value={value} unit={attribute.unit} showCopyButton={showCopyButton} compact={compact} showUnit={showUnit} />
 
     case 'link':
       return <LinkRenderer value={value} maxLines={maxLines} showCopyButton={showCopyButton} compact={compact} />
