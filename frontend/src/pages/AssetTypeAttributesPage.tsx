@@ -1372,15 +1372,6 @@ export default function AssetTypeAttributesPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} sx={{ flexShrink: 0, p: 2, pb: 0 }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ overflow: 'hidden' }}>
-          {showingGlobalDefinition ? (
-            <IconButton size="small" onClick={() => { setShowingGlobalDefinition(false); setGlobalDefinition(null) }} edge="start">
-              <CloseIcon />
-            </IconButton>
-          ) : isSmallScreen && (
-            <IconButton size="small" onClick={() => setSelectedAttribute(null)} edge="start">
-              <CloseIcon />
-            </IconButton>
-          )}
           <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {showingGlobalDefinition ? 'Global Definition' : 'Details'}
           </Typography>
@@ -1623,7 +1614,7 @@ export default function AssetTypeAttributesPage() {
       </Box>
 
       {/* Details Drawer for small screens */}
-      <PvDrawer isOpen={isSmallScreen && !!selectedAttribute}
+      <PvDrawer open={isSmallScreen && !!selectedAttribute}
         onClose={() => setSelectedAttribute(null)}>
         {detailsPanelContent}
       </PvDrawer>
@@ -1972,7 +1963,6 @@ export default function AssetTypeAttributesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <ConfirmDialog
         open={confirmDialog.open}
         title={confirmDialog.title}

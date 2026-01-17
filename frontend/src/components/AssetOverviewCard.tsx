@@ -241,7 +241,7 @@ export default function AssetOverviewCard({
       {/* System Details Drawer */}
       <PvDrawer
         key="SystemDetailsDrawer"
-        isOpen={systemDetailsOpen}
+        open={systemDetailsOpen}
         onClose={() => setSystemDetailsOpen(false)}
         resizable={false}
         width={600}

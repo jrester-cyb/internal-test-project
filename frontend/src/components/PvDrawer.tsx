@@ -5,7 +5,7 @@ import { useSidebar } from '../contexts/SidebarContext'
 
 interface PvDrawerProps {
   key?: string
-  isOpen: boolean
+  open: boolean
   onClose: () => void
   children: React.ReactNode
   /** When true, skip the initial slide animation (for pre-selected assets on page load) */
@@ -18,7 +18,7 @@ interface PvDrawerProps {
   overlay?: boolean
 }
 
-export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen = false, resizable = true, width, overlay = false }: PvDrawerProps) {
+export default function PvDrawer({ key, open, onClose, children, initiallyOpen = false, resizable = true, width, overlay = false }: Readonly<PvDrawerProps>) {
   const { isMobile } = useSidebar()
   const isResizable = resizable && !isMobile
 
@@ -95,13 +95,13 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
   }, [isResizing, isSliding, slideOffset, panelWidth, onClose])
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!open) {
       setTimeout(() => {
         setIsSliding(false)
         setSlideOffset(0)
       }, 350)
     }
-  }, [isOpen])
+  }, [open])
 
   // Extracted style for Slide component to avoid nested ternary
   let slideStyle: React.CSSProperties | undefined;
@@ -125,121 +125,121 @@ export default function PvDrawer({ key, isOpen, onClose, children, initiallyOpen
       {/* Backdrop overlay */}
       {overlay && (
         <Backdrop
-          open={isOpen}
+          open={open}
           onClick={onClose}
           sx={{ zIndex: 999 }}
           transitionDuration={300}
         />
       )}
       <Slide
-      direction={isMobile ? "up" : "left"}
-      in={isOpen}
-      appear={!initiallyOpen}
-      timeout={300}
-      style={slideStyle}
-    >
-      <Paper
-        elevation={isMobile ? 8 : 0}
-        sx={{
-          pointerEvents: 'auto',
-          position: 'fixed',
-          top: isMobile ? 'auto' : 64,
-          left: isMobile ? 0 : 'auto',
-          right: 0,
-          bottom: isMobile ? 56 : 0, // Leave 56px for bottom nav on mobile
-          width: getDrawerWidth(),
-          height: isMobile ? 'calc(100vh - 112px)' : 'auto', // 56px top + 56px bottom
-          zIndex: 1000,
-          borderLeft: isMobile ? 0 : 1,
-          borderTop: isMobile ? 1 : 0,
-          borderColor: 'divider',
-          borderRadius: isMobile ? '16px 16px 0 0' : undefined, // Rounded top corners on mobile
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none'
-        }}
+        direction={isMobile ? "up" : "left"}
+        in={open}
+        appear={!initiallyOpen}
+        timeout={300}
+        style={slideStyle}
       >
-        {/* Resize/Close Handle - only show on desktop */}
-        {!isMobile && (
-          <Box
-            ref={resizeRef}
-            onMouseDown={isResizable ? handleResizeStart : undefined}
-            onClick={handleResizeClick}
-            sx={{
-              width: '12px',
-              cursor: isResizable ? 'ew-resize' : 'pointer',
-              backgroundColor: 'background.paper',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              '&:hover': {
-                backgroundColor: 'action.hover',
-                '& .resize-dots': {
-                  opacity: 0
-                },
-                '& .close-arrow': {
-                  opacity: 1
-                }
-              }
-            }}
-          >
-            {isResizable && (
-              <Box
-                className="resize-dots"
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 0.25,
-                  opacity: 0.6,
-                  transition: 'opacity 0.2s ease'
-                }}
-              >
-                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-                <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
-              </Box>
-            )}
-
-            <ChevronRightIcon
-              className="close-arrow"
+        <Paper
+          elevation={isMobile ? 8 : 0}
+          sx={{
+            pointerEvents: 'auto',
+            position: 'fixed',
+            top: isMobile ? 'auto' : 64,
+            left: isMobile ? 0 : 'auto',
+            right: 0,
+            bottom: isMobile ? 56 : 0, // Leave 56px for bottom nav on mobile
+            width: getDrawerWidth(),
+            height: isMobile ? 'calc(100vh - 112px)' : 'auto', // 56px top + 56px bottom
+            zIndex: 1000,
+            borderLeft: isMobile ? 0 : 1,
+            borderTop: isMobile ? 1 : 0,
+            borderColor: 'divider',
+            borderRadius: isMobile ? '16px 16px 0 0' : undefined, // Rounded top corners on mobile
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none'
+          }}
+        >
+          {/* Resize/Close Handle - only show on desktop */}
+          {!isMobile && (
+            <Box
+              ref={resizeRef}
+              onMouseDown={isResizable ? handleResizeStart : undefined}
+              onClick={handleResizeClick}
               sx={{
-                position: isResizable ? 'absolute' : 'static',
-                opacity: isResizable ? 0 : 0.6,
-                transition: 'opacity 0.2s ease',
-                fontSize: 16,
-                color: 'text.secondary'
+                width: '12px',
+                cursor: isResizable ? 'ew-resize' : 'pointer',
+                backgroundColor: 'background.paper',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                  '& .resize-dots': {
+                    opacity: 0
+                  },
+                  '& .close-arrow': {
+                    opacity: 1
+                  }
+                }
               }}
-            />
-          </Box>
-        )}
+            >
+              {isResizable && (
+                <Box
+                  className="resize-dots"
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.25,
+                    opacity: 0.6,
+                    transition: 'opacity 0.2s ease'
+                  }}
+                >
+                  <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+                  <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+                  <Box sx={{ width: '2px', height: '2px', bgcolor: 'text.secondary', borderRadius: '50%' }} />
+                </Box>
+              )}
 
-        {/* Mobile Close Button */}
-        {isMobile && (
-          <Box
-            onClick={onClose}
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              py: 0.5,
-              borderBottom: 1,
-              borderColor: 'divider',
-              width: '100%',
-              cursor: 'pointer',
-              '&:hover': { bgcolor: 'action.hover' }
-            }}
-          >
-            <ChevronDownIcon sx={{ fontSize: 24 }} />
-          </Box>
-        )}
+              <ChevronRightIcon
+                className="close-arrow"
+                sx={{
+                  position: isResizable ? 'absolute' : 'static',
+                  opacity: isResizable ? 0 : 0.6,
+                  transition: 'opacity 0.2s ease',
+                  fontSize: 16,
+                  color: 'text.secondary'
+                }}
+              />
+            </Box>
+          )}
 
-        {/* Main Content */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {children}
-        </Box>
-      </Paper>
-    </Slide>
+          {/* Mobile Close Button */}
+          {isMobile && (
+            <Box
+              onClick={onClose}
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                py: 0.5,
+                borderBottom: 1,
+                borderColor: 'divider',
+                width: '100%',
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+            >
+              <ChevronDownIcon sx={{ fontSize: 24 }} />
+            </Box>
+          )}
+
+          {/* Main Content */}
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {children}
+          </Box>
+        </Paper>
+      </Slide>
     </>
   )
 }

@@ -1524,7 +1524,6 @@ export default function AssetGridPage() {
     <Box sx={{ flexShrink: 0, p: 3, pb: 2 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Stack direction="row" alignItems="center" spacing={2}>
-          <Typography variant="h5" component="h2">Assets</Typography>
           {hasUnsavedChanges && (
             <Typography variant="body2" color="warning.main" sx={{ fontWeight: 500 }}>
               {pendingChanges.size} unsaved change{pendingChanges.size !== 1 ? 's' : ''}

@@ -44,7 +44,7 @@ export default function MapDetailsDrawer(props: MapDetailsDrawerProps) {
   const { isOpen, onClose, organizationId, workspaceId, initiallyOpen } = props
 
   return (
-    <PvDrawer key="MapDrawer" isOpen={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
+    <PvDrawer key="MapDrawer" open={isOpen} onClose={onClose} initiallyOpen={initiallyOpen}>
       {props.type === 'cluster' ? (
         <ClusterContent
           organizationId={organizationId}
