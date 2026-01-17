@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, RouterProvider, type Params } from 'reac
 import { ThemeProvider } from './contexts/ThemeContext'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { SidebarProvider } from './contexts/SidebarContext'
+import { ChoicesProvider } from './contexts/ChoicesContext'
 import './index.css'
 import App from './App.tsx'
 
@@ -479,7 +480,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <OrganizationProvider>
         <SidebarProvider>
-          <RouterProvider router={router} />
+          <ChoicesProvider>
+            <RouterProvider router={router} />
+          </ChoicesProvider>
         </SidebarProvider>
       </OrganizationProvider>
     </ThemeProvider>

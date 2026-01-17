@@ -76,11 +76,61 @@ class TextAttributeChoice(AssetTypeAttributeChoice):
 
     value = models.TextField()
 
+    class Meta:
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_duplicate_text_choice",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_textattributechoice tc
+                        JOIN public.assets_assettypeattributechoice base ON tc.assettypeattributechoice_ptr_id = base.id
+                        WHERE base.asset_type_attribute_id = (
+                            SELECT asset_type_attribute_id FROM public.assets_assettypeattributechoice WHERE id = NEW.assettypeattributechoice_ptr_id
+                        )
+                        AND tc.value = NEW.value
+                        AND tc.assettypeattributechoice_ptr_id != NEW.assettypeattributechoice_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'A choice with this value already exists for this attribute';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
+
 
 class NumberAttributeChoice(AssetTypeAttributeChoice):
     """Number choice value"""
 
     value = models.FloatField()
+
+    class Meta:
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_duplicate_number_choice",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_numberattributechoice nc
+                        JOIN public.assets_assettypeattributechoice base ON nc.assettypeattributechoice_ptr_id = base.id
+                        WHERE base.asset_type_attribute_id = (
+                            SELECT asset_type_attribute_id FROM public.assets_assettypeattributechoice WHERE id = NEW.assettypeattributechoice_ptr_id
+                        )
+                        AND nc.value = NEW.value
+                        AND nc.assettypeattributechoice_ptr_id != NEW.assettypeattributechoice_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'A choice with this value already exists for this attribute';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
 
 
 class DateAttributeChoice(AssetTypeAttributeChoice):
@@ -88,11 +138,61 @@ class DateAttributeChoice(AssetTypeAttributeChoice):
 
     value = models.DateField()
 
+    class Meta:
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_duplicate_date_choice",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_dateattributechoice dc
+                        JOIN public.assets_assettypeattributechoice base ON dc.assettypeattributechoice_ptr_id = base.id
+                        WHERE base.asset_type_attribute_id = (
+                            SELECT asset_type_attribute_id FROM public.assets_assettypeattributechoice WHERE id = NEW.assettypeattributechoice_ptr_id
+                        )
+                        AND dc.value = NEW.value
+                        AND dc.assettypeattributechoice_ptr_id != NEW.assettypeattributechoice_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'A choice with this value already exists for this attribute';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
+
 
 class DateTimeAttributeChoice(AssetTypeAttributeChoice):
     """DateTime choice value"""
 
     value = models.DateTimeField()
+
+    class Meta:
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_duplicate_datetime_choice",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_datetimeattributechoice dtc
+                        JOIN public.assets_assettypeattributechoice base ON dtc.assettypeattributechoice_ptr_id = base.id
+                        WHERE base.asset_type_attribute_id = (
+                            SELECT asset_type_attribute_id FROM public.assets_assettypeattributechoice WHERE id = NEW.assettypeattributechoice_ptr_id
+                        )
+                        AND dtc.value = NEW.value
+                        AND dtc.assettypeattributechoice_ptr_id != NEW.assettypeattributechoice_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'A choice with this value already exists for this attribute';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
 
 
 class JSONAttributeChoice(AssetTypeAttributeChoice):
@@ -100,12 +200,62 @@ class JSONAttributeChoice(AssetTypeAttributeChoice):
 
     value = models.JSONField()
 
+    class Meta:
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_duplicate_json_choice",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_jsonattributechoice jc
+                        JOIN public.assets_assettypeattributechoice base ON jc.assettypeattributechoice_ptr_id = base.id
+                        WHERE base.asset_type_attribute_id = (
+                            SELECT asset_type_attribute_id FROM public.assets_assettypeattributechoice WHERE id = NEW.assettypeattributechoice_ptr_id
+                        )
+                        AND jc.value = NEW.value
+                        AND jc.assettypeattributechoice_ptr_id != NEW.assettypeattributechoice_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'A choice with this value already exists for this attribute';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
+
 
 class LinkAttributeChoice(AssetTypeAttributeChoice):
     """Link/URL choice value with optional display text"""
 
     url = models.URLField(max_length=2000)
     display_text = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        triggers = [
+            pgtrigger.Trigger(
+                name="prevent_duplicate_link_choice",
+                operation=pgtrigger.Insert | pgtrigger.Update,
+                when=pgtrigger.Before,
+                func="""
+                    IF EXISTS (
+                        SELECT 1
+                        FROM public.assets_linkattributechoice lc
+                        JOIN public.assets_assettypeattributechoice base ON lc.assettypeattributechoice_ptr_id = base.id
+                        WHERE base.asset_type_attribute_id = (
+                            SELECT asset_type_attribute_id FROM public.assets_assettypeattributechoice WHERE id = NEW.assettypeattributechoice_ptr_id
+                        )
+                        AND lc.url = NEW.url
+                        AND lc.assettypeattributechoice_ptr_id != NEW.assettypeattributechoice_ptr_id
+                        AND base.deleted_at IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'A choice with this URL already exists for this attribute';
+                    END IF;
+                    RETURN NEW;
+                """,
+            ),
+        ]
 
     @property
     def value(self):

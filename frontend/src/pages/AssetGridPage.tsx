@@ -14,6 +14,7 @@ import AttributeValueRenderer from '../components/AttributeValueRenderer'
 import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '../components/VirtualizedGrid'
 import ActionButtons from '../components/ActionButtons'
 import { useSidebar } from '../contexts/SidebarContext'
+import { useChoices } from '../contexts/ChoicesContext'
 
 // Type for tracking pending changes per asset
 // Stores name change and/or attribute changes (keyed by apiKey)
@@ -32,7 +33,7 @@ export default function AssetGridPage() {
   }
 
   const { isOpen, setIsOpen, isMobile, windowWidth } = useSidebar()
-
+  const { getChoices, loadChoices, isLoading: isLoadingChoices } = useChoices()
 
   const { assetTypeId } = useParams()
   const location = useLocation()
@@ -1285,24 +1286,44 @@ export default function AssetGridPage() {
     )
   }, [])
 
+  // Helper to format choice value for display
+  const formatChoiceValue = (value: any, unit?: string): string => {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'object') return JSON.stringify(value)
+    const strValue = String(value)
+    // Append unit for number values if unit is provided
+    if (unit && typeof value === 'number') {
+      return `${strValue} ${unit}`
+    }
+    return strValue
+  }
+
   // Choices cell editor - for attributes with predefined choices
-  const createChoicesCellEditor = useCallback((choices: NonNullable<AssetTypeAttribute['choices']>) => {
+  // Now accepts a getter function that returns choices from context, plus optional unit for display
+  const createChoicesCellEditor = useCallback((getChoicesForAttr: () => NonNullable<AssetTypeAttribute['choices']> | undefined, unit?: string) => {
     return ({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+      const choices = getChoicesForAttr() || []
       // Find the current choice by matching value
-      const currentChoice = choices.find(c => String(c.value) === value || c.label === value)
+      const currentChoice = choices.find(c => String(c.value) === value || formatChoiceValue(c.value) === value)
       const [selectedValue, setSelectedValue] = useState(currentChoice?.value ?? '')
       const [open, setOpen] = useState(true)
+      // Track if we already saved to prevent double-save
+      const hasSavedRef = useRef(false)
 
       const handleChange = (newValue: any) => {
         setSelectedValue(newValue)
-        // Save immediately on selection
+        // Save immediately on selection and mark as saved
+        hasSavedRef.current = true
         onSave(String(newValue))
       }
 
       const handleClose = () => {
         setOpen(false)
-        // Save current value when closing
-        onSave(String(selectedValue))
+        // Only save on close if we haven't already saved from selection
+        // This handles the case where user opens dropdown but doesn't select anything
+        if (!hasSavedRef.current) {
+          onSave(String(selectedValue))
+        }
       }
 
       const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1311,6 +1332,30 @@ export default function AssetGridPage() {
           onCancel()
         }
         e.stopPropagation()
+      }
+
+      // If no choices loaded yet, show loading or empty state
+      if (choices.length === 0) {
+        return (
+          <Box
+            style={style}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'background.paper',
+              position: 'relative',
+              zIndex: 2,
+              borderBottom: selectionBorders?.bottom ? 'none' : '1px solid',
+              borderRight: selectionBorders?.right ? 'none' : '1px solid',
+              borderRightColor: 'divider',
+              borderBottomColor: 'divider',
+              boxSizing: 'border-box',
+            }}
+          >
+            <CircularProgress size={16} />
+          </Box>
+        )
       }
 
       return (
@@ -1381,7 +1426,7 @@ export default function AssetGridPage() {
                       }}
                     />
                   )}
-                  {choice.label}
+                  {formatChoiceValue(choice.value, unit)}
                 </Box>
               </MenuItem>
             ))}
@@ -1463,9 +1508,24 @@ export default function AssetGridPage() {
 
     // Helper to get the editor for an attribute type
     const getEditorForAttribute = (attr: AssetTypeAttribute) => {
-      // If the attribute has choices, use the choices editor regardless of type
-      if (attr.choices && attr.choices.length > 0) {
-        return createChoicesCellEditor(attr.choices)
+      // If the attribute has choices (either already loaded or indicated by hasChoices flag),
+      // use the choices editor. The editor gets choices from context on render.
+      if ((attr.choices && attr.choices.length > 0) || attr.hasChoices) {
+        // Load choices on demand when we know they exist
+        if (attr.hasChoices && assetTypeId) {
+          loadChoices(initialData.workspaceId, assetTypeId, attr.id)
+        }
+        // Create editor with a getter that retrieves choices from context
+        // Pass unit for number attributes to display in dropdown
+        return createChoicesCellEditor(() => {
+          // First check if choices are cached in context
+          const cachedChoices = getChoices(attr.id)
+          if (cachedChoices && cachedChoices.length > 0) {
+            return cachedChoices
+          }
+          // Fall back to choices on the attribute itself (if pre-loaded)
+          return attr.choices
+        }, attr.unit)
       }
 
       switch (attr.attributeType) {
@@ -1483,38 +1543,49 @@ export default function AssetGridPage() {
     const editableTypes = ['string', 'number', 'text', 'json', 'boolean', 'date', 'datetime', 'link']
 
     // Add dynamic attribute columns
-    const attributeColumns: ColumnDefinition<Asset>[] = displayAttributes.map(attr => ({
-      key: `attr-${attr.id}`,
-      header: (
-        <Box sx={{ px: 2, opacity: attr.isHidden ? 0.5 : 1 }}>
-          {attr.name}
-        </Box>
-      ),
-      width: 150,
-      minWidth: 100,
-      editable: editingEnabled && editableTypes.includes(attr.attributeType),
-      editor: getEditorForAttribute(attr),
-      render: (asset) => (
-        <Box sx={{ px: 2, overflow: 'hidden', opacity: attr.isHidden ? 0.5 : 1 }}>
-          <AttributeValueRenderer
-            attribute={attr}
-            value={getAttributeValue(asset, attr.apiKey)}
-            maxLines={1}
-            lineNumbers="fullscreen"
-            showCopyButton={false}
-            compact
-          />
-        </Box>
-      ),
-      getCellValue: (asset) => formatAttributeValueForCopy(
-        getAttributeValue(asset, attr.apiKey),
-        attr.attributeType
-      ),
-      headerSx: { fontWeight: 600 },
-    }))
+    const attributeColumns: ColumnDefinition<Asset>[] = displayAttributes.map(attr => {
+      return {
+        key: `attr-${attr.id}`,
+        header: (
+          <Box sx={{ px: 2, opacity: attr.isHidden ? 0.5 : 1 }}>
+            {attr.name}
+          </Box>
+        ),
+        width: 150,
+        minWidth: 100,
+        editable: editingEnabled && editableTypes.includes(attr.attributeType),
+        editor: getEditorForAttribute(attr),
+        render: (asset) => {
+          // Get choices from context at render time (not at memo evaluation time)
+          // This ensures we get the latest choices after they load
+          const cachedChoices = getChoices(attr.id)
+          const enrichedAttr = (cachedChoices && cachedChoices.length > 0)
+            ? { ...attr, choices: cachedChoices }
+            : attr
+
+          return (
+            <Box sx={{ px: 2, overflow: 'hidden', opacity: attr.isHidden ? 0.5 : 1 }}>
+              <AttributeValueRenderer
+                attribute={enrichedAttr}
+                value={getAttributeValue(asset, attr.apiKey)}
+                maxLines={1}
+                lineNumbers="fullscreen"
+                showCopyButton={false}
+                compact
+              />
+            </Box>
+          )
+        },
+        getCellValue: (asset) => formatAttributeValueForCopy(
+          getAttributeValue(asset, attr.apiKey),
+          attr.attributeType
+        ),
+        headerSx: { fontWeight: 600 },
+      }
+    })
 
     return [...baseColumns, ...attributeColumns]
-  }, [displayAttributes, location.state, editingEnabled, navigate, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor, createChoicesCellEditor])
+  }, [displayAttributes, location.state, editingEnabled, navigate, JsonCellEditor, createNumberWithUnitEditor, BooleanCellEditor, DateCellEditor, DateTimeCellEditor, LinkCellEditor, createChoicesCellEditor, getChoices, loadChoices, initialData.workspaceId, assetTypeId])
 
   // Cell placeholder for loading state
   const cellPlaceholder = (

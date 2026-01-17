@@ -174,6 +174,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
     asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
+    has_choices = serializers.SerializerMethodField()
     organization_id = serializers.SerializerMethodField()
     scope = serializers.SerializerMethodField()
     api_url = serializers.SerializerMethodField()
@@ -196,6 +197,7 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "locked_to_global",
             "asset_count_url",
             "is_hidden",
+            "has_choices",
             "organization_id",
             "scope",
             "api_url",
@@ -234,6 +236,11 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Check if this attribute is hidden in the current workspace."""
         # Assumes _is_hidden is always annotated on the queryset
         return getattr(obj, "_is_hidden", False)
+
+    def get_has_choices(self, obj):
+        """Check if this attribute has choices defined."""
+        # Uses _has_choices annotation from the queryset (Exists subquery)
+        return getattr(obj, "_has_choices", False)
 
     def get_scope(self, obj):
         """Global attributes have scope 'global'."""
@@ -390,6 +397,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
     organization_id = serializers.SerializerMethodField()
     asset_count_url = serializers.SerializerMethodField()
     is_hidden = serializers.SerializerMethodField()
+    has_choices = serializers.SerializerMethodField()
     scope = serializers.SerializerMethodField()
     api_url = serializers.SerializerMethodField()
 
@@ -411,6 +419,7 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             "unit",
             "asset_count_url",
             "is_hidden",
+            "has_choices",
             "scope",
             "api_url",
             "created_at",
@@ -450,6 +459,11 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Check if this attribute is hidden in its workspace."""
         # Use the _is_hidden annotation from the queryset
         return getattr(obj, "_is_hidden", False)
+
+    def get_has_choices(self, obj):
+        """Check if this attribute has choices defined."""
+        # Uses _has_choices annotation from the queryset (Exists subquery)
+        return getattr(obj, "_has_choices", False)
 
     def get_scope(self, obj):
         """Local attributes have scope 'local'."""

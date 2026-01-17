@@ -33,6 +33,7 @@ from ..models import (
     BaseAttributeValue,
     WorkspaceAsset,
     AssetType,
+    AssetTypeAttributeChoice,
 )
 from ..serializers import (
     AssetTypeAttributeSerializer,
@@ -212,6 +213,12 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 deleted_at__isnull=True,
             )
 
+            # Subquery to check if attribute has choices
+            has_choices_check = AssetTypeAttributeChoice.objects.filter(
+                asset_type_attribute_id=OuterRef("id"),
+                deleted_at__isnull=True,
+            )
+
             # Subquery to get workspace name for override and local attributes
             from workspaces.models import Workspace
 
@@ -245,6 +252,8 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     _is_hidden=Exists(hidden_check),
                     # Annotate workspace_name for override/local attributes
                     _workspace_name=Subquery(workspace_name_subquery),
+                    # Annotate has_choices for lazy loading choices on frontend
+                    _has_choices=Exists(has_choices_check),
                 )
                 .annotate(_organization_id=F("asset_type__organization_id"))
                 .select_related(
@@ -304,6 +313,12 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             organization_pk = self.kwargs["organization_pk"]
             assettype_pk = self.kwargs["assettype_pk"]
 
+            # Subquery to check if attribute has choices
+            has_choices_check = AssetTypeAttributeChoice.objects.filter(
+                asset_type_attribute_id=OuterRef("id"),
+                deleted_at__isnull=True,
+            )
+
             queryset = (
                 GlobalAssetTypeAttribute.objects.filter(
                     asset_type_id=assettype_pk,
@@ -312,6 +327,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 .annotate(
                     _is_hidden=Value(False),  # No hidden status at org level
                     _organization_id=F("asset_type__organization_id"),
+                    _has_choices=Exists(has_choices_check),
                 )
                 .select_related("polymorphic_ctype")
             )

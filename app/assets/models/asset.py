@@ -157,7 +157,19 @@ class Asset(SoftDeleteMixin):
         # Check if this attribute has choices defined
         if field_def.choices.exists():
             # Find matching choice by value
-            choice = field_def.choices.filter(value=value).first()
+            # Since choices are polymorphic and 'value' is on subclasses,
+            # we need to iterate and compare values (polymorphic filter on child fields doesn't work)
+            choice = None
+            for c in field_def.choices.all():
+                choice_value = getattr(c, 'value', None)
+                # For numbers, compare with type coercion (e.g., 42 == 42.0)
+                if choice_value == value:
+                    choice = c
+                    break
+                # Also try string comparison for flexibility
+                if str(choice_value) == str(value):
+                    choice = c
+                    break
             if not choice:
                 raise ValueError(f"Invalid choice value: {value}")
 

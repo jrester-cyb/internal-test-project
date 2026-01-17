@@ -33,6 +33,7 @@ export interface AssetTypeAttribute {
   assetCountUrl?: string | null
   apiUrl?: string | null
   choices?: AssetTypeAttributeChoice[]
+  hasChoices?: boolean  // Indicates if choices exist (for lazy loading)
   // Workspace extension fields
   workspace?: string | null
   workspaceName?: string | null

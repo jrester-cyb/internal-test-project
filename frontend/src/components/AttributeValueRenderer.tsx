@@ -303,11 +303,13 @@ function NumberRenderer({ value, unit, showCopyButton = true, compact = false }:
   )
 }
 
-// Choice renderer - displays value with optional color indicator
-function ChoiceRenderer({ value, choices, compact = false }: { value: any; choices: NonNullable<AssetTypeAttribute['choices']>; compact?: boolean }) {
+// Choice renderer - displays value with optional color indicator and unit
+function ChoiceRenderer({ value, choices, compact = false, unit }: { value: any; choices: NonNullable<AssetTypeAttribute['choices']>; compact?: boolean; unit?: string }) {
   // Find the matching choice to get its color
   const choice = choices.find(c => c.value === value || String(c.value) === String(value))
-  const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  const baseDisplayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  // Append unit for number values
+  const displayValue = unit && typeof value === 'number' ? `${baseDisplayValue} ${unit}` : baseDisplayValue
   const color = choice?.color
 
   if (compact) {
@@ -391,7 +393,7 @@ export default function AttributeValueRenderer({ attribute, value, maxLines = 3,
 
   // If attribute has choices, use the choice renderer regardless of type
   if (attribute.choices && attribute.choices.length > 0) {
-    return <ChoiceRenderer value={value} choices={attribute.choices} compact={compact} />
+    return <ChoiceRenderer value={value} choices={attribute.choices} compact={compact} unit={attribute.unit} />
   }
 
   // Render based on attribute type
