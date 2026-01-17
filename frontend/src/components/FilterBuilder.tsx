@@ -131,7 +131,7 @@ export default function FilterBuilder({
     }
   }
 
-  async function loadAttributeValues(assetTypeId: string, attributeDefinitionId: string) {
+  async function loadAttributeValues(assetTypeId: string, attributeDefinitionId: string, apiKey: string) {
     if (!workspaceId) return
     setLoadingValues(true)
     // Reset the map when loading a new attribute
@@ -147,7 +147,7 @@ export default function FilterBuilder({
       setAttributeValuesTotalCount(response.count)
       setAttributeTotalCounts(prev => ({
         ...prev,
-        [`${assetTypeId}-${attributeDefinitionId}`]: response.count
+        [`${assetTypeId}-${apiKey}`]: response.count
       }))
     } catch (error) {
       console.error('Failed to load attribute values:', error)
@@ -185,7 +185,7 @@ export default function FilterBuilder({
   const handleAttributeSelect = (attr: AssetTypeAttribute) => {
     setSelectedAttribute(attr)
     if (selectedTypeForAttributes) {
-      loadAttributeValues(selectedTypeForAttributes, attr.id)
+      loadAttributeValues(selectedTypeForAttributes, attr.id, attr.apiKey)
     }
   }
 
