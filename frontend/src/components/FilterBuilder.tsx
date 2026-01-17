@@ -115,6 +115,26 @@ export default function FilterBuilder({
     }
   }, [selectedTypeForAttributes])
 
+  // Deselect attribute if it's no longer visible after filter changes
+  useEffect(() => {
+    if (!selectedAttribute || !selectedTypeForAttributes) return
+    const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
+    const isStillVisible = allAttrs.some(attr => {
+      if (attr.id !== selectedAttribute.id) return false
+      if (attr.isHidden && !attrFilterShowHidden) return false
+      if (attrFilterSelectedTypes.length > 0 && !attrFilterSelectedTypes.includes(attr.attributeType)) return false
+      if (attrFilterSelectedTags.length > 0) {
+        const attrTags = attr.tags || []
+        if (!attrFilterSelectedTags.some(tag => attrTags.includes(tag))) return false
+      }
+      if (attrFilterExcludedScopes.length > 0 && attr.scope && attrFilterExcludedScopes.includes(attr.scope)) return false
+      return true
+    })
+    if (!isStillVisible) {
+      setSelectedAttribute(null)
+    }
+  }, [selectedAttribute, selectedTypeForAttributes, attributeDefinitions, attrFilterShowHidden, attrFilterSelectedTypes, attrFilterSelectedTags, attrFilterExcludedScopes])
+
   async function loadAssetTypes() {
     if (!workspaceId) return
     try {
@@ -868,6 +888,14 @@ export default function FilterBuilder({
                                             size="small"
                                             color="primary"
                                             sx={{ height: 18, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.75 } }}
+                                          />
+                                        )}
+                                        {attr.isHidden && (
+                                          <Chip
+                                            label="hidden"
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.5 }, opacity: 0.7 }}
                                           />
                                         )}
                                       </Box>
