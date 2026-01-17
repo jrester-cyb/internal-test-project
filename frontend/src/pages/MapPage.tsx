@@ -32,7 +32,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
   onBoundsChange: (bounds: number[] | null) => void
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { selectedAssetTypes, attributeFilters, nameFilter, geometryTypeFilter, clusteringDisabled } = useMapContext()
+  const { selectedAssetTypes, attributeFilters, geometryTypeFilter, clusteringDisabled, buildFilters } = useMapContext()
 
   const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [29.9511, -90.0715])
   const [zoom, setZoom] = useState(loaderData?.initialZoom || 10)
@@ -57,86 +57,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
 
     try {
       let mergedFilters = filters ? { ...filters } : null
-      const filterGroups: any[] = []
-
-      if (nameFilter.trim()) {
-        filterGroups.push({
-          field: 'name',
-          value: nameFilter.trim(),
-          operator: 'icontains'
-        })
-      }
-
-      // Add geometry type filter if any types are excluded
-      if (geometryTypeFilter.length > 0) {
-        filterGroups.push({
-          field: 'geometry_type',
-          value: geometryTypeFilter,
-          operator: 'nin'
-        })
-      }
-
-      const attributesByType: Record<string, any[]> = {}
-      attributeFilters.forEach(af => {
-        if (!attributesByType[af.assetTypeId]) {
-          attributesByType[af.assetTypeId] = []
-        }
-        attributesByType[af.assetTypeId].push({
-          field: `attributes.${af.attributeKey}`,
-          value: af.value,
-          operator: af.operator
-        })
-      })
-
-      if (selectedAssetTypes.length > 0) {
-        // When specific asset types are selected, build OR group:
-        // (typeA exact AND its filters) OR (typeB exact) OR ...
-        const orFilters: any[] = []
-
-        selectedAssetTypes.forEach(typeId => {
-          if (attributesByType[typeId]) {
-            // Type has attribute filters - AND them together
-            const typeFilters: any[] = [
-              { field: 'assetTypeId', value: typeId, operator: 'exact' },
-              ...attributesByType[typeId]
-            ]
-            orFilters.push({ logic: 'AND', filters: typeFilters })
-          } else {
-            // Type has no attribute filters - just match the type
-            orFilters.push({ field: 'assetTypeId', value: typeId, operator: 'exact' })
-          }
-        })
-
-        if (orFilters.length === 1) {
-          filterGroups.push(orFilters[0])
-        } else {
-          filterGroups.push({ logic: 'OR', filters: orFilters })
-        }
-      } else if (Object.keys(attributesByType).length > 0) {
-        // When all asset types are shown but we have attribute filters,
-        // build OR group: (type1 exact AND its filters) OR (type2 exact AND its filters) OR (nin filtered types)
-        const filteredTypeIds = Object.keys(attributesByType)
-        const orFilters: any[] = []
-
-        // Add filter groups for each type with attribute filters
-        Object.entries(attributesByType).forEach(([typeId, attrFilters]) => {
-          const typeFilters: any[] = [
-            { field: 'assetTypeId', value: typeId, operator: 'exact' },
-            ...attrFilters
-          ]
-          orFilters.push({ logic: 'AND', filters: typeFilters })
-        })
-
-        // Add a filter for asset types that are NOT being filtered (so they still appear)
-        orFilters.push({
-          field: 'assetTypeId',
-          value: filteredTypeIds,
-          operator: 'nin'
-        })
-
-        // Wrap in OR logic
-        filterGroups.push({ logic: 'OR', filters: orFilters })
-      }
+      const filterGroups = buildFilters()
 
       if (filterGroups.length > 0) {
         if (mergedFilters && mergedFilters.filters) {
@@ -148,7 +69,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         } else {
           mergedFilters = {
             filters: filterGroups,
-            logic: selectedAssetTypes.length > 1 ? 'OR' : 'AND'
+            logic: 'AND'
           }
         }
       }
@@ -275,7 +196,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
       }
       console.error('Error loading map data:', error)
     }
-  }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter, geometryTypeFilter, clusteringDisabled, onBoundsChange])
+  }, [workspaceId, selectedAssetTypes, attributeFilters, geometryTypeFilter, clusteringDisabled, buildFilters, onBoundsChange])
 
   useEffect(() => {
     const newSearchParams = new URLSearchParams(searchParams)

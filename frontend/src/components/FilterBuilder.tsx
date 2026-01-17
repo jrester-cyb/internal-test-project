@@ -86,6 +86,8 @@ export default function FilterBuilder({
   const [loading, setLoading] = useState(true)
   const [internalOpen, setInternalOpen] = useState(false)
   const [selectedTypeForAttributes, setSelectedTypeForAttributes] = useState<string | null>(null)
+  // Track excluded asset types locally ([] means none excluded = all shown)
+  const [excludedAssetTypes, setExcludedAssetTypes] = useState<string[]>([])
   const [selectedAttribute, setSelectedAttribute] = useState<AssetTypeAttribute | null>(null)
   // Sparse map for attribute values (index -> value)
   const [attributeValuesMap, setAttributeValuesMap] = useState<Map<number, any>>(new Map())
@@ -330,41 +332,27 @@ export default function FilterBuilder({
   }
 
   const handleToggle = (assetTypeId: string) => {
-    // When selectedAssetTypes is empty, all types are shown
-    // Unchecking one means we want all EXCEPT that one
-    if (selectedAssetTypes.length === 0) {
-      // Create array with all types except the one being unchecked
-      const allExceptThis = assetTypes.filter(t => t.id !== assetTypeId).map(t => t.id)
-      onAssetTypesChange(allExceptThis)
-      // Remove attribute filters for the unchecked type
-      onAttributeFiltersChange(attributeFilters.filter(f => f.assetTypeId !== assetTypeId))
-      if (selectedTypeForAttributes === assetTypeId) {
-        setSelectedTypeForAttributes(allExceptThis[0] || null)
-      }
-    } else {
-      const currentIndex = selectedAssetTypes.indexOf(assetTypeId)
-      const newSelected = [...selectedAssetTypes]
+    const isCurrentlyExcluded = excludedAssetTypes.includes(assetTypeId)
+    let newExcluded: string[]
 
-      if (currentIndex === -1) {
-        // Adding this type back
-        newSelected.push(assetTypeId)
-        // If this makes it all types, reset to empty (show all)
-        if (newSelected.length === assetTypes.length) {
-          onAssetTypesChange([])
-        } else {
-          onAssetTypesChange(newSelected)
-        }
-      } else {
-        // Removing this type
-        newSelected.splice(currentIndex, 1)
-        // Remove attribute filters for this asset type
-        onAttributeFiltersChange(attributeFilters.filter(f => f.assetTypeId !== assetTypeId))
-        if (selectedTypeForAttributes === assetTypeId) {
-          setSelectedTypeForAttributes(newSelected[0] || null)
-        }
-        onAssetTypesChange(newSelected)
+    if (isCurrentlyExcluded) {
+      // Re-include this type (remove from excluded)
+      newExcluded = excludedAssetTypes.filter(id => id !== assetTypeId)
+    } else {
+      // Exclude this type (add to excluded)
+      newExcluded = [...excludedAssetTypes, assetTypeId]
+      // Remove attribute filters for the excluded type
+      onAttributeFiltersChange(attributeFilters.filter(f => f.assetTypeId !== assetTypeId))
+      // If this was the selected type for attributes, select another one
+      if (selectedTypeForAttributes === assetTypeId) {
+        const remainingTypes = assetTypes.filter(t => !newExcluded.includes(t.id))
+        setSelectedTypeForAttributes(remainingTypes[0]?.id || null)
       }
     }
+
+    setExcludedAssetTypes(newExcluded)
+    // Pass excluded types directly to parent - [] means nothing excluded (show all)
+    onAssetTypesChange(newExcluded)
   }
 
   const handleTypeClick = (assetTypeId: string) => {
@@ -376,12 +364,14 @@ export default function FilterBuilder({
   }
 
   const handleSelectAll = () => {
-    // Inverted: "Select All" means show all = clear the exclusion list
+    // Select All means show all = clear the exclusion list
+    setExcludedAssetTypes([])
     onAssetTypesChange([])
   }
 
   const handleClearAll = () => {
     // Clear all filters including exclusions, attribute filters, name filter, and geometry filter
+    setExcludedAssetTypes([])
     onAssetTypesChange([])
     onAttributeFiltersChange([])
     onNameFilterChange?.('')
@@ -617,10 +607,9 @@ export default function FilterBuilder({
     }
   }
 
-  // Count filters: type filters (when not all selected) + attribute filters + name filter
-  // When selectedAssetTypes is empty, all types are shown (no type filter active)
-  // When selectedAssetTypes has items, those are the only types shown (type filter active)
-  const typeFilterCount = selectedAssetTypes.length > 0 && selectedAssetTypes.length < assetTypes.length ? 1 : 0
+  // Count filters: type filters (when any are excluded) + attribute filters + name filter
+  // selectedAssetTypes now contains excluded types - if any are excluded, that's an active filter
+  const typeFilterCount = selectedAssetTypes.length > 0 ? 1 : 0
   const geometryFilterCount = geometryTypeFilter.length > 0 ? 1 : 0
   const totalFilters = typeFilterCount + attributeFilters.length + (nameFilter.trim() ? 1 : 0) + geometryFilterCount
 
@@ -662,7 +651,7 @@ export default function FilterBuilder({
         <Button
           size="small"
           onClick={handleSelectAll}
-          disabled={loading || selectedAssetTypes.length === 0}
+          disabled={loading || excludedAssetTypes.length === 0}
         >
           Select All Types
         </Button>
@@ -722,10 +711,11 @@ export default function FilterBuilder({
                       width={width}
                       itemCount={assetTypes.length}
                       itemSize={52}
+                      itemKey={(index) => assetTypes[index]?.id || index}
                     >
                       {({ index, style }) => {
                         const assetType = assetTypes[index]
-                        const isIncluded = selectedAssetTypes.length === 0 || selectedAssetTypes.indexOf(assetType.id) > -1
+                        const isIncluded = !excludedAssetTypes.includes(assetType.id)
                         const isActive = selectedTypeForAttributes === assetType.id
 
                         return (
@@ -747,15 +737,14 @@ export default function FilterBuilder({
                                 }
                               }}
                             >
+                              <span onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={isIncluded}
-                                onChange={(e) => {
-                                  e.stopPropagation()
-                                  handleToggle(assetType.id)
-                                }}
+                                onChange={() => handleToggle(assetType.id)}
                                 size="small"
                                 sx={{ p: 0, flexShrink: 0 }}
                               />
+                            </span>
                               <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
                                 <CopyableText variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
                                   {assetType.name}
