@@ -788,6 +788,14 @@ export default function FilterBuilder({
                   const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
                   const hiddenCount = allAttrs.filter(a => a.isHidden).length
                   const availableTags = [...new Set(allAttrs.flatMap(a => a.tags || []))]
+                  // Count hidden attributes that have active filters
+                  const hiddenWithFiltersCount = allAttrs.filter(attr => {
+                    if (!attr.isHidden) return false
+                    const hasFilter = attributeFilters.some(
+                      f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === attr.apiKey
+                    )
+                    return hasFilter
+                  }).length
                   return (
                     <AttributeFilterPopover
                       showHidden={attrFilterShowHidden}
@@ -802,6 +810,7 @@ export default function FilterBuilder({
                       hiddenCount={hiddenCount}
                       availableTags={availableTags}
                       showTypeFilter
+                      hiddenWithFiltersCount={hiddenWithFiltersCount}
                     />
                   )
                 })()

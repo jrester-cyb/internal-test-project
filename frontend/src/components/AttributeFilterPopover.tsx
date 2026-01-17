@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Box, Typography, Chip, IconButton, Popover, Switch, FormControlLabel, Autocomplete, TextField, Tooltip, Stack, CircularProgress } from '@mui/material'
+import { Box, Typography, Chip, IconButton, Popover, Switch, FormControlLabel, Autocomplete, TextField, Tooltip, Stack, CircularProgress, Badge } from '@mui/material'
 import { FilterList as FilterIcon } from '@mui/icons-material'
 import { fetchAttributeTypes } from '../api/assets'
 
@@ -31,6 +31,8 @@ interface AttributeFilterPopoverProps {
   showTypeFilter?: boolean
   // Optional loading state
   isLoading?: boolean
+  // Number of hidden attributes that have active filters (shown as badge when showHidden is false)
+  hiddenWithFiltersCount?: number
 }
 
 export default function AttributeFilterPopover({
@@ -49,6 +51,7 @@ export default function AttributeFilterPopover({
   availableTags,
   showTypeFilter = false,
   isLoading = false,
+  hiddenWithFiltersCount = 0,
 }: AttributeFilterPopoverProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [availableTypes, setAvailableTypes] = useState<{ value: string; label: string }[]>([])
@@ -96,9 +99,19 @@ export default function AttributeFilterPopover({
     return type?.label ?? value
   }
 
+  // Show badge when hidden attributes have filters and we're not showing hidden
+  const showBadge = !showHidden && hiddenWithFiltersCount > 0
+
   return (
     <>
-      <Tooltip title={hasActiveFilters ? "Filters applied" : "Filter"} arrow placement="top">
+      <Tooltip
+        title={showBadge
+          ? `${hiddenWithFiltersCount} hidden attribute${hiddenWithFiltersCount > 1 ? 's have' : ' has'} filters`
+          : hasActiveFilters ? "Filters applied" : "Filter"
+        }
+        arrow
+        placement="top"
+      >
         <IconButton
           size="small"
           onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -108,7 +121,19 @@ export default function AttributeFilterPopover({
               : 'text.secondary',
           }}
         >
-          <FilterIcon />
+          <Badge
+            badgeContent={showBadge ? hiddenWithFiltersCount : 0}
+            color="warning"
+            sx={{
+              '& .MuiBadge-badge': {
+                fontSize: '0.65rem',
+                height: 16,
+                minWidth: 16,
+              }
+            }}
+          >
+            <FilterIcon />
+          </Badge>
         </IconButton>
       </Tooltip>
       <Popover
