@@ -162,7 +162,7 @@ export default function AssetListPage() {
   const handlePasteRange = useCallback((data: string[][], startRow: number, startCol: number, endRow: number, endCol: number) => {
     console.log('Paste range:', { data, startRow, startCol, endRow, endCol })
 
-    if (data.length === 0 || data[0].length === 0) return
+    if (data.length === 0 || !data[0] || data[0].length === 0) return
 
     setItems(prev => {
       const updated = new Map(prev)
@@ -501,23 +501,25 @@ export default function AssetListPage() {
 
   // Number cell editor with unit display
   const createNumberWithUnitEditor = useCallback((unit?: string) => {
-    return ({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+    return ({ value, onSave, onCancel, style, selectionBorders, isReplacing }: CellEditorProps<Asset>) => {
       // Filter initial value to only valid number characters
       const filterNumber = (v: string) => v.replace(/[^0-9.\-]/g, '')
       const [editValue, setEditValue] = useState(filterNumber(value))
       const inputRef = useRef<HTMLInputElement>(null)
-      // Detect if opened via keyboard input (single valid digit/character)
-      const isKeyboardInputRef = useRef(value.length === 1 && /^[0-9.\-]$/.test(value))
 
       useEffect(() => {
         const input = inputRef.current
         if (!input) return
         input.focus()
-        // If opened via keyboard input, put cursor at end
+        // If replacing (opened via keyboard input or backspace), put cursor at end
         // Otherwise select all text
-        if (isKeyboardInputRef.current) {
-          const len = input.value.length
-          input.setSelectionRange(len, len)
+        if (isReplacing) {
+          setTimeout(() => {
+            if (inputRef.current) {
+              const len = inputRef.current.value.length
+              inputRef.current.setSelectionRange(len, len)
+            }
+          }, 0)
         } else {
           input.select()
         }
@@ -863,24 +865,19 @@ export default function AssetListPage() {
   }, [])
 
   // Link cell editor with popover for URL and display text
-  const LinkCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders }: CellEditorProps<Asset>) => {
+  const LinkCellEditor = useCallback(({ value, onSave, onCancel, style, selectionBorders, isReplacing }: CellEditorProps<Asset>) => {
     // Parse incoming value - could be string URL or {url, text} object
-    // Also detect if value is a single printable character (from keyboard input)
-    const parseLink = (v: string): { url: string; text: string; isKeyboardInput: boolean } => {
-      if (!v) return { url: '', text: '', isKeyboardInput: false }
-      // Check if this is a single printable character (keyboard input to start editing)
-      if (v.length === 1 && /^[a-zA-Z0-9]$/.test(v)) {
-        return { url: v, text: '', isKeyboardInput: true }
-      }
+    const parseLink = (v: string): { url: string; text: string } => {
+      if (!v) return { url: '', text: '' }
       try {
         const parsed = JSON.parse(v)
         if (typeof parsed === 'object' && parsed.url !== undefined) {
-          return { url: parsed.url || '', text: parsed.text || '', isKeyboardInput: false }
+          return { url: parsed.url || '', text: parsed.text || '' }
         }
       } catch {
         // Not JSON, treat as plain URL string
       }
-      return { url: v, text: '', isKeyboardInput: false }
+      return { url: v, text: '' }
     }
 
     const initialLink = parseLink(value)
@@ -889,7 +886,7 @@ export default function AssetListPage() {
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
     const cellRef = useRef<HTMLDivElement>(null)
     const urlInputRef = useRef<HTMLInputElement>(null)
-    const isKeyboardInputRef = useRef(initialLink.isKeyboardInput)
+    const isReplacingRef = useRef(isReplacing)
 
     // Open popover on mount
     useEffect(() => {
@@ -905,9 +902,9 @@ export default function AssetListPage() {
           const input = urlInputRef.current
           if (!input) return
           input.focus()
-          // If opened via keyboard input, put cursor at end (after the typed character)
+          // If replacing (opened via keyboard input or backspace), put cursor at end
           // Otherwise select all text
-          if (isKeyboardInputRef.current) {
+          if (isReplacingRef.current) {
             const len = input.value.length
             input.setSelectionRange(len, len)
           } else {

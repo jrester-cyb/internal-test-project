@@ -72,39 +72,83 @@ export function useGridKeyboardNavigation<T>({
         return
       }
 
-      // Check if we should start editing (only for single-cell selection)
+      // Delete or Backspace - clear cells or enter edit mode
+      if ((e.key === 'Delete' || e.key === 'Backspace') && editingEnabled) {
+        e.preventDefault()
+
+        const { rowIndex: startRow, columnIndex: startCol } = currentSelection.start
+        const { rowIndex: endRow, columnIndex: endCol } = currentSelection.end
+
+        // Check if single cell selection
+        const isSingleCellForDelete = startRow === endRow && startCol === endCol
+
+        if (isSingleCellForDelete && e.key === 'Backspace' && startEditing) {
+          // Backspace on single cell: enter edit mode with last character removed
+          const currentColumns = columnsRef.current
+          const column = currentColumns?.[startCol]
+          if (column?.editable) {
+            // We need to get the current cell value and remove the last character
+            // Pass undefined to indicate we want the current value minus last char
+            // The startEditing function will handle this with a special marker
+            startEditing(startRow, startCol, '\b') // Use backspace character as marker
+            return
+          }
+        }
+
+        // Delete key or Backspace on multi-cell: clear all cells in range
+        if (onPasteRange) {
+          // Normalize start/end
+          const normalizedStartRow = Math.min(startRow, endRow)
+          const normalizedEndRow = Math.max(startRow, endRow)
+          const normalizedStartCol = Math.min(startCol, endCol)
+          const normalizedEndCol = Math.max(startCol, endCol)
+
+          // Create empty data array to clear all cells in range
+          const rowCount = normalizedEndRow - normalizedStartRow + 1
+          const colCount = normalizedEndCol - normalizedStartCol + 1
+          const emptyData = Array(rowCount).fill(null).map(() => Array(colCount).fill(''))
+
+          onPasteRange(emptyData, normalizedStartRow, normalizedStartCol, normalizedEndRow, normalizedEndCol)
+        }
+        return
+      }
+
+      // Check if we should start editing
       const isSingleCell =
         currentSelection.start.rowIndex === currentSelection.end.rowIndex &&
         currentSelection.start.columnIndex === currentSelection.end.columnIndex
 
-      if (editingEnabled && startEditing && isSingleCell) {
-        const { rowIndex, columnIndex } = currentSelection.start
+      if (editingEnabled && startEditing) {
+        // For multi-cell selection, get the top-left cell (normalized start)
+        const rowIndex = Math.min(currentSelection.start.rowIndex, currentSelection.end.rowIndex)
+        const columnIndex = Math.min(currentSelection.start.columnIndex, currentSelection.end.columnIndex)
         const currentColumns = columnsRef.current
         const column = currentColumns?.[columnIndex]
 
         // Check if the column is editable
         if (column?.editable) {
-          // F2 or Enter to start editing (keep current value)
-          if (e.key === 'F2' || e.key === 'Enter') {
+          // F2 to start editing (keep current value) - only for single cell
+          if (isSingleCell && e.key === 'F2') {
+            e.preventDefault()
+            startEditing(rowIndex, columnIndex)
+            return
+          }
+
+          // Enter to start editing - works for both single and multi-cell selection
+          // For multi-cell, edits the first cell while preserving the selection range
+          if (e.key === 'Enter') {
             e.preventDefault()
             startEditing(rowIndex, columnIndex)
             return
           }
 
           // Printable character - start editing and replace content with the typed character
+          // For multi-cell selection, edit the first cell but keep the selection range
           // Check for single printable character (not modifier keys, function keys, etc.)
           const isPrintable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
           if (isPrintable) {
             e.preventDefault()
             startEditing(rowIndex, columnIndex, e.key)
-            return
-          }
-
-          // Delete or Backspace - clear cell and enter edit mode
-          if (e.key === 'Delete' || e.key === 'Backspace') {
-            e.preventDefault()
-            // Start editing with empty value to clear and focus
-            startEditing(rowIndex, columnIndex, '')
             return
           }
         }
@@ -192,6 +236,66 @@ export function useGridKeyboardNavigation<T>({
       })
     }
 
+    // Handle Tab key for column navigation
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+
+      const currentSelection = selectionRef.current
+      if (!currentSelection) return
+
+      const currentColumns = columnsRef.current
+      if (!currentColumns) return
+
+      e.preventDefault()
+
+      const { start, end } = currentSelection
+      const isSingleCell = start.rowIndex === end.rowIndex && start.columnIndex === end.columnIndex
+
+      if (isSingleCell) {
+        // Single cell: move to next/previous column, wrapping to next/previous row
+        let newRow = end.rowIndex
+        let newCol = end.columnIndex
+
+        if (e.shiftKey) {
+          newCol = end.columnIndex - 1
+          if (newCol < 0) {
+            newCol = currentColumns.length - 1
+            newRow = Math.max(0, end.rowIndex - 1)
+          }
+        } else {
+          newCol = end.columnIndex + 1
+          if (newCol >= currentColumns.length) {
+            newCol = 0
+            newRow = Math.min(totalCount - 1, end.rowIndex + 1)
+          }
+        }
+
+        const newCell: CellPosition = { rowIndex: newRow, columnIndex: newCol }
+        setSelection({ start: newCell, end: newCell })
+
+        gridRef.current?.scrollToItem({
+          rowIndex: newRow,
+          columnIndex: newCol,
+          align: 'smart'
+        })
+      } else {
+        // Multi-cell selection: Tab moves to first cell of selection, then subsequent tabs move normally
+        // Normalize selection bounds to get the first cell (top-left)
+        const minRow = Math.min(start.rowIndex, end.rowIndex)
+        const minCol = Math.min(start.columnIndex, end.columnIndex)
+
+        // Collapse to first cell of selection
+        const newCell: CellPosition = { rowIndex: minRow, columnIndex: minCol }
+        setSelection({ start: newCell, end: newCell })
+
+        gridRef.current?.scrollToItem({
+          rowIndex: minRow,
+          columnIndex: minCol,
+          align: 'smart'
+        })
+      }
+    }
+
     // Handle paste event - uses clipboardData directly (no permission prompt)
     const handlePaste = (e: ClipboardEvent) => {
       if (!editingEnabled || !onPasteRange) return
@@ -200,7 +304,7 @@ export function useGridKeyboardNavigation<T>({
       if (!currentSelection) return
 
       const text = e.clipboardData?.getData('text/plain')
-      if (!text) return
+      if (text === undefined || text === null) return
 
       e.preventDefault()
 
@@ -214,8 +318,21 @@ export function useGridKeyboardNavigation<T>({
       const normalizedEndCol = Math.max(startCol, endCol)
 
       // Parse clipboard text - split by newlines for rows, tabs for columns
-      const rows = text.split(/\r?\n/).filter(row => row.length > 0)
-      const data = rows.map(row => row.split('\t'))
+      // Handle empty clipboard as a single empty cell
+      let data: string[][]
+      if (text === '') {
+        data = [['']]
+      } else {
+        // Filter out only completely empty trailing rows (from trailing newlines)
+        const allRows = text.split(/\r?\n/)
+        // Remove trailing empty rows but keep empty rows in the middle
+        let rows = allRows
+        while (rows.length > 0 && rows.at(-1) === '') {
+          rows = rows.slice(0, -1)
+        }
+        // If all rows were empty, treat as single empty cell
+        data = rows.length > 0 ? rows.map(row => row.split('\t')) : [['']]
+      }
 
       // Calculate paste dimensions (larger of selection or data)
       const selectionRows = normalizedEndRow - normalizedStartRow + 1
@@ -244,9 +361,11 @@ export function useGridKeyboardNavigation<T>({
     }
 
     document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', handleTab)
     document.addEventListener('paste', handlePaste)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keydown', handleTab)
       document.removeEventListener('paste', handlePaste)
     }
   }, [enabled, selectionRef, setSelection, copySelectionToClipboard, totalCount, columnsRef, gridRef, startEditing, editingEnabled, onPasteRange])

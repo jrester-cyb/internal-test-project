@@ -41,6 +41,8 @@ export interface CellEditorProps<T> {
   onSave: (newValue: string) => void
   /** Called when editing is cancelled */
   onCancel: () => void
+  /** Whether the editor was opened with a replacement value (from keyboard input) - if true, cursor should be at end instead of selecting all */
+  isReplacing?: boolean
 }
 
 // Cell selection types

@@ -49,13 +49,21 @@ export function Editor<T>({
   useEffect(() => {
     const input = inputRef.current
     if (!input) return
-    input.focus()
+
     // If replacing (opened via keyboard typing), put cursor at end
     // Otherwise (opened via double-click/F2/Enter), select all text
     if (isReplacing) {
-      const len = input.value.length
-      input.setSelectionRange(len, len)
+      // For replacement mode, focus without selecting, then set cursor position
+      // Use setTimeout to ensure this runs after MUI's focus handlers
+      input.focus()
+      setTimeout(() => {
+        if (inputRef.current) {
+          const len = inputRef.current.value.length
+          inputRef.current.setSelectionRange(len, len)
+        }
+      }, 0)
     } else {
+      input.focus()
       input.select()
     }
   }, [])
@@ -71,6 +79,10 @@ export function Editor<T>({
       // Save and exit edit mode, let the event propagate for grid navigation
       onSave(editValue)
       return // Don't stop propagation - let grid handle navigation
+    } else if (e.key === 'Tab') {
+      // Save and exit edit mode, let Tab propagate for column navigation
+      onSave(editValue)
+      return // Don't stop propagation - let grid handle Tab navigation
     }
     // Stop propagation to prevent grid keyboard navigation for other keys
     e.stopPropagation()

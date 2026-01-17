@@ -203,7 +203,20 @@ function GridCellInner<T>({
       : String(column.render(item, rowIndex) ?? '')
 
     // Use initial value if provided (from keyboard input), otherwise use cell value
-    const editorValue = editingInitialValue ?? cellValue
+    // Special case: '\b' (backspace) means remove last character from cell value
+    let editorValue: string
+    if (editingInitialValue === '\b') {
+      // Backspace: use cell value with last character removed
+      editorValue = cellValue.slice(0, -1)
+    } else if (editingInitialValue !== undefined) {
+      editorValue = editingInitialValue
+    } else {
+      editorValue = cellValue
+    }
+
+    // isReplacing: true when we want cursor at end (typing a character or backspace)
+    // false for F2/Enter/double-click (select all text)
+    const isReplacingOrBackspace = editingInitialValue !== undefined
 
     // Use custom editor if provided, otherwise use default Editor
     if (column.editor) {
@@ -219,6 +232,7 @@ function GridCellInner<T>({
             selectionBorders,
             onSave: (newValue) => onCellEditSave(rowIndex, columnIndex, newValue),
             onCancel: onCellEditCancel,
+            isReplacing: isReplacingOrBackspace,
           })}
         </>
       )
@@ -236,7 +250,7 @@ function GridCellInner<T>({
         selectionBorders={selectionBorders}
         onMouseDown={handleMouseDown}
         item={item}
-        isReplacing={editingInitialValue !== undefined}
+        isReplacing={isReplacingOrBackspace}
       />
     )
   }

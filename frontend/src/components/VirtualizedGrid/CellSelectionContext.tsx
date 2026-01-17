@@ -81,6 +81,17 @@ export function CellSelectionProvider<T>({
     return null
   }, [])
 
+  // Helper to check if a cell is within the current selection range
+  const isCellInSelection = useCallback((rowIndex: number, columnIndex: number): boolean => {
+    const sel = selectionRef.current
+    if (!sel) return false
+    const minRow = Math.min(sel.start.rowIndex, sel.end.rowIndex)
+    const maxRow = Math.max(sel.start.rowIndex, sel.end.rowIndex)
+    const minCol = Math.min(sel.start.columnIndex, sel.end.columnIndex)
+    const maxCol = Math.max(sel.start.columnIndex, sel.end.columnIndex)
+    return rowIndex >= minRow && rowIndex <= maxRow && columnIndex >= minCol && columnIndex <= maxCol
+  }, [])
+
   // Handle mouse down on a cell - starts selection or drag
   const handleCellMouseDown = useCallback((rowIndex: number, columnIndex: number, event: React.MouseEvent) => {
     if (event.button !== 0) return
@@ -95,15 +106,27 @@ export function CellSelectionProvider<T>({
       })
       dragStartCellRef.current = selectionRef.current.start
     } else {
-      setSelection({
-        start: newCell,
-        end: newCell
-      })
-      dragStartCellRef.current = newCell
+      // If clicking within an existing multi-cell selection, preserve it
+      // This allows editing a cell within a range without collapsing the selection
+      const currentSel = selectionRef.current
+      const isMultiCell = currentSel && (
+        currentSel.start.rowIndex !== currentSel.end.rowIndex ||
+        currentSel.start.columnIndex !== currentSel.end.columnIndex
+      )
+      if (isMultiCell && isCellInSelection(rowIndex, columnIndex)) {
+        // Keep the existing selection, just update drag start for potential dragging
+        dragStartCellRef.current = newCell
+      } else {
+        setSelection({
+          start: newCell,
+          end: newCell
+        })
+        dragStartCellRef.current = newCell
+      }
     }
 
     setIsDragging(true)
-  }, [])
+  }, [isCellInSelection])
 
   // Handle mouse down on header - starts column selection
   const handleHeaderMouseDown = useCallback((columnIndex: number, event: React.MouseEvent) => {
