@@ -1385,8 +1385,13 @@ Format the output as follows:
             ).hexdigest()
             cache_key = f"cluster_filter:{organization_pk or ''}:{workspace_pk or ''}:{filter_hash}"
 
-            filtered_ids = cache.get(cache_key)
-            if filtered_ids is None:
+            with silk_profile(name="clusters: cache_get"):
+                cached_ids_str = cache.get(cache_key)
+            if cached_ids_str is not None:
+                # Cached as comma-separated string for faster serialization
+                with silk_profile(name="clusters: parse_cached_ids"):
+                    filtered_ids = cached_ids_str.split(",") if cached_ids_str else []
+            else:
                 with silk_profile(name="clusters: build_query"):
                     q_filter = FilterSerializer(data=request.data).build_query()
                 if q_filter:
@@ -1396,16 +1401,17 @@ Format the output as follows:
                     if workspace_pk:
                         base_qs = base_qs.filter(workspace_memberships__workspace_id=workspace_pk)
                     with silk_profile(name="clusters: filter_and_fetch_ids"):
-                        filtered_ids = list(
-                            base_qs.filter(q_filter).values_list("id", flat=True)
-                        )
-                    cache.set(cache_key, filtered_ids, timeout=60)  # Cache for 1 minute
+                        filtered_ids = [
+                            str(id) for id in base_qs.filter(q_filter).values_list("id", flat=True)
+                        ]
+                    # Cache as comma-separated string for faster serialization
+                    cache.set(cache_key, ",".join(filtered_ids), timeout=60)
                 else:
                     filtered_ids = []
 
             if filtered_ids:
                 where_clauses.append("a.id = ANY(%s::uuid[])")
-                params.append([str(id) for id in filtered_ids])
+                params.append(filtered_ids)
             elif request.data:
                 # Filter was provided but no assets match, return empty result
                 return Response({"clusters": [], "precision": precision, "totalClusters": 0})
