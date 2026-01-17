@@ -126,13 +126,19 @@ export async function fetchTiles(
   limit: number = 1000,
   filters?: any,
   signal?: AbortSignal,
-  offset: number = 0
+  offset: number = 0,
+  zoom?: number
 ): Promise<TilesResponse> {
   const params = new URLSearchParams({
     bbox: bbox.join(','),
     limit: limit.toString(),
     offset: offset.toString()
   })
+
+  // Add zoom parameter for server-side filtering of small geometries
+  if (zoom !== undefined) {
+    params.set('zoom', zoom.toString())
+  }
 
   const url = workspaceUrl(workspaceId, `assets/tiles/?${params}`)
 

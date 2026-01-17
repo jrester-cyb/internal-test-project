@@ -5,6 +5,7 @@ import Supercluster from 'supercluster'
 import type { Asset, Cluster } from '../types'
 import AssetGeometry from './AssetGeometry'
 import { useTheme } from '../contexts/ThemeContext'
+import { useMapContext } from '../contexts/MapContext'
 import { lightTheme, darkTheme } from '../theme'
 
 interface AssetClusterLayerProps {
@@ -149,6 +150,16 @@ export default function AssetClusterLayer({
 }: Readonly<AssetClusterLayerProps>) {
   const map = useMap()
   const { isDarkMode } = useTheme()
+  const { geometryTypeFilter } = useMapContext()
+
+  // Filter out excluded geometry types immediately on the UI
+  const filteredAssets = useMemo(() => {
+    if (geometryTypeFilter.length === 0) return assets
+    return assets.filter(asset => {
+      if (!asset.geometry?.type) return true
+      return !geometryTypeFilter.includes(asset.geometry.type)
+    })
+  }, [assets, geometryTypeFilter])
 
   // Track map state to trigger re-renders
   const [mapState, setMapState] = useState({
@@ -171,7 +182,7 @@ export default function AssetClusterLayer({
 
     // Convert assets to GeoJSON points for clustering
     const points: PointFeature[] = []
-    for (const asset of assets) {
+    for (const asset of filteredAssets) {
       const centroid = getGeometryCentroid(asset)
       if (centroid) {
         points.push({
@@ -190,7 +201,7 @@ export default function AssetClusterLayer({
 
     index.load(points)
     return index
-  }, [assets, clusterRadius, maxClusterZoom])
+  }, [filteredAssets, clusterRadius, maxClusterZoom])
 
   // Get clusters for current viewport
   const clusters = useMemo(() => {
@@ -283,7 +294,7 @@ export default function AssetClusterLayer({
 
   // Filter assets to only those visible in current viewport (with buffer)
   const visibleAssets = useMemo(() => {
-    if (!disableClustering) return assets // When clustering, supercluster handles this
+    if (!disableClustering) return filteredAssets // When clustering, supercluster handles this
 
     const bounds = mapState.bounds
     // Add a buffer to avoid popping at edges (roughly 10% of viewport)
@@ -297,7 +308,7 @@ export default function AssetClusterLayer({
       west: bounds.getWest() - lngBuffer
     }
 
-    return assets.filter(asset => {
+    return filteredAssets.filter(asset => {
       if (!asset.geometry) return false
 
       const centroid = getGeometryCentroid(asset)
@@ -311,7 +322,7 @@ export default function AssetClusterLayer({
         lng <= bufferedBounds.east
       )
     })
-  }, [assets, mapState.bounds, disableClustering])
+  }, [filteredAssets, mapState.bounds, disableClustering])
 
   // When clustering is disabled, render visible assets directly without going through Supercluster
   if (disableClustering) {

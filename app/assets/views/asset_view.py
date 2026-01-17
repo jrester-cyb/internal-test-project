@@ -1211,6 +1211,18 @@ Format the output as follows:
                 required=False,
                 type=int,
             ),
+            OpenApiParameter(
+                name="zoom",
+                description="Map zoom level (0-22) for filtering out small geometries",
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name="min_pixel_size",
+                description="Minimum pixel size for geometries to be included (default 50)",
+                required=False,
+                type=int,
+            ),
         ],
     )
     @action(detail=False, methods=["get", "post"])
@@ -1234,6 +1246,7 @@ Format the output as follows:
         # Apply bounding box filter and compute center for distance ordering
         bbox_param = request.query_params.get("bbox")
         center_point = None
+        bbox_width_degrees = None
         if bbox_param:
             try:
                 bounds = [float(x) for x in bbox_param.split(",")]
@@ -1247,6 +1260,55 @@ Format the output as follows:
                     center_lon = (bounds[0] + bounds[2]) / 2
                     center_lat = (bounds[1] + bounds[3]) / 2
                     center_point = Point(center_lon, center_lat, srid=4326)
+                    # Store bbox width for size filtering
+                    bbox_width_degrees = bounds[2] - bounds[0]
+            except (ValueError, TypeError):
+                pass
+
+        # Filter out small geometries based on zoom level
+        # This reduces data transfer and improves client rendering performance
+        zoom_param = request.query_params.get("zoom")
+        min_pixel_size_param = request.query_params.get("min_pixel_size")
+        if zoom_param is not None:
+            try:
+                zoom = int(zoom_param)
+                min_pixel_size = int(min_pixel_size_param) if min_pixel_size_param else 50
+
+                # Calculate minimum size in degrees based on zoom level
+                # At zoom 0, world is 256 pixels = 360 degrees
+                # Each zoom level doubles the pixels (halves degrees per pixel)
+                # degrees_per_pixel = 360 / (256 * 2^zoom)
+                degrees_per_pixel = 360.0 / (256.0 * (2 ** zoom))
+                min_size_degrees = min_pixel_size * degrees_per_pixel
+                min_line_size_degrees = min_size_degrees * 0.6  # Lower threshold for 1D lines
+
+                # Use extra() with WHERE clause for efficient filtering
+                # This uses PostGIS functions directly and benefits from spatial indexes
+                # Points are always included, polygons/lines must meet size threshold
+                queryset = queryset.extra(
+                    where=[
+                        """
+                        (
+                            ST_GeometryType(geometry) = 'ST_Point'
+                            OR (
+                                ST_GeometryType(geometry) = 'ST_Polygon'
+                                AND SQRT(
+                                    POW(ST_XMax(geometry) - ST_XMin(geometry), 2) +
+                                    POW(ST_YMax(geometry) - ST_YMin(geometry), 2)
+                                ) >= %s
+                            )
+                            OR (
+                                ST_GeometryType(geometry) = 'ST_LineString'
+                                AND SQRT(
+                                    POW(ST_XMax(geometry) - ST_XMin(geometry), 2) +
+                                    POW(ST_YMax(geometry) - ST_YMin(geometry), 2)
+                                ) >= %s
+                            )
+                        )
+                        """
+                    ],
+                    params=[min_size_degrees, min_line_size_degrees]
+                )
             except (ValueError, TypeError):
                 pass
 
