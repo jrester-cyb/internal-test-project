@@ -19,6 +19,8 @@ interface AssetGeometryProps {
   currentZoom?: number
   /** Canvas renderer for better performance with many vector elements */
   canvasRenderer?: L.Canvas
+  /** When true (clustering disabled), skip small geometries. When false (clustering enabled), render as markers */
+  disableClustering?: boolean
 }
 
 // Calculate the pixel bounding box diagonal of a polygon
@@ -57,6 +59,28 @@ function getPolylinePixelLength(map: L.Map, coordinates: number[][]): number {
   return totalLength
 }
 
+// Calculate the centroid of a polygon
+function getPolygonCentroid(coordinates: number[][]): [number, number] {
+  let sumLat = 0
+  let sumLng = 0
+  const n = coordinates.length
+  for (const [lng, lat] of coordinates) {
+    sumLat += lat
+    sumLng += lng
+  }
+  return [sumLat / n, sumLng / n]
+}
+
+// Calculate the midpoint of a polyline
+function getPolylineMidpoint(coordinates: number[][]): [number, number] {
+  if (coordinates.length === 0) return [0, 0]
+  if (coordinates.length === 1) return [coordinates[0][1], coordinates[0][0]]
+
+  const midIndex = Math.floor(coordinates.length / 2)
+  const [lng, lat] = coordinates[midIndex]
+  return [lat, lng]
+}
+
 function AssetGeometryInner({
   asset,
   isSelected,
@@ -69,7 +93,8 @@ function AssetGeometryInner({
   onAssetClick,
   minPixelSize = 50,
   currentZoom,
-  canvasRenderer
+  canvasRenderer,
+  disableClustering = false
 }: Readonly<AssetGeometryProps>) {
   const map = useMap()
 
@@ -93,9 +118,16 @@ function AssetGeometryInner({
       const coords = coordinates[0] as unknown as number[][]
       const pixelSize = getPolygonPixelSize(map, coords)
 
-      // Skip rendering if too small
+      // If too small: skip when clustering disabled, show as marker when clustering enabled
       if (pixelSize < minPixelSize) {
-        return null
+        if (disableClustering) {
+          return null
+        }
+        // Collapse to marker at centroid
+        return {
+          type: 'collapsed-polygon' as const,
+          position: getPolygonCentroid(coords)
+        }
       }
 
       return {
@@ -108,9 +140,16 @@ function AssetGeometryInner({
       const coords = coordinates as unknown as number[][]
       const pixelLength = getPolylinePixelLength(map, coords)
 
-      // Skip rendering if too small (use smaller threshold for lines since they're 1D)
+      // If too small: skip when clustering disabled, show as marker when clustering enabled
       if (pixelLength < (minPixelSize * 0.6)) {
-        return null
+        if (disableClustering) {
+          return null
+        }
+        // Collapse to marker at midpoint
+        return {
+          type: 'collapsed-polyline' as const,
+          position: getPolylineMidpoint(coords)
+        }
       }
 
       return {
@@ -121,14 +160,14 @@ function AssetGeometryInner({
 
     return null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asset.geometry, map, minPixelSize, zoom])
+  }, [asset.geometry, map, minPixelSize, zoom, disableClustering])
 
   if (!renderInfo) return null
 
   const handleClick = () => onAssetClick(asset)
 
-  // Point geometry - always render as marker
-  if (renderInfo.type === 'point') {
+  // Point geometry or collapsed geometries - render as marker
+  if (renderInfo.type === 'point' || renderInfo.type === 'collapsed-polygon' || renderInfo.type === 'collapsed-polyline') {
     return (
       <Marker
         position={renderInfo.position}
@@ -219,7 +258,8 @@ const AssetGeometry = memo(AssetGeometryInner, (prevProps, nextProps) => {
     prevProps.polygonFillColor === nextProps.polygonFillColor &&
     prevProps.polygonStrokeColor === nextProps.polygonStrokeColor &&
     prevProps.polylineColor === nextProps.polylineColor &&
-    prevProps.canvasRenderer === nextProps.canvasRenderer
+    prevProps.canvasRenderer === nextProps.canvasRenderer &&
+    prevProps.disableClustering === nextProps.disableClustering
   )
 })
 

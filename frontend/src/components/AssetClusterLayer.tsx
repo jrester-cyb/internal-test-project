@@ -331,6 +331,7 @@ export default function AssetClusterLayer({
             onAssetClick={onAssetClick}
             currentZoom={mapState.zoom}
             canvasRenderer={canvasRenderer}
+            disableClustering={true}
           />
         ))}
       </>

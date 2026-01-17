@@ -173,13 +173,21 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         setClusters(realClusters)
         setAssets(geojsonAssets)
       } else {
-        // Fetch tiles with pagination support
-        const allAssets: Asset[] = []
+        // Fetch tiles with pagination - render progressively as each page arrives
+        setClusters([])
+
+        // Clear assets on new request to avoid stale data mixing with new
+        setAssets([])
+
         let tileData = await fetchTiles(workspaceId, bounds, 1000, mergedFilters, abortController.signal)
 
-        // Add first batch of assets
+        // Check if aborted before processing
+        if (abortController.signal.aborted) return
+
+        // Parse first batch of assets
+        const firstBatch: Asset[] = []
         for (const f of tileData.features) {
-          allAssets.push({
+          firstBatch.push({
             id: f.id,
             name: f.properties.name,
             assetType: f.properties.assetTypeId,
@@ -188,11 +196,20 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
           })
         }
 
-        // Fetch additional pages if available
+        // Render first batch immediately
+        setAssets(firstBatch)
+
+        // Fetch additional pages if available, appending progressively
+        let allAssets = [...firstBatch]
         while (tileData.next && !abortController.signal.aborted) {
           tileData = await fetchTilesFromUrl(tileData.next, mergedFilters, abortController.signal)
+
+          // Check if aborted before processing
+          if (abortController.signal.aborted) return
+
+          const newAssets: Asset[] = []
           for (const f of tileData.features) {
-            allAssets.push({
+            newAssets.push({
               id: f.id,
               name: f.properties.name,
               assetType: f.properties.assetTypeId,
@@ -200,10 +217,11 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
               geometry: f.geometry
             })
           }
-        }
 
-        setAssets(allAssets)
-        setClusters([])
+          // Append new assets and update state
+          allAssets = [...allAssets, ...newAssets]
+          setAssets(allAssets)
+        }
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
