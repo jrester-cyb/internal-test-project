@@ -14,11 +14,25 @@ import {
   Typography,
   Box,
   Divider,
+  Select,
+  MenuItem,
+  FormControl,
+  Tabs,
+  Tab,
+  useTheme,
 } from '@mui/material'
-import type { Asset, AssetTypeAttribute } from '../types'
-import { updateAssetAttributeValue } from '../api/assets'
+import type { Asset, AssetTypeAttribute, AssetTypeAttributeChoice } from '../types'
+import { updateAsset } from '../api/assets'
 import JsonEditor from './JsonEditor'
 import AttributeValueRenderer from './AttributeValueRenderer'
+
+// Fetch choices from an attribute's choices URL
+async function fetchChoicesFromUrl(choicesUrl: string): Promise<AssetTypeAttributeChoice[]> {
+  const response = await fetch(choicesUrl)
+  if (!response.ok) return []
+  const data = await response.json()
+  return data.results || []
+}
 
 interface AssetEditDialogProps {
   open: boolean
@@ -43,6 +57,19 @@ function AttributeRow({
   disabled?: boolean
 }) {
   const isReadOnly = attribute.cannotOverride || attribute.lockedToGlobal
+  const [choices, setChoices] = useState<AssetTypeAttributeChoice[]>([])
+  const [loadingChoices, setLoadingChoices] = useState(false)
+
+  // Load choices when attribute has them
+  useEffect(() => {
+    if (attribute.hasChoices && attribute.apiUrl) {
+      setLoadingChoices(true)
+      fetchChoicesFromUrl(`${attribute.apiUrl}choices/`)
+        .then(setChoices)
+        .catch((err) => console.error('Failed to load choices:', err))
+        .finally(() => setLoadingChoices(false))
+    }
+  }, [attribute.hasChoices, attribute.apiUrl])
 
   const renderInput = () => {
     // If attribute cannot be overridden, show read-only value
@@ -54,6 +81,59 @@ function AttributeRow({
             {attribute.lockedToGlobal ? 'Locked to global value' : 'Cannot be overridden'}
           </Typography>
         </Box>
+      )
+    }
+
+    // If attribute has choices, render a Select dropdown
+    if (attribute.hasChoices && choices.length > 0) {
+      // Find the selected choice by matching value
+      const selectedChoice = choices.find((c) => JSON.stringify(c.value) === JSON.stringify(value))
+
+      // Format choice display value, including unit for numbers
+      const formatChoiceValue = (choiceValue: any) => {
+        if (typeof choiceValue === 'object') {
+          return JSON.stringify(choiceValue)
+        }
+        const displayValue = String(choiceValue)
+        // Add unit for number attributes
+        if (attribute.attributeType === 'number' && attribute.unit) {
+          return `${displayValue} ${attribute.unit}`
+        }
+        return displayValue
+      }
+
+      return (
+        <FormControl fullWidth size="small" disabled={disabled || loadingChoices}>
+          <Select
+            value={selectedChoice?.id || ''}
+            onChange={(e) => {
+              const choice = choices.find((c) => c.id === e.target.value)
+              onChange(choice ? choice.value : null)
+            }}
+            displayEmpty
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {choices.map((choice) => (
+              <MenuItem key={choice.id} value={choice.id}>
+                {choice.icon && <span style={{ marginRight: 8 }}>{choice.icon}</span>}
+                {formatChoiceValue(choice.value)}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )
+    }
+
+    // Show loading state while fetching choices
+    if (attribute.hasChoices && loadingChoices) {
+      return (
+        <FormControl fullWidth size="small" disabled>
+          <Select value="" displayEmpty>
+            <MenuItem value="">Loading choices...</MenuItem>
+          </Select>
+        </FormControl>
       )
     }
 
@@ -209,16 +289,21 @@ export default function AssetEditDialog({
   asset,
   attributes,
   workspaceId,
-  assetTypeId,
   onClose,
   onSuccess,
 }: AssetEditDialogProps) {
-  const [values, setValues] = useState<Record<string, any>>({})
-  const [originalValues, setOriginalValues] = useState<Record<string, any>>({})
+  const theme = useTheme()
+  const isDarkMode = theme.palette.mode === 'dark'
+  const [activeTab, setActiveTab] = useState(0)
+  const [name, setName] = useState('')
+  const [longitude, setLongitude] = useState<string>('')
+  const [latitude, setLatitude] = useState<string>('')
+  const [attributeValues, setAttributeValues] = useState<Record<string, any>>({})
+  const [originalName, setOriginalName] = useState('')
+  const [originalCoords, setOriginalCoords] = useState<[number, number] | null>(null)
+  const [originalAttributes, setOriginalAttributes] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(false)
-  const [savingAttribute, setSavingAttribute] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [savedCount, setSavedCount] = useState(0)
 
   // Get non-hidden attributes
   const editableAttributes = attributes.filter((attr) => !attr.isHidden)
@@ -226,143 +311,234 @@ export default function AssetEditDialog({
   // Initialize values when dialog opens or asset changes
   useEffect(() => {
     if (open && asset) {
-      console.log('AssetEditDialog: Initializing values', { assetId: asset.id, attributeCount: attributes.length })
+      // Name
+      setName(asset.name || '')
+      setOriginalName(asset.name || '')
+
+      // Location (prefer location over geometry)
+      const coords = asset.location?.coordinates || asset.geometry?.coordinates
+      if (coords && coords.length >= 2) {
+        setLongitude(String(coords[0]))
+        setLatitude(String(coords[1]))
+        setOriginalCoords([coords[0], coords[1]])
+      } else {
+        setLongitude('')
+        setLatitude('')
+        setOriginalCoords(null)
+      }
+
+      // Attributes
       const initialValues: Record<string, any> = {}
       attributes.filter((attr) => !attr.isHidden).forEach((attr) => {
         initialValues[attr.apiKey] = asset.attributes?.[attr.apiKey] ?? null
       })
-      console.log('AssetEditDialog: Initial values', initialValues)
-      setValues(initialValues)
-      setOriginalValues({ ...initialValues })
+      setAttributeValues(initialValues)
+      setOriginalAttributes({ ...initialValues })
+
       setError(null)
-      setSavedCount(0)
+      setActiveTab(0)
     }
   }, [open, asset?.id])
 
-  const handleValueChange = (apiKey: string, value: any) => {
-    setValues((prev) => ({ ...prev, [apiKey]: value }))
+  const handleAttributeChange = (apiKey: string, value: any) => {
+    setAttributeValues((prev) => ({ ...prev, [apiKey]: value }))
   }
 
-  // Get changed attributes (excluding read-only ones)
+  // Check what has changed
+  const hasNameChanged = name !== originalName
+  const hasLocationChanged = (() => {
+    const newLng = longitude ? parseFloat(longitude) : null
+    const newLat = latitude ? parseFloat(latitude) : null
+    if (originalCoords === null && (newLng === null || newLat === null)) return false
+    if (originalCoords === null && newLng !== null && newLat !== null) return true
+    if (originalCoords !== null && (newLng === null || newLat === null)) return true
+    return originalCoords![0] !== newLng || originalCoords![1] !== newLat
+  })()
+
   const getChangedAttributes = () => {
     return editableAttributes.filter((attr) => {
       // Skip read-only attributes
       if (attr.cannotOverride || attr.lockedToGlobal) return false
-      const original = originalValues[attr.apiKey]
-      const current = values[attr.apiKey]
-      const originalStr = JSON.stringify(original)
-      const currentStr = JSON.stringify(current)
-      const isChanged = originalStr !== currentStr
-      if (isChanged) {
-        console.log(`Changed: ${attr.apiKey}`, { original, current, originalStr, currentStr })
-      }
-      return isChanged
+      const original = originalAttributes[attr.apiKey]
+      const current = attributeValues[attr.apiKey]
+      return JSON.stringify(original) !== JSON.stringify(current)
     })
   }
+
+  const changedAttributeCount = getChangedAttributes().length
+  const totalChanges = (hasNameChanged ? 1 : 0) + (hasLocationChanged ? 1 : 0) + changedAttributeCount
 
   const handleSave = async () => {
     if (!asset) return
 
-    const changedAttrs = getChangedAttributes()
-    if (changedAttrs.length === 0) {
+    if (totalChanges === 0) {
       onClose()
       return
     }
 
     setLoading(true)
     setError(null)
-    setSavedCount(0)
 
-    let lastAsset = asset
-    let errorOccurred = false
+    try {
+      // Build the PATCH payload
+      const payload: {
+        name?: string
+        location?: { type: string; coordinates: number[] } | null
+        attributes?: Record<string, any>
+      } = {}
 
-    // Save each changed attribute sequentially
-    for (const attr of changedAttrs) {
-      if (errorOccurred) break
-
-      setSavingAttribute(attr.id)
-      try {
-        const response = await updateAssetAttributeValue(
-          workspaceId,
-          assetTypeId,
-          asset.id,
-          attr.id,
-          values[attr.apiKey]
-        )
-        if (response.asset) {
-          lastAsset = response.asset
-        }
-        setSavedCount((prev) => prev + 1)
-      } catch (err) {
-        setError(`Failed to save ${attr.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-        errorOccurred = true
+      if (hasNameChanged) {
+        payload.name = name
       }
-    }
 
-    setSavingAttribute(null)
-    setLoading(false)
+      if (hasLocationChanged) {
+        const lng = longitude ? parseFloat(longitude) : null
+        const lat = latitude ? parseFloat(latitude) : null
+        if (lng !== null && lat !== null && !isNaN(lng) && !isNaN(lat)) {
+          payload.location = {
+            type: 'Point',
+            coordinates: [lng, lat],
+          }
+        } else {
+          payload.location = null
+        }
+      }
 
-    if (!errorOccurred) {
-      onSuccess(lastAsset)
+      if (changedAttributeCount > 0) {
+        const changedAttrs = getChangedAttributes()
+        payload.attributes = {}
+        for (const attr of changedAttrs) {
+          payload.attributes[attr.apiKey] = attributeValues[attr.apiKey]
+        }
+      }
+
+      const updatedAsset = await updateAsset(workspaceId, asset.id, payload)
+      onSuccess(updatedAsset)
       onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save changes')
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleClose = () => {
     if (!loading) {
-      setValues({})
-      setOriginalValues({})
+      setName('')
+      setLongitude('')
+      setLatitude('')
+      setAttributeValues({})
       setError(null)
       onClose()
     }
   }
-
-  const changedCount = getChangedAttributes().length
-  const hasRequiredEmpty = editableAttributes.some(
-    (attr) => attr.isRequired && (values[attr.apiKey] === null || values[attr.apiKey] === '')
-  )
 
   if (!asset) return null
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        Edit Attributes
+        Edit Asset
         <Typography variant="body2" color="text.secondary">
           {asset.name}
         </Typography>
       </DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={0} divider={<Divider />}>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => setActiveTab(v)}
+        textColor={isDarkMode ? 'secondary' : 'primary'}
+        indicatorColor={isDarkMode ? 'secondary' : 'primary'}
+        sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label="General" />
+        <Tab label={`Attributes${changedAttributeCount > 0 ? ` (${changedAttributeCount})` : ''}`} />
+      </Tabs>
+      <DialogContent sx={{ minHeight: 300 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-          {editableAttributes.length === 0 ? (
-            <Typography variant="body2" color="text.disabled" sx={{ py: 2 }}>
-              No editable attributes available
-            </Typography>
-          ) : (
-            editableAttributes.map((attr) => (
-              <AttributeRow
-                key={attr.id}
-                attribute={attr}
-                value={values[attr.apiKey]}
-                onChange={(value) => handleValueChange(attr.apiKey, value)}
-                disabled={loading}
-              />
-            ))
-          )}
-        </Stack>
+        {activeTab === 0 && (
+          <Stack spacing={3} sx={{ pt: 1 }}>
+            {/* Name */}
+            <TextField
+              label="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fullWidth
+              disabled={loading}
+              required
+              error={!name.trim()}
+              helperText={!name.trim() ? 'Name is required' : hasNameChanged ? 'Modified' : undefined}
+            />
+
+            {/* Location */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Location
+                {hasLocationChanged && (
+                  <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>
+                    Modified
+                  </Typography>
+                )}
+              </Typography>
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Longitude"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  fullWidth
+                  disabled={loading}
+                  type="number"
+                  inputProps={{ step: 'any' }}
+                  placeholder="-180 to 180"
+                />
+                <TextField
+                  label="Latitude"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  fullWidth
+                  disabled={loading}
+                  type="number"
+                  inputProps={{ step: 'any' }}
+                  placeholder="-90 to 90"
+                />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Enter coordinates in decimal degrees (e.g., -122.4194, 37.7749)
+              </Typography>
+            </Box>
+          </Stack>
+        )}
+
+        {activeTab === 1 && (
+          <Stack spacing={0} divider={<Divider />}>
+            {editableAttributes.length === 0 ? (
+              <Typography variant="body2" color="text.disabled" sx={{ py: 2 }}>
+                No editable attributes available
+              </Typography>
+            ) : (
+              editableAttributes.map((attr) => (
+                <AttributeRow
+                  key={attr.id}
+                  attribute={attr}
+                  value={attributeValues[attr.apiKey]}
+                  onChange={(value) => handleAttributeChange(attr.apiKey, value)}
+                  disabled={loading}
+                />
+              ))
+            )}
+          </Stack>
+        )}
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
         <Typography variant="body2" color="text.secondary">
           {loading
-            ? `Saving... (${savedCount}/${changedCount})`
-            : changedCount > 0
-              ? `${changedCount} change${changedCount !== 1 ? 's' : ''}`
+            ? 'Saving...'
+            : totalChanges > 0
+              ? `${totalChanges} change${totalChanges !== 1 ? 's' : ''}`
               : 'No changes'}
         </Typography>
         <Box>
@@ -372,7 +548,7 @@ export default function AssetEditDialog({
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={loading || changedCount === 0}
+            disabled={loading || totalChanges === 0 || !name.trim()}
             sx={{ ml: 1 }}
           >
             {loading ? <CircularProgress size={24} /> : 'Save Changes'}

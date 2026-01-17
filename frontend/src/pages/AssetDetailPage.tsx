@@ -210,6 +210,8 @@ export default function AssetDetailPage() {
         onClose={handleEditDialogClose}
         asset={currentAsset}
         attributes={attributes}
+        workspaceId={workspaceId || ''}
+        assetTypeId={assetTypeId || ''}
         onSuccess={handleEditSuccess}
       />
     </Box>

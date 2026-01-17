@@ -528,7 +528,13 @@ export async function moveFileNodes(workspaceId: string, fileIds: string[], dest
 export async function updateAsset(
   workspaceId: string,
   assetId: string,
-  data: { name?: string; description?: string; attributes?: Record<string, any> }
+  data: {
+    name?: string
+    description?: string
+    attributes?: Record<string, any>
+    location?: { type: string; coordinates: number[] } | null
+    geometry?: { type: string; coordinates: number[] } | null
+  }
 ) {
   const response = await fetch(
     workspaceUrl(workspaceId, `assets/${assetId}/`),

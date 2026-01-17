@@ -227,6 +227,7 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             DateAttributeValue,
             DateTimeAttributeValue,
             JSONAttributeValue,
+            ChoiceAttributeValue,
         )
 
         # Get content type IDs dynamically - cached by Django's ContentType framework
@@ -236,6 +237,7 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         ct_date = ContentType.objects.get_for_model(DateAttributeValue).id
         ct_datetime = ContentType.objects.get_for_model(DateTimeAttributeValue).id
         ct_json = ContentType.objects.get_for_model(JSONAttributeValue).id
+        ct_choice = ContentType.objects.get_for_model(ChoiceAttributeValue).id
 
         return RawSQL(
             f"""
@@ -252,6 +254,30 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                               WHERE dtv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
                 WHEN {ct_json} THEN (SELECT jv.value FROM assets_jsonattributevalue jv
                               WHERE jv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
+                WHEN {ct_choice} THEN (
+                    SELECT COALESCE(
+                        -- TextAttributeChoice
+                        (SELECT to_jsonb(tc.value) FROM assets_textattributechoice tc
+                         WHERE tc.assettypeattributechoice_ptr_id = cv.choice_id),
+                        -- NumberAttributeChoice
+                        (SELECT to_jsonb(nc.value) FROM assets_numberattributechoice nc
+                         WHERE nc.assettypeattributechoice_ptr_id = cv.choice_id),
+                        -- DateAttributeChoice
+                        (SELECT to_jsonb(dc.value) FROM assets_dateattributechoice dc
+                         WHERE dc.assettypeattributechoice_ptr_id = cv.choice_id),
+                        -- DateTimeAttributeChoice
+                        (SELECT to_jsonb(dtc.value) FROM assets_datetimeattributechoice dtc
+                         WHERE dtc.assettypeattributechoice_ptr_id = cv.choice_id),
+                        -- JSONAttributeChoice
+                        (SELECT jc.value FROM assets_jsonattributechoice jc
+                         WHERE jc.assettypeattributechoice_ptr_id = cv.choice_id),
+                        -- LinkAttributeChoice (return URL as value)
+                        (SELECT to_jsonb(lc.url) FROM assets_linkattributechoice lc
+                         WHERE lc.assettypeattributechoice_ptr_id = cv.choice_id)
+                    )
+                    FROM assets_choiceattributevalue cv
+                    WHERE cv.baseattributevalue_ptr_id = assets_baseattributevalue.id
+                )
             END
             """,
             [],
@@ -425,6 +451,37 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve - values are annotated on prefetched attributes"""
         instance = self.get_object()
+
+        # Build api_key_map for this asset's type if not already set
+        context = self.get_serializer_context()
+        if "_api_key_map" not in context:
+            api_key_map = self._get_api_key_map(
+                instance.asset_type_id, self.kwargs.get("workspace_pk")
+            )
+            context["_api_key_map"] = api_key_map
+
+        serializer = self.get_serializer(instance, context=context)
+        return Response(serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        """Override update to re-fetch instance with optimized queryset after save.
+
+        The default DRF update returns the saved instance directly, but we need
+        the prefetched/annotated attributes for proper serialization.
+        """
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        if getattr(instance, "_prefetched_objects_cache", None):
+            # If 'prefetch_related' has been applied to a queryset, we need to
+            # forcibly invalidate the prefetch cache on the instance.
+            instance._prefetched_objects_cache = {}
+
+        # Re-fetch instance with proper prefetching and annotations
+        instance = self.get_queryset().get(pk=instance.pk)
 
         # Build api_key_map for this asset's type if not already set
         context = self.get_serializer_context()

@@ -129,7 +129,7 @@ class Asset(SoftDeleteMixin):
         return f"{self.name} ({self.asset_type.name})"
 
     def set_attribute(self, api_key, value):
-        """Set a specific attribute value by api_key"""
+        """Set a specific attribute value by api_key. Pass None to delete the attribute value."""
         from .attribute_value import (
             TextAttributeValue,
             NumberAttributeValue,
@@ -153,6 +153,15 @@ class Asset(SoftDeleteMixin):
             raise ValueError(
                 f"No attribute with api_key '{api_key}' for this asset type in this workspace."
             )
+
+        # If value is None, delete the existing attribute value
+        if value is None:
+            try:
+                field_value = self.attributes.get(asset_type_attribute=field_def)
+                field_value.delete()
+            except BaseAttributeValue.DoesNotExist:
+                pass  # Nothing to delete
+            return None
 
         # Check if this attribute has choices defined
         if field_def.choices.exists():
