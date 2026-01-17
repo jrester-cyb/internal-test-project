@@ -80,6 +80,7 @@ export default function FilterBuilder({
   const [attributeValuesMap, setAttributeValuesMap] = useState<Map<number, any>>(new Map())
   const [attributeValuesTotalCount, setAttributeValuesTotalCount] = useState(0)
   const [loadingValues, setLoadingValues] = useState(false)
+  const [attributeTotalCounts, setAttributeTotalCounts] = useState<Record<string, number>>({})
 
   // Attribute filter popover state
   const [attrFilterShowHidden, setAttrFilterShowHidden] = useState(false)
@@ -144,6 +145,10 @@ export default function FilterBuilder({
       })
       setAttributeValuesMap(newMap)
       setAttributeValuesTotalCount(response.count)
+      setAttributeTotalCounts(prev => ({
+        ...prev,
+        [`${assetTypeId}-${attributeDefinitionId}`]: response.count
+      }))
     } catch (error) {
       console.error('Failed to load attribute values:', error)
       setAttributeValuesMap(new Map())
@@ -194,15 +199,16 @@ export default function FilterBuilder({
     if (value === "Blank") {
       value = null
       if (!currentFilter) {
-        // create filter with no exclusions, meaning "Blank" is selected
+        // No filter means all are included. Clicking "Blank" means exclude "Blank"
         handleAttributeFilterChange(
           selectedTypeForAttributes,
           selectedAttribute.apiKey,
           selectedAttribute.name,
           selectedAttribute.attributeType,
           'nin',
-          [],
-          []
+          [null],
+          [null],
+          attributeValuesTotalCount
         )
       } else {
         const currentExcluded = currentFilter.excludedValues || []
@@ -222,7 +228,8 @@ export default function FilterBuilder({
           selectedAttribute.attributeType,
           'nin',
           newExcluded,
-          newExcluded
+          newExcluded,
+          attributeValuesTotalCount
         )
       }
     } else {
@@ -242,7 +249,8 @@ export default function FilterBuilder({
           selectedAttribute.attributeType,
           'nin',
           [],
-          []
+          [],
+          attributeValuesTotalCount
         )
       } else {
         handleAttributeFilterChange(
@@ -252,7 +260,8 @@ export default function FilterBuilder({
           selectedAttribute.attributeType,
           'nin',
           newExcluded,
-          newExcluded
+          newExcluded,
+          attributeValuesTotalCount
         )
       }
     }
@@ -260,13 +269,13 @@ export default function FilterBuilder({
 
   // Check if a value is included (checked) - inverted logic: checked by default
   const isValueSelected = (value: any) => {
-    if (!selectedAttribute || !selectedTypeForAttributes) return value !== "Blank" // Default to checked for others, unchecked for Blank
+    if (!selectedAttribute || !selectedTypeForAttributes) return true // Default to checked for all
 
     const currentFilter = attributeFilters.find(
       f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
     )
 
-    if (!currentFilter) return value !== "Blank" // No filter = all included except Blank
+    if (!currentFilter) return true // No filter = all included
 
     // Check if value is in excluded list
     const excluded = currentFilter.excludedValues || []
@@ -276,18 +285,17 @@ export default function FilterBuilder({
     return excluded.indexOf(value) === -1 // Selected if NOT excluded
   }
 
-  // Get active count for an attribute (total - excluded)
+  // Get active count for an attribute (total - excluded, or total if no exclusions)
   // Returns null if we don't have the total count yet
   const getActiveCount = (assetTypeId: string, attributeKey: string): number | null => {
+    const totalCount = attributeTotalCounts[`${assetTypeId}-${attributeKey}`]
+    if (totalCount === undefined) return null
+
     const currentFilter = attributeFilters.find(
       f => f.assetTypeId === assetTypeId && f.attributeKey === attributeKey
     )
-    if (!currentFilter || !currentFilter.excludedValues?.length) return null
-    // We store total count on the filter when we have exclusions
-    if (currentFilter.totalCount !== undefined) {
-      return currentFilter.totalCount - (currentFilter.excludedValues?.length || 0)
-    }
-    return null
+    const excludedCount = currentFilter?.excludedValues?.length || 0
+    return totalCount - excludedCount
   }
 
   const handleToggle = (assetTypeId: string) => {
@@ -365,7 +373,7 @@ export default function FilterBuilder({
     )
 
     // Remove filter if no exclusions (value is empty and excludedValues is empty)
-    if (operator !== 'nin' && (value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0))
+    if ((value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0))
       && (!excludedValues || excludedValues.length === 0)) {
       if (existingIndex > -1) {
         const newFilters = [...attributeFilters]
