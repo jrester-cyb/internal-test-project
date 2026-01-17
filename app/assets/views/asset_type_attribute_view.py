@@ -1319,9 +1319,14 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         paginator = CustomPageNumberPagination()
         values_list = list(values_qs)
-        # Add "Blank" as the first value if not already present
-        if "Blank" not in values_list:
-            values_list.insert(0, "Blank")
+        # Replace null values with "Blank"
+        values_list = ["Blank" if v is None else v for v in values_list]
+        # Remove duplicates that might have been created by the replacement
+        values_list = list(dict.fromkeys(values_list))
+        # Ensure "Blank" is at the beginning
+        if "Blank" in values_list:
+            values_list.remove("Blank")
+        values_list.insert(0, "Blank")
         page = paginator.paginate_queryset(values_list, request)
         if page is not None:
             return paginator.get_paginated_response(page)
