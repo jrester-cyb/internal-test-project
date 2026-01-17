@@ -69,6 +69,10 @@ interface MapContextType {
   nameFilter: string
   setNameFilter: (name: string) => void
 
+  // Clustering state
+  clusteringDisabled: boolean
+  setClusteringDisabled: (disabled: boolean) => void
+
   // Drawer actions
   openAssetDrawer: (asset: Asset, attributes?: AssetTypeAttribute[]) => void
   openClusterDrawer: (cluster: Cluster) => void
@@ -108,6 +112,17 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   const [selectedAssetTypes, setSelectedAssetTypes] = useState<string[]>([])
   const [attributeFilters, setAttributeFilters] = useState<AttributeFilter[]>([])
   const [nameFilter, setNameFilter] = useState('')
+
+  // Clustering state - persisted to localStorage
+  const [clusteringDisabled, setClusteringDisabledState] = useState(() => {
+    const saved = localStorage.getItem('clusteringDisabled')
+    return saved ? JSON.parse(saved) : false
+  })
+
+  const setClusteringDisabled = useCallback((disabled: boolean) => {
+    setClusteringDisabledState(disabled)
+    localStorage.setItem('clusteringDisabled', JSON.stringify(disabled))
+  }, [])
 
 
 
@@ -604,6 +619,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       setAttributeFilters,
       nameFilter,
       setNameFilter,
+      clusteringDisabled,
+      setClusteringDisabled,
       openAssetDrawer,
       openClusterDrawer,
       closeDrawer,

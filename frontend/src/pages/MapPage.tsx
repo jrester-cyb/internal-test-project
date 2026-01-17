@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useLoaderData } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { fetchClusters, fetchTiles } from '../api/assets'
+import { fetchClusters, fetchTiles, fetchTilesFromUrl } from '../api/assets'
 import type { Asset, Cluster } from '../types'
 import type { AttributeFilter } from '../components/FilterBuilder'
 import { MapProvider, useMapContext } from '../contexts/MapContext'
@@ -32,7 +32,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
   onBoundsChange: (bounds: number[] | null) => void
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { selectedAssetTypes, attributeFilters, nameFilter } = useMapContext()
+  const { selectedAssetTypes, attributeFilters, nameFilter, clusteringDisabled } = useMapContext()
 
   const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [29.9511, -90.0715])
   const [zoom, setZoom] = useState(loaderData?.initialZoom || 10)
@@ -143,7 +143,8 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         }
       }
 
-      if (zoom < 12) {
+      // When clustering is disabled, always fetch tiles regardless of zoom level
+      if (!clusteringDisabled && zoom < 12) {
         const clusterData = await fetchClusters(workspaceId, zoom, bounds, mergedFilters, abortController.signal)
         const geojsonAssets: Asset[] = []
         const realClusters: Cluster[] = []
@@ -163,14 +164,36 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         setClusters(realClusters)
         setAssets(geojsonAssets)
       } else {
-        const tileData = await fetchTiles(workspaceId, bounds, 5000, mergedFilters, abortController.signal)
-        setAssets(tileData.features.map((f: any) => ({
-          id: f.id,
-          name: f.properties.name,
-          assetType: f.properties.assetTypeId,
-          h3Index: f.properties.h3Index,
-          geometry: f.geometry
-        })))
+        // Fetch tiles with pagination support
+        const allAssets: Asset[] = []
+        let tileData = await fetchTiles(workspaceId, bounds, 1000, mergedFilters, abortController.signal)
+
+        // Add first batch of assets
+        for (const f of tileData.features) {
+          allAssets.push({
+            id: f.id,
+            name: f.properties.name,
+            assetType: f.properties.assetTypeId,
+            h3Index: f.properties.h3Index,
+            geometry: f.geometry
+          })
+        }
+
+        // Fetch additional pages if available
+        while (tileData.next && !abortController.signal.aborted) {
+          tileData = await fetchTilesFromUrl(tileData.next, mergedFilters, abortController.signal)
+          for (const f of tileData.features) {
+            allAssets.push({
+              id: f.id,
+              name: f.properties.name,
+              assetType: f.properties.assetTypeId,
+              h3Index: f.properties.h3Index,
+              geometry: f.geometry
+            })
+          }
+        }
+
+        setAssets(allAssets)
         setClusters([])
       }
     } catch (error) {
@@ -179,7 +202,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
       }
       console.error('Error loading map data:', error)
     }
-  }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter, onBoundsChange])
+  }, [workspaceId, selectedAssetTypes, attributeFilters, nameFilter, clusteringDisabled, onBoundsChange])
 
   useEffect(() => {
     const newSearchParams = new URLSearchParams(searchParams)

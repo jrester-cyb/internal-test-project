@@ -112,14 +112,56 @@ export async function fetchClusters(workspaceId: string, zoom: number, bbox?: nu
   }
 }
 
-export async function fetchTiles(workspaceId: string, bbox: number[], limit: number = 5000, filters?: any, signal?: AbortSignal) {
+export interface TilesResponse {
+  type: 'FeatureCollection'
+  features: any[]
+  count: number
+  total: number
+  next: string | null
+}
+
+export async function fetchTiles(
+  workspaceId: string,
+  bbox: number[],
+  limit: number = 1000,
+  filters?: any,
+  signal?: AbortSignal,
+  offset: number = 0
+): Promise<TilesResponse> {
   const params = new URLSearchParams({
     bbox: bbox.join(','),
-    limit: limit.toString()
+    limit: limit.toString(),
+    offset: offset.toString()
   })
 
   const url = workspaceUrl(workspaceId, `assets/tiles/?${params}`)
 
+  if (filters) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(filters),
+      signal
+    })
+    if (!response.ok) throw new Error('Failed to fetch tiles')
+    return response.json()
+  } else {
+    const response = await fetch(url, { signal })
+    if (!response.ok) throw new Error('Failed to fetch tiles')
+    return response.json()
+  }
+}
+
+/**
+ * Fetch tiles from a next URL (for pagination)
+ */
+export async function fetchTilesFromUrl(
+  url: string,
+  filters?: any,
+  signal?: AbortSignal
+): Promise<TilesResponse> {
   if (filters) {
     const response = await fetch(url, {
       method: 'POST',

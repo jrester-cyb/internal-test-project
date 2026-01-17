@@ -22,6 +22,8 @@ interface AssetClusterLayerProps {
   clusterRadius?: number
   /** Maximum zoom at which clustering occurs */
   maxClusterZoom?: number
+  /** When true, disables client-side clustering and shows all assets individually */
+  disableClustering?: boolean
 }
 
 type PointFeature = {
@@ -139,7 +141,8 @@ export default function AssetClusterLayer({
   onAssetClick,
   onClusterClick,
   clusterRadius = 60,
-  maxClusterZoom = 18
+  maxClusterZoom = 18,
+  disableClustering = false
 }: Readonly<AssetClusterLayerProps>) {
   const map = useMap()
   const { isDarkMode } = useTheme()
@@ -274,6 +277,28 @@ export default function AssetClusterLayer({
       iconSize: [svgSize, svgSize]
     })
   }, [bgColor, textColor, outlineColor])
+
+  // When clustering is disabled, render all assets directly without going through Supercluster
+  if (disableClustering) {
+    return (
+      <>
+        {assets.map((asset) => (
+          <AssetGeometry
+            key={asset.id}
+            asset={asset}
+            isSelected={selectedAssetId === asset.id}
+            markerIcon={markerIcon}
+            selectedMarkerIcon={selectedMarkerIcon}
+            glowColor={glowColor}
+            polygonFillColor={polygonFillColor}
+            polygonStrokeColor={polygonStrokeColor}
+            polylineColor={polylineColor}
+            onAssetClick={onAssetClick}
+          />
+        ))}
+      </>
+    )
+  }
 
   return (
     <>

@@ -1,8 +1,9 @@
 import { useMemo, useEffect } from 'react'
 import { MapContainer, TileLayer, ZoomControl, useMap, Pane } from 'react-leaflet'
 import L from 'leaflet'
-import { Box } from '@mui/material'
+import { Box, IconButton, Tooltip } from '@mui/material'
 import { useTheme as useMuiTheme } from '@mui/material/styles'
+import ScatterPlotIcon from '@mui/icons-material/ScatterPlot'
 import { useTheme } from '../contexts/ThemeContext'
 import { useMapContext } from '../contexts/MapContext'
 import ClusterMarkers from './ClusterMarkers'
@@ -59,7 +60,7 @@ export default function MapView({
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
   const theme = useMuiTheme()
-  const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId } = useMapContext()
+  const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId, clusteringDisabled, setClusteringDisabled } = useMapContext()
 
   const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
   const strokeColor = isDarkMode ? theme.palette.secondary.main : "black"
@@ -171,11 +172,14 @@ export default function MapView({
         {/* Custom pane for glow effects - z-index 399 is below overlayPane (400) */}
         <Pane name="glowPane" style={{ zIndex: 399 }} />
 
-        <ClusterMarkers
-          clusters={clusters}
-          selectedClusterId={selectedClusterId}
-          onClusterClick={openClusterDrawer}
-        />
+        {/* Only show cluster markers when clustering is enabled */}
+        {!clusteringDisabled && (
+          <ClusterMarkers
+            clusters={clusters}
+            selectedClusterId={selectedClusterId}
+            onClusterClick={openClusterDrawer}
+          />
+        )}
 
         <ZoomControl position="bottomright" />
 
@@ -190,8 +194,33 @@ export default function MapView({
           polylineColor={polylineColor}
           onAssetClick={openAssetDrawer}
           onClusterClick={openClusterDrawer}
+          disableClustering={clusteringDisabled}
         />
       </MapContainer>
+
+      {/* Clustering toggle button */}
+      <Tooltip title={clusteringDisabled ? "Enable clustering" : "Disable clustering"} placement="left">
+        <IconButton
+          onClick={() => setClusteringDisabled(!clusteringDisabled)}
+          sx={{
+            position: 'absolute',
+            bottom: 100,
+            right: 10,
+            zIndex: 1000,
+            bgcolor: 'background.paper',
+            boxShadow: 2,
+            border: '2px solid',
+            borderColor: 'divider',
+            '&:hover': {
+              bgcolor: 'background.paper',
+            },
+            color: clusteringDisabled ? 'text.disabled' : 'primary.main',
+          }}
+          size="small"
+        >
+          <ScatterPlotIcon />
+        </IconButton>
+      </Tooltip>
     </Box>
   )
 }

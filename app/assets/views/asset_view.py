@@ -5,7 +5,7 @@ from rest_framework.pagination import PageNumberPagination, CursorPagination
 from django.db.models import Q, Count, Prefetch
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
-from django.contrib.gis.db.models.functions import Centroid
+from django.contrib.gis.db.models.functions import Centroid, Distance
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
 from silk.profiling.profiler import silk_profile
@@ -1189,7 +1189,7 @@ Format the output as follows:
     @extend_schema(
         tags=["Assets"],
         summary="Get assets as map tiles",
-        description="Optimized endpoint for map rendering. Returns lightweight GeoJSON-like features.",
+        description="Optimized endpoint for map rendering. Returns lightweight GeoJSON-like features with pagination support.",
         parameters=[
             OpenApiParameter(
                 name="bbox",
@@ -1199,7 +1199,13 @@ Format the output as follows:
             ),
             OpenApiParameter(
                 name="limit",
-                description="Maximum number of features to return",
+                description="Maximum number of features to return per page (default 1000)",
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name="offset",
+                description="Number of features to skip for pagination",
                 required=False,
                 type=int,
             ),
@@ -1223,8 +1229,9 @@ Format the output as follows:
                 queryset = queryset.filter(q_filter)
                 queryset = queryset.distinct()
 
-        # Apply bounding box filter if provided
+        # Apply bounding box filter and compute center for distance ordering
         bbox_param = request.query_params.get("bbox")
+        center_point = None
         if bbox_param:
             try:
                 bounds = [float(x) for x in bbox_param.split(",")]
@@ -1234,16 +1241,37 @@ Format the output as follows:
                         srid=4326,
                     )
                     queryset = queryset.filter(geometry__intersects=bbox)
+                    # Calculate center of bbox for distance ordering
+                    center_lon = (bounds[0] + bounds[2]) / 2
+                    center_lat = (bounds[1] + bounds[3]) / 2
+                    center_point = Point(center_lon, center_lat, srid=4326)
             except (ValueError, TypeError):
                 pass
 
-        # Apply limit
-        limit = request.query_params.get("limit")
-        if limit:
-            try:
-                queryset = queryset[: int(limit)]
-            except (ValueError, TypeError):
-                pass
+        # Order by distance from center of viewport (closest first), with id as tiebreaker
+        if center_point:
+            queryset = queryset.annotate(
+                distance_from_center=Distance(Centroid("geometry"), center_point)
+            ).order_by("distance_from_center", "id")
+        else:
+            queryset = queryset.order_by("id")
+
+        # Get total count before pagination
+        total_count = queryset.count()
+
+        # Parse pagination parameters
+        try:
+            limit = int(request.query_params.get("limit", 1000))
+        except (ValueError, TypeError):
+            limit = 1000
+
+        try:
+            offset = int(request.query_params.get("offset", 0))
+        except (ValueError, TypeError):
+            offset = 0
+
+        # Apply pagination
+        queryset = queryset[offset : offset + limit]
 
         # Optimize query - we only need basic fields for tiles
         queryset = queryset.select_related("asset_type")
@@ -1272,8 +1300,26 @@ Format the output as follows:
                     }
                 )
 
+        # Build next URL if there are more results
+        next_url = None
+        next_offset = offset + limit
+        if next_offset < total_count:
+            # Build the next URL with updated offset
+            next_params = request.query_params.copy()
+            next_params["offset"] = str(next_offset)
+            next_params["limit"] = str(limit)
+            next_url = request.build_absolute_uri(
+                f"{request.path}?{next_params.urlencode()}"
+            )
+
         return Response(
-            {"type": "FeatureCollection", "features": features, "count": len(features)}
+            {
+                "type": "FeatureCollection",
+                "features": features,
+                "count": len(features),
+                "total": total_count,
+                "next": next_url,
+            }
         )
 
     @extend_schema(
