@@ -24,12 +24,12 @@ def get_attributes_by_api_key(api_key: str) -> list[dict]:
 
     from itertools import chain
 
-    global_attrs = GlobalAssetTypeAttribute.objects.filter(
-        api_key=api_key
-    ).only("id", "attribute_type", "unit")
-    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
-        api_key=api_key
-    ).only("id", "attribute_type", "unit")
+    global_attrs = GlobalAssetTypeAttribute.objects.filter(api_key=api_key).only(
+        "id", "attribute_type", "unit"
+    )
+    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(api_key=api_key).only(
+        "id", "attribute_type", "unit"
+    )
 
     # Convert to list of dicts for caching (can't cache querysets)
     attrs = [
@@ -150,39 +150,167 @@ class FilterGroupSerializer(serializers.Serializer):
 
                     # For number types with units, convert the query value to the stored unit
                     if attr_type == "number" and query_unit and attr_unit:
-                        try:
-                            # Convert from query unit to the attribute's stored unit
-                            filter_value = convert_value(value, query_unit, attr_unit)
-                        except Exception:
-                            # If conversion fails, use the original value
-                            pass
+                        if isinstance(filter_value, list):
+                            filter_value = [
+                                (
+                                    convert_value(v, query_unit, attr_unit)
+                                    if v is not None
+                                    else v
+                                )
+                                for v in filter_value
+                            ]
+                        else:
+                            filter_value = (
+                                convert_value(filter_value, query_unit, attr_unit)
+                                if filter_value is not None
+                                else filter_value
+                            )
+
+                    if isinstance(filter_value, list):
+                        has_null = None in filter_value
+                        non_null_values = [v for v in filter_value if v is not None]
+                    else:
+                        has_null = filter_value is None
+                        non_null_values = [] if has_null else [filter_value]
 
                     # Link type searches both url and display_text fields
-                    # Use the attribute ID directly since api_key is not on the base table
                     if attr_type == "link":
-                        new_q = Q(
-                            **{
-                                "attributes__asset_type_attribute_id": attr_id,
-                            }
-                        ) & (
-                            Q(
-                                **{
-                                    f"attributes__linkattributevalue__url__{actual_operator}": filter_value
-                                }
-                            )
-                            | Q(
-                                **{
-                                    f"attributes__linkattributevalue__display_text__{actual_operator}": filter_value
-                                }
-                            )
-                        )
+                        if actual_operator == "in":
+                            if has_null:
+                                new_q = (
+                                    Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id
+                                        }
+                                    )
+                                    & (
+                                        Q(
+                                            **{
+                                                f"attributes__linkattributevalue__url__in": non_null_values
+                                            }
+                                        )
+                                        | Q(
+                                            **{
+                                                f"attributes__linkattributevalue__display_text__in": non_null_values
+                                            }
+                                        )
+                                    )
+                                ) | Q(
+                                    **{
+                                        "attributes__asset_type_attribute_id": attr_id,
+                                        f"attributes__isnull": True,
+                                    }
+                                )
+                            else:
+                                new_q = Q(
+                                    **{"attributes__asset_type_attribute_id": attr_id}
+                                ) & (
+                                    Q(
+                                        **{
+                                            f"attributes__linkattributevalue__url__in": filter_value
+                                        }
+                                    )
+                                    | Q(
+                                        **{
+                                            f"attributes__linkattributevalue__display_text__in": filter_value
+                                        }
+                                    )
+                                )
+                        else:
+                            if has_null:
+                                new_q = Q(
+                                    **{
+                                        "attributes__asset_type_attribute_id": attr_id,
+                                        f"attributes__isnull": True,
+                                    }
+                                )
+                            else:
+                                new_q = Q(
+                                    **{"attributes__asset_type_attribute_id": attr_id}
+                                ) & (
+                                    Q(
+                                        **{
+                                            f"attributes__linkattributevalue__url__{actual_operator}": filter_value
+                                        }
+                                    )
+                                    | Q(
+                                        **{
+                                            f"attributes__linkattributevalue__display_text__{actual_operator}": filter_value
+                                        }
+                                    )
+                                )
                     else:
-                        new_q = Q(
-                            **{
-                                "attributes__asset_type_attribute_id": attr_id,
-                                f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value,
-                            }
-                        )
+                        if actual_operator == "in":
+                            if is_negated:
+                                if has_null:
+                                    new_q = (
+                                        Q(
+                                            **{
+                                                "attributes__asset_type_attribute_id": attr_id
+                                            }
+                                        )
+                                        & ~Q(
+                                            **{
+                                                f"attributes__{self.LOOKUP_MAP[attr_type]}__in": non_null_values
+                                            }
+                                        )
+                                        & ~Q(
+                                            **{
+                                                f"attributes__{self.LOOKUP_MAP[attr_type]}__isnull": True
+                                            }
+                                        )
+                                    )
+                                else:
+                                    new_q = ~Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id,
+                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__in": filter_value,
+                                        }
+                                    )
+                            else:
+                                if has_null:
+                                    new_q = Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id,
+                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__in": non_null_values,
+                                        }
+                                    ) | Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id,
+                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__isnull": True,
+                                        }
+                                    )
+                                else:
+                                    new_q = Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id,
+                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__in": filter_value,
+                                        }
+                                    )
+                        else:
+                            if is_negated:
+                                new_q = Q(
+                                    **{"attributes__asset_type_attribute_id": attr_id}
+                                ) & ~Q(
+                                    **{
+                                        f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value
+                                    }
+                                )
+                            else:
+                                if has_null:
+                                    new_q = Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id,
+                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__isnull": True,
+                                        }
+                                    )
+                                else:
+                                    new_q = Q(
+                                        **{
+                                            "attributes__asset_type_attribute_id": attr_id,
+                                            f"attributes__{self.LOOKUP_MAP[attr_type]}__{actual_operator}": filter_value,
+                                        }
+                                    )
 
                     if q is None:
                         q = new_q
@@ -193,8 +321,7 @@ class FilterGroupSerializer(serializers.Serializer):
 
                 # Apply negation AFTER combining all attribute matches with OR
                 # For nin: we want NOT(has value in attr1 OR has value in attr2)
-                if is_negated and q is not None:
-                    q = ~q
+                # Removed: negation is now handled in the new_q building
 
                 if q is None:
                     return Q()

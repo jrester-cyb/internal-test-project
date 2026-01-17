@@ -41,29 +41,20 @@ def organization(db):
 @pytest.fixture
 def workspace(db, organization):
     """Create a test workspace."""
-    return Workspace.objects.create(
-        organization=organization,
-        name="Test Workspace"
-    )
+    return Workspace.objects.create(organization=organization, name="Test Workspace")
 
 
 @pytest.fixture
 def asset_type(db, organization):
     """Create a test asset type."""
-    return AssetType.objects.create(
-        organization=organization,
-        name="Test Asset Type"
-    )
+    return AssetType.objects.create(organization=organization, name="Test Asset Type")
 
 
 @pytest.fixture
 def global_text_attribute(db, asset_type):
     """Create a global text attribute."""
     return GlobalAssetTypeAttribute.objects.create(
-        asset_type=asset_type,
-        name="OSM ID",
-        api_key="osm_id",
-        attribute_type="text"
+        asset_type=asset_type, name="OSM ID", api_key="osm_id", attribute_type="text"
     )
 
 
@@ -75,7 +66,7 @@ def global_number_attribute(db, asset_type):
         name="Number of Rooms",
         api_key="number_of_rooms",
         attribute_type="number",
-        unit="rooms"
+        unit="rooms",
     )
 
 
@@ -86,7 +77,7 @@ def global_boolean_attribute(db, asset_type):
         asset_type=asset_type,
         name="Is Active",
         api_key="is_active",
-        attribute_type="boolean"
+        attribute_type="boolean",
     )
 
 
@@ -97,7 +88,7 @@ def global_date_attribute(db, asset_type):
         asset_type=asset_type,
         name="Purchase Date",
         api_key="purchase_date",
-        attribute_type="date"
+        attribute_type="date",
     )
 
 
@@ -105,10 +96,7 @@ def global_date_attribute(db, asset_type):
 def global_link_attribute(db, asset_type):
     """Create a global link attribute."""
     return GlobalAssetTypeAttribute.objects.create(
-        asset_type=asset_type,
-        name="Website",
-        api_key="website",
-        attribute_type="link"
+        asset_type=asset_type, name="Website", api_key="website", attribute_type="link"
     )
 
 
@@ -119,7 +107,7 @@ def global_json_attribute(db, asset_type):
         asset_type=asset_type,
         name="Metadata",
         api_key="metadata",
-        attribute_type="json"
+        attribute_type="json",
     )
 
 
@@ -131,7 +119,7 @@ def workspace_local_attribute(db, asset_type, workspace):
         workspace=workspace,
         name="Local Tag",
         api_key="local_tag",
-        attribute_type="text"
+        attribute_type="text",
     )
 
 
@@ -143,32 +131,29 @@ def workspace_local_number_attribute(db, asset_type, workspace):
         workspace=workspace,
         name="Local Score",
         api_key="local_score",
-        attribute_type="number"
+        attribute_type="number",
     )
 
 
 @pytest.fixture
-def asset_with_attributes(db, organization, asset_type, global_text_attribute, global_number_attribute):
+def asset_with_attributes(
+    db, organization, asset_type, global_text_attribute, global_number_attribute
+):
     """Create an asset with some attribute values."""
     asset = Asset.objects.create(
-        organization=organization,
-        asset_type=asset_type,
-        name="Test Asset"
+        organization=organization, asset_type=asset_type, name="Test Asset"
     )
     TextAttributeValue.objects.create(
-        asset=asset,
-        asset_type_attribute=global_text_attribute,
-        value="12345"
+        asset=asset, asset_type_attribute=global_text_attribute, value="12345"
     )
     NumberAttributeValue.objects.create(
-        asset=asset,
-        asset_type_attribute=global_number_attribute,
-        value=100
+        asset=asset, asset_type_attribute=global_number_attribute, value=100
     )
     return asset
 
 
 # --- Serializer Validation Tests ---
+
 
 class TestFilterGroupSerializerValidation:
     """Test that filter group serializer correctly validates and transforms input."""
@@ -204,7 +189,10 @@ class TestFilterGroupSerializerValidation:
         }
         serializer = FilterGroupSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
-        assert serializer.validated_data["field"] == "attributes__metadata__config__setting"
+        assert (
+            serializer.validated_data["field"]
+            == "attributes__metadata__config__setting"
+        )
 
     def test_attribute_filter_with_unit(self):
         """Test attribute filter includes unit for conversion."""
@@ -220,6 +208,7 @@ class TestFilterGroupSerializerValidation:
 
 
 # --- Query Building Tests for Global Attributes ---
+
 
 @pytest.mark.django_db
 class TestGlobalAttributeFilterQuery:
@@ -362,6 +351,7 @@ class TestGlobalAttributeFilterQuery:
 
 # --- Query Building Tests for Workspace Local Attributes ---
 
+
 @pytest.mark.django_db
 class TestWorkspaceLocalAttributeFilterQuery:
     """Test query building for workspace-local asset type attributes."""
@@ -379,7 +369,9 @@ class TestWorkspaceLocalAttributeFilterQuery:
         assert q is not None
         assert q != Q()
 
-    def test_workspace_local_number_attribute_filter(self, workspace_local_number_attribute):
+    def test_workspace_local_number_attribute_filter(
+        self, workspace_local_number_attribute
+    ):
         """Test building query for workspace-local number attribute."""
         data = {
             "field": "attributes.local_score",
@@ -395,11 +387,14 @@ class TestWorkspaceLocalAttributeFilterQuery:
 
 # --- Combined Filter Tests ---
 
+
 @pytest.mark.django_db
 class TestCombinedAttributeFilters:
     """Test combined attribute filters with AND/OR logic."""
 
-    def test_multiple_attribute_filters_and(self, global_text_attribute, global_number_attribute):
+    def test_multiple_attribute_filters_and(
+        self, global_text_attribute, global_number_attribute
+    ):
         """Test AND combination of multiple attribute filters."""
         data = {
             "logic": "AND",
@@ -423,7 +418,9 @@ class TestCombinedAttributeFilters:
         assert q is not None
         assert q != Q()
 
-    def test_multiple_attribute_filters_or(self, global_text_attribute, global_number_attribute):
+    def test_multiple_attribute_filters_or(
+        self, global_text_attribute, global_number_attribute
+    ):
         """Test OR combination of multiple attribute filters."""
         data = {
             "logic": "OR",
@@ -447,7 +444,9 @@ class TestCombinedAttributeFilters:
         assert q is not None
         assert q != Q()
 
-    def test_nested_filter_groups(self, global_text_attribute, global_number_attribute, global_boolean_attribute):
+    def test_nested_filter_groups(
+        self, global_text_attribute, global_number_attribute, global_boolean_attribute
+    ):
         """Test nested filter groups with mixed logic."""
         data = {
             "logic": "AND",
@@ -481,7 +480,9 @@ class TestCombinedAttributeFilters:
         assert q is not None
         assert q != Q()
 
-    def test_attribute_filter_with_asset_type_filter(self, global_text_attribute, asset_type):
+    def test_attribute_filter_with_asset_type_filter(
+        self, global_text_attribute, asset_type
+    ):
         """Test combining attribute filter with asset type filter."""
         data = {
             "logic": "AND",
@@ -508,6 +509,7 @@ class TestCombinedAttributeFilters:
 
 # --- Actual Query Execution Tests ---
 
+
 @pytest.mark.django_db
 class TestAttributeFilterExecution:
     """Test that filters actually work when applied to querysets."""
@@ -518,25 +520,17 @@ class TestAttributeFilterExecution:
         """Test that text attribute filter finds assets with matching value."""
         # Create assets with different text values
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 1"
+            organization=organization, asset_type=asset_type, name="Asset 1"
         )
         TextAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_text_attribute,
-            value="12345"
+            asset=asset1, asset_type_attribute=global_text_attribute, value="12345"
         )
 
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 2"
+            organization=organization, asset_type=asset_type, name="Asset 2"
         )
         TextAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_text_attribute,
-            value="67890"
+            asset=asset2, asset_type_attribute=global_text_attribute, value="67890"
         )
 
         # Build and apply filter
@@ -557,25 +551,17 @@ class TestAttributeFilterExecution:
     ):
         """Test that number attribute filter finds assets with matching value."""
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 1"
+            organization=organization, asset_type=asset_type, name="Asset 1"
         )
         NumberAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_number_attribute,
-            value=100
+            asset=asset1, asset_type_attribute=global_number_attribute, value=100
         )
 
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 2"
+            organization=organization, asset_type=asset_type, name="Asset 2"
         )
         NumberAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_number_attribute,
-            value=50
+            asset=asset2, asset_type_attribute=global_number_attribute, value=50
         )
 
         # Filter for rooms > 75
@@ -596,25 +582,17 @@ class TestAttributeFilterExecution:
     ):
         """Test that boolean attribute filter finds assets with matching value."""
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Active Asset"
+            organization=organization, asset_type=asset_type, name="Active Asset"
         )
         BooleanAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_boolean_attribute,
-            value=True
+            asset=asset1, asset_type_attribute=global_boolean_attribute, value=True
         )
 
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Inactive Asset"
+            organization=organization, asset_type=asset_type, name="Inactive Asset"
         )
         BooleanAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_boolean_attribute,
-            value=False
+            asset=asset2, asset_type_attribute=global_boolean_attribute, value=False
         )
 
         # Filter for active
@@ -635,25 +613,19 @@ class TestAttributeFilterExecution:
     ):
         """Test that workspace-local attribute filter finds assets."""
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Tagged Asset"
+            organization=organization, asset_type=asset_type, name="Tagged Asset"
         )
         TextAttributeValue.objects.create(
             asset=asset1,
             asset_type_attribute=workspace_local_attribute,
-            value="priority"
+            value="priority",
         )
 
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Other Asset"
+            organization=organization, asset_type=asset_type, name="Other Asset"
         )
         TextAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=workspace_local_attribute,
-            value="normal"
+            asset=asset2, asset_type_attribute=workspace_local_attribute, value="normal"
         )
 
         # Filter for priority tag
@@ -674,27 +646,25 @@ class TestAttributeFilterExecution:
     ):
         """Test that link attribute filter searches URL field."""
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset with website"
+            organization=organization, asset_type=asset_type, name="Asset with website"
         )
         LinkAttributeValue.objects.create(
             asset=asset1,
             asset_type_attribute=global_link_attribute,
             url="https://example.com/page",
-            display_text="Example Page"
+            display_text="Example Page",
         )
 
         asset2 = Asset.objects.create(
             organization=organization,
             asset_type=asset_type,
-            name="Asset with other website"
+            name="Asset with other website",
         )
         LinkAttributeValue.objects.create(
             asset=asset2,
             asset_type_attribute=global_link_attribute,
             url="https://other.com/page",
-            display_text="Other Page"
+            display_text="Other Page",
         )
 
         # Filter for example.com in URL
@@ -715,27 +685,23 @@ class TestAttributeFilterExecution:
     ):
         """Test that link attribute filter also searches display_text field."""
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 1"
+            organization=organization, asset_type=asset_type, name="Asset 1"
         )
         LinkAttributeValue.objects.create(
             asset=asset1,
             asset_type_attribute=global_link_attribute,
             url="https://site.com/1",
-            display_text="Important Link"
+            display_text="Important Link",
         )
 
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 2"
+            organization=organization, asset_type=asset_type, name="Asset 2"
         )
         LinkAttributeValue.objects.create(
             asset=asset2,
             asset_type_attribute=global_link_attribute,
             url="https://site.com/2",
-            display_text="Regular Link"
+            display_text="Regular Link",
         )
 
         # Filter for "Important" in display_text
@@ -767,38 +733,26 @@ class TestAttributeFilterExecution:
         """
         # Asset with rooms in range
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="In Range"
+            organization=organization, asset_type=asset_type, name="In Range"
         )
         NumberAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_number_attribute,
-            value=75
+            asset=asset1, asset_type_attribute=global_number_attribute, value=75
         )
 
         # Asset below range
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Below Range"
+            organization=organization, asset_type=asset_type, name="Below Range"
         )
         NumberAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_number_attribute,
-            value=30
+            asset=asset2, asset_type_attribute=global_number_attribute, value=30
         )
 
         # Asset above range
         asset3 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Above Range"
+            organization=organization, asset_type=asset_type, name="Above Range"
         )
         NumberAttributeValue.objects.create(
-            asset=asset3,
-            asset_type_attribute=global_number_attribute,
-            value=150
+            asset=asset3, asset_type_attribute=global_number_attribute, value=150
         )
 
         # AND filter: number > 50 AND number < 100
@@ -834,38 +788,26 @@ class TestAttributeFilterExecution:
         """
         # Asset that matches both criteria
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Target Asset"
+            organization=organization, asset_type=asset_type, name="Target Asset"
         )
         TextAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_text_attribute,
-            value="12345"
+            asset=asset1, asset_type_attribute=global_text_attribute, value="12345"
         )
 
         # Asset that matches only name
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Target Other"
+            organization=organization, asset_type=asset_type, name="Target Other"
         )
         TextAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_text_attribute,
-            value="67890"
+            asset=asset2, asset_type_attribute=global_text_attribute, value="67890"
         )
 
         # Asset that matches only attribute
         asset3 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Other Asset"
+            organization=organization, asset_type=asset_type, name="Other Asset"
         )
         TextAttributeValue.objects.create(
-            asset=asset3,
-            asset_type_attribute=global_text_attribute,
-            value="12345"
+            asset=asset3, asset_type_attribute=global_text_attribute, value="12345"
         )
 
         # AND filter: name contains "Target" AND osm_id = "12345"
@@ -897,53 +839,35 @@ class TestAttributeFilterExecution:
         """Test OR combination actually filters correctly."""
         # Asset that matches text
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Text Match"
+            organization=organization, asset_type=asset_type, name="Text Match"
         )
         TextAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_text_attribute,
-            value="target"
+            asset=asset1, asset_type_attribute=global_text_attribute, value="target"
         )
         NumberAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=global_number_attribute,
-            value=10
+            asset=asset1, asset_type_attribute=global_number_attribute, value=10
         )
 
         # Asset that matches number
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Number Match"
+            organization=organization, asset_type=asset_type, name="Number Match"
         )
         TextAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_text_attribute,
-            value="other"
+            asset=asset2, asset_type_attribute=global_text_attribute, value="other"
         )
         NumberAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=global_number_attribute,
-            value=100
+            asset=asset2, asset_type_attribute=global_number_attribute, value=100
         )
 
         # Asset that matches neither
         asset3 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="No Match"
+            organization=organization, asset_type=asset_type, name="No Match"
         )
         TextAttributeValue.objects.create(
-            asset=asset3,
-            asset_type_attribute=global_text_attribute,
-            value="something"
+            asset=asset3, asset_type_attribute=global_text_attribute, value="something"
         )
         NumberAttributeValue.objects.create(
-            asset=asset3,
-            asset_type_attribute=global_number_attribute,
-            value=10
+            asset=asset3, asset_type_attribute=global_number_attribute, value=10
         )
 
         # OR filter: text = "target" OR number > 50
@@ -971,8 +895,93 @@ class TestAttributeFilterExecution:
         assert asset2 in results
         assert asset3 not in results
 
+    def test_filter_can_exclude_assets_with_blank_values(
+        self, organization, asset_type, global_text_attribute
+    ):
+        """Test that filters can exclude assets with blank/null values for attributes."""
+        # Create assets: one with a value, one without any value for the attribute
+        asset_with_value = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with value",
+            geometry="POINT(0 0)",
+        )
+        TextAttributeValue.objects.create(
+            asset=asset_with_value,
+            asset_type_attribute=global_text_attribute,
+            value="some value",
+        )
+
+        asset_without_value = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset without value",
+            geometry="POINT(0 0)",
+        )
+
+        # Create a filter that excludes blank values (includes only assets with non-null values)
+        # This simulates selecting all values except "Blank" in the UI
+        data = {
+            "field": f"attributes.{global_text_attribute.api_key}",
+            "value": [None],  # Excluding null values
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        # Apply the filter
+        results = Asset.objects.filter(q).filter(organization=organization)
+
+        # Should include only the asset with a value, exclude the asset without a value
+        assert results.count() == 1
+        assert asset_with_value in results
+        assert asset_without_value not in results
+
+    def test_filter_can_include_only_assets_with_blank_values(
+        self, organization, asset_type, global_text_attribute
+    ):
+        """Test that filters can include only assets with blank/null values for attributes."""
+        # Create assets: one with a value, one without any value for the attribute
+        asset_with_value = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with value",
+            geometry="POINT(0 0)",
+        )
+        TextAttributeValue.objects.create(
+            asset=asset_with_value,
+            asset_type_attribute=global_text_attribute,
+            value="some value",
+        )
+
+        asset_without_value = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset without value",
+            geometry="POINT(0 0)",
+        )
+
+        # Create a filter that includes only blank values (excludes all non-null values)
+        # This simulates selecting only "Blank" in the UI
+        data = {
+            "field": f"attributes.{global_text_attribute.api_key}",
+            "value": [],  # No exclusions means include all, but our logic should handle blanks
+            "operator": "nin",
+        }
+        serializer = FilterGroupSerializer(data=data)
+        q = serializer.build_filter_query()
+
+        # Apply the filter
+        results = Asset.objects.filter(q).filter(organization=organization)
+
+        # With nin and empty exclusions, should include all assets (both with and without values)
+        assert results.count() == 2
+        assert asset_with_value in results
+        assert asset_without_value in results
+
 
 # --- Regression Tests ---
+
 
 @pytest.mark.django_db
 class TestAttributeFilterRegressions:
@@ -1002,9 +1011,7 @@ class TestAttributeFilterRegressions:
         assert q is not None
         assert q != Q()
 
-    def test_workspace_local_attributes_are_queried(
-        self, workspace_local_attribute
-    ):
+    def test_workspace_local_attributes_are_queried(self, workspace_local_attribute):
         """
         Regression test: Workspace-local attributes should be found by the filter.
         Previously only GlobalAssetTypeAttribute was queried.
@@ -1029,49 +1036,35 @@ class TestAttributeFilterRegressions:
         are OR'd together in the query.
         """
         # Create two asset types with attributes that have the same api_key
-        asset_type1 = AssetType.objects.create(
-            organization=organization,
-            name="Type 1"
-        )
+        asset_type1 = AssetType.objects.create(organization=organization, name="Type 1")
         attr1 = GlobalAssetTypeAttribute.objects.create(
             asset_type=asset_type1,
             name="Status",
             api_key="status",
-            attribute_type="text"
+            attribute_type="text",
         )
 
-        asset_type2 = AssetType.objects.create(
-            organization=organization,
-            name="Type 2"
-        )
+        asset_type2 = AssetType.objects.create(organization=organization, name="Type 2")
         attr2 = GlobalAssetTypeAttribute.objects.create(
             asset_type=asset_type2,
             name="Status",
             api_key="status",
-            attribute_type="text"
+            attribute_type="text",
         )
 
         # Create assets of each type
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Asset Type 1"
+            organization=organization, asset_type=asset_type1, name="Asset Type 1"
         )
         TextAttributeValue.objects.create(
-            asset=asset1,
-            asset_type_attribute=attr1,
-            value="active"
+            asset=asset1, asset_type_attribute=attr1, value="active"
         )
 
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Asset Type 2"
+            organization=organization, asset_type=asset_type2, name="Asset Type 2"
         )
         TextAttributeValue.objects.create(
-            asset=asset2,
-            asset_type_attribute=attr2,
-            value="active"
+            asset=asset2, asset_type_attribute=attr2, value="active"
         )
 
         # Filter should find both assets
@@ -1086,19 +1079,19 @@ class TestAttributeFilterRegressions:
         results = Asset.objects.filter(q)
         assert results.count() == 2
 
-    def test_json_nested_path_uses_attribute_ids(self, global_json_attribute, organization, asset_type):
+    def test_json_nested_path_uses_attribute_ids(
+        self, global_json_attribute, organization, asset_type
+    ):
         """
         Regression test: JSON nested path lookups should also use attribute IDs.
         """
         asset = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="JSON Asset"
+            organization=organization, asset_type=asset_type, name="JSON Asset"
         )
         JSONAttributeValue.objects.create(
             asset=asset,
             asset_type_attribute=global_json_attribute,
-            value={"config": {"setting": "enabled"}}
+            value={"config": {"setting": "enabled"}},
         )
 
         data = {
@@ -1143,54 +1136,38 @@ class TestAttributeFilterRegressions:
         """
         # Create two asset types
         asset_type1 = AssetType.objects.create(
-            organization=organization,
-            name="Building"
+            organization=organization, name="Building"
         )
         status_attr = GlobalAssetTypeAttribute.objects.create(
             asset_type=asset_type1,
             name="Status",
             api_key="status",
-            attribute_type="text"
+            attribute_type="text",
         )
 
-        asset_type2 = AssetType.objects.create(
-            organization=organization,
-            name="Road"
-        )
+        asset_type2 = AssetType.objects.create(organization=organization, name="Road")
 
         # Create assets of type1 (Building) with different statuses
         building_active = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Building Active"
+            organization=organization, asset_type=asset_type1, name="Building Active"
         )
         TextAttributeValue.objects.create(
-            asset=building_active,
-            asset_type_attribute=status_attr,
-            value="active"
+            asset=building_active, asset_type_attribute=status_attr, value="active"
         )
 
         building_inactive = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Building Inactive"
+            organization=organization, asset_type=asset_type1, name="Building Inactive"
         )
         TextAttributeValue.objects.create(
-            asset=building_inactive,
-            asset_type_attribute=status_attr,
-            value="inactive"
+            asset=building_inactive, asset_type_attribute=status_attr, value="inactive"
         )
 
         # Create assets of type2 (Road) - no status attribute
         road1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Road 1"
+            organization=organization, asset_type=asset_type2, name="Road 1"
         )
         road2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Road 2"
+            organization=organization, asset_type=asset_type2, name="Road 2"
         )
 
         # Filter: (type1 AND status=active) OR (type2)
@@ -1204,12 +1181,24 @@ class TestAttributeFilterRegressions:
                 {
                     "logic": "AND",
                     "filters": [
-                        {"field": "assetTypeId", "value": str(asset_type1.id), "operator": "exact"},
-                        {"field": "attributes.status", "value": "active", "operator": "exact"}
-                    ]
+                        {
+                            "field": "assetTypeId",
+                            "value": str(asset_type1.id),
+                            "operator": "exact",
+                        },
+                        {
+                            "field": "attributes.status",
+                            "value": "active",
+                            "operator": "exact",
+                        },
+                    ],
                 },
-                {"field": "assetTypeId", "value": str(asset_type2.id), "operator": "exact"}
-            ]
+                {
+                    "field": "assetTypeId",
+                    "value": str(asset_type2.id),
+                    "operator": "exact",
+                },
+            ],
         }
         serializer = FilterSerializer(data=data)
         q = serializer.build_query()
@@ -1220,7 +1209,9 @@ class TestAttributeFilterRegressions:
         # Should include: building_active (matches type AND attribute filter)
         # Should include: road1, road2 (match type2, no attribute filter)
         # Should NOT include: building_inactive (matches type but NOT attribute filter)
-        assert results.count() == 3, f"Expected 3 results, got {results.count()}: {list(results.values_list('name', flat=True))}"
+        assert (
+            results.count() == 3
+        ), f"Expected 3 results, got {results.count()}: {list(results.values_list('name', flat=True))}"
         assert building_active in results
         assert road1 in results
         assert road2 in results
@@ -1251,54 +1242,40 @@ class TestAttributeFilterRegressions:
         """
         # Create two asset types
         asset_type1 = AssetType.objects.create(
-            organization=organization,
-            name="Building Type"
+            organization=organization, name="Building Type"
         )
         status_attr = GlobalAssetTypeAttribute.objects.create(
             asset_type=asset_type1,
             name="Status",
             api_key="status",
-            attribute_type="text"
+            attribute_type="text",
         )
 
         asset_type2 = AssetType.objects.create(
-            organization=organization,
-            name="Road Type"
+            organization=organization, name="Road Type"
         )
 
         # Create assets of type1 (Building) with different statuses
         building_active = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Building Active"
+            organization=organization, asset_type=asset_type1, name="Building Active"
         )
         TextAttributeValue.objects.create(
-            asset=building_active,
-            asset_type_attribute=status_attr,
-            value="active"
+            asset=building_active, asset_type_attribute=status_attr, value="active"
         )
 
         building_inactive = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Building Inactive"
+            organization=organization, asset_type=asset_type1, name="Building Inactive"
         )
         TextAttributeValue.objects.create(
-            asset=building_inactive,
-            asset_type_attribute=status_attr,
-            value="inactive"
+            asset=building_inactive, asset_type_attribute=status_attr, value="inactive"
         )
 
         # Create assets of type2 (Road)
         road1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Road 1"
+            organization=organization, asset_type=asset_type2, name="Road 1"
         )
         road2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Road 2"
+            organization=organization, asset_type=asset_type2, name="Road 2"
         )
 
         # Filter: (type1 AND status=active) OR (assetTypeId NOT IN [type1])
@@ -1311,12 +1288,24 @@ class TestAttributeFilterRegressions:
                 {
                     "logic": "AND",
                     "filters": [
-                        {"field": "assetTypeId", "value": str(asset_type1.id), "operator": "exact"},
-                        {"field": "attributes.status", "value": "active", "operator": "exact"}
-                    ]
+                        {
+                            "field": "assetTypeId",
+                            "value": str(asset_type1.id),
+                            "operator": "exact",
+                        },
+                        {
+                            "field": "attributes.status",
+                            "value": "active",
+                            "operator": "exact",
+                        },
+                    ],
                 },
-                {"field": "assetTypeId", "value": [str(asset_type1.id)], "operator": "nin"}
-            ]
+                {
+                    "field": "assetTypeId",
+                    "value": [str(asset_type1.id)],
+                    "operator": "nin",
+                },
+            ],
         }
         serializer = FilterSerializer(data=data)
         q = serializer.build_query()
@@ -1327,7 +1316,9 @@ class TestAttributeFilterRegressions:
         # Should include: building_active (matches type AND attribute filter)
         # Should include: road1, road2 (NOT type1, so pass through via nin)
         # Should NOT include: building_inactive (IS type1 but doesn't match attribute filter)
-        assert results.count() == 3, f"Expected 3 results, got {results.count()}: {list(results.values_list('name', flat=True))}"
+        assert (
+            results.count() == 3
+        ), f"Expected 3 results, got {results.count()}: {list(results.values_list('name', flat=True))}"
         assert building_active in results
         assert road1 in results
         assert road2 in results
@@ -1342,15 +1333,15 @@ class TestAttributeFilterRegressions:
         type2 = AssetType.objects.create(organization=organization, name="Type2")
 
         # Create assets
-        asset1 = Asset.objects.create(organization=organization, asset_type=type1, name="Asset1")
-        asset2 = Asset.objects.create(organization=organization, asset_type=type2, name="Asset2")
+        asset1 = Asset.objects.create(
+            organization=organization, asset_type=type1, name="Asset1"
+        )
+        asset2 = Asset.objects.create(
+            organization=organization, asset_type=type2, name="Asset2"
+        )
 
         # Test nin - should return asset2 (type2) since we're excluding type1
-        data = {
-            "field": "assetTypeId",
-            "value": [str(type1.id)],
-            "operator": "nin"
-        }
+        data = {"field": "assetTypeId", "value": [str(type1.id)], "operator": "nin"}
         serializer = FilterGroupSerializer(data=data)
         q = serializer.build_filter_query()
 
@@ -1374,15 +1365,15 @@ class TestAttributeFilterRegressions:
         type2 = AssetType.objects.create(organization=organization, name="TypeB")
 
         # Create assets
-        asset1 = Asset.objects.create(organization=organization, asset_type=type1, name="AssetA")
-        asset2 = Asset.objects.create(organization=organization, asset_type=type2, name="AssetB")
+        asset1 = Asset.objects.create(
+            organization=organization, asset_type=type1, name="AssetA"
+        )
+        asset2 = Asset.objects.create(
+            organization=organization, asset_type=type2, name="AssetB"
+        )
 
         # Test exact - should return asset1 (type1)
-        data = {
-            "field": "assetTypeId",
-            "value": str(type1.id),
-            "operator": "exact"
-        }
+        data = {"field": "assetTypeId", "value": str(type1.id), "operator": "exact"}
         serializer = FilterGroupSerializer(data=data)
         q = serializer.build_filter_query()
 
@@ -1423,66 +1414,48 @@ class TestAttributeFilterRegressions:
         """
         # Create asset type with osm_type attribute
         asset_type1 = AssetType.objects.create(
-            organization=organization,
-            name="OSM Points"
+            organization=organization, name="OSM Points"
         )
         osm_type_attr = GlobalAssetTypeAttribute.objects.create(
             asset_type=asset_type1,
             name="OSM Type",
             api_key="osm_type",
-            attribute_type="text"
+            attribute_type="text",
         )
 
         # Create second asset type (no osm_type attribute)
         asset_type2 = AssetType.objects.create(
-            organization=organization,
-            name="Buildings"
+            organization=organization, name="Buildings"
         )
 
         # Create assets of type1 with different osm_type values
         point_node = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Point Node"
+            organization=organization, asset_type=asset_type1, name="Point Node"
         )
         TextAttributeValue.objects.create(
-            asset=point_node,
-            asset_type_attribute=osm_type_attr,
-            value="node"
+            asset=point_node, asset_type_attribute=osm_type_attr, value="node"
         )
 
         point_way = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Point Way"
+            organization=organization, asset_type=asset_type1, name="Point Way"
         )
         TextAttributeValue.objects.create(
-            asset=point_way,
-            asset_type_attribute=osm_type_attr,
-            value="way"
+            asset=point_way, asset_type_attribute=osm_type_attr, value="way"
         )
 
         point_relation = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type1,
-            name="Point Relation"
+            organization=organization, asset_type=asset_type1, name="Point Relation"
         )
         TextAttributeValue.objects.create(
-            asset=point_relation,
-            asset_type_attribute=osm_type_attr,
-            value="relation"
+            asset=point_relation, asset_type_attribute=osm_type_attr, value="relation"
         )
 
         # Create assets of type2 (should all be included)
         building1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Building 1"
+            organization=organization, asset_type=asset_type2, name="Building 1"
         )
         building2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type2,
-            name="Building 2"
+            organization=organization, asset_type=asset_type2, name="Building 2"
         )
 
         # Filter: (type1 AND osm_type NOT IN ['node']) OR (NOT type1)
@@ -1495,14 +1468,26 @@ class TestAttributeFilterRegressions:
                         {
                             "logic": "AND",
                             "filters": [
-                                {"field": "assetTypeId", "value": str(asset_type1.id), "operator": "exact"},
-                                {"field": "attributes.osm_type", "value": ["node"], "operator": "nin"}
-                            ]
+                                {
+                                    "field": "assetTypeId",
+                                    "value": str(asset_type1.id),
+                                    "operator": "exact",
+                                },
+                                {
+                                    "field": "attributes.osm_type",
+                                    "value": ["node"],
+                                    "operator": "nin",
+                                },
+                            ],
                         },
-                        {"field": "assetTypeId", "value": [str(asset_type1.id)], "operator": "nin"}
-                    ]
+                        {
+                            "field": "assetTypeId",
+                            "value": [str(asset_type1.id)],
+                            "operator": "nin",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
 
         serializer = FilterSerializer(data=data)
@@ -1511,7 +1496,7 @@ class TestAttributeFilterRegressions:
         print(f"Generated Q: {q}")
 
         results = Asset.objects.filter(q).filter(organization=organization)
-        result_names = list(results.values_list('name', flat=True))
+        result_names = list(results.values_list("name", flat=True))
         print(f"Results: {result_names}")
 
         # Should include:
@@ -1521,7 +1506,9 @@ class TestAttributeFilterRegressions:
         # - building2 (type2, passes via nin on asset type)
         # Should NOT include:
         # - point_node (type1, osm_type='node', excluded by attribute nin)
-        assert results.count() == 4, f"Expected 4 results, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 4
+        ), f"Expected 4 results, got {results.count()}: {result_names}"
         assert point_way in results
         assert point_relation in results
         assert building1 in results
@@ -1533,77 +1520,62 @@ class TestAttributeFilterRegressions:
         Test that nin operator on attributes correctly excludes multiple values.
         """
         asset_type = AssetType.objects.create(
-            organization=organization,
-            name="Test Type"
+            organization=organization, name="Test Type"
         )
         status_attr = GlobalAssetTypeAttribute.objects.create(
             asset_type=asset_type,
             name="Status",
             api_key="status",
-            attribute_type="text"
+            attribute_type="text",
         )
 
         # Create assets with different statuses
         active_asset = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Active"
+            organization=organization, asset_type=asset_type, name="Active"
         )
         TextAttributeValue.objects.create(
-            asset=active_asset,
-            asset_type_attribute=status_attr,
-            value="active"
+            asset=active_asset, asset_type_attribute=status_attr, value="active"
         )
 
         pending_asset = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Pending"
+            organization=organization, asset_type=asset_type, name="Pending"
         )
         TextAttributeValue.objects.create(
-            asset=pending_asset,
-            asset_type_attribute=status_attr,
-            value="pending"
+            asset=pending_asset, asset_type_attribute=status_attr, value="pending"
         )
 
         archived_asset = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Archived"
+            organization=organization, asset_type=asset_type, name="Archived"
         )
         TextAttributeValue.objects.create(
-            asset=archived_asset,
-            asset_type_attribute=status_attr,
-            value="archived"
+            asset=archived_asset, asset_type_attribute=status_attr, value="archived"
         )
 
         deleted_asset = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Deleted"
+            organization=organization, asset_type=asset_type, name="Deleted"
         )
         TextAttributeValue.objects.create(
-            asset=deleted_asset,
-            asset_type_attribute=status_attr,
-            value="deleted"
+            asset=deleted_asset, asset_type_attribute=status_attr, value="deleted"
         )
 
         # Exclude 'archived' and 'deleted' statuses
         data = {
             "field": "attributes.status",
             "value": ["archived", "deleted"],
-            "operator": "nin"
+            "operator": "nin",
         }
 
         serializer = FilterGroupSerializer(data=data)
         q = serializer.build_filter_query()
 
         results = Asset.objects.filter(q).filter(organization=organization)
-        result_names = list(results.values_list('name', flat=True))
+        result_names = list(results.values_list("name", flat=True))
 
         # Should include: active, pending
         # Should NOT include: archived, deleted
-        assert results.count() == 2, f"Expected 2 results, got {results.count()}: {result_names}"
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results, got {results.count()}: {result_names}"
         assert active_asset in results
         assert pending_asset in results
         assert archived_asset not in results
@@ -1624,16 +1596,14 @@ class TestAttributeFilterRegressions:
         """
         # Create an asset (doesn't matter what attributes it has)
         asset = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Test Asset"
+            organization=organization, asset_type=asset_type, name="Test Asset"
         )
 
         # Filter on a completely nonexistent api_key
         data = {
             "field": "attributes.nonexistent_attribute_xyz",
             "value": "some_value",
-            "operator": "exact"
+            "operator": "exact",
         }
 
         serializer = FilterGroupSerializer(data=data)
@@ -1648,7 +1618,9 @@ class TestAttributeFilterRegressions:
         assert results.count() == 1
         assert asset in results
 
-    def test_invalid_api_key_with_nin_does_not_raise_error(self, organization, asset_type):
+    def test_invalid_api_key_with_nin_does_not_raise_error(
+        self, organization, asset_type
+    ):
         """
         Test that nin operator on an invalid api_key does not raise an error.
 
@@ -1658,21 +1630,17 @@ class TestAttributeFilterRegressions:
         """
         # Create some assets
         asset1 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 1"
+            organization=organization, asset_type=asset_type, name="Asset 1"
         )
         asset2 = Asset.objects.create(
-            organization=organization,
-            asset_type=asset_type,
-            name="Asset 2"
+            organization=organization, asset_type=asset_type, name="Asset 2"
         )
 
         # nin filter on nonexistent attribute
         data = {
             "field": "attributes.does_not_exist",
             "value": ["value1", "value2"],
-            "operator": "nin"
+            "operator": "nin",
         }
 
         serializer = FilterGroupSerializer(data=data)
@@ -1682,4 +1650,80 @@ class TestAttributeFilterRegressions:
         # With no attribute definitions found, q is None, so we return Q()
         # An empty Q() doesn't filter anything - all assets pass through
         results = Asset.objects.filter(q).filter(organization=organization)
-        assert results.count() == 2, f"Expected 2 results (filter has no effect), got {results.count()}"
+        assert (
+            results.count() == 2
+        ), f"Expected 2 results (filter has no effect), got {results.count()}"
+
+
+class TestAttributeValuesEndpoint:
+    """Test the attribute values endpoint that returns distinct values for filtering."""
+
+    @pytest.mark.django_db
+    def test_values_endpoint_includes_blank_option(
+        self, client, organization, workspace, asset_type, global_text_attribute
+    ):
+        """Test that the values endpoint includes 'Blank' as the first option."""
+        # Create some assets with and without values for the attribute
+        asset_with_value = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with value",
+            geometry="POINT(0 0)",
+        )
+        TextAttributeValue.objects.create(
+            asset=asset_with_value,
+            asset_type_attribute=global_text_attribute,
+            value="test value",
+        )
+
+        asset_without_value = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset without value",
+            geometry="POINT(0 0)",
+        )
+
+        # Make a request to the values endpoint
+        url = f"/api/workspaces/{workspace.id}/asset-types/{asset_type.id}/attributes/{global_text_attribute.id}/values/"
+        response = client.get(url)
+
+        # Check that the response data includes 'Blank' as the first item
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        results = data["results"]
+        assert len(results) > 0
+        assert (
+            results[0] == "Blank"
+        ), f"Expected 'Blank' as first result, got {results[0]}"
+
+    @pytest.mark.django_db
+    def test_values_endpoint_blank_not_duplicated(
+        self, client, organization, workspace, asset_type, global_text_attribute
+    ):
+        """Test that 'Blank' is not duplicated if it already exists in values."""
+        # Create an asset with "Blank" as a value
+        asset_with_blank = Asset.objects.create(
+            organization=organization,
+            asset_type=asset_type,
+            name="Asset with blank value",
+            geometry="POINT(0 0)",
+        )
+        TextAttributeValue.objects.create(
+            asset=asset_with_blank,
+            asset_type_attribute=global_text_attribute,
+            value="Blank",
+        )
+
+        # Make a request to the values endpoint
+        url = f"/api/workspaces/{workspace.id}/asset-types/{asset_type.id}/attributes/{global_text_attribute.id}/values/"
+        response = client.get(url)
+
+        # Check that 'Blank' appears only once
+        assert response.status_code == 200
+        data = response.json()
+        results = data["results"]
+        blank_count = results.count("Blank")
+        assert (
+            blank_count == 1
+        ), f"Expected 'Blank' to appear once, but found {blank_count} times"

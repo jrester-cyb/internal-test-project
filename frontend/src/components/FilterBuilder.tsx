@@ -185,42 +185,36 @@ export default function FilterBuilder({
   }
 
   const handleValueClick = (value: any) => {
+    if (!selectedAttribute || !selectedTypeForAttributes) return
+
+    const currentFilter = attributeFilters.find(
+      f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
+    )
+
     if (value === "Blank") {
       value = null
-    }
-    if (selectedAttribute && selectedTypeForAttributes) {
-      const currentFilter = attributeFilters.find(
-        f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
-      )
-
-      // Get current excluded values
-      const currentExcluded = currentFilter?.excludedValues || []
-      const isCurrentlyExcluded = currentExcluded.indexOf(value) > -1
-
-      let newExcluded: any[]
-      if (isCurrentlyExcluded) {
-        // Re-include (remove from excluded list)
-        newExcluded = currentExcluded.filter((v: any) => v !== value)
-      } else {
-        // Exclude (add to excluded list)
-        newExcluded = [...currentExcluded, value]
-      }
-
-      if (newExcluded.length === 0) {
-        // No exclusions = remove filter entirely
+      if (!currentFilter) {
+        // create filter with no exclusions, meaning "Blank" is selected
         handleAttributeFilterChange(
           selectedTypeForAttributes,
           selectedAttribute.apiKey,
           selectedAttribute.name,
           selectedAttribute.attributeType,
-          'exact',
-          '',
+          'nin',
           [],
-          undefined
+          []
         )
       } else {
-        // Use 'nin' (not in) operator with excluded values
-        // This way we send what to exclude rather than computing what to include
+        const currentExcluded = currentFilter.excludedValues || []
+        const isCurrentlySelected = currentExcluded.indexOf(null) === -1
+        let newExcluded
+        if (isCurrentlySelected) {
+          // deselect, add null to excluded
+          newExcluded = [...currentExcluded, null]
+        } else {
+          // select, remove null from excluded
+          newExcluded = currentExcluded.filter(v => v !== null)
+        }
         handleAttributeFilterChange(
           selectedTypeForAttributes,
           selectedAttribute.apiKey,
@@ -228,8 +222,37 @@ export default function FilterBuilder({
           selectedAttribute.attributeType,
           'nin',
           newExcluded,
+          newExcluded
+        )
+      }
+    } else {
+      const currentExcluded = currentFilter?.excludedValues || []
+      const isCurrentlyExcluded = currentExcluded.indexOf(value) > -1
+      let newExcluded
+      if (isCurrentlyExcluded) {
+        newExcluded = currentExcluded.filter(v => v !== value)
+      } else {
+        newExcluded = [...currentExcluded, value]
+      }
+      if (newExcluded.length === 0) {
+        handleAttributeFilterChange(
+          selectedTypeForAttributes,
+          selectedAttribute.apiKey,
+          selectedAttribute.name,
+          selectedAttribute.attributeType,
+          'nin',
+          [],
+          []
+        )
+      } else {
+        handleAttributeFilterChange(
+          selectedTypeForAttributes,
+          selectedAttribute.apiKey,
+          selectedAttribute.name,
+          selectedAttribute.attributeType,
+          'nin',
           newExcluded,
-          attributeValuesTotalCount // Pass total count for UI
+          newExcluded
         )
       }
     }
@@ -237,19 +260,19 @@ export default function FilterBuilder({
 
   // Check if a value is included (checked) - inverted logic: checked by default
   const isValueSelected = (value: any) => {
-    if (value === "Blank") {
-      value = null
-    }
-    if (!selectedAttribute || !selectedTypeForAttributes) return true // Default to checked
+    if (!selectedAttribute || !selectedTypeForAttributes) return value !== "Blank" // Default to checked for others, unchecked for Blank
 
     const currentFilter = attributeFilters.find(
       f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === selectedAttribute.apiKey
     )
 
-    if (!currentFilter) return true // No filter = all included
+    if (!currentFilter) return value !== "Blank" // No filter = all included except Blank
 
     // Check if value is in excluded list
     const excluded = currentFilter.excludedValues || []
+    if (value === "Blank") {
+      value = null
+    }
     return excluded.indexOf(value) === -1 // Selected if NOT excluded
   }
 
@@ -342,7 +365,7 @@ export default function FilterBuilder({
     )
 
     // Remove filter if no exclusions (value is empty and excludedValues is empty)
-    if ((value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0))
+    if (operator !== 'nin' && (value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0))
       && (!excludedValues || excludedValues.length === 0)) {
       if (existingIndex > -1) {
         const newFilters = [...attributeFilters]
