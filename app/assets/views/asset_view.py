@@ -1304,38 +1304,9 @@ Format the output as follows:
         ],
     )
     @action(detail=False, methods=["get", "post"])
-    def clusters(self, request, workspace_pk=None):
+    def clusters(self, request, workspace_pk=None, organization_pk=None):
         """Get asset clusters grouped by H3 prefix for map overview"""
-        # Start with base queryset
-        queryset = Asset.objects.all()
-
-        # Filter by workspace if provided
-        if workspace_pk:
-            queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
-
-        # Apply search filters if provided (POST request)
-        if request.method == "POST" and request.data:
-            filter_config = request.data
-            q_filter = FilterSerializer(data=filter_config).build_query()
-            if q_filter:
-                queryset = queryset.filter(q_filter)
-
-        # Always apply distinct after workspace join (assets can belong to multiple workspaces)
-        queryset = queryset.distinct()
-
-        # Apply bounding box filter if provided
         bbox_param = request.query_params.get("bbox")
-        if bbox_param:
-            try:
-                bounds = [float(x) for x in bbox_param.split(",")]
-                if len(bounds) == 4:
-                    bbox = GEOSGeometry(
-                        f"POLYGON(({bounds[0]} {bounds[1]}, {bounds[2]} {bounds[1]}, {bounds[2]} {bounds[3]}, {bounds[0]} {bounds[3]}, {bounds[0]} {bounds[1]}))",
-                        srid=4326,
-                    )
-                    queryset = queryset.filter(geometry__intersects=bbox)
-            except (ValueError, TypeError):
-                pass
 
         # Determine H3 prefix length based on zoom level or use provided value
         zoom = request.query_params.get("zoom")
@@ -1373,77 +1344,117 @@ Format the output as follows:
         else:
             precision = 7  # Default to mid-level granularity
 
-        # Filter assets with h3_index and ensure distinct
-        queryset = queryset.exclude(h3_index="").exclude(h3_index__isnull=True).distinct()
-
-        # Group by h3_index prefix and count
-        from django.db.models.functions import Substr
-        from django.db.models import Count
-
-        clusters = (
-            queryset.annotate(h3_index_prefix=Substr("h3_index", 1, precision))
-            .values("h3_index_prefix")
-            .annotate(count=Count("id", distinct=True))
-            .order_by("-count")
-        )
-
-        # Build cluster response with centroids
+        # Build WHERE conditions and params for raw SQL
+        import json
         from django.db import connection
 
+        where_clauses = [
+            "a.h3_index IS NOT NULL",
+            "a.h3_index != ''",
+            "a.geometry IS NOT NULL",
+            "a.deleted_at IS NULL",
+        ]
+        params = [precision]
+
+        # Filter by organization if provided
+        if organization_pk:
+            where_clauses.append("a.organization_id = %s")
+            params.append(organization_pk)
+
+        # Filter by workspace if provided
+        if workspace_pk:
+            where_clauses.append(
+                "a.id IN (SELECT asset_id FROM assets_workspaceasset WHERE workspace_id = %s)"
+            )
+            params.append(workspace_pk)
+
+        # Apply search filters if provided (POST request)
+        if request.method == "POST" and request.data:
+            import hashlib
+            from django.core.cache import cache
+
+            # Cache filtered IDs based on filter config hash
+            filter_hash = hashlib.md5(
+                json.dumps(request.data, sort_keys=True).encode()
+            ).hexdigest()
+            cache_key = f"cluster_filter:{organization_pk or ''}:{workspace_pk or ''}:{filter_hash}"
+
+            filtered_ids = cache.get(cache_key)
+            if filtered_ids is None:
+                q_filter = FilterSerializer(data=request.data).build_query()
+                if q_filter:
+                    base_qs = Asset.objects.all()
+                    if organization_pk:
+                        base_qs = base_qs.filter(organization_id=organization_pk)
+                    if workspace_pk:
+                        base_qs = base_qs.filter(workspace_memberships__workspace_id=workspace_pk)
+                    filtered_ids = list(
+                        base_qs.filter(q_filter).values_list("id", flat=True)
+                    )
+                    cache.set(cache_key, filtered_ids, timeout=60)  # Cache for 1 minute
+                else:
+                    filtered_ids = []
+
+            if filtered_ids:
+                placeholders = ",".join(["%s"] * len(filtered_ids))
+                where_clauses.append(f"a.id IN ({placeholders})")
+                params.extend([str(id) for id in filtered_ids])
+            elif request.data:
+                # Filter was provided but no assets match, return empty result
+                return Response({"clusters": [], "precision": precision, "totalClusters": 0})
+
+        # Apply bounding box filter if provided
+        if bbox_param:
+            try:
+                bounds = [float(x) for x in bbox_param.split(",")]
+                if len(bounds) == 4:
+                    where_clauses.append("a.geometry && ST_MakeEnvelope(%s, %s, %s, %s, 4326)")
+                    params.extend(bounds)
+            except (ValueError, TypeError):
+                pass
+
+        where_sql = " AND ".join(where_clauses)
+
+        # Single query: groups by h3 prefix, computes centroids using AVG(location) which is faster
+        # than ST_Centroid(ST_Collect(geometry)) for large clusters
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    LEFT(a.h3_index, %s) as h3_prefix,
+                    COUNT(*) as cluster_count,
+                    MIN(a.id::text),
+                    MIN(a.name),
+                    MIN(a.asset_type_id::text),
+                    MIN(a.h3_index),
+                    ST_AsGeoJSON(MIN(a.geometry)),
+                    AVG(ST_Y(a.location)),
+                    AVG(ST_X(a.location))
+                FROM assets_asset a
+                WHERE {where_sql}
+                GROUP BY h3_prefix
+                ORDER BY cluster_count DESC
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+
+        # Build response: indices are 0=prefix, 1=count, 2=id, 3=name, 4=type_id, 5=h3, 6=geojson, 7=lat, 8=lon
         cluster_data = []
-        for cluster in clusters:
-            hash_prefix = cluster["h3_index_prefix"]
-            count = cluster["count"]
-
-            if count == 1:
-                # Serialize as a tile feature (GeoJSON)
-                asset = (
-                    Asset.objects.filter(h3_index__startswith=hash_prefix)
-                    .only("id", "name", "geometry", "asset_type_id", "h3_index")
-                    .first()
-                )
-                if asset and asset.geometry:
-                    cluster_data.append(
-                        {
-                            "type": "Feature",
-                            "id": str(asset.id),
-                            "geometry": {
-                                "type": asset.geometry.geom_type,
-                                "coordinates": (
-                                    list(asset.geometry.coords)
-                                    if hasattr(asset.geometry, "coords")
-                                    else None
-                                ),
-                            },
-                            "properties": {
-                                "name": asset.name,
-                                "assetTypeId": str(asset.asset_type_id),
-                                "h3_index": asset.h3_index,
-                            },
-                        }
-                    )
-                continue
-
-            # Calculate centroid for this cluster
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT ST_Y(ST_Centroid(ST_Collect(geometry))) as lat, ST_X(ST_Centroid(ST_Collect(geometry))) as lon
-                    FROM assets_asset
-                    WHERE h3_index LIKE %s || '%%' AND geometry IS NOT NULL
-                    """,
-                    [hash_prefix],
-                )
-                result = cursor.fetchone()
-                if result and result[0] is not None and result[1] is not None:
-                    lat, lon = result
-                    cluster_data.append(
-                        {
-                            "h3_index": hash_prefix,
-                            "count": int(count),
-                            "center": {"lat": float(lat), "lon": float(lon)},
-                        }
-                    )
+        for prefix, count, asset_id, name, type_id, h3, geojson, lat, lon in rows:
+            if count == 1 and geojson:
+                cluster_data.append({
+                    "type": "Feature",
+                    "id": asset_id,
+                    "geometry": json.loads(geojson),
+                    "properties": {"name": name, "assetTypeId": type_id, "h3_index": h3},
+                })
+            elif lat is not None and lon is not None:
+                cluster_data.append({
+                    "h3_index": prefix,
+                    "count": count,
+                    "center": {"lat": float(lat), "lon": float(lon)},
+                })
 
         return Response(
             {
