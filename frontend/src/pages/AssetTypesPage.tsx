@@ -57,8 +57,14 @@ export default function AssetTypesPage() {
   const { organizationId, workspaceId } = useParams()
 
   // Virtualized list state - Map for sparse data
-  const [items, setItems] = useState<Map<number, AssetType>>(new Map())
-  const [totalCount, setTotalCount] = useState(0)
+  // Initialize directly from loader data to avoid flash of empty content
+  const [items, setItems] = useState<Map<number, AssetType>>(() => {
+    const results = loaderData?.results || []
+    const newItems = new Map<number, AssetType>()
+    results.forEach((item, idx) => newItems.set(idx, item))
+    return newItems
+  })
+  const [totalCount, setTotalCount] = useState(loaderData?.count || 0)
   const [isLoading, setIsLoading] = useState(false)
   const loadingPagesRef = useRef<Set<number>>(new Set())
 
@@ -82,9 +88,17 @@ export default function AssetTypesPage() {
 
   const hasActiveFilters = activeFilters.workspaceCountRange !== null || activeFilters.assetCountRange !== null
 
-  // Initialize from loader data
+  // Track the loaderData identity to detect when we get fresh data from navigation
+  const loaderDataRef = useRef(loaderData)
+
+  // Re-initialize from loader data when it changes (e.g., navigating back to this page)
   useEffect(() => {
-    if (activeSearch || sortBy !== 'name' || hasActiveFilters) return // Don't reset if we have active filters
+    // Skip if loaderData hasn't actually changed (same reference)
+    if (loaderDataRef.current === loaderData) return
+    loaderDataRef.current = loaderData
+
+    // Don't reset if we have active filters/search - user is in the middle of filtering
+    if (activeSearch || sortBy !== 'name' || hasActiveFilters) return
 
     const results = loaderData?.results || []
     const count = loaderData?.count || 0

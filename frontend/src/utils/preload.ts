@@ -3,6 +3,15 @@
 
 import { getCachedFetch, cacheKeys } from './prefetchCache'
 import { fetchFileTree, fetchAssetTypes, fetchAssetsByType, fetchAssetAttributeDefinitions, fetchAllAssetAttributeDefinitions } from '../api/assets'
+import {
+  preloadMapLoader,
+  preloadAssetTypesLoader,
+  preloadLibraryLoader,
+  preloadAssetTypeDetailLoader,
+  preloadAssetGridLoader,
+  preloadAssetAttributesLoader,
+  preloadAssetDetailLoader,
+} from '../router'
 
 // Page component preloaders
 export const preloadAssetTypeAboutPage = () => import('../pages/AssetTypeAboutPage')
@@ -13,18 +22,11 @@ export const preloadMapPage = () => import('../pages/MapPage')
 export const preloadLibraryPage = () => import('../pages/LibraryPage')
 export const preloadAssetTypesPage = () => import('../pages/AssetTypesPage')
 
-// Loader module preloaders
-export const preloadLibraryLoader = () => import('../loaders/library')
-export const preloadMapLoader = () => import('../loaders/map')
-export const preloadAssetTypesLoader = () => import('../loaders/assetTypes')
-export const preloadOrganizationsLoader = () => import('../loaders/organizations')
-export const preloadWorkspacesLoader = () => import('../loaders/workspaces')
-
 // Prefetch functions that load both the JS chunk AND start fetching data
 // These should be called with the route params to prefetch the actual data
 
 export function prefetchLibrary(organizationId: string, workspaceId?: string, directoryId?: string) {
-  // Load JS chunks (page + loader)
+  // Load JS chunks (page) and warm up cached lazy loader
   preloadLibraryPage()
   preloadLibraryLoader()
 
@@ -34,7 +36,7 @@ export function prefetchLibrary(organizationId: string, workspaceId?: string, di
 }
 
 export function prefetchAssetTypes(organizationId: string, workspaceId?: string) {
-  // Load JS chunks (page + loader)
+  // Load JS chunks (page) and warm up cached lazy loader
   preloadAssetTypesPage()
   preloadAssetTypesLoader()
 
@@ -44,16 +46,17 @@ export function prefetchAssetTypes(organizationId: string, workspaceId?: string)
 }
 
 export function prefetchMap(organizationId: string, workspaceId?: string) {
-  // Load JS chunks (page + loader) - map data depends on viewport which we don't know yet
+  // Load JS chunks (page) and warm up cached lazy loader
+  // Map data depends on viewport which we don't know yet
   preloadMapPage()
   preloadMapLoader()
 }
 
 export function prefetchAssetTypeDetail(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
-  // Load JS chunks (pages + loader)
+  // Load JS chunks (pages) and warm up cached lazy loader
   preloadAssetTypeAboutPage()
   preloadAssetTypeAttributesPage()
-  preloadAssetTypesLoader()
+  preloadAssetTypeDetailLoader()
 
   // Start fetching data
   const key = cacheKeys.assetTypeDetail(organizationId, workspaceId, assetTypeId)
@@ -63,9 +66,9 @@ export function prefetchAssetTypeDetail(organizationId: string, workspaceId: str
 }
 
 export function prefetchAssetGrid(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
-  // Load JS chunks (page + loader)
+  // Load JS chunks (page) and warm up cached lazy loader
   preloadAssetGridPage()
-  preloadAssetTypesLoader()
+  preloadAssetGridLoader()
 
   // Start fetching assets
   const assetsKey = cacheKeys.assetsByType(organizationId, workspaceId, assetTypeId)
@@ -77,9 +80,9 @@ export function prefetchAssetGrid(organizationId: string, workspaceId: string | 
 }
 
 export function prefetchAssetAttributes(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
-  // Load JS chunks (page + loader)
+  // Load JS chunks (page) and warm up cached lazy loader
   preloadAssetTypeAttributesPage()
-  preloadAssetTypesLoader()
+  preloadAssetAttributesLoader()
 
   // Start fetching attribute definitions (first page)
   const key = cacheKeys.assetAttributeDefinitions(organizationId, workspaceId, assetTypeId)
@@ -87,9 +90,9 @@ export function prefetchAssetAttributes(organizationId: string, workspaceId: str
 }
 
 export function prefetchAssetDetail(organizationId: string, workspaceId: string | undefined, assetTypeId: string, assetId: string) {
-  // Load JS chunks (page + loader)
+  // Load JS chunks (page) and warm up cached lazy loader
   preloadAssetDetailPage()
-  preloadAssetTypesLoader()
+  preloadAssetDetailLoader()
 
   // Start fetching asset data
   const assetKey = cacheKeys.assetDetail(organizationId, workspaceId, assetId)
