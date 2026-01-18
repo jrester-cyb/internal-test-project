@@ -144,8 +144,8 @@ export default function AssetContent({
     async function loadFullAsset() {
       if (!organizationId || !asset?.id) return
 
-      // If attributes are provided, assume the asset is already fully loaded
-      if (propAttributes) {
+      // If attributes are provided with actual data, assume the asset is already fully loaded
+      if (propAttributes && propAttributes.length > 0) {
         setFullAsset(asset)
         const map = new Map<number, AssetTypeAttribute>()
         propAttributes.forEach((attr, index) => map.set(index, attr))
@@ -160,8 +160,8 @@ export default function AssetContent({
         const data = await getAsset(organizationId, workspaceId, asset.id)
         setFullAsset(data)
 
-        // Fetch attributes if not provided and we have an asset type
-        if (!propAttributes && data.assetType) {
+        // Fetch attributes if not provided (or empty) and we have an asset type
+        if ((!propAttributes || propAttributes.length === 0) && data.assetType) {
           const attrsResponse = await fetchAssetAttributeDefinitions(organizationId, workspaceId, data.assetType, 1, ATTRIBUTES_PAGE_SIZE)
           const map = new Map<number, AssetTypeAttribute>()
           const results = Array.isArray(attrsResponse.results) ? attrsResponse.results : []
