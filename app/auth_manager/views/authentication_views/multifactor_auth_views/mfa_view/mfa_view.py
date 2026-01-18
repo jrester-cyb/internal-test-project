@@ -36,7 +36,8 @@ class MFAView(TemplateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
-        devices = self.user.mfa_devices.filter(confirmed_at__isnull=False)
+        # Use MFADevice.objects to respect soft delete filtering
+        devices = MFADevice.objects.filter(user=self.user, confirmed_at__isnull=False)
         if not devices.exists():
             # Redirect to enrollment with token
             enroll_url = f"{reverse('auth-manager:mfa-enroll')}?t={self.token}"
@@ -173,7 +174,8 @@ class MFAView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        devices = self.user.mfa_devices.filter(confirmed_at__isnull=False)
+        # Use MFADevice.objects to respect soft delete filtering
+        devices = MFADevice.objects.filter(user=self.user, confirmed_at__isnull=False)
 
         # Check if we're in SMS verification mode
         sms_verify_mode = self.request.GET.get("sms_verify") == "1"

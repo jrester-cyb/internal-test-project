@@ -35,7 +35,8 @@ class MFAEnrollView(TemplateView):
             )
 
         # If user already has enrolled devices, redirect to the mfa page with token
-        if self.user.mfa_devices.filter(confirmed_at__isnull=False).exists():
+        # Use MFADevice.objects to respect soft delete filtering
+        if MFADevice.objects.filter(user=self.user, confirmed_at__isnull=False).exists():
             mfa_url = f"{reverse('auth-manager:mfa')}?t={self.token}"
             return redirect(mfa_url)
 
