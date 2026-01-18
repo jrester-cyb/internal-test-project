@@ -95,4 +95,8 @@ export const cacheKeys = {
 
   assetDetail: (orgId: string, workspaceId: string | undefined, assetId: string) =>
     `assetDetail:${orgId}:${workspaceId || 'global'}:${assetId}`,
+
+  // Security pages
+  sessions: (userId: string) => `sessions:${userId}`,
+  mfaDevices: () => `mfaDevices`,
 }

@@ -5,14 +5,20 @@ from django.conf import settings
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-def create_tokens_for_user(user):
+def create_tokens_for_user(user, session_id=None):
     """
     Generate JWT access and refresh tokens for a user.
+
+    Args:
+        user: The user to create tokens for
+        session_id: Optional UserSession ID to include in the token
 
     Returns:
         tuple: (access_token, refresh_token) as strings
     """
     refresh = RefreshToken.for_user(user)
+    if session_id:
+        refresh["session_id"] = str(session_id)
     return str(refresh.access_token), str(refresh)
 
 

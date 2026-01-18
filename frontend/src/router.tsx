@@ -100,6 +100,23 @@ const assetDetailLoaderBundle = createCachedLazyLoader(
   () => import('./loaders/assetTypes').then((m) => m.assetDetailRouteLoader)
 )
 
+// Security loaders
+const securityLayoutLoaderBundle = createCachedLazyLoader(
+  () => import('./loaders/security').then((m) => m.securityLayoutLoader)
+)
+
+const sessionsLoaderBundle = createCachedLazyLoader(
+  () => import('./loaders/security').then((m) => m.sessionsLoader)
+)
+
+const mfaDevicesLoaderBundle = createCachedLazyLoader(
+  () => import('./loaders/security').then((m) => m.mfaDevicesLoader)
+)
+
+const passwordLoaderBundle = createCachedLazyLoader(
+  () => import('./loaders/security').then((m) => m.passwordLoader)
+)
+
 // Export preload functions for use in prefetch handlers
 export const preloadMapLoader = mapLoaderBundle.preload
 export const preloadAssetTypesLoader = assetTypesLoaderBundle.preload
@@ -108,6 +125,11 @@ export const preloadAssetTypeDetailLoader = assetTypeDetailLoaderBundle.preload
 export const preloadAssetGridLoader = assetGridLoaderBundle.preload
 export const preloadAssetAttributesLoader = assetAttributesLoaderBundle.preload
 export const preloadAssetDetailLoader = assetDetailLoaderBundle.preload
+
+// Security page preload functions
+export const preloadSessionsLoader = sessionsLoaderBundle.preload
+export const preloadMfaDevicesLoader = mfaDevicesLoaderBundle.preload
+export const preloadPasswordLoader = passwordLoaderBundle.preload
 
 // Routes shared between org-level and workspace-level
 const sharedRoutes = [
@@ -238,7 +260,9 @@ export const router = createBrowserRouter([
           },
           {
             path: "security",
+            id: "security",
             element: <SecuritySettingsPage />,
+            loader: securityLayoutLoaderBundle.loader,
             handle: {
               crumb: "Security",
             },
@@ -250,14 +274,17 @@ export const router = createBrowserRouter([
               {
                 path: "sessions",
                 element: <SessionsPage />,
+                loader: sessionsLoaderBundle.loader,
               },
               {
                 path: "mfa",
                 element: <MFADevicesPage />,
+                loader: mfaDevicesLoaderBundle.loader,
               },
               {
                 path: "password",
                 element: <PasswordPage />,
+                loader: passwordLoaderBundle.loader,
               },
             ],
           },

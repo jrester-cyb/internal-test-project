@@ -5,6 +5,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from user_agents import parse as parse_user_agent
 
 from core.models import SoftDeleteMixin
 
@@ -19,14 +20,60 @@ class UserSessionManager(models.Manager):
         Extracts IP address, user agent, and other metadata.
         """
         ip_address = self._get_client_ip(request)
-        user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
+        user_agent_string = request.META.get("HTTP_USER_AGENT", "")[:500]
+
+        # Parse user agent to extract device info
+        device_info = self._parse_user_agent(user_agent_string)
+
+        # Get session key if available
+        session_key = None
+        if hasattr(request, "session") and request.session:
+            session_key = request.session.session_key
 
         return self.create(
             user=user,
-            session_key=request.session.session_key,
+            session_key=session_key,
             ip_address=ip_address,
-            user_agent=user_agent,
+            user_agent=user_agent_string,
+            device_type=device_info["device_type"],
+            browser=device_info["browser"],
+            operating_system=device_info["operating_system"],
         )
+
+    def _parse_user_agent(self, user_agent_string: str) -> dict:
+        """Parse user agent string to extract device, browser, and OS info."""
+        if not user_agent_string:
+            return {"device_type": "", "browser": "", "operating_system": ""}
+
+        ua = parse_user_agent(user_agent_string)
+
+        # Determine device type
+        if ua.is_mobile:
+            device_type = "mobile"
+        elif ua.is_tablet:
+            device_type = "tablet"
+        elif ua.is_pc:
+            device_type = "desktop"
+        elif ua.is_bot:
+            device_type = "bot"
+        else:
+            device_type = "unknown"
+
+        # Get browser info (e.g., "Chrome 120")
+        browser_family = ua.browser.family or ""
+        browser_version = ua.browser.version_string or ""
+        browser = f"{browser_family} {browser_version}".strip()
+
+        # Get OS info (e.g., "Windows 10")
+        os_family = ua.os.family or ""
+        os_version = ua.os.version_string or ""
+        operating_system = f"{os_family} {os_version}".strip()
+
+        return {
+            "device_type": device_type[:50],
+            "browser": browser[:100],
+            "operating_system": operating_system[:100],
+        }
 
     def _get_client_ip(self, request) -> str | None:
         """Extract the client IP address from the request."""

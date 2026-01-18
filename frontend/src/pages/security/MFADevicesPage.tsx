@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react'
 import {
   Typography,
   Box,
-  CircularProgress,
   List,
   ListItem,
   ListItemIcon,
@@ -17,38 +15,11 @@ import {
   Email as EmailIcon,
   Add as AddIcon,
 } from '@mui/icons-material'
-import { authFetch } from '../../api/authFetch'
-
-interface MFADevice {
-  id: string
-  name: string
-  type: 'app' | 'sms' | 'email'
-  masked_destination: string | null
-  confirmed_at: string
-  last_used_at: string | null
-  created_at: string
-}
+import { useLoaderData } from 'react-router-dom'
+import type { MFADevice, MFADevicesLoaderData } from '../../loaders/security'
 
 export default function MFADevicesPage() {
-  const [mfaDevices, setMfaDevices] = useState<MFADevice[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function fetchMfaDevices() {
-      try {
-        const response = await authFetch('/api/auth/v2/mfa-devices/')
-        if (!response.ok) throw new Error('Failed to fetch MFA devices')
-        const data = await response.json()
-        setMfaDevices(data)
-      } catch (err) {
-        console.error('Failed to load MFA devices', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchMfaDevices()
-  }, [])
+  const { devices: mfaDevices } = useLoaderData() as MFADevicesLoaderData
 
   const getMfaDeviceIcon = (type: MFADevice['type']) => {
     switch (type) {
@@ -83,14 +54,6 @@ export default function MFADevicesPage() {
       month: 'short',
       day: 'numeric',
     })
-  }
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-        <CircularProgress />
-      </Box>
-    )
   }
 
   return (

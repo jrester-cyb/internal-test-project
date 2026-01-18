@@ -81,12 +81,12 @@ class LoginFinalizeView(View):
             redirect_to_uri = add_token_to_url(redirect_to_uri, new_token)
             return HttpResponseRedirect(redirect_to_uri)
 
+        # Create session record for tracking (before JWT so we can include session_id)
+        session = UserSession.objects.create_from_request(self.user, request)
+
         # For web (method="c"), generate JWT and set cookies
-        access_token, refresh_token = create_tokens_for_user(self.user)
+        access_token, refresh_token = create_tokens_for_user(self.user, session_id=session.id)
         response = HttpResponseRedirect(redirect_to_uri or "/")
         set_jwt_cookies(response, access_token, refresh_token)
-
-        # Create session record for tracking
-        UserSession.objects.create_from_request(self.user, request)
 
         return response

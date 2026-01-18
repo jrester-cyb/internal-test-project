@@ -32,8 +32,11 @@ class APITokenInitView(APIView):
         if not is_valid:
             raise PermissionDenied()
 
-        # Generate JWT tokens
-        access_token, refresh_token = create_tokens_for_user(user)
+        # Create session record for tracking (before JWT so we can include session_id)
+        session = UserSession.objects.create_from_request(user, request)
+
+        # Generate JWT tokens with session_id
+        access_token, refresh_token = create_tokens_for_user(user, session_id=session.id)
 
         # Build response with tokens and user info
         response_data = {
@@ -46,8 +49,5 @@ class APITokenInitView(APIView):
 
         # Also set cookies in case this is called from a web context
         set_jwt_cookies(response, access_token, refresh_token)
-
-        # Create session record for tracking (for mobile/API clients)
-        UserSession.objects.create_from_request(user, request)
 
         return response

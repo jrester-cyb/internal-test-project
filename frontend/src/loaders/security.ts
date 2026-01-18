@@ -6,31 +6,31 @@ export interface Session {
   id: string
   device: string | null
   location: string | null
-  ip_address: string | null
-  device_type: string
+  ipAddress: string | null
+  deviceType: string
   browser: string
-  operating_system: string
-  created_at: string
-  last_activity_at: string
-  logged_out_at: string | null
-  is_current: boolean
+  operatingSystem: string
+  createdAt: string
+  lastActivityAt: string
+  loggedOutAt: string | null
+  isCurrent: boolean
 }
 
 export interface MFADevice {
   id: string
   name: string
   type: 'app' | 'sms' | 'email'
-  masked_destination: string | null
-  confirmed_at: string
-  last_used_at: string | null
-  created_at: string
+  maskedDestination: string | null
+  confirmedAt: string
+  lastUsedAt: string | null
+  createdAt: string
 }
 
 export interface UserProfile {
   id: string
   email: string
-  first_name: string
-  last_name: string
+  firstName: string
+  lastName: string
 }
 
 export interface SessionsLoaderData {

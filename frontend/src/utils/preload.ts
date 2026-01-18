@@ -12,7 +12,11 @@ import {
   preloadAssetGridLoader,
   preloadAssetAttributesLoader,
   preloadAssetDetailLoader,
+  preloadSessionsLoader,
+  preloadMfaDevicesLoader,
+  preloadPasswordLoader,
 } from '../router'
+import { authFetch } from '../api/authFetch'
 
 // Track which pages have been preloaded (JS chunks loaded)
 const preloadedPages = new Set<string>()
@@ -115,4 +119,37 @@ export function prefetchAssetDetail(organizationId: string, workspaceId: string 
   // Also prefetch attribute definitions (needed for the detail page)
   const attrsKey = cacheKeys.assetAttributeDefinitionsAll(organizationId, workspaceId, assetTypeId)
   getCachedFetch(attrsKey, () => fetchAllAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId))
+}
+
+// Security page preloaders
+export const preloadSessionsPage = () => import('../pages/security/SessionsPage')
+export const preloadMfaDevicesPage = () => import('../pages/security/MFADevicesPage')
+export const preloadPasswordPage = () => import('../pages/security/PasswordPage')
+
+export function prefetchSessions(userId: string) {
+  // Load JS chunks (page) and warm up cached lazy loader
+  preloadSessionsPage()
+  preloadSessionsLoader()
+
+  // Start fetching data
+  const key = cacheKeys.sessions(userId)
+  getCachedFetch(key, () =>
+    authFetch(`/api/auth/v2/users/${userId}/sessions/?limit=20&offset=0`).then((res) => res.json())
+  )
+}
+
+export function prefetchMfaDevices() {
+  // Load JS chunks (page) and warm up cached lazy loader
+  preloadMfaDevicesPage()
+  preloadMfaDevicesLoader()
+
+  // Start fetching data
+  const key = cacheKeys.mfaDevices()
+  getCachedFetch(key, () => authFetch('/api/auth/v2/mfa-devices/').then((res) => res.json()))
+}
+
+export function prefetchPassword() {
+  // Load JS chunks (page) and warm up cached lazy loader - no data to fetch
+  preloadPasswordPage()
+  preloadPasswordLoader()
 }

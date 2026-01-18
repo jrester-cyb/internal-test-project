@@ -1,6 +1,3 @@
-# django
-from django.shortcuts import get_object_or_404
-
 # local
 from app.pagination import FlexiblePagination
 from auth_manager.models import UserSession
@@ -12,6 +9,17 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+
+
+def get_session_id_from_request(request) -> str | None:
+    """
+    Extract the session_id from the JWT token in the request.
+    Returns None if no valid session_id is found.
+    """
+    if hasattr(request, "auth") and request.auth:
+        # request.auth is the validated token payload from SimpleJWT
+        return request.auth.get("session_id")
+    return None
 
 
 class UserSessionSerializer(serializers.ModelSerializer):
@@ -43,8 +51,10 @@ class UserSessionSerializer(serializers.ModelSerializer):
 
     def get_is_current(self, obj) -> bool:
         request = self.context.get("request")
-        if request and hasattr(request, "session"):
-            return obj.session_key == request.session.session_key
+        if request:
+            current_session_id = get_session_id_from_request(request)
+            if current_session_id:
+                return str(obj.id) == current_session_id
         return False
 
 
@@ -71,8 +81,9 @@ class UserSessionsViewSet(
 
     def get_queryset(self):
         """
-        Return sessions for the specified user.
+        Return active sessions for the specified user.
         Users can only see their own sessions unless they have admin permissions.
+        Excludes soft-deleted sessions (handled by manager) and logged-out sessions.
         """
         user_id = self.kwargs.get("user_id")
         user = self.request.user
@@ -81,12 +92,22 @@ class UserSessionsViewSet(
         if str(user.id) != user_id and not user.is_staff:
             return UserSession.objects.none()
 
-        return UserSession.objects.filter(user_id=user_id).order_by("-created_at")
+        return UserSession.objects.filter(
+            user_id=user_id,
+            logged_out_at__isnull=True,  # Only active sessions
+        ).order_by("-created_at")
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+    def _is_current_session(self, request, session) -> bool:
+        """Check if the given session is the current session from the JWT."""
+        current_session_id = get_session_id_from_request(request)
+        if current_session_id:
+            return str(session.id) == current_session_id
+        return False
 
     def destroy(self, request, user_id=None, id=None):
         """
@@ -95,10 +116,7 @@ class UserSessionsViewSet(
         session = self.get_object()
 
         # Don't allow revoking the current session via this endpoint
-        if (
-            hasattr(request, "session")
-            and session.session_key == request.session.session_key
-        ):
+        if self._is_current_session(request, session):
             return Response(
                 {"detail": "Cannot revoke your current session. Use logout instead."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -115,10 +133,7 @@ class UserSessionsViewSet(
         session = self.get_object()
 
         # Don't allow revoking the current session via this endpoint
-        if (
-            hasattr(request, "session")
-            and session.session_key == request.session.session_key
-        ):
+        if self._is_current_session(request, session):
             return Response(
                 {"detail": "Cannot revoke your current session. Use logout instead."},
                 status=status.HTTP_400_BAD_REQUEST,

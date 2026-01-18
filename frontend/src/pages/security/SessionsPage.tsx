@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type CSSProperties } from 'react'
+import { useState, useCallback, type CSSProperties } from 'react'
 import {
   Typography,
   Box,
@@ -9,39 +9,30 @@ import {
   Button,
   Skeleton,
 } from '@mui/material'
-import { Computer as ComputerIcon } from '@mui/icons-material'
-import { useOutletContext } from 'react-router-dom'
+import {
+  Computer as ComputerIcon,
+  PhoneAndroid as PhoneIcon,
+  Tablet as TabletIcon,
+} from '@mui/icons-material'
+import { useLoaderData } from 'react-router-dom'
 import InfiniteLoaderList from '../../components/InfiniteLoaderList'
 import { authFetch } from '../../api/authFetch'
-
-interface Session {
-  id: string
-  device: string | null
-  location: string | null
-  ip_address: string | null
-  device_type: string
-  browser: string
-  operating_system: string
-  created_at: string
-  last_activity_at: string
-  logged_out_at: string | null
-  is_current: boolean
-}
-
-interface SecurityContext {
-  userId: string | null
-}
+import type { Session, SessionsLoaderData } from '../../loaders/security'
 
 const PAGE_SIZE = 20
 
 export default function SessionsPage() {
-  const { userId } = useOutletContext<SecurityContext>()
-  const [sessions, setSessions] = useState<Map<number, Session>>(new Map())
-  const [sessionsTotalCount, setSessionsTotalCount] = useState(0)
+  const loaderData = useLoaderData() as SessionsLoaderData
+  const [sessions, setSessions] = useState<Map<number, Session>>(loaderData.sessions)
+  const [sessionsTotalCount, setSessionsTotalCount] = useState(loaderData.totalCount)
   const [sessionsLoading, setSessionsLoading] = useState(false)
+  const userId = loaderData.userId
 
-  const formatRelativeTime = (dateString: string) => {
+  const formatRelativeTime = (dateString: string | null) => {
+    if (!dateString) return null
     const date = new Date(dateString)
+    if (isNaN(date.getTime())) return null
+
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
     const diffMins = Math.floor(diffMs / 60000)
@@ -55,10 +46,8 @@ export default function SessionsPage() {
     return date.toLocaleDateString()
   }
 
-  // Fetch sessions with limit/offset pagination
-  const fetchSessions = useCallback(async (offset: number, limit: number) => {
-    if (!userId) return
-
+  // Fetch more sessions with limit/offset pagination
+  const fetchMoreSessions = useCallback(async (offset: number, limit: number) => {
     setSessionsLoading(true)
     try {
       const response = await authFetch(
@@ -85,23 +74,14 @@ export default function SessionsPage() {
     }
   }, [userId])
 
-  // Load initial sessions when we have the user ID
-  useEffect(() => {
-    if (userId) {
-      fetchSessions(0, PAGE_SIZE)
-    }
-  }, [userId, fetchSessions])
-
   // Handle infinite loader requesting more data
   const handleLoadRange = useCallback((startIndex: number, endIndex: number) => {
     const offset = startIndex
     const limit = endIndex - startIndex + 1
-    fetchSessions(offset, limit)
-  }, [fetchSessions])
+    fetchMoreSessions(offset, limit)
+  }, [fetchMoreSessions])
 
   const handleRevokeSession = useCallback(async (sessionId: string) => {
-    if (!userId) return
-
     try {
       const response = await authFetch(`/api/auth/v2/users/${userId}/sessions/${sessionId}/`, {
         method: 'DELETE',
@@ -126,6 +106,24 @@ export default function SessionsPage() {
     }
   }, [userId])
 
+  const getDeviceIcon = (deviceType: string) => {
+    const type = deviceType?.toLowerCase()
+    if (type?.includes('mobile') || type?.includes('phone')) return <PhoneIcon />
+    if (type?.includes('tablet')) return <TabletIcon />
+    return <ComputerIcon />
+  }
+
+  const getDeviceTitle = (session: Session) => {
+    // Use the device field if available (pre-formatted by backend)
+    if (session.device) return session.device
+
+    // Otherwise build from browser and OS
+    const parts = [session.browser, session.operatingSystem].filter(Boolean)
+    if (parts.length > 0) return parts.join(' on ')
+
+    return 'Unknown device'
+  }
+
   const renderSessionItem = useCallback((session: Session, _index: number, _style: CSSProperties) => (
     <ListItem
       sx={{
@@ -134,7 +132,7 @@ export default function SessionsPage() {
         borderRadius: 1,
       }}
       secondaryAction={
-        session.is_current ? (
+        session.isCurrent ? (
           <Chip label="Current" size="small" color="primary" />
         ) : (
           <Button
@@ -148,13 +146,16 @@ export default function SessionsPage() {
       }
     >
       <ListItemIcon sx={{ color: 'text.secondary' }}>
-        <ComputerIcon />
+        {getDeviceIcon(session.deviceType)}
       </ListItemIcon>
       <ListItemText
-        primary={session.device || session.browser || 'Unknown device'}
+        primary={getDeviceTitle(session)}
         secondary={
           <>
-            {session.location || session.ip_address || 'Unknown location'} &bull; {formatRelativeTime(session.last_activity_at)}
+            {[
+              session.location || session.ipAddress,
+              formatRelativeTime(session.lastActivityAt),
+            ].filter(Boolean).join(' \u2022 ')}
           </>
         }
       />

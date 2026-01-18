@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback } from 'react'
 import {
   Paper,
   Box,
@@ -6,8 +6,13 @@ import {
   Tab,
   Container,
 } from '@mui/material'
-import { Link, useLocation, Outlet } from 'react-router-dom'
-import { authFetch } from '../api/authFetch'
+import { Link, useLocation, Outlet, useLoaderData } from 'react-router-dom'
+import type { SecurityLayoutLoaderData } from '../loaders/security'
+import {
+  prefetchSessions,
+  prefetchMfaDevices,
+  prefetchPassword,
+} from '../utils/preload'
 
 // Map path to tab index
 const getTabFromPath = (pathname: string): number => {
@@ -20,23 +25,11 @@ const getTabFromPath = (pathname: string): number => {
 export default function SecuritySettingsPage() {
   const location = useLocation()
   const currentTab = getTabFromPath(location.pathname)
-  const [userId, setUserId] = useState<string | null>(null)
+  const { userId } = useLoaderData() as SecurityLayoutLoaderData
 
-  // Fetch user profile to get user ID
-  useEffect(() => {
-    async function fetchUserProfile() {
-      try {
-        const response = await authFetch('/api/auth/v2/whoami/')
-        if (!response.ok) throw new Error('Failed to fetch user profile')
-        const data = await response.json()
-        setUserId(data.id)
-      } catch (err) {
-        console.error('Failed to load user profile', err)
-      }
-    }
-
-    fetchUserProfile()
-  }, [])
+  const handlePrefetchSessions = useCallback(() => {
+    prefetchSessions(userId)
+  }, [userId])
 
   return (
     <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
@@ -63,16 +56,19 @@ export default function SecuritySettingsPage() {
               label="Sessions"
               component={Link}
               to="/profile/security/sessions"
+              onMouseEnter={handlePrefetchSessions}
             />
             <Tab
               label="MFA Devices"
               component={Link}
               to="/profile/security/mfa"
+              onMouseEnter={prefetchMfaDevices}
             />
             <Tab
               label="Password"
               component={Link}
               to="/profile/security/password"
+              onMouseEnter={prefetchPassword}
             />
           </Tabs>
         </Box>
