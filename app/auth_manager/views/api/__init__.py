@@ -7,6 +7,7 @@ __all__ = [
     "TokenRefreshView",
     "TokenLogoutView",
     "MFADeviceViewSet",
+    "UserMFADevicesView",
 ]
 
 from .identity_provider_views import IdentityProviderViewSet
@@ -16,3 +17,4 @@ from .password_reset import ResetPasswordRequestTokenOverride
 from .request_magic_link_view import RequestMagicLinkAPIView
 from .token_views import TokenRefreshView, TokenLogoutView
 from .mfa_device_views import MFADeviceViewSet
+from .user_mfa_devices_view import UserMFADevicesView

@@ -53,6 +53,11 @@ export default function PvAppBar() {
     navigate('/profile')
   }
 
+  const handleLogout = () => {
+    // Redirect to the Django logout endpoint which clears JWT cookies
+    window.location.href = '/auth/logout/'
+  }
+
   const workspaceSubmenu = [
     {
       id: 'global',
@@ -137,7 +142,7 @@ export default function PvAppBar() {
     {
       label: 'Logout',
       icon: <LogoutIcon fontSize="small" />,
-      onClick: () => console.log('Logout clicked'),
+      onClick: handleLogout,
       color: 'inherit' as const,
       variant: 'text' as const,
       minWidth: Infinity

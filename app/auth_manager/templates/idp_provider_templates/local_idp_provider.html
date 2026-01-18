@@ -23,9 +23,12 @@
                 <label for="password" class="mui-input-label">Password</label>
               </div>
               <input type="hidden" name="submit-password" value="true" />
-              <div id="api-error" style="color: red; margin-bottom: 4px;">
-                {{ error_message }}
+              {% if error_message %}
+              <div style="display: flex; align-items: center; justify-content: center; gap: 0.3em; color: #d32f2f; margin-bottom: 8px; font-size: 0.95em;">
+                <span class="material-icons" style="font-size: 1.1em;">error_outline</span>
+                <span>{{ error_message }}</span>
               </div>
+              {% endif %}
               <button type="submit" class="mui-btn-contained"
                 style="max-width: 280px; width: 100%; margin: 0 auto;">Login</button>
               <div style="text-align:center; margin-top:1em;">

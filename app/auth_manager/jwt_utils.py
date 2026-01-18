@@ -34,6 +34,7 @@ def set_jwt_cookies(response, access_token, refresh_token):
         httponly=settings.JWT_AUTH_HTTPONLY,
         secure=settings.JWT_AUTH_SECURE,
         samesite=settings.JWT_AUTH_SAMESITE,
+        path="/",
         max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
     )
     response.set_cookie(
@@ -42,6 +43,7 @@ def set_jwt_cookies(response, access_token, refresh_token):
         httponly=settings.JWT_AUTH_HTTPONLY,
         secure=settings.JWT_AUTH_SECURE,
         samesite=settings.JWT_AUTH_SAMESITE,
+        path="/",
         max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
     )
     return response
@@ -59,10 +61,12 @@ def clear_jwt_cookies(response):
     """
     response.delete_cookie(
         key=settings.JWT_AUTH_COOKIE,
+        path="/",
         samesite=settings.JWT_AUTH_SAMESITE,
     )
     response.delete_cookie(
         key=settings.JWT_AUTH_REFRESH_COOKIE,
+        path="/",
         samesite=settings.JWT_AUTH_SAMESITE,
     )
     return response

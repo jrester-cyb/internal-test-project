@@ -193,13 +193,6 @@ class MFAView(TemplateView):
 
             device_list.append(device_dict)
 
-        # Add email as a magic link option (always available)
-        device_list.append({
-            "name": "Email",
-            "value": "email",
-            "id": None,
-        })
-
         context["devices"] = device_list
         context["email"] = self.user.email
         context["auth_token"] = self.token

@@ -6,12 +6,12 @@
   {% if messages %}
   {% for message in messages %}
   {% if message.tags == 'success' %}
-  <div class="success-msg-display">
+  <div style="display: flex; align-items: center; justify-content: center; gap: 0.3em; color: #2e7d32; margin-bottom: 8px; font-size: 0.95em;">
     <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">check_circle</span>
     <span>{{ message }}</span>
   </div>
   {% elif message.tags == 'error' %}
-  <div class="error-msg-display">
+  <div style="display: flex; align-items: center; justify-content: center; gap: 0.3em; color: #d32f2f; margin-bottom: 8px; font-size: 0.95em;">
     <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
     <span>{{ message }}</span>
   </div>

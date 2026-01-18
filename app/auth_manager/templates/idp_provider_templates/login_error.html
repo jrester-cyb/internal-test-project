@@ -4,13 +4,16 @@
   <div class="mui-card" style="width:100%; margin: 0 auto 1.5em auto;">
     <div class="mui-card-body">
       <div class="mui-card-body-content" style="padding-top: 1em; text-align: center;">
-          {{error_message}}
+        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5em; color: #d32f2f; font-size: 1em;">
+          <span class="material-icons" style="font-size: 1.5em;">error_outline</span>
+          <span>{{ error_message }}</span>
+        </div>
       </div>
     </div>
   </div>
   <div class="center-align">
     <a href="{% url 'auth-manager:login' %}"
-      style="cursor:pointer; color:rgb(255, 213, 8); font-weight:500; text-decoration:underline;">Restart Login</a>
+      style="cursor:pointer; color:rgb(255, 213, 8); font-weight:500; text-decoration:underline;">Back to Login</a>
   </div>
 </div>
 {% endblock %}

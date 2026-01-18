@@ -2,11 +2,17 @@
 
 async function checkAuth(): Promise<boolean> {
   try {
-    const res = await fetch('/api/me', { credentials: 'include' })
-    return res.ok
-  } catch (e) {
-    // Redirect to login page
-    return
+    const res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
+    if (!res.ok) {
+      // Not authenticated, redirect to login page
+      window.location.href = '/auth/login/?redirect_uri=' + encodeURIComponent(window.location.pathname)
+      return false
+    }
+    return true
+  } catch {
+    // Network error, redirect to login page
+    window.location.href = '/auth/login/'
+    return false
   }
 }
 

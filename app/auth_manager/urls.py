@@ -9,6 +9,7 @@ from auth_manager.views import (
     ResetPasswordRequestTokenOverride,
     TokenLogoutView,
     TokenRefreshView,
+    UserMFADevicesView,
     WhoAmIView,
 )
 
@@ -40,6 +41,7 @@ urlpatterns = [
     path("token/logout/", TokenLogoutView.as_view(), name="token-logout"),
     # MFA device endpoints
     path("", include(mfa_router.urls)),
+    path("mfa-devices/", UserMFADevicesView.as_view(), name="user-mfa-devices"),
     # Password reset
     path(
         "password/reset/",

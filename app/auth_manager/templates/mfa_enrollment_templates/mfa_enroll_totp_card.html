@@ -43,7 +43,7 @@
       {% if messages %}
       {% for message in messages %}
       {% if message.tags == 'error' %}
-      <div class="error-msg-display">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 0.3em; color: #d32f2f; margin-top: 8px; font-size: 0.95em;">
         <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
         <span>{{ message }}</span>
       </div>

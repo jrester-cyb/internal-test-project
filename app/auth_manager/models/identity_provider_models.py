@@ -251,6 +251,7 @@ class LocalIdentityProvider(IdentityProvider):
 
         if user is None:
             self._log_failed_login_attempt(user=existing_user)
+            raise IncorrectCredentials()
 
         # Clear lock expiration on successful login
         user.lock_expiration = None

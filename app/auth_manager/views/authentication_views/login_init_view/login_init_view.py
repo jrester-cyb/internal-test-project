@@ -1,6 +1,12 @@
 # django
+from django.conf import settings
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views.generic import TemplateView
+
+# thirdparty
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 # local
 from auth_manager.constants import NORMALIZED_EMAIL, PROVIDED_EMAIL
@@ -11,11 +17,24 @@ from auth_manager.models.identity_provider_models import (
     SAMLIdentityProvider,
 )
 from auth_manager.views.shortcuts import login_error_page
-from django.urls import reverse
 
 
 class LoginInitView(TemplateView):
     template_name = "login.html"
+
+    def _check_jwt_authenticated(self, request):
+        """Check if user has a valid JWT token in cookie."""
+        raw_token = request.COOKIES.get(settings.JWT_AUTH_COOKIE)
+        if not raw_token:
+            return None
+
+        try:
+            jwt_auth = JWTAuthentication()
+            validated_token = jwt_auth.get_validated_token(raw_token)
+            user = jwt_auth.get_user(validated_token)
+            return user
+        except (InvalidToken, TokenError):
+            return None
 
     def dispatch(self, request, *args, **kwargs):
         # Pull the queryparameter redirect_uri and set on the session
@@ -28,8 +47,18 @@ class LoginInitView(TemplateView):
         if auth_method:
             request.session["auth_method"] = auth_method
 
+        # Check for session-based auth or JWT auth
+        user = None
         if request.user.is_authenticated:
-            return redirect("auth-manager:mfa")
+            user = request.user
+        else:
+            user = self._check_jwt_authenticated(request)
+
+        if user:
+            # User is already authenticated, redirect to the app
+            final_redirect = request.session.pop("redirect_uri", None) or "/"
+            return redirect(final_redirect)
+
         self.request.session.pop(PROVIDED_EMAIL, None)
 
         return super().dispatch(request, *args, **kwargs)
