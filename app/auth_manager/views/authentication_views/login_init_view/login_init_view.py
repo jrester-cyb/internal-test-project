@@ -79,6 +79,12 @@ class LoginInitView(TemplateView):
         # If password is not provided, this is the first step (email submission)
         if email:
             identity_provider = self.get_identity_provider(email)
+            if identity_provider is None:
+                return login_error_page(
+                    request,
+                    message="No identity provider found for this domain. Please contact your administrator.",
+                    status=403,
+                )
             if isinstance(identity_provider, LocalIdentityProvider) or not getattr(
                 identity_provider, "enabled", False
             ):
