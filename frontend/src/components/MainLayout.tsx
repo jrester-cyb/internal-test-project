@@ -69,9 +69,12 @@ function MainLayoutContent() {
           transition: 'margin-left 225ms cubic-bezier(0.4, 0, 0.6, 1)',
         }}
       >
-        <Box sx={{ px: 3, pt: 2 }}>
-          <AppBreadcrumbs />
-        </Box>
+        {/* Hide breadcrumbs when navigating to map (which has no breadcrumbs) */}
+        {!(isNavigating && targetPath?.includes('/map')) && (
+          <Box sx={{ px: 3, pt: 2 }}>
+            <AppBreadcrumbs />
+          </Box>
+        )}
         {/* Show skeleton when navigating between main sections */}
         {isNavigatingToNewSection && targetPath ? (
           getSkeletonForPath(targetPath)
