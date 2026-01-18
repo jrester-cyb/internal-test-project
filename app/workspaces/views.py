@@ -50,3 +50,19 @@ class WorkspaceViewSet(AuditLogMixin, viewsets.ModelViewSet):
         "update": "Updated workspace: {obj}",
         "destroy": "Deleted workspace: {obj}",
     }
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Filter by organization from URL if present
+        organization_pk = self.kwargs.get("organization_pk")
+        if organization_pk:
+            queryset = queryset.filter(organization_id=organization_pk)
+        return queryset
+
+    def perform_create(self, serializer):
+        # Set organization from URL if present
+        organization_pk = self.kwargs.get("organization_pk")
+        if organization_pk:
+            serializer.save(organization_id=organization_pk)
+        else:
+            serializer.save()
