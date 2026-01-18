@@ -74,16 +74,54 @@ function VirtualizedGridInner<T>({
   // Force re-render counter for resize updates
   const [resizeCounter, setResizeCounter] = useState(0)
 
-  // Compute widths - recompute when columns change or resize happens
+  // Track container width for auto-sizing columns
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  // Compute widths - recompute when columns change, resize happens, or container width changes
   const columnWidths = useMemo(() => {
     // resizeCounter is used to trigger recomputation on resize
     void resizeCounter
-    return columns.map(col => {
-      // Use stored width if available, otherwise use default
+
+    // Get base widths and track which columns have been manually resized
+    const baseWidths: number[] = []
+    const isManuallyResized: boolean[] = []
+
+    columns.forEach(col => {
       const storedWidth = columnWidthsByKey.current.get(col.key)
-      return storedWidth ?? col.width
+      baseWidths.push(storedWidth ?? col.width)
+      isManuallyResized.push(storedWidth !== undefined)
     })
-  }, [columns, resizeCounter])
+
+    // If container width is known, distribute extra space to non-resized flex columns
+    if (containerWidth > 0) {
+      const totalBaseWidth = baseWidths.reduce((sum, w) => sum + w, 0)
+      const extraSpace = containerWidth - totalBaseWidth
+
+      if (extraSpace > 0) {
+        // Calculate total flex value only for columns that haven't been manually resized
+        // and have flex enabled (flex !== 0)
+        const totalFlex = columns.reduce((sum, col, i) => {
+          if (isManuallyResized[i]) return sum
+          const flex = col.flex ?? 1
+          if (flex === 0) return sum
+          return sum + flex
+        }, 0)
+
+        if (totalFlex > 0) {
+          // Distribute extra space proportionally to non-resized flex columns
+          return baseWidths.map((baseWidth, i) => {
+            if (isManuallyResized[i]) return baseWidth
+            const flex = columns[i].flex ?? 1
+            if (flex === 0) return baseWidth
+            const extraForColumn = (flex / totalFlex) * extraSpace
+            return baseWidth + extraForColumn
+          })
+        }
+      }
+    }
+
+    return baseWidths
+  }, [columns, resizeCounter, containerWidth])
 
   // Reset grid when columns change
   useEffect(() => {
@@ -497,6 +535,11 @@ function VirtualizedGridInner<T>({
         }}
       >
         <AutoSizer
+          onResize={({ width }) => {
+            if (width && width !== containerWidth) {
+              setContainerWidth(width)
+            }
+          }}
           renderProp={({ height, width }) => {
             if (!height || !width) return null
 
