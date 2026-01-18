@@ -199,19 +199,10 @@ export default function AssetTypesPage() {
   return (
     <Box sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Page header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Asset Types</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleAdd}
-        >
-          Add Asset Type
-        </Button>
-      </Box>
+      <Typography variant="h4" sx={{ mb: 2 }}>Asset Types</Typography>
 
-      {/* Search bar */}
-      <Box sx={{ mb: 2 }}>
+      {/* Search bar and Add button */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <TextField
           size="small"
           placeholder="Search asset types..."
@@ -238,6 +229,13 @@ export default function AssetTypesPage() {
           }}
           sx={{ width: 300 }}
         />
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleAdd}
+        >
+          Add Asset Type
+        </Button>
       </Box>
 
       {/* Table */}
