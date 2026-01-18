@@ -110,7 +110,7 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
   }
   const [searchParams, setSearchParams] = useSearchParams()
   const loaderData = useLoaderData() as MapLoaderData | null
-  const { isOpen: sidebarOpen, isMobile } = useLayout()
+  const { sidebarOpen, isMobile } = useLayout()
 
   // Calculate sidebar width for overlay positioning
   const sidebarWidth = isMobile ? 0 : (sidebarOpen ? 240 : 64)
