@@ -273,9 +273,17 @@ function AttributesListContent({
 
   // Don't disable infinite loading when filters are active - we still want to load more data
   // The filtering happens client-side after data is loaded
-  const hasFilters = !showHidden || selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0
+  // Note: showHidden=false is the default (hide hidden items), so we only consider it a "filter"
+  // when tags, types, or scopes are explicitly selected
+  const hasActiveFilters = selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0
 
-  if (filteredCount === 0 && !isLoading) {
+  // When loading and no data yet, show placeholder rows
+  // Use a reasonable default count so VirtualizedList shows skeletons
+  const displayCount = hasActiveFilters
+    ? filteredCount
+    : (totalAttributeCount > 0 ? totalAttributeCount : (isLoading ? 5 : 0))
+
+  if (displayCount === 0 && !isLoading) {
     return (
       <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         <Typography color="text.secondary" variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
@@ -288,11 +296,11 @@ function AttributesListContent({
 
   return (
     <VirtualizedList
-      items={hasFilters ? filteredMap : attributesMap}
-      totalCount={hasFilters ? filteredCount : totalAttributeCount}
+      items={hasActiveFilters ? filteredMap : attributesMap}
+      totalCount={displayCount}
       getItemKey={getItemKey}
       renderItem={renderAttribute}
-      onLoadRange={hasFilters ? undefined : onLoadRange}
+      onLoadRange={hasActiveFilters ? undefined : onLoadRange}
       estimatedItemHeight={80}
       isLoading={isLoading}
       emptyMessage={emptyMessage.message}

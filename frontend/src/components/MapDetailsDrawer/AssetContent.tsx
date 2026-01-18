@@ -83,7 +83,8 @@ export default function AssetContent({
     return map
   })
   const [totalAttributeCount, setTotalAttributeCount] = useState(Array.isArray(propAttributes) ? propAttributes.length : 0)
-  const [loading, setLoading] = useState(false)
+  // Start loading if we don't have attributes provided
+  const [loading, setLoading] = useState(!propAttributes || propAttributes.length === 0)
   const [attributesLoading, setAttributesLoading] = useState(false)
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
@@ -325,38 +326,24 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                            {loading ? (
-                              <Box sx={{ p: 2 }}>
-                                <Skeleton variant="text" width="30%" height={24} sx={{ mb: 2 }} />
-                                {[1, 2, 3, 4, 5].map(i => (
-                                  <Box key={i} sx={{ display: 'flex', gap: 2, mb: 1.5 }}>
-                                    <Skeleton variant="text" width="35%" height={20} />
-                                    <Skeleton variant="text" width="50%" height={20} />
-                                  </Box>
-                                ))}
-                              </Box>
-                            ) : (
-                              <AttributesCard
-                                asset={displayAsset}
-                                attributesMap={attributesMap}
-                                totalAttributeCount={totalAttributeCount}
-                                onLoadRange={handleLoadAttributeRange}
-                                showHidden={showHidden}
-                                onShowHiddenChange={setShowHidden}
-                                selectedTags={selectedTags}
-                                onSelectedTagsChange={setSelectedTags}
-                                selectedTypes={selectedTypes}
-                                onSelectedTypesChange={setSelectedTypes}
-                                excludedScopes={excludedScopes}
-                                onExcludedScopesChange={setExcludedScopes}
-                                isLoading={loading || attributesLoading}
-                                defaultOpen={cardOpenState.attributes}
-                                onToggle={toggleAttributes}
-                                headerAction={<DragHandle {...dragHandleProps} />}
-                              />
-                            )}
-                          </Box>
+                          <AttributesCard
+                            asset={displayAsset}
+                            attributesMap={attributesMap}
+                            totalAttributeCount={totalAttributeCount}
+                            onLoadRange={handleLoadAttributeRange}
+                            showHidden={showHidden}
+                            onShowHiddenChange={setShowHidden}
+                            selectedTags={selectedTags}
+                            onSelectedTagsChange={setSelectedTags}
+                            selectedTypes={selectedTypes}
+                            onSelectedTypesChange={setSelectedTypes}
+                            excludedScopes={excludedScopes}
+                            onExcludedScopesChange={setExcludedScopes}
+                            isLoading={loading || attributesLoading}
+                            defaultOpen={cardOpenState.attributes}
+                            onToggle={toggleAttributes}
+                            headerAction={<DragHandle {...dragHandleProps} />}
+                          />
                         )}
                       </SortableCard>
                     )
@@ -364,27 +351,25 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                            <AssetTreeCard
-                              assetId={displayAsset.id}
-                              relatedAssets={relatedAssets}
-                              loading={relatedLoading}
-                              error={relatedError}
-                              organizationId={activeOrganization?.id || ''}
-                              workspaceId={workspaceId}
-                              currentAsset={{
-                                id: displayAsset.id,
-                                name: displayAsset.name,
-                                assetType: displayAsset.assetType,
-                                assetTypeName: displayAsset.assetTypeName || (typeof displayAsset.assetType === 'string' ? displayAsset.assetType : 'Unknown'),
-                                relatedUrl: '',
-                                hasChildren: false
-                              }}
-                              defaultOpen={cardOpenState.tree}
-                              onToggle={toggleTree}
-                              headerAction={<DragHandle {...dragHandleProps} />}
-                            />
-                          </Box>
+                          <AssetTreeCard
+                            assetId={displayAsset.id}
+                            relatedAssets={relatedAssets}
+                            loading={relatedLoading}
+                            error={relatedError}
+                            organizationId={activeOrganization?.id || ''}
+                            workspaceId={workspaceId}
+                            currentAsset={{
+                              id: displayAsset.id,
+                              name: displayAsset.name,
+                              assetType: displayAsset.assetType,
+                              assetTypeName: displayAsset.assetTypeName || (typeof displayAsset.assetType === 'string' ? displayAsset.assetType : 'Unknown'),
+                              relatedUrl: '',
+                              hasChildren: false
+                            }}
+                            defaultOpen={cardOpenState.tree}
+                            onToggle={toggleTree}
+                            headerAction={<DragHandle {...dragHandleProps} />}
+                          />
                         )}
                       </SortableCard>
                     )
@@ -392,13 +377,11 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                            <TasksCard
-                              defaultOpen={cardOpenState.tasks}
-                              onToggle={toggleTasks}
-                              headerAction={<DragHandle {...dragHandleProps} />}
-                            />
-                          </Box>
+                          <TasksCard
+                            defaultOpen={cardOpenState.tasks}
+                            onToggle={toggleTasks}
+                            headerAction={<DragHandle {...dragHandleProps} />}
+                          />
                         )}
                       </SortableCard>
                     )
@@ -406,13 +389,11 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                            <FilesCard
-                              defaultOpen={cardOpenState.files}
-                              onToggle={toggleFiles}
-                              headerAction={<DragHandle {...dragHandleProps} />}
-                            />
-                          </Box>
+                          <FilesCard
+                            defaultOpen={cardOpenState.files}
+                            onToggle={toggleFiles}
+                            headerAction={<DragHandle {...dragHandleProps} />}
+                          />
                         )}
                       </SortableCard>
                     )
