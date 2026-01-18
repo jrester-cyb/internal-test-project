@@ -25,6 +25,12 @@ interface AttributesCardProps {
   excludedScopes: string[]
   onExcludedScopesChange: (scopes: string[]) => void
   isLoading?: boolean
+  /** Initial open state (for uncontrolled mode) */
+  defaultOpen?: boolean
+  /** Controlled open state */
+  open?: boolean
+  /** Callback when the card is toggled */
+  onToggle?: () => void
   /** Additional action elements to render in the header */
   headerAction?: React.ReactNode
 }
@@ -43,6 +49,9 @@ export default function AttributesCard({
   excludedScopes,
   onExcludedScopesChange,
   isLoading = false,
+  defaultOpen = true,
+  open,
+  onToggle,
   headerAction,
 }: AttributesCardProps) {
   // Convert map to array for filtering
@@ -64,6 +73,9 @@ export default function AttributesCard({
   return (
     <CollapsibleCard
       title="Attributes"
+      defaultOpen={defaultOpen}
+      open={open}
+      onToggle={onToggle}
       headerAction={
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AttributeFilterPopover

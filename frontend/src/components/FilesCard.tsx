@@ -1,42 +1,25 @@
-import { Card, CardContent, CardHeader, Typography, Box, Tooltip } from '@mui/material'
-import { DragHandle as DragHandleIcon } from '@mui/icons-material'
+import { Typography } from '@mui/material'
+import CollapsibleCard from '@app/components/CollapsibleCard'
 
 interface FilesCardProps {
-  // Add props as needed for files functionality
-  dragHandleProps?: {
-    attributes: any
-    listeners: any
-  }
+  defaultOpen?: boolean
+  open?: boolean
+  onToggle?: () => void
+  headerAction?: React.ReactNode
 }
 
-export default function FilesCard({ dragHandleProps }: FilesCardProps) {
+export default function FilesCard({ defaultOpen = true, open, onToggle, headerAction }: FilesCardProps) {
   return (
-    <Card sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <CardHeader
-        title="Files"
-        action={dragHandleProps && (
-          <Tooltip title="Drag to reorder cards">
-            <Box
-              {...dragHandleProps.attributes}
-              {...dragHandleProps.listeners}
-              sx={{
-                cursor: 'grab',
-                '&:active': { cursor: 'grabbing' },
-                p: 0.5,
-                borderRadius: 1,
-                '&:hover': { bgcolor: 'action.hover' }
-              }}
-            >
-              <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-            </Box>
-          </Tooltip>
-        )}
-      />
-      <CardContent sx={{ flex: 1, overflow: 'hidden' }}>
-        <Typography color="text.secondary" variant="body2">
-          No files attached
-        </Typography>
-      </CardContent>
-    </Card>
+    <CollapsibleCard
+      title="Files"
+      defaultOpen={defaultOpen}
+      open={open}
+      onToggle={onToggle}
+      headerAction={headerAction}
+    >
+      <Typography color="text.secondary" variant="body2">
+        No files attached
+      </Typography>
+    </CollapsibleCard>
   )
 }

@@ -41,6 +41,18 @@ export default function AssetDetailPage() {
   const [globalValuesOnly, setGlobalValuesOnly] = useState(false)
   const [loadingGlobalValues, setLoadingGlobalValues] = useState(false)
 
+  // Card open/collapsed states
+  const [attributesOpen, setAttributesOpen] = useState(true)
+  const [treeOpen, setTreeOpen] = useState(true)
+  const [tasksOpen, setTasksOpen] = useState(true)
+  const [filesOpen, setFilesOpen] = useState(true)
+
+  // Stable toggle callbacks
+  const toggleAttributes = useCallback(() => setAttributesOpen(prev => !prev), [])
+  const toggleTree = useCallback(() => setTreeOpen(prev => !prev), [])
+  const toggleTasks = useCallback(() => setTasksOpen(prev => !prev), [])
+  const toggleFiles = useCallback(() => setFilesOpen(prev => !prev), [])
+
   // Attributes state for infinite scrolling
   const [attributesMap, setAttributesMap] = useState<Map<number, AssetTypeAttribute>>(() => {
     const map = new Map<number, AssetTypeAttribute>()
@@ -225,10 +237,12 @@ export default function AssetDetailPage() {
                 excludedScopes={excludedScopes}
                 onExcludedScopesChange={setExcludedScopes}
                 isLoading={loadingGlobalValues || attributesLoading}
+                open={attributesOpen}
+                onToggle={toggleAttributes}
               />
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6 }} sx={{ minHeight: 400, display: 'flex' }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <AssetTreeCard
                 assetId={asset.id}
                 relatedAssets={relatedAssets}
@@ -244,16 +258,18 @@ export default function AssetDetailPage() {
                   hasChildren: relatedAssets?.children.length > 0 || false,
                   relatedUrl: '' // Not needed for root
                 }}
+                open={treeOpen}
+                onToggle={toggleTree}
               />
             </Grid>
 
             {/* Second Row: Tasks, Files */}
             <Grid size={{ xs: 12, md: 6 }}>
-              <TasksCard />
+              <TasksCard open={tasksOpen} onToggle={toggleTasks} />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <FilesCard />
+              <FilesCard open={filesOpen} onToggle={toggleFiles} />
             </Grid>
 
             {/* Third Row: Audit History */}

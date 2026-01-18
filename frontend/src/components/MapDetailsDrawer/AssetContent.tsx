@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { Box, Skeleton, Typography } from '@mui/material'
 import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
@@ -23,6 +23,36 @@ import {
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { DragEndEvent } from '@dnd-kit/core'
+
+// Sortable card wrapper component - defined outside to prevent recreating on each render
+function SortableCard({ id, children }: { id: string; children: (dragHandleProps: { attributes: any; listeners: any }) => React.ReactNode }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={style}
+      sx={{
+        position: 'relative',
+      }}
+    >
+      {children({ attributes, listeners })}
+    </Box>
+  )
+}
 
 export interface AssetContentProps {
   organizationId: string
@@ -64,6 +94,31 @@ export default function AssetContent({
   const [excludedScopes, setExcludedScopes] = useState<string[]>([])
   const [globalValuesOnly, setGlobalValuesOnly] = useState(false)
 
+  // Card open/collapsed states
+  const [cardOpenState, setCardOpenState] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('assetDetailsCardOpenState')
+    return saved ? JSON.parse(saved) : { attributes: true, tree: true, tasks: true, files: true }
+  })
+
+  // Debounce localStorage save to avoid interfering with animations
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => {
+    saveTimeoutRef.current = setTimeout(() => {
+      localStorage.setItem('assetDetailsCardOpenState', JSON.stringify(cardOpenState))
+    }, 300)
+    return () => clearTimeout(saveTimeoutRef.current)
+  }, [cardOpenState])
+
+  const toggleCard = useCallback((cardId: string) => {
+    setCardOpenState(prev => ({ ...prev, [cardId]: !prev[cardId] }))
+  }, [])
+
+  // Stable toggle callbacks for each card
+  const toggleAttributes = useCallback(() => toggleCard('attributes'), [toggleCard])
+  const toggleTree = useCallback(() => toggleCard('tree'), [toggleCard])
+  const toggleTasks = useCallback(() => toggleCard('tasks'), [toggleCard])
+  const toggleFiles = useCallback(() => toggleCard('files'), [toggleCard])
+
   // Card order for drag and drop
   const [cardOrder, setCardOrder] = useState(() => {
     const saved = localStorage.getItem('assetDetailsCardOrder')
@@ -98,36 +153,6 @@ export default function AssetContent({
         return arrayMove(items, oldIndex, newIndex)
       })
     }
-  }
-
-  // Sortable card wrapper component
-  function SortableCard({ id, children }: { id: string; children: (dragHandleProps: { attributes: any; listeners: any }) => React.ReactNode }) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id })
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    }
-
-    return (
-      <Box
-        ref={setNodeRef}
-        style={style}
-        sx={{
-          position: 'relative',
-        }}
-      >
-        {children({ attributes, listeners })}
-      </Box>
-    )
   }
 
   useEffect(() => {
@@ -300,7 +325,7 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             {loading ? (
                               <Box sx={{ p: 2 }}>
                                 <Skeleton variant="text" width="30%" height={24} sx={{ mb: 2 }} />
@@ -326,6 +351,8 @@ export default function AssetContent({
                                 excludedScopes={excludedScopes}
                                 onExcludedScopesChange={setExcludedScopes}
                                 isLoading={loading || attributesLoading}
+                                defaultOpen={cardOpenState.attributes}
+                                onToggle={toggleAttributes}
                                 headerAction={<DragHandle {...dragHandleProps} />}
                               />
                             )}
@@ -337,7 +364,7 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <AssetTreeCard
                               assetId={displayAsset.id}
                               relatedAssets={relatedAssets}
@@ -353,7 +380,9 @@ export default function AssetContent({
                                 relatedUrl: '',
                                 hasChildren: false
                               }}
-                              dragHandleProps={dragHandleProps}
+                              defaultOpen={cardOpenState.tree}
+                              onToggle={toggleTree}
+                              headerAction={<DragHandle {...dragHandleProps} />}
                             />
                           </Box>
                         )}
@@ -363,8 +392,12 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                            <TasksCard dragHandleProps={dragHandleProps} />
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <TasksCard
+                              defaultOpen={cardOpenState.tasks}
+                              onToggle={toggleTasks}
+                              headerAction={<DragHandle {...dragHandleProps} />}
+                            />
                           </Box>
                         )}
                       </SortableCard>
@@ -373,8 +406,12 @@ export default function AssetContent({
                     return (
                       <SortableCard key={cardId} id={cardId}>
                         {(dragHandleProps) => (
-                          <Box sx={{ minHeight: 400, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                            <FilesCard dragHandleProps={dragHandleProps} />
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <FilesCard
+                              defaultOpen={cardOpenState.files}
+                              onToggle={toggleFiles}
+                              headerAction={<DragHandle {...dragHandleProps} />}
+                            />
                           </Box>
                         )}
                       </SortableCard>

@@ -1,17 +1,17 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Card, CardHeader, CardContent, Collapse, IconButton, type SxProps, type Theme } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 
 interface CollapsibleCardProps {
   title: string | ReactNode
   children: ReactNode
-  /** Initial collapsed state */
-  defaultExpanded?: boolean
-  /** Controlled expanded state */
-  expanded?: boolean
-  /** Callback when expanded state changes */
-  onExpandedChange?: (expanded: boolean) => void
-  /** Additional actions to display in the header (rendered before the expand button) */
+  /** Initial open state (for uncontrolled mode) */
+  defaultOpen?: boolean
+  /** Controlled open state - if provided, component becomes controlled */
+  open?: boolean
+  /** Callback when the card is toggled */
+  onToggle?: () => void
+  /** Additional actions to display in the header */
   headerAction?: ReactNode
   /** Custom sx for the Card */
   sx?: SxProps<Theme>
@@ -24,26 +24,27 @@ interface CollapsibleCardProps {
 export default function CollapsibleCard({
   title,
   children,
-  defaultExpanded = true,
-  expanded: controlledExpanded,
-  onExpandedChange,
+  defaultOpen = true,
+  open: controlledOpen,
+  onToggle,
   headerAction,
   sx,
   contentSx,
   disableContentPadding = false,
 }: CollapsibleCardProps) {
-  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded)
+  const [internalOpen, setInternalOpen] = useState(defaultOpen)
 
-  // Support both controlled and uncontrolled modes
-  const isControlled = controlledExpanded !== undefined
-  const expanded = isControlled ? controlledExpanded : internalExpanded
+  // Use controlled state if provided, otherwise use internal state
+  const isControlled = controlledOpen !== undefined
+  const isOpen = isControlled ? controlledOpen : internalOpen
 
   const handleToggle = () => {
-    const newExpanded = !expanded
-    if (!isControlled) {
-      setInternalExpanded(newExpanded)
+    if (isControlled) {
+      onToggle?.()
+    } else {
+      setInternalOpen(prev => !prev)
+      onToggle?.()
     }
-    onExpandedChange?.(newExpanded)
   }
 
   return (
@@ -59,7 +60,7 @@ export default function CollapsibleCard({
             onClick={handleToggle}
             size="small"
             sx={{
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s',
               ml: -1,
             }}
@@ -71,7 +72,7 @@ export default function CollapsibleCard({
         titleTypographyProps={{ variant: 'h6' }}
         action={headerAction}
       />
-      <Collapse in={expanded} timeout="auto">
+      <Collapse in={isOpen}>
         <CardContent
           sx={{
             flex: 1,
