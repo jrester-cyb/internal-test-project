@@ -12,6 +12,7 @@ export interface SubMenuItem {
   onClick?: () => void // Called when clicked (only if no submenu)
   submenu?: SubMenuItem[] // If present, clicking opens this submenu (onClick ignored)
   dividerAfter?: boolean
+  dividerBefore?: boolean
 }
 
 // Generic action button type
@@ -133,6 +134,7 @@ export default function ActionButtons({
       <>
         {items.map((item, index) => (
           <Fragment key={item.id}>
+            {item.dividerBefore && <Divider />}
             <MenuItem
               selected={item.selected}
               disabled={item.disabled}

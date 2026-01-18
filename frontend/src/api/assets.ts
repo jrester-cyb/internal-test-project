@@ -232,8 +232,22 @@ export async function interpretSearch(organizationId: string, workspaceId: strin
   return response.json()
 }
 
-export async function fetchAssetTypes(organizationId: string, workspaceId: string | undefined) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/`))
+export async function fetchAssetTypes(
+  organizationId: string,
+  workspaceId: string | undefined,
+  limit?: number,
+  offset?: number
+): Promise<OffsetPaginatedResponse<any>> {
+  const params = new URLSearchParams()
+  if (limit !== undefined) {
+    params.append('limit', limit.toString())
+  }
+  if (offset !== undefined) {
+    params.append('offset', offset.toString())
+  }
+  const queryString = params.toString()
+  const url = buildUrl(organizationId, workspaceId, `asset-types/`) + (queryString ? `?${queryString}` : '')
+  const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to fetch asset types')
   return response.json()
 }

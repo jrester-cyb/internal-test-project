@@ -7,6 +7,7 @@ import PvAppBar from '@app/components/PvAppBar'
 import Sidebar from '@app/components/Sidebar'
 import { AssetTypesPageSkeleton, LibraryPageSkeleton, MapPageSkeleton, GenericPageSkeleton } from '@app/components/PageSkeletons'
 import type { Organization } from '@app/types'
+import AppBreadcrumbs from './AppBreadcrumbs'
 
 /**
  * Returns the appropriate skeleton component based on the navigation target path
@@ -53,6 +54,7 @@ function MainLayoutContent() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
+      <AppBreadcrumbs />
       <PvAppBar />
       <Sidebar />
 

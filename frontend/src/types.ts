@@ -19,6 +19,10 @@ export interface AssetType {
   id: string
   name: string
   description?: string
+  organization?: string
+  organizationName?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface AssetTypeAttributeChoice {

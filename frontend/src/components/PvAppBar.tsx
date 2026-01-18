@@ -65,7 +65,15 @@ export default function PvAppBar() {
       label: ws.name,
       selected: activeWorkspace?.id === ws.id,
       onClick: () => handleWorkspaceSelect(ws.id)
-    }))
+    })),
+    {
+      id: 'manage-workspaces',
+      label: 'Manage Workspaces',
+      onClick: () => {
+        navigate(`/organizations/${activeOrganization?.id}/workspaces`)
+      },
+      dividerBefore: true
+    }
   ]
 
   const toolbarActions = [

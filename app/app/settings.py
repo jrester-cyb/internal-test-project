@@ -162,7 +162,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_PAGINATION_CLASS": "app.pagination.CustomPageNumberPagination",
+    # FlexiblePagination supports both page number (?page=2&page_size=50)
+    # and limit/offset (?limit=50&offset=100) styles
+    "DEFAULT_PAGINATION_CLASS": "app.pagination.FlexiblePagination",
     "DEFAULT_RENDERER_CLASSES": [
         "djangorestframework_camel_case.render.CamelCaseJSONRenderer",
         "djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer",
