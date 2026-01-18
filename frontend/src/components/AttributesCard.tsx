@@ -262,11 +262,16 @@ function AttributesListContent({
 
   // Loading placeholder for items being fetched
   const loadingPlaceholder = useMemo(() => (
-    <Box sx={{ px: 2, py: 1.5 }}>
-      <Skeleton variant="text" width="40%" height={24} />
-      <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-        <Skeleton variant="text" width={60} height={16} />
-        <Skeleton variant="text" width={80} height={16} />
+    <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ flex: 1, minWidth: 0, mr: 2 }}>
+        <Skeleton variant="text" width="60%" height={24} />
+        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+          <Skeleton variant="text" width={60} height={16} />
+          <Skeleton variant="text" width={80} height={16} />
+        </Box>
+      </Box>
+      <Box sx={{ flex: 1 }}>
+        <Skeleton variant="text" width="70%" height={24} />
       </Box>
     </Box>
   ), [])

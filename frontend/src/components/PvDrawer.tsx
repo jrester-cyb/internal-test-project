@@ -281,7 +281,7 @@ export default function PvDrawer({
             borderLeft: isMobile ? 0 : (bgcolor ? 0 : 1),
             borderTop: isMobile ? 1 : 0,
             borderColor: 'divider',
-            borderRadius: isMobile ? '16px 16px 0 0' : undefined,
+            borderRadius: 0,
             display: 'flex',
             flexDirection: isMobile ? 'column' : 'row',
             transition: !isMobile && !isResizing ? 'width 0.3s ease-in-out' : 'none',

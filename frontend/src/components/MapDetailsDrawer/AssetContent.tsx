@@ -20,6 +20,7 @@ import {
   KeyboardSensor,
   DndContext,
 } from '@dnd-kit/core'
+import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { DragEndEvent } from '@dnd-kit/core'
@@ -318,7 +319,7 @@ export default function AssetContent({
               Drag cards to reorder
             </Typography>
           </Box>
-          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
             <SortableContext items={cardOrder} strategy={rectSortingStrategy}>
               {cardOrder.map((cardId: string) => {
                 switch (cardId) {
