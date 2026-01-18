@@ -1,9 +1,10 @@
 # django
 from django.conf import settings
 from django.urls import reverse
+from django.utils import timezone
 
 # local
-from auth_manager.models import MFADevice, OneTimeToken
+from auth_manager.models import MFADevice, OneTimeToken, TOTPDevice, SMSDevice
 
 # thirdparty
 from rest_framework import status
@@ -86,10 +87,8 @@ class MFADeviceViewSet(GenericViewSet):
         """
         Verify MFA code for a device.
 
-        On successful verification:
-        1. Consumes the current auth token
-        2. Generates a new token for the finalize step
-        3. Returns the new token in the response
+        On successful verification, returns the finalize URL with the same token.
+        The token is consumed at the finalize step.
         """
         user, token = self.get_user_from_token(request)
         if not user:
@@ -109,7 +108,7 @@ class MFADeviceViewSet(GenericViewSet):
             device = MFADevice.objects.get(
                 id=id,
                 user=user,
-                verified=True,  # Only verified devices can be used for auth
+                confirmed_at__isnull=False,  # Only confirmed devices can be used for auth
             )
         except MFADevice.DoesNotExist:
             return Response(
@@ -124,18 +123,8 @@ class MFADeviceViewSet(GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Consume the current token
-        OneTimeToken.objects.validate_token(
-            token,
-            token_expiration_time=settings.SHORT_TOKEN_EXPIRATION,
-            consume=True,
-        )
-
-        # Generate a new token for finalize
-        new_token = OneTimeToken.objects.generate_token(user)
-
-        # Build finalize URL with new token
-        finalize_url = f"{reverse('auth-manager:finalize')}?t={new_token}"
+        # Build finalize URL with same token (consumed at finalize)
+        finalize_url = f"{reverse('auth-manager:finalize')}?t={token}"
 
         return Response(
             {
@@ -145,25 +134,191 @@ class MFADeviceViewSet(GenericViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=["post"], url_path="enroll")
-    def enroll_device(self, request, user_id=None, id=None):
+    @action(detail=False, methods=["post"], url_path="enroll")
+    def enroll_device(self, request, user_id=None):
         """
-        Enroll (verify) a new MFA device.
+        Enroll a new MFA device.
 
-        On successful enrollment:
-        1. Marks the device as verified
-        2. Consumes the current auth token
-        3. Generates a new token for the finalize step
-        4. Returns the new token in the response
+        Creates the device and confirms it in one step.
+
+        Required fields:
+        - type: Device type ('totp' or 'sms')
+        - token: The verification code from the authenticator app
+
+        For TOTP devices:
+        - seed: The secret key used to generate the code
+
+        For SMS devices:
+        - phone_number: The phone number for SMS delivery
+
+        On successful enrollment, returns the finalize URL with the same token.
+        The token is consumed at the finalize step.
         """
-        user, token = self.get_user_from_token(request)
+        user, auth_token = self.get_user_from_token(request)
         if not user:
             return Response(
                 {"detail": "Invalid or expired authentication token."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        code = request.data.get("code", "")
+        device_type = request.data.get("type")
+        code = request.data.get("token") or request.data.get("code", "")
+        seed = request.data.get("seed")
+
+        if not device_type:
+            return Response(
+                {"detail": "Device type is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not code:
+            return Response(
+                {"detail": "Verification code is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create the device based on type
+        if device_type == "totp":
+            if not seed:
+                return Response(
+                    {"detail": "Seed is required for TOTP devices."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Create TOTP device with provided seed
+            device = TOTPDevice(
+                user=user,
+                name="Authenticator App",
+            )
+            device.secret = seed
+            device.save()
+
+        elif device_type == "sms":
+            phone_number = request.data.get("phone_number", "")
+            if not phone_number:
+                return Response(
+                    {"detail": "Phone number is required for SMS devices."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Create SMS device with phone number
+            device = SMSDevice.objects.create(
+                user=user,
+                name="SMS",
+                phone_number=phone_number,
+            )
+
+        else:
+            return Response(
+                {"detail": f"Invalid device type: {device_type}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify the code against the device
+        if not device.verify_totp(code):
+            # Delete the device if verification fails
+            device.delete()
+            return Response(
+                {"detail": "Invalid verification code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Confirm the device
+        device.confirmed_at = timezone.now()
+        device.save(update_fields=["confirmed_at"])
+
+        # Build finalize URL with same token (consumed at finalize)
+        finalize_url = f"{reverse('auth-manager:finalize')}?t={auth_token}"
+
+        return Response(
+            {
+                "detail": "Device enrolled successfully.",
+                "finalize_url": finalize_url,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="initiate-sms-enrollment")
+    def initiate_sms_enrollment(self, request, user_id=None):
+        """
+        Initiate SMS device enrollment.
+
+        Creates an unconfirmed SMS device and sends a verification code to the phone.
+
+        Required fields:
+        - phone_number: The phone number for SMS delivery
+
+        Returns the device ID for use in the verify-sms-enrollment endpoint.
+        """
+        user, auth_token = self.get_user_from_token(request)
+        if not user:
+            return Response(
+                {"detail": "Invalid or expired authentication token."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        phone_number = request.data.get("phone_number", "")
+        if not phone_number:
+            return Response(
+                {"detail": "Phone number is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Delete any existing unconfirmed SMS devices for this user
+        SMSDevice.objects.filter(user=user, confirmed_at__isnull=True).delete()
+
+        # Create SMS device with phone number
+        device = SMSDevice.objects.create(
+            user=user,
+            name="SMS",
+            phone_number=phone_number,
+        )
+
+        # Send the verification code
+        try:
+            device.send_code()
+        except Exception as e:
+            device.delete()
+            return Response(
+                {"detail": f"Failed to send verification code: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "detail": "Verification code sent.",
+                "device_id": str(device.id),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="verify-sms-enrollment")
+    def verify_sms_enrollment(self, request, user_id=None):
+        """
+        Verify and complete SMS device enrollment.
+
+        Required fields:
+        - device_id: The ID of the SMS device from initiate-sms-enrollment
+        - code: The verification code sent to the phone
+
+        On success, confirms the device and returns the finalize URL.
+        """
+        user, auth_token = self.get_user_from_token(request)
+        if not user:
+            return Response(
+                {"detail": "Invalid or expired authentication token."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        device_id = request.data.get("device_id", "")
+        code = request.data.get("code") or request.data.get("token", "")
+
+        if not device_id:
+            return Response(
+                {"detail": "Device ID is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if not code:
             return Response(
                 {"detail": "Verification code is required."},
@@ -171,40 +326,30 @@ class MFADeviceViewSet(GenericViewSet):
             )
 
         try:
-            device = MFADevice.objects.get(
-                id=id,
+            device = SMSDevice.objects.get(
+                id=device_id,
                 user=user,
-                verified=False,  # Only unverified devices can be enrolled
+                confirmed_at__isnull=True,
             )
-        except MFADevice.DoesNotExist:
+        except SMSDevice.DoesNotExist:
             return Response(
                 {"detail": "Device not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Verify the code for enrollment
+        # Verify the code
         if not device.verify_totp(code):
             return Response(
                 {"detail": "Invalid verification code."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Mark device as verified
-        device.verified = True
-        device.save(update_fields=["verified"])
+        # Confirm the device
+        device.confirmed_at = timezone.now()
+        device.save(update_fields=["confirmed_at"])
 
-        # Consume the current token
-        OneTimeToken.objects.validate_token(
-            token,
-            token_expiration_time=settings.SHORT_TOKEN_EXPIRATION,
-            consume=True,
-        )
-
-        # Generate a new token for finalize
-        new_token = OneTimeToken.objects.generate_token(user)
-
-        # Build finalize URL with new token
-        finalize_url = f"{reverse('auth-manager:finalize')}?t={new_token}"
+        # Build finalize URL with same token (consumed at finalize)
+        finalize_url = f"{reverse('auth-manager:finalize')}?t={auth_token}"
 
         return Response(
             {
@@ -219,7 +364,7 @@ class MFADeviceViewSet(GenericViewSet):
         """
         Skip MFA enrollment (only allowed if MFA is not required for the user).
 
-        Consumes the current token and generates a new one for finalize.
+        Returns the finalize URL with the same token (consumed at finalize).
         """
         user, token = self.get_user_from_token(request)
         if not user:
@@ -235,18 +380,8 @@ class MFADeviceViewSet(GenericViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Consume the current token
-        OneTimeToken.objects.validate_token(
-            token,
-            token_expiration_time=settings.SHORT_TOKEN_EXPIRATION,
-            consume=True,
-        )
-
-        # Generate a new token for finalize
-        new_token = OneTimeToken.objects.generate_token(user)
-
-        # Build finalize URL with new token
-        finalize_url = f"{reverse('auth-manager:finalize')}?t={new_token}"
+        # Build finalize URL with same token (consumed at finalize)
+        finalize_url = f"{reverse('auth-manager:finalize')}?t={token}"
 
         return Response(
             {

@@ -1,4 +1,4 @@
-{% comment %} Email magic link MFA card content {% endcomment %}
+{% comment %} Email magic link MFA enrollment card content {% endcomment %}
 <div class="center-align">
   <p>We'll send a secure login link to your email address:</p>
   <p style="font-weight: 500; margin: 1em 0;">{{ email }}</p>
@@ -19,7 +19,7 @@
   {% endfor %}
   {% endif %}
 
-  <form method="post" action="{% url 'auth-manager:mfa' %}">
+  <form method="post" action="{% url 'auth-manager:mfa-enroll' %}">
     {% csrf_token %}
     <input type="hidden" name="t" value="{{ auth_token }}">
     <input type="hidden" name="action" value="send_magic_link">

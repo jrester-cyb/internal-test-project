@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "actions",
     "auth_manager",
     "django_rest_passwordreset",
+    "qr_code",
 ]
 
 # Custom User Model

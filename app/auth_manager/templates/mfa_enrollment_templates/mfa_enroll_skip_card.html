@@ -1,32 +1,10 @@
-  <div style="display: flex; align-items: center; flex-direction: column;">
-    <p>If you do not wish to set up MFA at this time, click the button below.</p>
-    <button id="skip-mfa-btn" type="button" class="mui-btn-contained">Don't Setup MFA</button>
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        var skipBtn = document.getElementById('skip-mfa-btn');
-        if (skipBtn) {
-          skipBtn.addEventListener('click', function() {
-            fetch("{{ skip_device_code_endpoint }}", {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken'),
-              },
-              credentials: 'same-origin',
-            }).then(function(response) {
-              if (response.ok) {
-                globalThis.location.href = "{{ mfa_finalize_endpoint }}";
-              } else {
-                response.text().then(function(text) {
-                  alert('Failed to skip MFA: ' + text);
-                });
-              }
-            }).catch(function(error) {
-              alert('Failed to skip MFA: ' + error);
-            });
-          });
-        }
-      });
-    </script>
-  </div>
-</li>
+{% comment %} MFA enrollment skip card content {% endcomment %}
+<div style="display: flex; align-items: center; flex-direction: column;">
+  <p>If you do not wish to set up MFA at this time, click the button below.</p>
+  <form method="post" action="{% url 'auth-manager:mfa-enroll' %}">
+    {% csrf_token %}
+    <input type="hidden" name="t" value="{{ auth_token }}">
+    <input type="hidden" name="action" value="skip">
+    <button type="submit" class="mui-btn-contained">Don't Setup MFA</button>
+  </form>
+</div>

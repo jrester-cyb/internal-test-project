@@ -1,61 +1,37 @@
 <div class="center-align">
   <p>Please enter the code from your authenticator app.</p>
-  <form id="totp-form-{{ device.id }}" onsubmit="verifyTotpCode(event)" style="text-align: center;">
+  <form method="post" action="{% url 'auth-manager:mfa' %}" style="text-align: center;">
     {% csrf_token %}
+    <input type="hidden" name="t" value="{{ auth_token }}">
+    <input type="hidden" name="action" value="verify_totp">
+    <input type="hidden" name="device_id" value="{{ device.id }}">
+
     <div style="display: flex; justify-content: center; flex-direction: column; margin-top: 1.5em; position: relative;">
       <div class="mui-input-wrapper" style="display: flex; flex-direction: column; z-index: 2;">
           <input
             class="mui-input-contained"
             type="text"
             id="totp-input-{{ device.id }}"
-            name="totp-input-{{ device.id }}"
+            name="code"
             maxlength="6"
             pattern="\d{6}"
             required
             placeholder=" "
-            oninput="document.getElementById('verify-totp-code-error-{{ device.id }}').style.display='none'"
             style="margin-bottom:0; z-index: 2;"
           />
           <label for="totp-input-{{ device.id }}" class="mui-input-label">Enter Code</label>
       </div>
-      <div id="verify-totp-code-error-{{ device.id }}" class="error-msg-display">
+      {% if messages %}
+      {% for message in messages %}
+      {% if message.tags == 'error' %}
+      <div class="error-msg-display">
         <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
-        <span>Invalid code provided. Please try again.</span>
+        <span>{{ message }}</span>
       </div>
+      {% endif %}
+      {% endfor %}
+      {% endif %}
     </div>
-    <button type="submit" id="verify-totp-submit-{{ device.id }}" name="verify_code" value="1" class="mui-btn-contained">Verify</button>
-    </form>
+    <button type="submit" class="mui-btn-contained">Verify</button>
+  </form>
 </div>
-<script>
-  function verifyTotpCode(event) {
-    event.preventDefault();
-    const errorDiv = document.getElementById('verify-totp-code-error-{{ device.id }}');
-    const code = document.getElementById('totp-input-{{ device.id }}').value;
-    const btn = document.getElementById('verify-totp-submit-{{ device.id }}');
-    errorDiv.style.display = 'none';
-
-    // Send request to verify the input
-    fetch("{{ device.verify_endpoint }}", {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCookie('csrftoken'),
-      },
-      body: JSON.stringify({ token: code }),
-    })
-      .then((response) => {
-            if (response.ok) {
-              window.location.href = "{{ mfa_finalize_endpoint }}";
-            } else {
-              errorDiv.style.display = "block";
-            }
-          })
-          .catch(() => {
-            errorDiv.style.display = "block";
-          })
-          .finally(() => {
-            btn.disabled = false;
-          })
-    
-  }
-</script>

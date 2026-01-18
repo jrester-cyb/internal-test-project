@@ -51,19 +51,16 @@
   <div class="mui-card{% if forloop.counter > 1 %} mui-card-collapsed{% endif %}"
     style="width:100%;  margin: 0 auto 1.5em auto;">
     <div class="mui-card-header">
-      {% if device.name|lower == 'totp' %}Authenticator App{% elif device.name|lower == 'email' %}Email{% elif device.name|lower == 'sms' %}SMS{% else %}{{ device.name }}{% endif %}
+      {{ device.name }}
     </div>
     <div class="mui-card-body">
       <div class="mui-card-body-content">
-        {% if device.name|lower == 'email' %}
-        {% include "mfa_templates/mfa_email_card.html" %}
-        {% elif device.name|lower == 'sms' %}
+        {% if device.type == 'email' %}
+        {% include "mfa_enrollment_templates/mfa_enroll_email_card.html" %}
+        {% elif device.type == 'sms' %}
         {% include "mfa_enrollment_templates/mfa_enroll_sms_card.html" %}
-        {% elif device.name|lower == 'totp' %}
+        {% elif device.type == 'app' %}
         {% include "mfa_enrollment_templates/mfa_enroll_totp_card.html" with device=device %}
-        {% else %}
-        <a href="/auth/mfa/enroll/{{ device.id }}/" class="waves-effect waves-light btn blue darken-4"
-          style="margin-top:1em;">Enroll</a>
         {% endif %}
       </div>
     </div>
