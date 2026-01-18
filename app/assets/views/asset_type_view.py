@@ -94,6 +94,22 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         "destroy": "Deleted asset type: {obj}",
     }
 
+    def _needs_count_annotations(self):
+        """Check if count annotations are needed for filtering."""
+        request = self.request
+        if not request:
+            return False
+        params = request.query_params
+        return any(
+            params.get(p)
+            for p in [
+                "workspace_count_min",
+                "workspace_count_max",
+                "asset_count_min",
+                "asset_count_max",
+            ]
+        )
+
     def get_queryset(self):
         """Filter by workspace or organization"""
         workspace_pk = self.kwargs.get("workspace_pk")
@@ -114,19 +130,29 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             # Top-level access: return all asset types
             queryset = AssetType.objects.all().select_related("organization")
 
-        # Always annotate counts (needed for filtering and serialization)
-        queryset = queryset.annotate(
-            _workspace_count=Count(
-                "workspace_asset_types",
-                filter=Q(workspace_asset_types__deleted_at__isnull=True),
-                distinct=True,
-            ),
-            _asset_count=Count(
-                "assets",
-                filter=Q(assets__deleted_at__isnull=True),
-                distinct=True,
-            ),
-        )
+        # Only annotate counts when filtering requires them (expensive operation)
+        if self._needs_count_annotations():
+            # Build asset count filter - scope to workspace if in workspace context
+            if workspace_pk:
+                asset_count_filter = Q(
+                    assets__deleted_at__isnull=True,
+                    assets__workspace_memberships__workspace_id=workspace_pk,
+                )
+            else:
+                asset_count_filter = Q(assets__deleted_at__isnull=True)
+
+            queryset = queryset.annotate(
+                _workspace_count=Count(
+                    "workspace_asset_types",
+                    filter=Q(workspace_asset_types__deleted_at__isnull=True),
+                    distinct=True,
+                ),
+                _asset_count=Count(
+                    "assets",
+                    filter=asset_count_filter,
+                    distinct=True,
+                ),
+            )
 
         # For detail view, prefetch attributes (both base and workspace extensions)
         if self.action == "retrieve":

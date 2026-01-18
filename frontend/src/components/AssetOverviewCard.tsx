@@ -3,9 +3,31 @@ import { Place as PlaceIcon, Category as CategoryIcon, Public as PublicIcon, Edi
 import type { Asset } from '@app/types'
 import ActionButtons from '@app/components/ActionButtons'
 import CopyableText from '@app/components/CopyableText'
-import TruncatedText from '@app/components/TruncatedText'
 import PvDrawer from '@app/components/PvDrawer'
+import SystemDetailsGrid, { type FieldConfig } from '@app/components/SystemDetailsGrid'
 import { useState, useRef, useEffect, useMemo } from 'react'
+
+// Field configuration for Asset System Details
+const ASSET_SYSTEM_DETAILS_FIELDS: FieldConfig[] = [
+  { key: 'apiUrl', label: 'API URL', format: 'monospace' },
+  { key: 'id', label: 'Asset ID', format: 'monospace' },
+  { key: 'assetType', label: 'Asset Type ID', format: 'monospace' },
+  { key: 'createdAt', label: 'Created', format: 'date' },
+  {
+    key: 'location',
+    label: (data) => {
+      const asset = data as Asset | null
+      return asset?.location ? `Location (${asset.location.type})` : 'Location'
+    },
+    format: 'monospace',
+    render: (value) => {
+      const location = value as Asset['location']
+      return location ? `[${location.coordinates.join(', ')}]` : '-'
+    },
+  },
+  { key: 'organization', label: 'Organization ID', format: 'monospace' },
+  { key: 'updatedAt', label: 'Updated', format: 'date' },
+]
 
 type AssetOverviewMode = 'page' | 'drawer'
 
@@ -249,55 +271,10 @@ export default function AssetOverviewCard({
       >
         <Box sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>System Details</Typography>
-          <Box sx={{
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            gap: 2,
-            rowGap: 1.5
-          }}>
-            {asset.apiUrl && (
-              <>
-                <Typography variant="body2" color="text.secondary">API URL</Typography>
-                <TruncatedText maxLines={1} title="API URL" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.apiUrl}</TruncatedText>
-              </>
-            )}
-
-            <Typography variant="body2" color="text.secondary">Asset ID</Typography>
-            <TruncatedText maxLines={1} title="Asset ID" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.id}</TruncatedText>
-
-            <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
-            <TruncatedText maxLines={1} title="Asset Type ID" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.assetType}</TruncatedText>
-
-            {asset.createdAt && (
-              <>
-                <Typography variant="body2" color="text.secondary">Created</Typography>
-                <Typography variant="body2">{new Date(asset.createdAt).toLocaleString()}</Typography>
-              </>
-            )}
-
-            {asset.location && (
-              <>
-                <Typography variant="body2" color="text.secondary">Location ({asset.location.type})</Typography>
-                <TruncatedText maxLines={1} title="Location" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                  {`[${asset.location.coordinates.join(', ')}]`}
-                </TruncatedText>
-              </>
-            )}
-
-            {asset.organization && (
-              <>
-                <Typography variant="body2" color="text.secondary">Organization ID</Typography>
-                <TruncatedText maxLines={1} title="Organization ID" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{asset.organization}</TruncatedText>
-              </>
-            )}
-
-            {asset.updatedAt && (
-              <>
-                <Typography variant="body2" color="text.secondary">Updated</Typography>
-                <Typography variant="body2">{new Date(asset.updatedAt).toLocaleString()}</Typography>
-              </>
-            )}
-          </Box>
+          <SystemDetailsGrid
+            data={asset}
+            fields={ASSET_SYSTEM_DETAILS_FIELDS}
+          />
         </Box>
       </PvDrawer>
     </Container>

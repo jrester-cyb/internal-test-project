@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, type ReactNode, lazy, Suspense, useMemo } from 'react'
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableHead, TableRow, Button, Stack, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, FormControlLabel, Switch, CircularProgress, Collapse, Divider, Tooltip, Autocomplete, useMediaQuery, useTheme } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon, Search as SearchIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Lock as LockIcon, LockOpen as LockOpenIcon, CompareArrows as CompareArrowsIcon, VisibilityOff as HideIcon, Visibility as ShowIcon, Close as CloseIcon, Share as ShareIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material'
 import ActionButtons from '@app/components/ActionButtons'
@@ -19,6 +19,7 @@ import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { FixedSizeList as List } from 'react-window'
 import PvDrawer from '@app/components/PvDrawer'
+import SystemDetailsGrid, { type FieldConfig } from '@app/components/SystemDetailsGrid'
 
 // Lazy load components that aren't needed on initial render
 const AttributeChoicesSection = lazy(() => import('../components/AttributeChoicesSection'))
@@ -989,6 +990,17 @@ export default function AssetTypeAttributesPage() {
   // The attribute to display in the details pane - either global definition or selected
   const displayedAttribute = showingGlobalDefinition && globalDefinition ? globalDefinition : selectedAttribute
 
+  // Field configuration for Attribute System Details
+  const attributeSystemDetailsFields: FieldConfig[] = useMemo(() => [
+    { key: 'apiUrl', label: 'API URL', format: 'monospace' },
+    { key: 'assetTypeId', label: 'Asset Type ID', format: 'monospace' },
+    { key: 'baseAttributeId', label: 'Global Attribute ID', format: 'monospace' },
+    { key: 'id', label: 'ID', format: 'monospace' },
+    { key: 'order', label: 'Order', format: 'number' },
+    { key: 'organizationId', label: 'Organization ID', format: 'monospace' },
+    { key: 'workspace', label: 'Workspace ID', format: 'monospace' },
+  ], [])
+
   const renderSection = (sectionId: string) => {
     if (!displayedAttribute) return null
     switch (sectionId) {
@@ -1294,49 +1306,11 @@ export default function AssetTypeAttributesPage() {
             expanded={expandedSections.system}
             onToggle={() => toggleSection('system')}
           >
-            <Box sx={{
-              mt: 1,
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr',
-              gap: 2,
-              rowGap: 1.5
-            }}>
-              {displayedAttribute.apiUrl && (
-                <>
-                  <Typography variant="body2" color="text.secondary">API URL</Typography>
-                  <TruncatedText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.apiUrl}</TruncatedText>
-                </>
-              )}
-
-              <Typography variant="body2" color="text.secondary">Asset Type ID</Typography>
-              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{assetTypeId || ''}</CopyableText>
-
-              {displayedAttribute.baseAttributeId && (
-                <>
-                  <Typography variant="body2" color="text.secondary">Global Attribute ID</Typography>
-                  <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.baseAttributeId}</CopyableText>
-                </>
-              )}
-
-              <Typography variant="body2" color="text.secondary">ID</Typography>
-              <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.id}</CopyableText>
-
-              <Typography variant="body2" color="text.secondary">Order</Typography>
-              <Typography variant="body2">{displayedAttribute.order}</Typography>
-
-              {displayedAttribute.organizationId && (
-                <>
-                  <Typography variant="body2" color="text.secondary">Organization ID</Typography>
-                  <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.organizationId}</CopyableText>
-                </>
-              )}
-
-              {displayedAttribute.workspace && (
-                <>
-                  <Typography variant="body2" color="text.secondary">Workspace ID</Typography>
-                  <CopyableText sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{displayedAttribute.workspace}</CopyableText>
-                </>
-              )}
+            <Box sx={{ mt: 1 }}>
+              <SystemDetailsGrid
+                data={{ ...displayedAttribute, assetTypeId }}
+                fields={attributeSystemDetailsFields}
+              />
             </Box>
           </DraggableSection>
         )

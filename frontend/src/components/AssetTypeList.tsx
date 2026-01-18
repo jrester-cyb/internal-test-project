@@ -5,7 +5,6 @@ import {
   IconButton,
   Skeleton,
   Typography,
-  CircularProgress,
   Tooltip,
 } from '@mui/material'
 import {
@@ -16,9 +15,9 @@ import {
 import { Link as RouterLink } from 'react-router-dom'
 import type { AssetType, AssetTypeSummary } from '@app/types'
 import PvDrawer from './PvDrawer'
-import TruncatedText from './TruncatedText'
 import { prefetchAssetTypeDetail } from '@app/utils/preload'
 import VirtualizedList from './VirtualizedList'
+import SystemDetailsGrid, { type FieldConfig } from './SystemDetailsGrid'
 
 function formatDate(dateString?: string) {
   if (!dateString) return '-'
@@ -30,6 +29,20 @@ function formatDate(dateString?: string) {
 }
 
 const ROW_HEIGHT = 52
+
+// Field configuration for System Details drawer
+const ASSET_TYPE_SYSTEM_DETAILS_FIELDS: FieldConfig[] = [
+  { key: 'apiUrl', label: 'API URL', format: 'monospace' },
+  { key: 'assetCount', label: 'Asset Count', format: 'number', showLoading: true },
+  { key: 'id', label: 'Asset Type ID', format: 'monospace' },
+  { key: 'createdAt', label: 'Created', format: 'date' },
+  { key: 'organization', label: 'Organization ID', format: 'monospace' },
+  { key: 'organizationName', label: 'Organization' },
+  { key: 'updatedAt', label: 'Updated', format: 'date' },
+  { key: 'workspace', label: 'Workspace ID', format: 'monospace' },
+  { key: 'workspaceCount', label: 'Workspace Count', format: 'number', showLoading: true },
+  { key: 'workspaceName', label: 'Workspace' },
+]
 
 // Custom skeleton placeholder for table rows
 const TableRowPlaceholder = (
@@ -75,7 +88,7 @@ export default function AssetTypeList({
 }: AssetTypeListProps) {
   const [systemDetailsDrawerProps, setSystemDetailsDrawerProps] = useState<{
     open: boolean
-    assetType: (AssetTypeSummary & { workspaceCount?: number }) | null
+    assetType: (AssetTypeSummary & { workspaceCount?: number | null; assetCount?: number | null }) | null
   }>({ open: false, assetType: null })
 
   const fetchAssetTypeDetailed = async (assetTypeSummary: AssetTypeSummary): Promise<AssetType> => {
@@ -244,93 +257,10 @@ export default function AssetTypeList({
           <Typography variant="h6" sx={{ mb: 2 }}>
             System Details
           </Typography>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr',
-              gap: 2,
-              rowGap: 1.5,
-            }}
-          >
-            {systemDetailsDrawerProps.assetType?.apiUrl && (
-              <>
-                <Typography variant="body2" color="text.secondary">
-                  API URL
-                </Typography>
-                <TruncatedText
-                  maxLines={2}
-                  title="API URL"
-                  sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                >
-                  {systemDetailsDrawerProps.assetType.apiUrl}
-                </TruncatedText>
-              </>
-            )}
-
-            <Typography variant="body2" color="text.secondary">
-              Asset Type ID
-            </Typography>
-            <TruncatedText
-              maxLines={1}
-              title="Asset ID"
-              sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-            >
-              {systemDetailsDrawerProps.assetType?.id}
-            </TruncatedText>
-
-            {systemDetailsDrawerProps.assetType?.createdAt && (
-              <>
-                <Typography variant="body2" color="text.secondary">
-                  Created
-                </Typography>
-                <Typography variant="body2">
-                  {new Date(systemDetailsDrawerProps.assetType.createdAt).toLocaleString()}
-                </Typography>
-              </>
-            )}
-
-            {systemDetailsDrawerProps.assetType?.organization && (
-              <>
-                <Typography variant="body2" color="text.secondary">
-                  Organization ID
-                </Typography>
-                <TruncatedText
-                  maxLines={1}
-                  title="Organization ID"
-                  sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                >
-                  {systemDetailsDrawerProps.assetType?.organization}
-                </TruncatedText>
-              </>
-            )}
-
-            {systemDetailsDrawerProps.assetType?.updatedAt && (
-              <>
-                <Typography variant="body2" color="text.secondary">
-                  Updated
-                </Typography>
-                <Typography variant="body2">
-                  {new Date(systemDetailsDrawerProps.assetType.updatedAt).toLocaleString()}
-                </Typography>
-              </>
-            )}
-
-            <>
-              <Typography variant="body2" color="text.secondary">
-                Workspace Count
-              </Typography>
-              {systemDetailsDrawerProps.assetType?.workspaceCount !== undefined ? (
-                <Typography variant="body2">
-                  {systemDetailsDrawerProps.assetType?.workspaceCount}
-                </Typography>
-              ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CircularProgress size={16} />
-                  <Typography variant="body2">Loading...</Typography>
-                </Box>
-              )}
-            </>
-          </Box>
+          <SystemDetailsGrid
+            data={systemDetailsDrawerProps.assetType}
+            fields={ASSET_TYPE_SYSTEM_DETAILS_FIELDS}
+          />
         </Box>
       </PvDrawer>
     </>

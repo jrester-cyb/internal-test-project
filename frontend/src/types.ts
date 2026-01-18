@@ -21,11 +21,13 @@ export interface AssetType {
   description?: string
   organization?: string
   organizationName?: string
+  workspace?: string | null
+  workspaceName?: string | null
   createdAt?: string
   updatedAt?: string
   apiUrl: string
-  workspaceCount: number
-  assetCount: number
+  workspaceCount: number | null
+  assetCount: number | null
 }
 
 export interface AssetTypeSummary extends Omit<AssetType, 'workspaceCount' | 'assetCount'> {}

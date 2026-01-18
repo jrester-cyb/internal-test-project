@@ -689,6 +689,8 @@ class AssetTypeSerializer(serializers.ModelSerializer):
     api_url = serializers.SerializerMethodField()
     workspace_count = serializers.SerializerMethodField()
     asset_count = serializers.SerializerMethodField()
+    workspace = serializers.SerializerMethodField()
+    workspace_name = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetType
@@ -696,6 +698,8 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "id",
             "organization",
             "organization_name",
+            "workspace",
+            "workspace_name",
             "name",
             "api_url",
             "description",
@@ -714,14 +718,24 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "asset_count",
         ]
 
+    def get_workspace(self, obj):
+        """Get the current workspace context ID if available."""
+        workspace = self.context.get("workspace")
+        return str(workspace.id) if workspace else None
+
+    def get_workspace_name(self, obj):
+        """Get the current workspace context name if available."""
+        workspace = self.context.get("workspace")
+        return workspace.name if workspace else None
+
     def get_workspace_count(self, obj):
         """Get the number of workspaces using this asset type."""
         # Attempt to use annotated count if available
         annotated_count = getattr(obj, "_workspace_count", None)
         if annotated_count is not None:
             return annotated_count
-        # Fallback to counting related workspaces
-        return obj.workspaces.count()
+        # Fallback to counting related workspaces via join table
+        return obj.workspace_asset_types.filter(deleted_at__isnull=True).count()
 
     def get_asset_count(self, obj):
         """Get the number of assets of this type."""
@@ -729,7 +743,13 @@ class AssetTypeSerializer(serializers.ModelSerializer):
         annotated_count = getattr(obj, "_asset_count", None)
         if annotated_count is not None:
             return annotated_count
-        # Fallback to counting related assets
+        # Fallback: scope to workspace if in workspace context
+        workspace = self.context.get("workspace")
+        if workspace:
+            return obj.assets.filter(
+                deleted_at__isnull=True,
+                workspace_memberships__workspace=workspace,
+            ).count()
         return obj.assets.filter(deleted_at__isnull=True).count()
 
     def get_api_url(self, obj):
@@ -794,21 +814,15 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
 
     def get_workspace_count(self, obj):
         """Get the number of workspaces using this asset type."""
-        # Attempt to use annotated count if available
+        # Only return count if annotated (expensive otherwise for list views)
         annotated_count = getattr(obj, "_workspace_count", None)
-        if annotated_count is not None:
-            return annotated_count
-        # Fallback to counting related workspaces
-        return obj.workspaces.count()
+        return annotated_count
 
     def get_asset_count(self, obj):
         """Get the number of assets of this type."""
-        # Attempt to use annotated count if available
+        # Only return count if annotated (expensive otherwise for list views)
         annotated_count = getattr(obj, "_asset_count", None)
-        if annotated_count is not None:
-            return annotated_count
-        # Fallback to counting related assets
-        return obj.assets.filter(deleted_at__isnull=True).count()
+        return annotated_count
 
     def get_api_url(self, obj):
         """Return the API URL for this attribute based on current request context."""
