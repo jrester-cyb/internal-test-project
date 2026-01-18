@@ -232,24 +232,48 @@ export async function interpretSearch(organizationId: string, workspaceId: strin
   return response.json()
 }
 
+export interface AssetTypesQueryParams {
+  limit?: number
+  offset?: number
+  search?: string
+  ordering?: 'name' | '-name' | 'created_at' | '-created_at'
+  workspaceCountMin?: number
+  workspaceCountMax?: number
+  assetCountMin?: number
+  assetCountMax?: number
+}
+
 export async function fetchAssetTypes(
   organizationId: string,
   workspaceId: string | undefined,
-  limit?: number,
-  offset?: number,
-  search?: string
+  params: AssetTypesQueryParams = {}
 ): Promise<OffsetPaginatedResponse<any>> {
-  const params = new URLSearchParams()
-  if (limit !== undefined) {
-    params.append('limit', limit.toString())
+  const searchParams = new URLSearchParams()
+  if (params.limit !== undefined) {
+    searchParams.append('limit', params.limit.toString())
   }
-  if (offset !== undefined) {
-    params.append('offset', offset.toString())
+  if (params.offset !== undefined) {
+    searchParams.append('offset', params.offset.toString())
   }
-  if (search) {
-    params.append('search', search)
+  if (params.search) {
+    searchParams.append('search', params.search)
   }
-  const queryString = params.toString()
+  if (params.ordering) {
+    searchParams.append('ordering', params.ordering)
+  }
+  if (params.workspaceCountMin !== undefined) {
+    searchParams.append('workspace_count_min', params.workspaceCountMin.toString())
+  }
+  if (params.workspaceCountMax !== undefined) {
+    searchParams.append('workspace_count_max', params.workspaceCountMax.toString())
+  }
+  if (params.assetCountMin !== undefined) {
+    searchParams.append('asset_count_min', params.assetCountMin.toString())
+  }
+  if (params.assetCountMax !== undefined) {
+    searchParams.append('asset_count_max', params.assetCountMax.toString())
+  }
+  const queryString = searchParams.toString()
   const url = buildUrl(organizationId, workspaceId, `asset-types/`) + (queryString ? `?${queryString}` : '')
   const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to fetch asset types')

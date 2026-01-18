@@ -8,14 +8,25 @@ import {
   Paper,
   Typography,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Slider,
+  Popover,
+  IconButton,
+  Badge,
+  Stack,
+  Divider,
 } from '@mui/material'
 import {
   Search as SearchIcon,
   Add as AddIcon,
   Clear as ClearIcon,
+  FilterList as FilterIcon,
 } from '@mui/icons-material'
 import AssetTypeList from '@app/components/AssetTypeList'
-import { fetchAssetTypes } from '@app/api/assets'
+import { fetchAssetTypes, type AssetTypesQueryParams } from '@app/api/assets'
 import type { AssetType } from '@app/types'
 
 interface LoaderData {
@@ -25,6 +36,20 @@ interface LoaderData {
 
 const PAGE_SIZE = 50
 const SEARCH_DEBOUNCE_MS = 300
+
+type SortOption = 'name' | '-name' | 'created_at' | '-created_at'
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'name', label: 'Name (A-Z)' },
+  { value: '-name', label: 'Name (Z-A)' },
+  { value: '-created_at', label: 'Newest first' },
+  { value: 'created_at', label: 'Oldest first' },
+]
+
+interface FilterState {
+  workspaceCountRange: [number, number] | null
+  assetCountRange: [number, number] | null
+}
 
 export default function AssetTypesPage() {
   const loaderData = useLoaderData() as LoaderData
@@ -43,9 +68,23 @@ export default function AssetTypesPage() {
   const [isSearching, setIsSearching] = useState(false)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Sort state
+  const [sortBy, setSortBy] = useState<SortOption>('name')
+
+  // Filter state
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null)
+  const [workspaceCountRange, setWorkspaceCountRange] = useState<[number, number]>([0, 100])
+  const [assetCountRange, setAssetCountRange] = useState<[number, number]>([0, 100000])
+  const [activeFilters, setActiveFilters] = useState<FilterState>({
+    workspaceCountRange: null,
+    assetCountRange: null,
+  })
+
+  const hasActiveFilters = activeFilters.workspaceCountRange !== null || activeFilters.assetCountRange !== null
+
   // Initialize from loader data
   useEffect(() => {
-    if (activeSearch) return // Don't reset if we're searching
+    if (activeSearch || sortBy !== 'name' || hasActiveFilters) return // Don't reset if we have active filters
 
     const results = loaderData?.results || []
     const count = loaderData?.count || 0
@@ -55,7 +94,65 @@ export default function AssetTypesPage() {
     setItems(newItems)
     setTotalCount(count)
     loadingPagesRef.current.clear()
-  }, [loaderData, activeSearch])
+  }, [loaderData, activeSearch, sortBy, hasActiveFilters])
+
+  // Build query params for API calls
+  const buildQueryParams = useCallback((
+    offset: number,
+    overrides: Partial<AssetTypesQueryParams> = {}
+  ): AssetTypesQueryParams => {
+    const params: AssetTypesQueryParams = {
+      limit: PAGE_SIZE,
+      offset,
+      ordering: sortBy,
+    }
+    if (activeSearch) {
+      params.search = activeSearch
+    }
+    if (activeFilters.workspaceCountRange) {
+      params.workspaceCountMin = activeFilters.workspaceCountRange[0]
+      params.workspaceCountMax = activeFilters.workspaceCountRange[1]
+    }
+    if (activeFilters.assetCountRange) {
+      params.assetCountMin = activeFilters.assetCountRange[0]
+      params.assetCountMax = activeFilters.assetCountRange[1]
+    }
+    return { ...params, ...overrides }
+  }, [sortBy, activeSearch, activeFilters])
+
+  // Fetch data with current filters/sort
+  const fetchData = useCallback(async (resetItems = true) => {
+    if (!organizationId) return
+
+    setIsSearching(true)
+    loadingPagesRef.current.clear()
+
+    try {
+      const data = await fetchAssetTypes(
+        organizationId,
+        workspaceId,
+        buildQueryParams(0)
+      )
+
+      if (resetItems) {
+        const newItems = new Map<number, AssetType>()
+        ;(data.results || []).forEach((item, idx) => newItems.set(idx, item))
+        setItems(newItems)
+      }
+      setTotalCount(data.count || 0)
+    } catch (error) {
+      console.error('Failed to fetch asset types:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }, [organizationId, workspaceId, buildQueryParams])
+
+  // Refetch when sort or filters change
+  useEffect(() => {
+    // Skip initial render - loader data handles that
+    if (sortBy === 'name' && !activeSearch && !hasActiveFilters) return
+    fetchData()
+  }, [sortBy, activeFilters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Perform server-side search
   const performSearch = useCallback(
@@ -70,9 +167,7 @@ export default function AssetTypesPage() {
         const data = await fetchAssetTypes(
           organizationId,
           workspaceId,
-          PAGE_SIZE,
-          0,
-          query || undefined
+          buildQueryParams(0, { search: query || undefined })
         )
 
         const newItems = new Map<number, AssetType>()
@@ -85,7 +180,7 @@ export default function AssetTypesPage() {
         setIsSearching(false)
       }
     },
-    [organizationId, workspaceId]
+    [organizationId, workspaceId, buildQueryParams]
   )
 
   // Handle search input change with debounce
@@ -120,6 +215,38 @@ export default function AssetTypesPage() {
       }
     }
   }, [])
+
+  // Handle sort change
+  const handleSortChange = (newSort: SortOption) => {
+    setSortBy(newSort)
+  }
+
+  // Handle filter popover
+  const handleFilterClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setFilterAnchorEl(event.currentTarget)
+  }
+
+  const handleFilterClose = () => {
+    setFilterAnchorEl(null)
+  }
+
+  const handleApplyFilters = () => {
+    setActiveFilters({
+      workspaceCountRange: workspaceCountRange[0] === 0 && workspaceCountRange[1] === 100 ? null : workspaceCountRange,
+      assetCountRange: assetCountRange[0] === 0 && assetCountRange[1] === 100000 ? null : assetCountRange,
+    })
+    handleFilterClose()
+  }
+
+  const handleClearFilters = () => {
+    setWorkspaceCountRange([0, 100])
+    setAssetCountRange([0, 100000])
+    setActiveFilters({
+      workspaceCountRange: null,
+      assetCountRange: null,
+    })
+    handleFilterClose()
+  }
 
   // Load items for a specific range
   const handleLoadRange = useCallback(
@@ -156,9 +283,7 @@ export default function AssetTypesPage() {
           const data = await fetchAssetTypes(
             organizationId,
             workspaceId,
-            PAGE_SIZE,
-            offset,
-            activeSearch || undefined
+            buildQueryParams(offset)
           )
           const newResults = data.results || []
 
@@ -176,12 +301,15 @@ export default function AssetTypesPage() {
         setIsLoading(false)
       }
     },
-    [organizationId, workspaceId, isLoading, items, activeSearch]
+    [organizationId, workspaceId, isLoading, items, buildQueryParams]
   )
 
   const handleEdit = (assetType: AssetType) => {
-    if (!workspaceId || !organizationId) return
-    navigate(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${assetType.id}`, {
+    if (!organizationId) return
+    const basePath = workspaceId
+      ? `/organizations/${organizationId}/workspaces/${workspaceId}`
+      : `/organizations/${organizationId}`
+    navigate(`${basePath}/asset-types/${assetType.id}`, {
       state: { assetTypeName: assetType.name },
     })
   }
@@ -196,39 +324,146 @@ export default function AssetTypesPage() {
     console.log('Add new asset type')
   }
 
+  const filterOpen = Boolean(filterAnchorEl)
+
+  // Build active filter description
+  const getActiveFilterDescription = () => {
+    const parts: string[] = []
+    if (activeFilters.workspaceCountRange) {
+      const [min, max] = activeFilters.workspaceCountRange
+      parts.push(`${min}-${max === 100 ? '100+' : max} workspaces`)
+    }
+    if (activeFilters.assetCountRange) {
+      const [min, max] = activeFilters.assetCountRange
+      parts.push(`${min}-${max === 100000 ? '100k+' : max.toLocaleString()} assets`)
+    }
+    return parts.join(', ')
+  }
+
   return (
     <Box sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Page header */}
       <Typography variant="h4" sx={{ mb: 2 }}>Asset Types</Typography>
 
-      {/* Search bar and Add button */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <TextField
-          size="small"
-          placeholder="Search asset types..."
-          value={searchInput}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                {isSearching ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <SearchIcon color="action" />
-                )}
-              </InputAdornment>
-            ),
-            endAdornment: searchInput && (
-              <InputAdornment position="end">
-                <ClearIcon
-                  sx={{ cursor: 'pointer', fontSize: 20 }}
-                  onClick={handleClearSearch}
+      {/* Search bar, Sort, Filter, and Add button */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Search asset types..."
+            value={searchInput}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  {isSearching ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <SearchIcon color="action" />
+                  )}
+                </InputAdornment>
+              ),
+              endAdornment: searchInput && (
+                <InputAdornment position="end">
+                  <ClearIcon
+                    sx={{ cursor: 'pointer', fontSize: 20 }}
+                    onClick={handleClearSearch}
+                  />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ width: 300 }}
+          />
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Sort by</InputLabel>
+            <Select
+              value={sortBy}
+              label="Sort by"
+              onChange={(e) => handleSortChange(e.target.value as SortOption)}
+            >
+              {SORT_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <Badge color="primary" variant="dot" invisible={!hasActiveFilters}>
+            <IconButton onClick={handleFilterClick} size="small">
+              <FilterIcon />
+            </IconButton>
+          </Badge>
+
+          <Popover
+            open={filterOpen}
+            anchorEl={filterAnchorEl}
+            onClose={handleFilterClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+          >
+            <Box sx={{ p: 2, width: 320 }}>
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                Workspace Count
+              </Typography>
+              <Box sx={{ px: 1 }}>
+                <Slider
+                  value={workspaceCountRange}
+                  onChange={(_, value) => setWorkspaceCountRange(value as [number, number])}
+                  valueLabelDisplay="auto"
+                  min={0}
+                  max={100}
+                  marks={[
+                    { value: 0, label: '0' },
+                    { value: 50, label: '50' },
+                    { value: 100, label: '100+' },
+                  ]}
                 />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ width: 300 }}
-        />
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+                {workspaceCountRange[0]} - {workspaceCountRange[1] === 100 ? '100+' : workspaceCountRange[1]} workspaces
+              </Typography>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                Asset Count
+              </Typography>
+              <Box sx={{ px: 1 }}>
+                <Slider
+                  value={assetCountRange}
+                  onChange={(_, value) => setAssetCountRange(value as [number, number])}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
+                  min={0}
+                  max={100000}
+                  step={1000}
+                  marks={[
+                    { value: 0, label: '0' },
+                    { value: 50000, label: '50k' },
+                    { value: 100000, label: '100k+' },
+                  ]}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+                {assetCountRange[0].toLocaleString()} - {assetCountRange[1] === 100000 ? '100k+' : assetCountRange[1].toLocaleString()} assets
+              </Typography>
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button size="small" onClick={handleClearFilters}>
+                  Clear
+                </Button>
+                <Button size="small" variant="contained" onClick={handleApplyFilters}>
+                  Apply
+                </Button>
+              </Stack>
+            </Box>
+          </Popover>
+        </Box>
+
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -237,6 +472,18 @@ export default function AssetTypesPage() {
           Add Asset Type
         </Button>
       </Box>
+
+      {/* Active filters display */}
+      {hasActiveFilters && (
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Filtering: {getActiveFilterDescription()}
+          </Typography>
+          <Button size="small" onClick={handleClearFilters}>
+            Clear filters
+          </Button>
+        </Box>
+      )}
 
       {/* Table */}
       <Paper sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

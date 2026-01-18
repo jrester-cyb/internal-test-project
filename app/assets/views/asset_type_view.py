@@ -1,7 +1,8 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Count, Q
+from django_filters import rest_framework as django_filters
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from audit_log.mixins import AuditLogMixin
 from ..models import AssetType, WorkspaceAssetType, BaseAssetTypeAttribute
@@ -12,7 +13,51 @@ from ..serializers import (
     WorkspaceAssetTypeWriteSerializer,
 )
 from workspaces.models import Workspace
-from django.db.models import Count
+
+
+class AssetTypeFilter(django_filters.FilterSet):
+    """Filter for AssetType with workspace and asset count range filtering."""
+
+    workspace_count_min = django_filters.NumberFilter(
+        method="filter_workspace_count_min", label="Minimum workspace count"
+    )
+    workspace_count_max = django_filters.NumberFilter(
+        method="filter_workspace_count_max", label="Maximum workspace count"
+    )
+    asset_count_min = django_filters.NumberFilter(
+        method="filter_asset_count_min", label="Minimum asset count"
+    )
+    asset_count_max = django_filters.NumberFilter(
+        method="filter_asset_count_max", label="Maximum asset count"
+    )
+
+    class Meta:
+        model = AssetType
+        fields = []
+
+    def filter_workspace_count_min(self, queryset, name, value):
+        """Filter asset types with at least this many workspaces."""
+        if value is not None:
+            return queryset.filter(_workspace_count__gte=value)
+        return queryset
+
+    def filter_workspace_count_max(self, queryset, name, value):
+        """Filter asset types with at most this many workspaces."""
+        if value is not None:
+            return queryset.filter(_workspace_count__lte=value)
+        return queryset
+
+    def filter_asset_count_min(self, queryset, name, value):
+        """Filter asset types with at least this many assets."""
+        if value is not None:
+            return queryset.filter(_asset_count__gte=value)
+        return queryset
+
+    def filter_asset_count_max(self, queryset, name, value):
+        """Filter asset types with at most this many assets."""
+        if value is not None:
+            return queryset.filter(_asset_count__lte=value)
+        return queryset
 
 
 @extend_schema_view(
@@ -32,9 +77,15 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """
 
     serializer_class = AssetTypeSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [
+        django_filters.DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_class = AssetTypeFilter
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
+    ordering = ["name"]  # Default ordering
 
     # Audit logging configuration
     audit_action_messages = {
@@ -63,6 +114,20 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
             # Top-level access: return all asset types
             queryset = AssetType.objects.all().select_related("organization")
 
+        # Always annotate counts (needed for filtering and serialization)
+        queryset = queryset.annotate(
+            _workspace_count=Count(
+                "workspace_asset_types",
+                filter=Q(workspace_asset_types__deleted_at__isnull=True),
+                distinct=True,
+            ),
+            _asset_count=Count(
+                "assets",
+                filter=Q(assets__deleted_at__isnull=True),
+                distinct=True,
+            ),
+        )
+
         # For detail view, prefetch attributes (both base and workspace extensions)
         if self.action == "retrieve":
             # Prefetch all polymorphic attributes with their related hidden_attribute
@@ -76,10 +141,6 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         "hidden_attribute__workspacelocalassettypeattribute",
                         "hidden_attribute__workspaceoverrideassettypeattribute",
                     ),
-                )
-            ).annotate(
-                _workspace_count=Count(
-                    "workspace_asset_types__workspace", distinct=True
                 )
             )
 

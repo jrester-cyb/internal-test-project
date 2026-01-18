@@ -25,7 +25,7 @@ export async function assetTypesRouteLoader({ params }: LoaderFunctionArgs): Pro
 
   const key = cacheKeys.assetTypes(organizationId, workspaceId)
   const data = await getCachedFetch(key, () =>
-    fetchAssetTypes(organizationId, workspaceId, INITIAL_PAGE_SIZE, 0)
+    fetchAssetTypes(organizationId, workspaceId, { limit: INITIAL_PAGE_SIZE, offset: 0 })
   )
 
   return {

@@ -25,9 +25,10 @@ export interface AssetType {
   updatedAt?: string
   apiUrl: string
   workspaceCount: number
+  assetCount: number
 }
 
-export interface AssetTypeSummary extends Omit<AssetType, 'workspaceCount'> {}
+export interface AssetTypeSummary extends Omit<AssetType, 'workspaceCount' | 'assetCount'> {}
 
 export interface AssetTypeAttributeChoice {
   id: string

@@ -40,7 +40,7 @@ export function prefetchAssetTypes(organizationId: string, workspaceId?: string)
 
   // Start fetching data
   const key = cacheKeys.assetTypes(organizationId, workspaceId)
-  getCachedFetch(key, () => fetchAssetTypes(organizationId, workspaceId))
+  getCachedFetch(key, () => fetchAssetTypes(organizationId, workspaceId, {}))
 }
 
 export function prefetchMap(organizationId: string, workspaceId?: string) {

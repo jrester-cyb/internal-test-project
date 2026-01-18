@@ -688,6 +688,7 @@ class AssetTypeSerializer(serializers.ModelSerializer):
     )
     api_url = serializers.SerializerMethodField()
     workspace_count = serializers.SerializerMethodField()
+    asset_count = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetType
@@ -702,6 +703,7 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "workspace_count",
+            "asset_count",
         ]
         read_only_fields = [
             "id",
@@ -709,6 +711,7 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "workspace_count",
+            "asset_count",
         ]
 
     def get_workspace_count(self, obj):
@@ -719,6 +722,15 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             return annotated_count
         # Fallback to counting related workspaces
         return obj.workspaces.count()
+
+    def get_asset_count(self, obj):
+        """Get the number of assets of this type."""
+        # Attempt to use annotated count if available
+        annotated_count = getattr(obj, "_asset_count", None)
+        if annotated_count is not None:
+            return annotated_count
+        # Fallback to counting related assets
+        return obj.assets.filter(deleted_at__isnull=True).count()
 
     def get_api_url(self, obj):
         """Return the API URL for this attribute based on current request context."""
@@ -761,6 +773,8 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
         source="organization.name", read_only=True
     )
     api_url = serializers.SerializerMethodField()
+    workspace_count = serializers.SerializerMethodField()
+    asset_count = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetType
@@ -773,8 +787,28 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
             "description",
             "created_at",
             "updated_at",
+            "workspace_count",
+            "asset_count",
         ]
-        read_only_fields = ["id", "organization", "created_at", "updated_at"]
+        read_only_fields = ["id", "organization", "created_at", "updated_at", "workspace_count", "asset_count"]
+
+    def get_workspace_count(self, obj):
+        """Get the number of workspaces using this asset type."""
+        # Attempt to use annotated count if available
+        annotated_count = getattr(obj, "_workspace_count", None)
+        if annotated_count is not None:
+            return annotated_count
+        # Fallback to counting related workspaces
+        return obj.workspaces.count()
+
+    def get_asset_count(self, obj):
+        """Get the number of assets of this type."""
+        # Attempt to use annotated count if available
+        annotated_count = getattr(obj, "_asset_count", None)
+        if annotated_count is not None:
+            return annotated_count
+        # Fallback to counting related assets
+        return obj.assets.filter(deleted_at__isnull=True).count()
 
     def get_api_url(self, obj):
         """Return the API URL for this attribute based on current request context."""

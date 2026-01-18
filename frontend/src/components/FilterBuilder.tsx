@@ -145,7 +145,7 @@ export default function FilterBuilder({
   async function loadAssetTypes() {
     if (!organizationId) return
     try {
-      const types = await fetchAssetTypes(organizationId, workspaceId)
+      const types = await fetchAssetTypes(organizationId, workspaceId, {})
       setAssetTypes(Array.isArray(types) ? types : types.results || [])
     } catch (error) {
       console.error('Failed to load asset types:', error)

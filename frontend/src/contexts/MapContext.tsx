@@ -143,7 +143,7 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
   useEffect(() => {
     if (!organizationId || assetTypeCacheLoaded.current) return
 
-    fetchAssetTypes(organizationId, workspaceId)
+    fetchAssetTypes(organizationId, workspaceId, {})
       .then(response => {
         const types = Array.isArray(response) ? response : response.results || []
         types.forEach((type: { id: string; name: string }) => {
