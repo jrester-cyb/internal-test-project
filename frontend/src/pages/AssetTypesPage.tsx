@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom'
+import { useTheme } from '@mui/material/styles'
 import {
   Box,
   TextField,
@@ -15,7 +16,6 @@ import {
   Slider,
   Popover,
   IconButton,
-  Badge,
   Stack,
   Divider,
 } from '@mui/material'
@@ -55,6 +55,7 @@ export default function AssetTypesPage() {
   const loaderData = useLoaderData() as LoaderData
   const navigate = useNavigate()
   const { organizationId, workspaceId } = useParams()
+  const theme = useTheme()
 
   // Virtualized list state - Map for sparse data
   // Initialize directly from loader data to avoid flash of empty content
@@ -150,7 +151,7 @@ export default function AssetTypesPage() {
 
       if (resetItems) {
         const newItems = new Map<number, AssetType>()
-        ;(data.results || []).forEach((item, idx) => newItems.set(idx, item))
+          ; (data.results || []).forEach((item, idx) => newItems.set(idx, item))
         setItems(newItems)
       }
       setTotalCount(data.count || 0)
@@ -162,9 +163,13 @@ export default function AssetTypesPage() {
   }, [organizationId, workspaceId, buildQueryParams])
 
   // Refetch when sort or filters change
+  const isFirstRender = useRef(true)
   useEffect(() => {
     // Skip initial render - loader data handles that
-    if (sortBy === 'name' && !activeSearch && !hasActiveFilters) return
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
     fetchData()
   }, [sortBy, activeFilters]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -185,7 +190,7 @@ export default function AssetTypesPage() {
         )
 
         const newItems = new Map<number, AssetType>()
-        ;(data.results || []).forEach((item, idx) => newItems.set(idx, item))
+          ; (data.results || []).forEach((item, idx) => newItems.set(idx, item))
         setItems(newItems)
         setTotalCount(data.count || 0)
       } catch (error) {
@@ -404,11 +409,9 @@ export default function AssetTypesPage() {
             </Select>
           </FormControl>
 
-          <Badge color="primary" variant="dot" invisible={!hasActiveFilters}>
-            <IconButton onClick={handleFilterClick} size="small">
-              <FilterIcon />
-            </IconButton>
-          </Badge>
+          <IconButton onClick={handleFilterClick} size="small" color={hasActiveFilters ? (theme.palette.mode === 'light' ? 'primary' : 'secondary') : 'default'}>
+            <FilterIcon />
+          </IconButton>
 
           <Popover
             open={filterOpen}
