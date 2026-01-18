@@ -1,9 +1,10 @@
+import { useCallback } from 'react'
 import { Box, List, Drawer, IconButton, Typography, useTheme } from '@mui/material'
 import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import SidebarNavItem from '@app/components/SidebarNavItem'
 import { useLayout } from '@app/contexts/LayoutContext'
 import { useOrganization } from '@app/contexts/OrganizationContext'
-import { preloadMapPage, preloadAssetTypesPage, preloadLibraryPage } from '@app/utils/preload'
+import { prefetchMap, prefetchAssetTypes, prefetchLibrary } from '@app/utils/preload'
 
 export default function Sidebar() {
   const theme = useTheme()
@@ -23,6 +24,19 @@ export default function Sidebar() {
     : `/organizations/${activeOrganization.id}/workspaces/${activeWorkspace?.id}`
 
   const modeLabel = isGlobalMode ? 'GLOBAL' : 'WORKSPACE'
+
+  // Prefetch handlers that pass the current org/workspace context
+  const handlePrefetchMap = useCallback(() => {
+    prefetchMap(activeOrganization.id, activeWorkspace?.id)
+  }, [activeOrganization.id, activeWorkspace?.id])
+
+  const handlePrefetchAssetTypes = useCallback(() => {
+    prefetchAssetTypes(activeOrganization.id, activeWorkspace?.id)
+  }, [activeOrganization.id, activeWorkspace?.id])
+
+  const handlePrefetchLibrary = useCallback(() => {
+    prefetchLibrary(activeOrganization.id, activeWorkspace?.id)
+  }, [activeOrganization.id, activeWorkspace?.id])
 
   return (
     <Drawer
@@ -68,19 +82,19 @@ export default function Sidebar() {
             to={`${basePath}/map`}
             icon={<MapIcon />}
             label="Map"
-            onPreload={preloadMapPage}
+            onPreload={handlePrefetchMap}
           />
           <SidebarNavItem
             to={`${basePath}/asset-types`}
             icon={<AssetsIcon />}
             label="Assets"
-            onPreload={preloadAssetTypesPage}
+            onPreload={handlePrefetchAssetTypes}
           />
           <SidebarNavItem
             to={`${basePath}/library`}
             icon={<LibraryIcon />}
             label="Library"
-            onPreload={preloadLibraryPage}
+            onPreload={handlePrefetchLibrary}
           />
         </List>
       </Box>

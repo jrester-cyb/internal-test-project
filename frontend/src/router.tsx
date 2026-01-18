@@ -4,6 +4,7 @@ import { organizationsLoader } from './loaders/organizations'
 import { workspacesLoader } from './loaders/workspaces'
 import { initialMapLoader } from './loaders/map'
 import { libraryLoader } from './loaders/library'
+import { assetTypesRouteLoader } from './loaders/assetTypes'
 
 // Lazy load layout and route components
 const MainLayout = lazy(() => import('./components/MainLayout.tsx'))
@@ -40,11 +41,7 @@ const sharedRoutes = [
       {
         index: true,
         element: <AssetTypesPage />,
-        loader: async ({ params }) => {
-          const { fetchAssetTypes } = await import('./api/assets')
-          const data = await fetchAssetTypes(params.organizationId!, params.workspaceId!)
-          return Array.isArray(data) ? data : data.results || []
-        },
+        loader: assetTypesRouteLoader,
       },
       {
         path: ":assetTypeId",
