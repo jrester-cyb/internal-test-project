@@ -1,5 +1,5 @@
 import { useNavigate, useNavigation } from 'react-router-dom'
-import { AppBar, Toolbar, Typography, LinearProgress } from '@mui/material'
+import { AppBar, Toolbar, Typography, LinearProgress, Button } from '@mui/material'
 import {
   Help as HelpIcon,
   Person as PersonIcon,
@@ -96,7 +96,18 @@ export default function PvAppBar() {
       color: 'inherit' as const,
       variant: 'text' as const,
       dividerAfter: windowWidth >= 600,
-      submenu: workspaceSubmenu
+      submenu: workspaceSubmenu,
+      customComponent: (
+        <Button
+          size="small"
+          variant="text"
+          color="inherit"
+          startIcon={isGlobalMode ? <PublicIcon fontSize="small" /> : <BusinessIcon fontSize="small" />}
+          sx={{ whiteSpace: 'nowrap', textTransform: 'none' }}
+        >
+          {isGlobalMode ? 'Global' : activeWorkspace?.name || 'Select Workspace'}
+        </Button>
+      )
     }] : []),
     {
       label: 'Profile',
