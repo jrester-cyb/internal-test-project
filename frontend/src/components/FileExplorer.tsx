@@ -192,8 +192,9 @@ export default function FileExplorer({
 
   const isActiveSearch = searchQuery.length > 0
 
-  // Filter out null items for display (when not in search mode)
-  const displayItems = isActiveSearch ? items.filter((item): item is FileNode => item !== null) : items.filter((item): item is FileNode => item !== null)
+  // For virtualized views, pass items with nulls for unloaded items
+  // Only filter for empty state check
+  const loadedItemCount = items.filter((item): item is FileNode => item !== null).length
 
   return (
     <Paper sx={{ flexGrow: 1, overflow: 'hidden', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -319,7 +320,7 @@ export default function FileExplorer({
         {isSearching && <LinearProgress />}
       </Box>
 
-      {displayItems.length === 0 ? (
+      {loadedItemCount === 0 && totalCount === 0 ? (
         <Box
           display="flex"
           flexDirection="column"

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useCallback } from 'react'
-import { Box, Typography, IconButton, CircularProgress, Skeleton } from '@mui/material'
+import React, { useRef, useCallback, useMemo } from 'react'
+import { Box, Typography, IconButton, Skeleton } from '@mui/material'
 import {
   Folder as FolderIcon,
   InsertDriveFile as FileIcon,
@@ -9,6 +9,8 @@ import {
   AudioFile as AudioIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material'
+import { FixedSizeGrid as Grid } from 'react-window'
+import { AutoSizer } from 'react-virtualized-auto-sizer'
 import type { FileNode } from '@app/api/assets'
 
 const resourceTypeIcons: Record<string, React.ReactElement> = {
@@ -31,6 +33,104 @@ function splitFilename(filename: string): { name: string; extension: string } {
   }
 }
 
+// Constants for grid layout
+const ITEM_WIDTH = 160
+const ITEM_HEIGHT = 176
+const GAP = 16
+
+interface GridItemData {
+  items: (FileNode | null)[]
+  columnCount: number
+  onNavigate: (item: FileNode) => void
+  onContextMenu: (event: React.MouseEvent, item: FileNode) => void
+  onMenuClick: (event: React.MouseEvent, item: FileNode) => void
+  onPrefetchDirectory?: (item: FileNode) => void
+}
+
+interface GridCellProps {
+  columnIndex: number
+  rowIndex: number
+  style: React.CSSProperties
+  data: GridItemData
+}
+
+const GridCell: React.FC<GridCellProps> = ({ columnIndex, rowIndex, style, data }) => {
+  const { items, columnCount, onNavigate, onContextMenu, onMenuClick, onPrefetchDirectory } = data
+  const index = rowIndex * columnCount + columnIndex
+  const item = items[index]
+
+  // Out of bounds
+  if (index >= items.length) {
+    return null
+  }
+
+  const { name, extension } = item ? splitFilename(item.name) : { name: '', extension: '' }
+
+  return (
+    <div style={{ ...style, padding: GAP / 2 }}>
+      <Box
+        onContextMenu={(e) => item && onContextMenu(e, item)}
+        onClick={() => item?.isDirectory && onNavigate(item)}
+        onMouseEnter={() => item?.isDirectory && onPrefetchDirectory?.(item)}
+        sx={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 2,
+          borderRadius: 1,
+          cursor: item?.isDirectory ? 'pointer' : 'default',
+          position: 'relative',
+          '&:hover': {
+            bgcolor: item ? 'action.hover' : 'transparent',
+          },
+        }}
+      >
+        {!item ? (
+          <>
+            <Skeleton variant="circular" width={64} height={64} sx={{ mb: 1.5 }} />
+            <Skeleton variant="text" width="80%" />
+          </>
+        ) : (
+          <>
+            <Box sx={{ mb: 1.5 }}>
+              {React.cloneElement(
+                resourceTypeIcons[item.resourceType] || <FileIcon />,
+                { sx: { fontSize: 64, color: 'action.active' } }
+              )}
+            </Box>
+            <Typography
+              variant="body2"
+              title={item.name}
+              fontWeight={item.isDirectory ? 500 : 400}
+              sx={{
+                textAlign: 'center',
+                width: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {name}{extension}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                onMenuClick(e, item)
+              }}
+              sx={{ position: 'absolute', top: 4, right: 4 }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </>
+        )}
+      </Box>
+    </div>
+  )
+}
+
 interface FileGalleryViewProps {
   items: (FileNode | null)[]
   totalCount?: number
@@ -50,137 +150,75 @@ export default function FileGalleryView({
   onItemsRendered,
   onPrefetchDirectory,
 }: FileGalleryViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const gridRef = useRef<Grid>(null)
 
-  // Set up intersection observer to track visible items
-  useEffect(() => {
+  const itemCount = totalCount || items.length
+
+  const handleItemsRendered = useCallback(({
+    visibleRowStartIndex,
+    visibleRowStopIndex,
+    visibleColumnStartIndex,
+    visibleColumnStopIndex,
+  }: {
+    visibleRowStartIndex: number
+    visibleRowStopIndex: number
+    visibleColumnStartIndex: number
+    visibleColumnStopIndex: number
+  }) => {
     if (!onItemsRendered) return
+    // We need the column count to calculate indices, but we'll get it from itemData
+    // For now, approximate using visible columns
+    const columnCount = visibleColumnStopIndex - visibleColumnStartIndex + 1
+    const startIndex = visibleRowStartIndex * columnCount
+    const stopIndex = (visibleRowStopIndex + 1) * columnCount - 1
+    onItemsRendered(startIndex, Math.min(stopIndex, itemCount - 1))
+  }, [onItemsRendered, itemCount])
 
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        const visibleIndices: number[] = []
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = Number(entry.target.getAttribute('data-index'))
-            if (!isNaN(index)) {
-              visibleIndices.push(index)
-            }
-          }
-        })
+  const GridComponent = useMemo(() => {
+    return ({ height, width }: { height: number | undefined; width: number | undefined }) => {
+      const effectiveWidth = width || 800
+      const effectiveHeight = height || 600
 
-        if (visibleIndices.length > 0) {
-          const min = Math.min(...visibleIndices)
-          const max = Math.max(...visibleIndices)
-          onItemsRendered(min, max)
-        }
-      },
-      { root: containerRef.current, rootMargin: '100px', threshold: 0.1 }
-    )
+      // Calculate columns based on available width
+      const columnCount = Math.max(1, Math.floor((effectiveWidth + GAP) / (ITEM_WIDTH + GAP)))
+      const rowCount = Math.ceil(itemCount / columnCount)
 
-    itemRefs.current.forEach((ref) => {
-      if (ref) observerRef.current?.observe(ref)
-    })
-
-    return () => {
-      observerRef.current?.disconnect()
-    }
-  }, [onItemsRendered, items.length])
-
-  const setItemRef = useCallback((index: number, element: HTMLDivElement | null) => {
-    if (element) {
-      itemRefs.current.set(index, element)
-      observerRef.current?.observe(element)
-    } else {
-      const existing = itemRefs.current.get(index)
-      if (existing) {
-        observerRef.current?.unobserve(existing)
-        itemRefs.current.delete(index)
+      const itemData: GridItemData = {
+        items,
+        columnCount,
+        onNavigate,
+        onContextMenu,
+        onMenuClick,
+        onPrefetchDirectory,
       }
-    }
-  }, [])
 
-  const displayItems = totalCount ? items.slice(0, totalCount) : items
+      return (
+        <Grid
+          ref={gridRef}
+          height={effectiveHeight}
+          width={effectiveWidth}
+          columnCount={columnCount}
+          columnWidth={ITEM_WIDTH + GAP}
+          rowCount={rowCount}
+          rowHeight={ITEM_HEIGHT + GAP}
+          itemData={itemData}
+          onItemsRendered={({ visibleRowStartIndex, visibleRowStopIndex }) => {
+            if (!onItemsRendered) return
+            const startIndex = visibleRowStartIndex * columnCount
+            const stopIndex = Math.min((visibleRowStopIndex + 1) * columnCount - 1, itemCount - 1)
+            onItemsRendered(startIndex, stopIndex)
+          }}
+          style={{ overflowX: 'hidden' }}
+        >
+          {GridCell}
+        </Grid>
+      )
+    }
+  }, [items, itemCount, onNavigate, onContextMenu, onMenuClick, onItemsRendered, onPrefetchDirectory])
 
   return (
-    <Box ref={containerRef} sx={{ p: 2, overflowY: 'auto', height: '100%' }}>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-          gap: 2,
-        }}
-      >
-        {displayItems.map((item, index) => {
-          const { name, extension } = item ? splitFilename(item.name) : { name: '', extension: '' }
-
-          return (
-            <Box
-              key={index}
-              ref={(el) => setItemRef(index, el)}
-              data-index={index}
-              onContextMenu={(e) => item && onContextMenu(e, item)}
-              onClick={() => item?.isDirectory && onNavigate(item)}
-              onMouseEnter={() => item?.isDirectory && onPrefetchDirectory?.(item)}
-              sx={{
-                height: 160,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                p: 2,
-                borderRadius: 1,
-                cursor: item?.isDirectory ? 'pointer' : 'default',
-                position: 'relative',
-                '&:hover': {
-                  bgcolor: item ? 'action.hover' : 'transparent',
-                },
-              }}
-            >
-              {!item ? (
-                <>
-                  <Skeleton variant="circular" width={64} height={64} sx={{ mb: 1.5 }} />
-                  <Skeleton variant="text" width="80%" />
-                </>
-              ) : (
-                <>
-                  <Box sx={{ mb: 1.5 }}>
-                    {React.cloneElement(
-                      resourceTypeIcons[item.resourceType] || <FileIcon />,
-                      { sx: { fontSize: 64, color: 'action.active' } }
-                    )}
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    title={item.name}
-                    fontWeight={item.isDirectory ? 500 : 400}
-                    sx={{
-                      textAlign: 'center',
-                      width: '100%',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {name}{extension}
-                  </Typography>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onMenuClick(e, item)
-                    }}
-                    sx={{ position: 'absolute', top: 4, right: 4 }}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                </>
-              )}
-            </Box>
-          )
-        })}
-      </Box>
+    <Box sx={{ height: '100%', width: '100%' }}>
+      <AutoSizer ChildComponent={GridComponent} />
     </Box>
   )
 }
