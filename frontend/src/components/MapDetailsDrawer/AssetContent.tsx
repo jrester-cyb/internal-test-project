@@ -8,6 +8,7 @@ import AttributesCard from '@app/components/AttributesCard'
 import AssetTreeCard from '@app/components/AssetTreeCard'
 import TasksCard from '@app/components/TasksCard'
 import FilesCard from '@app/components/FilesCard'
+import DragHandle from '@app/components/DragHandle'
 import { useOrganization } from '@app/contexts/OrganizationContext'
 import type { RelatedAssetsResponse } from '@app/api/assets'
 
@@ -325,7 +326,7 @@ export default function AssetContent({
                                 excludedScopes={excludedScopes}
                                 onExcludedScopesChange={setExcludedScopes}
                                 isLoading={loading || attributesLoading}
-                                dragHandleProps={dragHandleProps}
+                                headerAction={<DragHandle {...dragHandleProps} />}
                               />
                             )}
                           </Box>

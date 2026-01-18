@@ -1,11 +1,12 @@
 import { useMemo, useCallback, type CSSProperties } from 'react'
-import { Card, CardContent, CardHeader, Box, Typography, Tooltip, Skeleton } from '@mui/material'
-import { Article as ArticleIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon, DragHandle as DragHandleIcon } from '@mui/icons-material'
+import { Box, Typography, Skeleton } from '@mui/material'
+import { Article as ArticleIcon, VisibilityOff as VisibilityOffIcon, FilterAlt as FilterIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
 import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
 import TagsDisplay from '@app/components/TagsDisplay'
 import VirtualizedList from '@app/components/VirtualizedList'
+import CollapsibleCard from '@app/components/CollapsibleCard'
 
 interface AttributesCardProps {
   asset: Asset
@@ -24,10 +25,8 @@ interface AttributesCardProps {
   excludedScopes: string[]
   onExcludedScopesChange: (scopes: string[]) => void
   isLoading?: boolean
-  dragHandleProps?: {
-    attributes: any
-    listeners: any
-  }
+  /** Additional action elements to render in the header */
+  headerAction?: React.ReactNode
 }
 
 export default function AttributesCard({
@@ -44,7 +43,7 @@ export default function AttributesCard({
   excludedScopes,
   onExcludedScopesChange,
   isLoading = false,
-  dragHandleProps
+  headerAction,
 }: AttributesCardProps) {
   // Convert map to array for filtering
   const loadedAttributes = useMemo(() => {
@@ -63,61 +62,44 @@ export default function AttributesCard({
   const hiddenCount = loadedAttributes.filter(attr => attr.isHidden).length
 
   return (
-    <Card sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <CardHeader
-        title="Attributes"
-        action={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AttributeFilterPopover
-              showHidden={showHidden}
-              onShowHiddenChange={onShowHiddenChange}
-              selectedTags={selectedTags}
-              onSelectedTagsChange={onSelectedTagsChange}
-              selectedTypes={selectedTypes}
-              onSelectedTypesChange={onSelectedTypesChange}
-              excludedScopes={excludedScopes}
-              onExcludedScopesChange={onExcludedScopesChange}
-              showScopeFilter={true}
-              hiddenCount={hiddenCount}
-              availableTags={availableTags}
-              showTypeFilter={true}
-              isLoading={isLoading}
-            />
-            {dragHandleProps && (
-              <Tooltip title="Drag to reorder cards">
-                <Box
-                  {...dragHandleProps.attributes}
-                  {...dragHandleProps.listeners}
-                  sx={{
-                    cursor: 'grab',
-                    '&:active': { cursor: 'grabbing' },
-                    p: 0.5,
-                    borderRadius: 1,
-                    '&:hover': { bgcolor: 'action.hover' }
-                  }}
-                >
-                  <DragHandleIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                </Box>
-              </Tooltip>
-            )}
-          </Box>
-        }
+    <CollapsibleCard
+      title="Attributes"
+      headerAction={
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <AttributeFilterPopover
+            showHidden={showHidden}
+            onShowHiddenChange={onShowHiddenChange}
+            selectedTags={selectedTags}
+            onSelectedTagsChange={onSelectedTagsChange}
+            selectedTypes={selectedTypes}
+            onSelectedTypesChange={onSelectedTypesChange}
+            excludedScopes={excludedScopes}
+            onExcludedScopesChange={onExcludedScopesChange}
+            showScopeFilter={true}
+            hiddenCount={hiddenCount}
+            availableTags={availableTags}
+            showTypeFilter={true}
+            isLoading={isLoading}
+          />
+          {headerAction}
+        </Box>
+      }
+      contentSx={{ height: 400 }}
+      disableContentPadding
+    >
+      <AttributesListContent
+        asset={asset}
+        attributesMap={attributesMap}
+        totalAttributeCount={totalAttributeCount}
+        onLoadRange={onLoadRange}
+        showHidden={showHidden}
+        selectedTags={selectedTags}
+        onSelectedTagsChange={onSelectedTagsChange}
+        selectedTypes={selectedTypes}
+        excludedScopes={excludedScopes}
+        isLoading={isLoading}
       />
-      <CardContent sx={{ overflow: 'hidden', p: 0, height: 400 }}>
-        <AttributesListContent
-          asset={asset}
-          attributesMap={attributesMap}
-          totalAttributeCount={totalAttributeCount}
-          onLoadRange={onLoadRange}
-          showHidden={showHidden}
-          selectedTags={selectedTags}
-          onSelectedTagsChange={onSelectedTagsChange}
-          selectedTypes={selectedTypes}
-          excludedScopes={excludedScopes}
-          isLoading={isLoading}
-        />
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   )
 }
 
