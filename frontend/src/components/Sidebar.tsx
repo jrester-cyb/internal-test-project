@@ -3,6 +3,7 @@ import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft 
 import SidebarNavItem from '@app/components/SidebarNavItem'
 import { useLayout } from '@app/contexts/LayoutContext'
 import { useOrganization } from '@app/contexts/OrganizationContext'
+import { preloadMapPage, preloadAssetTypesPage, preloadLibraryPage } from '@app/utils/preload'
 
 export default function Sidebar() {
   const theme = useTheme()
@@ -67,16 +68,19 @@ export default function Sidebar() {
             to={`${basePath}/map`}
             icon={<MapIcon />}
             label="Map"
+            onPreload={preloadMapPage}
           />
           <SidebarNavItem
             to={`${basePath}/asset-types`}
             icon={<AssetsIcon />}
             label="Assets"
+            onPreload={preloadAssetTypesPage}
           />
           <SidebarNavItem
             to={`${basePath}/library`}
             icon={<LibraryIcon />}
             label="Library"
+            onPreload={preloadLibraryPage}
           />
         </List>
       </Box>

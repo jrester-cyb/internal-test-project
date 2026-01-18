@@ -7,9 +7,10 @@ interface SidebarNavItemProps {
   to: string
   icon: ReactElement
   label: string
+  onPreload?: () => void
 }
 
-export default function SidebarNavItem({ to, icon, label }: SidebarNavItemProps) {
+export default function SidebarNavItem({ to, icon, label, onPreload }: SidebarNavItemProps) {
   const { sidebarOpen: isOpen, isMobile, setSidebarOpen } = useLayout()
   return (
     <ListItem disablePadding>
@@ -17,6 +18,8 @@ export default function SidebarNavItem({ to, icon, label }: SidebarNavItemProps)
         component={NavLink}
         to={to}
         onClick={() => { if (isMobile) setSidebarOpen(false) }}
+        onMouseEnter={onPreload}
+        onFocus={onPreload}
         sx={{
           color: 'inherit',
           minHeight: 48,
