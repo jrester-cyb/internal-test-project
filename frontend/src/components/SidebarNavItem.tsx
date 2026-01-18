@@ -1,7 +1,7 @@
 import { ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import { NavLink } from 'react-router-dom'
-import { type ReactElement, useEffect, useState } from 'react'
-import { useSidebar } from '@app/contexts/SidebarContext'
+import type { ReactElement } from 'react'
+import { useLayout } from '@app/contexts/LayoutContext'
 
 interface SidebarNavItemProps {
   to: string
@@ -10,13 +10,13 @@ interface SidebarNavItemProps {
 }
 
 export default function SidebarNavItem({ to, icon, label }: SidebarNavItemProps) {
-  const { isOpen, isMobile, setIsOpen } = useSidebar()
+  const { sidebarOpen: isOpen, isMobile, setSidebarOpen } = useLayout()
   return (
     <ListItem disablePadding>
       <ListItemButton
         component={NavLink}
         to={to}
-        onClick={() => { if (isMobile) setIsOpen(false) }}
+        onClick={() => { if (isMobile) setSidebarOpen(false) }}
         sx={{
           color: 'inherit',
           minHeight: 48,

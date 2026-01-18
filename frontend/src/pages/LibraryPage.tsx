@@ -51,10 +51,10 @@ export default function LibraryPage() {
 
     setIsSearching(true)
     const timeoutId = setTimeout(async () => {
-      if (!workspaceId) return
+      if (!organizationId || !workspaceId) return
 
       try {
-        const results = await fetchFileTree(workspaceId, directoryId, searchQuery, 100, 0)
+        const results = await fetchFileTree(organizationId, workspaceId, directoryId, searchQuery, 100, 0)
         setSearchResults(results.children?.results || [])
       } catch (error) {
         console.error('Search failed:', error)
@@ -64,7 +64,7 @@ export default function LibraryPage() {
     }, 300)
 
     return () => clearTimeout(timeoutId)
-  }, [searchQuery, workspaceId, directoryId])
+  }, [searchQuery, organizationId, workspaceId, directoryId])
 
   // Build breadcrumbs from ancestors
   const basePath = `/organizations/${organizationId}/workspaces/${workspaceId}/library`
@@ -103,8 +103,8 @@ export default function LibraryPage() {
   }
 
   const handleCreateFolder = async (name: string) => {
-    if (!workspaceId) return
-    await createDirectory(workspaceId, {
+    if (!organizationId || !workspaceId) return
+    await createDirectory(organizationId, workspaceId, {
       name,
       parent: currentDir.id,
     })
@@ -112,14 +112,14 @@ export default function LibraryPage() {
   }
 
   const handleDelete = async (item: FileNode) => {
-    if (!workspaceId) return
-    await deleteFileNode(workspaceId, item.id)
+    if (!organizationId || !workspaceId) return
+    await deleteFileNode(organizationId, workspaceId, item.id)
     reloadCurrentDir()
   }
 
   const handleRename = async (item: FileNode, newName: string) => {
-    if (!workspaceId) return
-    await renameFileNode(workspaceId, item.id, newName)
+    if (!organizationId || !workspaceId) return
+    await renameFileNode(organizationId, workspaceId, item.id, newName)
     reloadCurrentDir()
   }
 
@@ -130,7 +130,7 @@ export default function LibraryPage() {
   // Load items for a specific range when they come into view
   const loadItemsInRange = useCallback(
     async (startIndex: number, stopIndex: number) => {
-      if (!workspaceId || searchQuery) return
+      if (!organizationId || !workspaceId || searchQuery) return
 
       // Calculate which page(s) we need to fetch
       const startPage = Math.floor(startIndex / PAGE_SIZE)
@@ -162,7 +162,7 @@ export default function LibraryPage() {
         const offset = page * PAGE_SIZE
 
         try {
-          const data = await fetchFileTree(workspaceId, directoryId, undefined, PAGE_SIZE, offset)
+          const data = await fetchFileTree(organizationId, workspaceId, directoryId, undefined, PAGE_SIZE, offset)
           const newChildren = data.children?.results || []
 
           setItems((prev) => {
@@ -177,7 +177,7 @@ export default function LibraryPage() {
         }
       }
     },
-    [workspaceId, directoryId, searchQuery, PAGE_SIZE]
+    [organizationId, workspaceId, directoryId, searchQuery, PAGE_SIZE]
   )
 
   // Convert Map to array for display, with placeholders for unloaded items

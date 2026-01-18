@@ -214,17 +214,44 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
             # Build the URL based on whether we have workspace context
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            organization_pk = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
 
             # If no workspace in URL params, check query params (for organization endpoint)
             if not workspace_id:
                 workspace_id = request.query_params.get("workspace_id")
 
-            if workspace_id:
+            if workspace_id and organization_pk:
                 return request.build_absolute_uri(
                     reverse(
-                        "workspace-assettype-attribute-asset-count",
+                        "organization-workspace-assettype-attribute-asset-count",
                         kwargs={
+                            "organization_pk": organization_pk,
                             "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif workspace_id:
+                # Fallback for non-org-nested routes
+                return request.build_absolute_uri(
+                    reverse(
+                        "assettype-attribute-asset-count",
+                        kwargs={
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif organization_pk:
+                # Organization-level endpoint (no workspace)
+                return request.build_absolute_uri(
+                    reverse(
+                        "organization-assettype-attribute-asset-count",
+                        kwargs={
+                            "organization_pk": organization_pk,
                             "assettype_pk": obj.asset_type_id,
                             "pk": obj.id,
                         },
@@ -258,27 +285,38 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
 
             # Check for workspace context first (workspace endpoint)
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            organization_id = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
             if not workspace_id:
                 # Check query params (for organization endpoint with workspace_id param)
                 workspace_id = request.query_params.get("workspace_id")
 
-            if workspace_id:
+            if workspace_id and organization_id:
                 return request.build_absolute_uri(
                     reverse(
-                        "workspace-assettype-attribute-detail",
+                        "organization-workspace-assettype-attribute-detail",
                         kwargs={
+                            "organization_pk": organization_id,
                             "workspace_pk": workspace_id,
                             "assettype_pk": obj.asset_type_id,
                             "pk": obj.id,
                         },
                     )
                 )
-
-            # Fallback to organization endpoint
-            organization_id = request.parser_context.get("kwargs", {}).get(
-                "organization_pk"
-            )
-            if organization_id:
+            elif workspace_id:
+                # Fallback for non-org-nested routes
+                return request.build_absolute_uri(
+                    reverse(
+                        "assettype-attribute-detail",
+                        kwargs={
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif organization_id:
+                # Organization-level endpoint (no workspace)
                 return request.build_absolute_uri(
                     reverse(
                         "organization-assettype-attribute-detail",
@@ -442,12 +480,27 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             from django.urls import reverse
 
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
-            if workspace_id:
+            organization_pk = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
+            if workspace_id and organization_pk:
                 return request.build_absolute_uri(
                     reverse(
-                        "workspace-assettype-attribute-asset-count",
+                        "organization-workspace-assettype-attribute-asset-count",
                         kwargs={
+                            "organization_pk": organization_pk,
                             "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif workspace_id:
+                # Fallback for non-org-nested routes
+                return request.build_absolute_uri(
+                    reverse(
+                        "assettype-attribute-asset-count",
+                        kwargs={
                             "assettype_pk": obj.asset_type_id,
                             "pk": obj.id,
                         },
@@ -476,12 +529,27 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
             from django.urls import reverse
 
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
-            if workspace_id:
+            organization_id = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
+            if workspace_id and organization_id:
                 return request.build_absolute_uri(
                     reverse(
-                        "workspace-assettype-attribute-detail",
+                        "organization-workspace-assettype-attribute-detail",
                         kwargs={
+                            "organization_pk": organization_id,
                             "workspace_pk": workspace_id,
+                            "assettype_pk": obj.asset_type_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif workspace_id:
+                # Fallback for non-org-nested routes
+                return request.build_absolute_uri(
+                    reverse(
+                        "assettype-attribute-detail",
+                        kwargs={
                             "assettype_pk": obj.asset_type_id,
                             "pk": obj.id,
                         },

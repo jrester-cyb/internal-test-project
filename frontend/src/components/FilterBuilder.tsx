@@ -35,7 +35,8 @@ export interface AttributeFilter {
 }
 
 interface FilterBuilderProps {
-  workspaceId: string
+  organizationId: string
+  workspaceId?: string
   selectedAssetTypes: string[]
   onAssetTypesChange: (assetTypeIds: string[]) => void
   attributeFilters: AttributeFilter[]
@@ -57,6 +58,7 @@ const GEOMETRY_TYPES = [
 ]
 
 export default function FilterBuilder({
+  organizationId,
   workspaceId,
   selectedAssetTypes,
   onAssetTypesChange,
@@ -82,6 +84,7 @@ export default function FilterBuilder({
   const [attributeValuesMap, setAttributeValuesMap] = useState<Map<number, any>>(new Map())
   const [attributeValuesTotalCount, setAttributeValuesTotalCount] = useState(0)
   const [loadingValues, setLoadingValues] = useState(false)
+  const [loadingAttributes, setLoadingAttributes] = useState(false)
   const [attributeTotalCounts, setAttributeTotalCounts] = useState<Record<string, number>>({})
 
   // Attribute filter popover state
@@ -99,10 +102,8 @@ export default function FilterBuilder({
   const handleClose = externalOnClose || (() => setInternalOpen(false))
 
   useEffect(() => {
-    if (workspaceId) {
-      loadAssetTypes()
-    }
-  }, [workspaceId])
+    loadAssetTypes()
+  }, [organizationId, workspaceId])
 
   useEffect(() => {
     // Load attribute definitions for the selected type for attributes panel
@@ -142,9 +143,9 @@ export default function FilterBuilder({
   }, [selectedAttribute, selectedTypeForAttributes, attributeDefinitions, attrFilterShowHidden, attrFilterSelectedTypes, attrFilterSelectedTags, attrFilterExcludedScopes])
 
   async function loadAssetTypes() {
-    if (!workspaceId) return
+    if (!organizationId) return
     try {
-      const types = await fetchAssetTypes(workspaceId)
+      const types = await fetchAssetTypes(organizationId, workspaceId)
       setAssetTypes(Array.isArray(types) ? types : types.results || [])
     } catch (error) {
       console.error('Failed to load asset types:', error)
@@ -155,9 +156,10 @@ export default function FilterBuilder({
   }
 
   async function loadAttributeDefinitions(assetTypeId: string) {
-    if (!workspaceId) return
+    if (!organizationId) return
+    setLoadingAttributes(true)
     try {
-      const defs = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId, 1, 1000)
+      const defs = await fetchAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId, 1, 1000)
       const attributes = Array.isArray(defs) ? defs : defs.results || []
       setAttributeDefinitions(prev => ({
         ...prev,
@@ -165,17 +167,24 @@ export default function FilterBuilder({
       }))
     } catch (error) {
       console.error('Failed to load attribute definitions:', error)
+      // Set empty array on error so we show "No attributes defined" instead of spinner forever
+      setAttributeDefinitions(prev => ({
+        ...prev,
+        [assetTypeId]: []
+      }))
+    } finally {
+      setLoadingAttributes(false)
     }
   }
 
   async function loadAttributeValues(assetTypeId: string, attributeDefinitionId: string, apiKey: string) {
-    if (!workspaceId) return
+    if (!organizationId) return
     setLoadingValues(true)
     // Reset the map when loading a new attribute
     setAttributeValuesMap(new Map())
     setAttributeValuesTotalCount(0)
     try {
-      const response = await fetchAttributeValues(workspaceId, assetTypeId, attributeDefinitionId, { limit: 50, offset: 0 })
+      const response = await fetchAttributeValues(organizationId, workspaceId, assetTypeId, attributeDefinitionId, { limit: 50, offset: 0 })
       const newMap = new Map<number, any>()
       response.results.forEach((value, index) => {
         newMap.set(index, value)
@@ -197,11 +206,12 @@ export default function FilterBuilder({
 
   // Load more attribute values for pagination
   const loadAttributeValuesRange = useCallback(async (startIndex: number, endIndex: number) => {
-    if (!workspaceId || !selectedTypeForAttributes || !selectedAttribute) return
+    if (!organizationId || !selectedTypeForAttributes || !selectedAttribute) return
 
     try {
       const limit = endIndex - startIndex + 1
       const response = await fetchAttributeValues(
+        organizationId,
         workspaceId,
         selectedTypeForAttributes,
         selectedAttribute.id,
@@ -217,7 +227,7 @@ export default function FilterBuilder({
     } catch (error) {
       console.error('Failed to load more attribute values:', error)
     }
-  }, [workspaceId, selectedTypeForAttributes, selectedAttribute])
+  }, [organizationId, workspaceId, selectedTypeForAttributes, selectedAttribute])
 
   const handleAttributeSelect = (attr: AssetTypeAttribute) => {
     setSelectedAttribute(attr)
@@ -765,7 +775,14 @@ export default function FilterBuilder({
           {/* Middle: Attribute selection - always shown */}
           <Divider orientation="vertical" flexItem />
           <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {selectedTypeForAttributes ? (
+            {selectedTypeForAttributes && loadingAttributes ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 1 }}>
+                <CircularProgress size={24} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading attributes...
+                </Typography>
+              </Box>
+            ) : selectedTypeForAttributes ? (
               (() => {
                 const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
                 const hiddenCount = allAttrs.filter(a => a.isHidden).length

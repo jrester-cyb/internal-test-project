@@ -24,7 +24,7 @@ interface ChoicesContextValue {
    * Trigger loading choices for an attribute if not already cached/loading.
    * Call this when a cell is focused or needs choices.
    */
-  loadChoices: (workspaceId: string, assetTypeId: string, attributeId: string) => void
+  loadChoices: (organizationId: string, workspaceId: string, assetTypeId: string, attributeId: string) => void
 
   /**
    * Clear all cached choices (e.g., when changing workspace/asset type).
@@ -51,7 +51,7 @@ export function ChoicesProvider({ children }: { children: ReactNode }) {
     return entry?.loading ?? false
   }, [])
 
-  const loadChoices = useCallback((workspaceId: string, assetTypeId: string, attributeId: string) => {
+  const loadChoices = useCallback((organizationId: string, workspaceId: string, assetTypeId: string, attributeId: string) => {
     // Check if already cached or loading
     const existing = cacheRef.current.get(attributeId)
     if (existing) {
@@ -62,7 +62,7 @@ export function ChoicesProvider({ children }: { children: ReactNode }) {
     cacheRef.current.set(attributeId, { choices: [], loading: true })
 
     // Fetch choices
-    fetchAssetTypeAttributeChoices(workspaceId, assetTypeId, attributeId)
+    fetchAssetTypeAttributeChoices(organizationId, workspaceId, assetTypeId, attributeId)
       .then((choices) => {
         cacheRef.current.set(attributeId, { choices, loading: false })
         // Trigger re-render for components that need the data
@@ -103,6 +103,7 @@ export function useChoices() {
  * Hook to get choices for an attribute, with lazy loading support.
  * Returns the choices if available, or undefined if loading/not loaded.
  *
+ * @param organizationId - Organization ID
  * @param workspaceId - Workspace ID
  * @param assetTypeId - Asset type ID
  * @param attributeId - Attribute ID
@@ -110,6 +111,7 @@ export function useChoices() {
  * @param shouldLoad - Whether to trigger loading (e.g., on focus)
  */
 export function useAttributeChoices(
+  organizationId: string,
   workspaceId: string,
   assetTypeId: string,
   attributeId: string,
@@ -120,7 +122,7 @@ export function useAttributeChoices(
 
   // Trigger load if requested and attribute has choices
   if (shouldLoad && hasChoices) {
-    loadChoices(workspaceId, assetTypeId, attributeId)
+    loadChoices(organizationId, workspaceId, assetTypeId, attributeId)
   }
 
   return getChoices(attributeId)

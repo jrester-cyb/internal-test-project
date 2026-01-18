@@ -331,12 +331,12 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     _is_hidden=Value(False),  # No hidden status at org level
                     _organization_id=F("asset_type__organization_id"),
                     _has_choices=Exists(has_choices_check),
+                    # For GlobalAssetTypeAttribute, order is directly on the model
+                    effective_order=F("order"),
                 )
                 .select_related("polymorphic_ctype")
+                .order_by("effective_order", "created_at")
             )
-
-            # Use global order
-            queryset = self._annotate_global_order(queryset)
 
         return queryset
 
@@ -1053,7 +1053,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         summary="Get all unique tags",
     )
     @action(detail=False, methods=["get"], url_path="tags")
-    def tags(self, request, workspace_pk=None, assettype_pk=None):
+    def tags(self, request, workspace_pk=None, assettype_pk=None, organization_pk=None):
         """Get all unique tags used in attributes."""
         all_tags = set()
 
@@ -1086,7 +1086,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         summary="Get asset count for attribute",
     )
     @action(detail=True, methods=["get"], url_path="asset-count")
-    def asset_count(self, request, pk=None, workspace_pk=None, assettype_pk=None):
+    def asset_count(self, request, pk=None, workspace_pk=None, assettype_pk=None, organization_pk=None):
         """Get count of assets with values for this attribute."""
         # For global attributes, we need to find by pk
         # For overrides, we need to use the base_attribute_id
@@ -1281,7 +1281,7 @@ class AssetTypeAttributeViewSet(AuditLogMixin, viewsets.ModelViewSet):
         summary="Get distinct values for this attribute",
     )
     @action(detail=True, methods=["get"])
-    def values(self, request, assettype_pk=None, pk=None, workspace_pk=None):
+    def values(self, request, assettype_pk=None, pk=None, workspace_pk=None, organization_pk=None):
         """Get distinct values for this attribute."""
         from assets.models import AssetTypeAttributeChoice
 

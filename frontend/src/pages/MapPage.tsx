@@ -18,8 +18,9 @@ L.Icon.Default.mergeOptions({
 })
 
 // Inner component that can access MapContext
-function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange }: {
-  workspaceId: string
+function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation, onBoundsChange }: {
+  organizationId: string
+  workspaceId?: string
   loaderData: {
     initialCenter: [number, number]
     initialZoom: number
@@ -44,7 +45,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
-    if (!workspaceId) return
+    if (!organizationId) return
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -76,7 +77,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
 
       // When clustering is disabled, always fetch tiles regardless of zoom level
       if (!clusteringDisabled && zoom < 12) {
-        const clusterData = await fetchClusters(workspaceId, zoom, bounds, mergedFilters, abortController.signal)
+        const clusterData = await fetchClusters(organizationId, workspaceId, zoom, bounds, mergedFilters, abortController.signal)
         const geojsonAssets: Asset[] = []
         const realClusters: Cluster[] = []
         for (const c of clusterData.clusters) {
@@ -106,7 +107,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
         const parallelRequests = 3
 
         // Fetch first page to get total count
-        const firstPageData = await fetchTiles(workspaceId, bounds, pageSize, mergedFilters, abortController.signal, 0, serverZoom)
+        const firstPageData = await fetchTiles(organizationId, workspaceId, bounds, pageSize, mergedFilters, abortController.signal, 0, serverZoom)
 
         // Check if aborted before processing
         if (abortController.signal.aborted) return
@@ -149,7 +150,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
 
             // Fetch batch in parallel
             const batchPromises = batchOffsets.map(offset =>
-              fetchTiles(workspaceId, bounds, pageSize, mergedFilters, abortController.signal, offset, serverZoom)
+              fetchTiles(organizationId, workspaceId, bounds, pageSize, mergedFilters, abortController.signal, offset, serverZoom)
             )
 
             try {
@@ -196,7 +197,7 @@ function MapPageContent({ workspaceId, loaderData, flyToLocation, onBoundsChange
       }
       console.error('Error loading map data:', error)
     }
-  }, [workspaceId, selectedAssetTypes, attributeFilters, geometryTypeFilter, clusteringDisabled, buildFilters, onBoundsChange])
+  }, [organizationId, workspaceId, selectedAssetTypes, attributeFilters, geometryTypeFilter, clusteringDisabled, buildFilters, onBoundsChange])
 
   useEffect(() => {
     const newSearchParams = new URLSearchParams(searchParams)
@@ -268,13 +269,12 @@ function MapPage() {
 
   return (
     <MapProvider
-      organizationId={organizationId || ''}
-      workspaceId={workspaceId || ''}
       onZoomToAsset={handleZoomToAsset}
       currentBounds={currentBounds}
     >
       <MapPageContent
-        workspaceId={workspaceId || ''}
+        organizationId={organizationId || ''}
+        workspaceId={workspaceId}
         loaderData={loaderData}
         flyToLocation={flyToLocation}
         onBoundsChange={setCurrentBounds}

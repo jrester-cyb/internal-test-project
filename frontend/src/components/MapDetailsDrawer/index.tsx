@@ -33,7 +33,7 @@ interface CommonProps {
   isOpen: boolean
   onClose: () => void
   organizationId: string
-  workspaceId: string
+  workspaceId?: string
   /** When true, skip the initial slide animation (for pre-selected assets/clusters on page load) */
   initiallyOpen?: boolean
 }

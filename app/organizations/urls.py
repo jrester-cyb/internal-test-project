@@ -99,6 +99,16 @@ asset_types_router.register(
     basename="organization-assettype",
 )
 
+# Nested router for assets under organizations (organization-level, aggregates all workspaces)
+org_assets_router = NestedDefaultRouter(
+    router, r"organizations", lookup="organization"
+)
+org_assets_router.register(
+    r"assets",
+    AssetViewSet,
+    basename="organization-asset",
+)
+
 # Nested router for attributes under asset types (organization-level)
 attributes_router = NestedDefaultRouter(
     asset_types_router, r"asset-types", lookup="assettype"
@@ -132,4 +142,5 @@ urlpatterns = (
     + asset_types_router.urls
     + attributes_router.urls
     + choices_router.urls
+    + org_assets_router.urls
 )

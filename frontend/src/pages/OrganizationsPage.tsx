@@ -29,16 +29,30 @@ export default function OrganizationsPage() {
     async function loadWorkspaces() {
       try {
         setLoading(true)
-        const data = await fetchWorkspaces()
-        setWorkspaces(Array.isArray(data) ? data : data.results || [])
+        // Fetch workspaces for all organizations in parallel
+        const allWorkspaces: Workspace[] = []
+        await Promise.all(
+          organizations.map(async (org) => {
+            try {
+              const data = await fetchWorkspaces(org.id)
+              const orgWorkspaces = Array.isArray(data) ? data : data.results || []
+              allWorkspaces.push(...orgWorkspaces)
+            } catch (error) {
+              console.error(`Failed to load workspaces for org ${org.id}:`, error)
+            }
+          })
+        )
+        setWorkspaces(allWorkspaces)
       } catch (error) {
         console.error('Failed to load workspaces:', error)
       } finally {
         setLoading(false)
       }
     }
-    loadWorkspaces()
-  }, [])
+    if (organizations.length > 0) {
+      loadWorkspaces()
+    }
+  }, [organizations])
 
   const getWorkspaceCount = (orgId: string) => {
     return workspaces.filter(w => w.organization === orgId).length

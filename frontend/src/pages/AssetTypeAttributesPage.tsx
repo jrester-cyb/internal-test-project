@@ -32,14 +32,13 @@ export default function AssetTypeAttributesPage() {
     count: number
     assetTypeId: string
     workspaceId: string
+    organizationId: string
     includeHidden?: boolean
   }
 
   const { initialData, initialNextUrl, count, includeHidden: initialIncludeHidden } = loaderData
 
-  const { assetTypeId, workspaceId } = useParams()
-  const workspaceData = useRouteLoaderData('workspace-route') as { organization?: string } | undefined
-  const organizationId = workspaceData?.organization
+  const { assetTypeId, workspaceId, organizationId } = useParams()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const listRef = useRef<any>(null)
@@ -131,12 +130,12 @@ export default function AssetTypeAttributesPage() {
 
     prevFiltersRef.current = { excludedScopes, selectedTags }
 
-    if (filtersChanged && workspaceId && assetTypeId) {
+    if (filtersChanged && organizationId && workspaceId && assetTypeId) {
       const doRefetch = async () => {
         setIsRefetching(true)
         console.debug('[Filter Effect] Refetching with filters:', { excludedScopes, selectedTags, searchTerm, includeHidden })
         try {
-          const response = await fetchAssetAttributeDefinitions(workspaceId, assetTypeId, 1, 25, {
+          const response = await fetchAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId, 1, 25, {
             search: searchTerm || undefined,
             includeHidden,
             excludeScopes: excludedScopes.length > 0 ? excludedScopes : undefined,
@@ -267,9 +266,9 @@ export default function AssetTypeAttributesPage() {
 
   // Fetch available tags after initial render (deferred to avoid blocking UI)
   useEffect(() => {
-    if (workspaceId && assetTypeId) {
+    if (organizationId && workspaceId && assetTypeId) {
       const fetchData = () => {
-        fetchAttributeTags(workspaceId, assetTypeId)
+        fetchAttributeTags(organizationId, workspaceId, assetTypeId)
           .then(tags => setAvailableTags(tags))
           .catch(err => console.error('Failed to fetch tags:', err))
       }
@@ -638,7 +637,7 @@ export default function AssetTypeAttributesPage() {
         : { ...formData, order: count }
 
       if (editingAttribute) {
-        const updatedAttr = await updateAssetTypeAttribute(workspaceId!, assetTypeId!, editingAttribute.id, dataToSave)
+        const updatedAttr = await updateAssetTypeAttribute(organizationId!, workspaceId!, assetTypeId!, editingAttribute.id, dataToSave)
 
         // When editing a base attribute, the backend may create a new override with a different ID
         // Use apiKey to match and replace the correct row
@@ -659,7 +658,7 @@ export default function AssetTypeAttributesPage() {
           setSelectedAttribute(updatedAttr)
         }
       } else {
-        const newAttr = await createAssetTypeAttribute(workspaceId!, assetTypeId!, dataToSave)
+        const newAttr = await createAssetTypeAttribute(organizationId!, workspaceId!, assetTypeId!, dataToSave)
         // Add new attribute to local state
         setAllAttributes(prev => [...prev, newAttr])
         // Select the newly created attribute
@@ -709,11 +708,11 @@ export default function AssetTypeAttributesPage() {
       const apiKey = attr.apiKey
       const isOverride = attr.isOverride
 
-      await deleteAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
+      await deleteAssetTypeAttribute(organizationId!, workspaceId!, assetTypeId!, attr.id)
 
       if (isOverride) {
         // This was an override - fetch the base attribute to replace it
-        const baseAttr = await fetchAssetAttributeByApiKey(workspaceId!, assetTypeId!, apiKey)
+        const baseAttr = await fetchAssetAttributeByApiKey(organizationId!, workspaceId!, assetTypeId!, apiKey)
         if (baseAttr) {
           // Replace the override with the base attribute
           setAllAttributes(prev => prev.map(a =>
@@ -760,7 +759,7 @@ export default function AssetTypeAttributesPage() {
 
   const handleHide = async (attr: AssetTypeAttribute) => {
     try {
-      const hiddenAttr = await hideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
+      const hiddenAttr = await hideAssetTypeAttribute(organizationId!, workspaceId!, assetTypeId!, attr.id)
 
       // Update the attribute in place with isHidden flag
       setAllAttributes(prev => prev.map(a =>
@@ -796,7 +795,7 @@ export default function AssetTypeAttributesPage() {
 
   const handleUnhide = async (attr: AssetTypeAttribute) => {
     try {
-      const updatedAttr = await unhideAssetTypeAttribute(workspaceId!, assetTypeId!, attr.id)
+      const updatedAttr = await unhideAssetTypeAttribute(organizationId!, workspaceId!, assetTypeId!, attr.id)
 
       // Update the row in place - the returned attribute replaces the current one
       // (may be base attribute if override was deleted, or same attribute if just unhidden)
@@ -1274,6 +1273,7 @@ export default function AssetTypeAttributesPage() {
               <Suspense fallback={<CircularProgress size={20} />}>
                 <AttributeChoicesSection
                   attribute={displayedAttribute}
+                  organizationId={organizationId!}
                   workspaceId={workspaceId!}
                   assetTypeId={assetTypeId!}
                   expanded={expandedSections.choices}

@@ -29,6 +29,7 @@ import JsonEditor from '@app/components/JsonEditor'
 
 interface AttributeChoicesSectionProps {
   attribute: AssetTypeAttribute
+  organizationId: string
   workspaceId: string
   assetTypeId: string
   expanded?: boolean
@@ -39,6 +40,7 @@ interface AttributeChoicesSectionProps {
 
 export default function AttributeChoicesSection({
   attribute,
+  organizationId,
   workspaceId,
   assetTypeId,
   expanded: controlledExpanded,
@@ -77,7 +79,7 @@ export default function AttributeChoicesSection({
   const loadChoices = async () => {
     setLoading(true)
     try {
-      const fetchedChoices = await fetchAssetTypeAttributeChoices(workspaceId, assetTypeId, attribute.id)
+      const fetchedChoices = await fetchAssetTypeAttributeChoices(organizationId, workspaceId, assetTypeId, attribute.id)
       setChoices(fetchedChoices)
       setLoaded(true)
     } catch (error) {
@@ -128,6 +130,7 @@ export default function AttributeChoicesSection({
 
     try {
       const newChoice = await createAssetTypeAttributeChoice(
+        organizationId,
         workspaceId,
         assetTypeId,
         attribute.id,
@@ -150,7 +153,7 @@ export default function AttributeChoicesSection({
     if (!confirm(`Are you sure you want to delete the choice "${displayValue}"?`)) return
 
     try {
-      await deleteAssetTypeAttributeChoice(workspaceId, assetTypeId, attribute.id, choice.id)
+      await deleteAssetTypeAttributeChoice(organizationId, workspaceId, assetTypeId, attribute.id, choice.id)
       setChoices(prev => prev.filter(c => c.id !== choice.id))
     } catch (error) {
       console.error('Failed to delete choice:', error)
@@ -171,7 +174,7 @@ export default function AttributeChoicesSection({
     console.log('Reordering choices:', { workspaceId, assetTypeId, attributeId: attribute.id, updates })
 
     try {
-      await reorderAssetTypeAttributeChoices(workspaceId, assetTypeId, attribute.id, updates)
+      await reorderAssetTypeAttributeChoices(organizationId, workspaceId, assetTypeId, attribute.id, updates)
     } catch (error) {
       console.error('Failed to reorder choices:', error)
       // Reload choices on error

@@ -23,7 +23,7 @@ import type { DragEndEvent } from '@dnd-kit/core'
 
 export interface AssetContentProps {
   organizationId: string
-  workspaceId: string
+  workspaceId?: string
   asset: Asset
   attributes?: AssetTypeAttribute[]
   onEdit?: (asset: Asset) => void
@@ -139,12 +139,12 @@ export default function AssetContent({
 
       setLoading(true)
       try {
-        const data = await getAsset(workspaceId, asset.id)
+        const data = await getAsset(organizationId, workspaceId, asset.id)
         setFullAsset(data)
 
         // Fetch attributes if not provided and we have an asset type
         if (!propAttributes && data.assetType) {
-          const attrsResponse = await fetchAssetAttributeDefinitions(workspaceId, data.assetType)
+          const attrsResponse = await fetchAssetAttributeDefinitions(organizationId, workspaceId, data.assetType)
           setAttributes(Array.isArray(attrsResponse.results) ? attrsResponse.results : [])
         }
       } catch (error) {
@@ -154,14 +154,14 @@ export default function AssetContent({
       }
     }
     loadFullAsset()
-  }, [asset?.id, workspaceId, propAttributes])
+  }, [asset?.id, organizationId, workspaceId, propAttributes])
 
   // Fetch related assets
   useEffect(() => {
-    if (workspaceId && asset?.id) {
+    if (organizationId && workspaceId && asset?.id) {
       setRelatedLoading(true)
       setRelatedError(null)
-      fetchRelatedAssets(workspaceId, asset.id)
+      fetchRelatedAssets(organizationId, workspaceId, asset.id)
         .then(setRelatedAssets)
         .catch((err) => {
           console.error('Failed to fetch related assets:', err)
@@ -169,7 +169,7 @@ export default function AssetContent({
         })
         .finally(() => setRelatedLoading(false))
     }
-  }, [workspaceId, asset?.id])
+  }, [organizationId, workspaceId, asset?.id])
 
   // Always show what we have - use the passed asset immediately, update when full data loads
   const displayAsset = fullAsset || asset

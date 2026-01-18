@@ -1,63 +1,56 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { fetchOrganizations } from '@app/api/assets'
-
-interface Organization {
-  id: string
-  name: string
-  description?: string
-  created_at?: string
-  updated_at?: string
-}
+import { createContext, useContext, useState, type ReactNode } from 'react'
+import type { Organization, Workspace } from '@app/types'
 
 interface OrganizationContextType {
   organizations: Organization[]
   activeOrganization: Organization | null
   setActiveOrganization: (org: Organization) => void
-  isLoading: boolean
+  workspaces: Workspace[]
+  setWorkspaces: (workspaces: Workspace[]) => void
+  activeWorkspace: Workspace | null
+  setActiveWorkspace: (workspace: Workspace | null) => void
+  isGlobalMode: boolean
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined)
 
-export function OrganizationProvider({ children }: { children: ReactNode }) {
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [activeOrganization, setActiveOrganizationState] = useState<Organization | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+interface OrganizationProviderProps {
+  children: ReactNode
+  organizations: Organization[]
+}
 
-  // Load organizations on mount
-  useEffect(() => {
-    async function loadOrganizations() {
-      try {
-        setIsLoading(true)
-        const data = await fetchOrganizations()
-        const orgList = Array.isArray(data) ? data : data.results || []
-        setOrganizations(orgList)
-
-        // Try to restore active organization from localStorage
-        const savedOrgId = localStorage.getItem('activeOrganizationId')
-        if (savedOrgId) {
-          const savedOrg = orgList.find((org: Organization) => org.id === savedOrgId)
-          if (savedOrg) {
-            setActiveOrganizationState(savedOrg)
-          } else if (orgList.length > 0) {
-            setActiveOrganizationState(orgList[0])
-          }
-        } else if (orgList.length > 0) {
-          // Default to first organization if none saved
-          setActiveOrganizationState(orgList[0])
-        }
-      } catch (error) {
-        console.error('Failed to load organizations:', error)
-      } finally {
-        setIsLoading(false)
-      }
+export function OrganizationProvider({ children, organizations }: OrganizationProviderProps) {
+  const [activeOrganization, setActiveOrganizationState] = useState<Organization | null>(() => {
+    const savedOrgId = localStorage.getItem('activeOrganizationId')
+    if (savedOrgId) {
+      const savedOrg = organizations.find(org => org.id === savedOrgId)
+      if (savedOrg) return savedOrg
     }
-    loadOrganizations()
-  }, [])
+    return organizations[0] || null
+  })
+
+  const [workspaces, setWorkspacesState] = useState<Workspace[]>([])
+  const [activeWorkspace, setActiveWorkspaceState] = useState<Workspace | null>(null)
 
   const setActiveOrganization = (org: Organization) => {
     setActiveOrganizationState(org)
     localStorage.setItem('activeOrganizationId', org.id)
   }
+
+  const setWorkspaces = (newWorkspaces: Workspace[]) => {
+    setWorkspacesState(newWorkspaces)
+  }
+
+  const setActiveWorkspace = (workspace: Workspace | null) => {
+    setActiveWorkspaceState(workspace)
+    if (workspace) {
+      localStorage.setItem('activeWorkspaceId', workspace.id)
+    } else {
+      localStorage.removeItem('activeWorkspaceId')
+    }
+  }
+
+  const isGlobalMode = activeWorkspace === null
 
   return (
     <OrganizationContext.Provider
@@ -65,7 +58,11 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         organizations,
         activeOrganization,
         setActiveOrganization,
-        isLoading,
+        workspaces,
+        setWorkspaces,
+        activeWorkspace,
+        setActiveWorkspace,
+        isGlobalMode,
       }}
     >
       {children}

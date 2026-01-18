@@ -48,24 +48,24 @@ export default function AssetDetailPage() {
 
   // Refetch asset when globalValuesOnly toggle changes
   useEffect(() => {
-    if (!workspaceId || !asset.id) return
+    if (!organizationId || !workspaceId || !asset.id) return
 
     setLoadingGlobalValues(true)
     import('../api/assets').then(({ getAsset }) => {
       const url = globalValuesOnly ? `${asset.id}/?global_values_only=true` : asset.id
-      getAsset(workspaceId, url)
+      getAsset(organizationId, workspaceId, url)
         .then(setCurrentAsset)
         .catch(err => console.error('Failed to fetch asset:', err))
         .finally(() => setLoadingGlobalValues(false))
     })
-  }, [workspaceId, asset.id, globalValuesOnly])
+  }, [organizationId, workspaceId, asset.id, globalValuesOnly])
 
   // Fetch related assets
   useEffect(() => {
-    if (workspaceId && asset.id) {
+    if (organizationId && workspaceId && asset.id) {
       setRelatedLoading(true)
       setRelatedError(null)
-      fetchRelatedAssets(workspaceId, asset.id)
+      fetchRelatedAssets(organizationId, workspaceId, asset.id)
         .then(setRelatedAssets)
         .catch((err) => {
           console.error('Failed to fetch related assets:', err)
@@ -73,7 +73,7 @@ export default function AssetDetailPage() {
         })
         .finally(() => setRelatedLoading(false))
     }
-  }, [workspaceId, asset.id])
+  }, [organizationId, workspaceId, asset.id])
 
 
   const handleEdit = () => {
@@ -210,6 +210,7 @@ export default function AssetDetailPage() {
         onClose={handleEditDialogClose}
         asset={currentAsset}
         attributes={attributes}
+        organizationId={organizationId || ''}
         workspaceId={workspaceId || ''}
         assetTypeId={assetTypeId || ''}
         onSuccess={handleEditSuccess}

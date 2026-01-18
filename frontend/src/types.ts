@@ -1,3 +1,20 @@
+export interface Organization {
+  id: string
+  name: string
+  description?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  organization: string
+  description?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export interface AssetType {
   id: string
   name: string

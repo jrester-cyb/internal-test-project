@@ -30,13 +30,12 @@ export default function ManageWorkspacesPage() {
 
   useEffect(() => {
     async function loadWorkspaces() {
+      if (!organizationId) return
       try {
         setLoading(true)
-        const data = await fetchWorkspaces()
+        const data = await fetchWorkspaces(organizationId)
         const allWorkspaces = Array.isArray(data) ? data : data.results || []
-        // Filter workspaces for this organization
-        const orgWorkspaces = allWorkspaces.filter(w => w.organization === organizationId)
-        setWorkspaces(orgWorkspaces)
+        setWorkspaces(allWorkspaces)
       } catch (error) {
         console.error('Failed to load workspaces:', error)
       } finally {

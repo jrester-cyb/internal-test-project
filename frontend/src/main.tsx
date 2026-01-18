@@ -5,7 +5,8 @@ async function checkAuth(): Promise<boolean> {
     const res = await fetch('/api/me', { credentials: 'include' })
     return res.ok
   } catch (e) {
-    return true
+    // Redirect to login page
+    return
   }
 }
 

@@ -29,7 +29,8 @@ export default function AssetGridPage() {
     attributes?: AssetTypeAttribute[],
     totalCount: number,
     pageSize: number,
-    workspaceId: string
+    workspaceId: string,
+    organizationId: string
   }
 
   const { isOpen, setIsOpen, isMobile, windowWidth } = useSidebar()
@@ -122,6 +123,7 @@ export default function AssetGridPage() {
     try {
       const limit = endIndex - startIndex + 1
       const response = await fetchAssetsByType(
+        initialData.organizationId,
         initialData.workspaceId,
         assetTypeId!,
         limit,
@@ -142,7 +144,7 @@ export default function AssetGridPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [assetTypeId, initialData.workspaceId, isLoading])
+  }, [assetTypeId, initialData.organizationId, initialData.workspaceId, isLoading])
 
   // Helper to convert value based on attribute type
   const convertValueForAttribute = useCallback((newValue: string, attributeType: string): any => {
@@ -440,7 +442,7 @@ export default function AssetGridPage() {
           if (Object.keys(payload).length > 0) {
             // We don't need to use the response - local state already has the correct values
             // from the optimistic update when the user edited the cell
-            await updateAsset(initialData.workspaceId, assetId, payload)
+            await updateAsset(initialData.organizationId, initialData.workspaceId, assetId, payload)
           }
         } catch (error) {
           errors.push(`Failed to save asset: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -1513,7 +1515,7 @@ export default function AssetGridPage() {
       if ((attr.choices && attr.choices.length > 0) || attr.hasChoices) {
         // Load choices on demand when we know they exist
         if (attr.hasChoices && assetTypeId) {
-          loadChoices(initialData.workspaceId, assetTypeId, attr.id)
+          loadChoices(initialData.organizationId, initialData.workspaceId, assetTypeId, attr.id)
         }
         // Create editor with a getter that retrieves choices from context
         // Pass unit for number attributes to display in dropdown

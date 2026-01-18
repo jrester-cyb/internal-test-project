@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Backdrop, Box, Paper, Slide } from '@mui/material'
 import { ChevronRight as ChevronRightIcon, KeyboardArrowDown as ChevronDownIcon } from '@mui/icons-material'
-import { useSidebar } from '@app/contexts/SidebarContext'
+import { useLayout } from '@app/contexts/LayoutContext'
 
 interface PvDrawerProps {
   key?: string
@@ -219,7 +219,7 @@ export default function PvDrawer({
   inline = false,
   bgcolor
 }: Readonly<PvDrawerProps>) {
-  const { isMobile } = useSidebar()
+  const { isMobile } = useLayout()
   const isResizable = resizable && !isMobile
   const paperRef = useRef<HTMLDivElement>(null)
 

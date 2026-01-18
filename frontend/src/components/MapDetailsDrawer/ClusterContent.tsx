@@ -8,7 +8,7 @@ import VirtualizedList from '@app/components/VirtualizedList'
 
 export interface ClusterContentProps {
   organizationId: string
-  workspaceId: string
+  workspaceId?: string
   cluster: Cluster
   /** Map of index to asset for sparse data */
   assets: Map<number, Asset>

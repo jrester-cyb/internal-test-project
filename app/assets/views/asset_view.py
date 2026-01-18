@@ -154,8 +154,9 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         return self._paginator
 
     def get_queryset(self):
-        """Filter assets by workspace via WorkspaceAsset join table"""
+        """Filter assets by workspace or organization"""
         workspace_pk = self.kwargs.get("workspace_pk")
+        organization_pk = self.kwargs.get("organization_pk")
 
         # If accessed via nested route under asset type, filter by asset type
         if "assettype_pk" in self.kwargs:
@@ -168,6 +169,11 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             # Filter by workspace via WorkspaceAsset join table
             queryset = Asset.objects.filter(
                 workspace_memberships__workspace_id=workspace_pk,
+            )
+        elif organization_pk:
+            # Filter by organization (org-level endpoint, aggregates all workspaces)
+            queryset = Asset.objects.filter(
+                organization_id=organization_pk,
             )
         else:
             # Top-level access: return all assets
@@ -992,7 +998,7 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         ],
     )
     @action(detail=False, methods=["post"])
-    def search(self, request, workspace_pk=None, assettype_pk=None):
+    def search(self, request, workspace_pk=None, assettype_pk=None, organization_pk=None):
         """Search assets by multiple attribute and geographic conditions with AND/OR logic"""
         from django.db.models import Prefetch
 
@@ -1005,6 +1011,8 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             queryset = Asset.objects.filter(
                 workspace_memberships__workspace_id=workspace_pk
             )
+        elif organization_pk:
+            queryset = Asset.objects.filter(organization_id=organization_pk)
         else:
             queryset = Asset.objects.all()
 
@@ -1226,12 +1234,16 @@ Format the output as follows:
         ],
     )
     @action(detail=False, methods=["get", "post"])
-    def tiles(self, request, workspace_pk=None):
+    def tiles(self, request, workspace_pk=None, organization_pk=None):
         """Get assets as lightweight GeoJSON features for map rendering"""
         # Start with base queryset
         queryset = Asset.objects.all()
 
-        # Filter by workspace if provided
+        # Filter by organization if provided (org-level endpoint)
+        if organization_pk:
+            queryset = queryset.filter(organization_id=organization_pk)
+
+        # Filter by workspace if provided (workspace-level endpoint)
         if workspace_pk:
             queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
 

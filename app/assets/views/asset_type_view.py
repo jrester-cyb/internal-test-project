@@ -43,14 +43,24 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        """Filter by workspace via WorkspaceAssetType join table"""
+        """Filter by workspace or organization"""
         workspace_pk = self.kwargs.get("workspace_pk")
+        organization_pk = self.kwargs.get("organization_pk")
 
-        # Get asset types visible to this workspace via join table
-        queryset = AssetType.objects.filter(
-            workspace_asset_types__workspace_id=workspace_pk,
-            workspace_asset_types__deleted_at__isnull=True,
-        ).select_related("organization")
+        if workspace_pk:
+            # Get asset types visible to this workspace via join table
+            queryset = AssetType.objects.filter(
+                workspace_asset_types__workspace_id=workspace_pk,
+                workspace_asset_types__deleted_at__isnull=True,
+            ).select_related("organization")
+        elif organization_pk:
+            # Get all asset types for this organization
+            queryset = AssetType.objects.filter(
+                organization_id=organization_pk,
+            ).select_related("organization")
+        else:
+            # Top-level access: return all asset types
+            queryset = AssetType.objects.all().select_related("organization")
 
         # For detail view, prefetch attributes (both base and workspace extensions)
         if self.action == "retrieve":

@@ -1,10 +1,10 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { useSearchParams, useLoaderData } from 'react-router-dom'
+import { useSearchParams, useLoaderData, useParams } from 'react-router-dom'
 import { Box } from '@mui/material'
 import type { Asset, AssetTypeAttribute, Cluster } from '@app/types'
 import { searchAssets, fetchAssetTypes } from '@app/api/assets'
-import { useSidebar } from '@app/contexts/SidebarContext'
+import { useLayout } from '@app/contexts/LayoutContext'
 import MapDetailsDrawer from '@app/components/MapDetailsDrawer'
 import FilterBuilder from '@app/components/FilterBuilder'
 import type { AttributeFilter } from '@app/components/FilterBuilder'
@@ -98,16 +98,19 @@ export function useMapContext() {
 
 interface MapProviderProps {
   children: ReactNode
-  organizationId: string
-  workspaceId: string
   onZoomToAsset?: (asset: Asset) => void
   currentBounds?: number[] | null
 }
 
-export function MapProvider({ children, organizationId, workspaceId, onZoomToAsset, currentBounds }: MapProviderProps) {
+export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProviderProps) {
+  const { organizationId, workspaceId } = useParams<{ organizationId: string; workspaceId?: string }>()
+
+  if (!organizationId) {
+    throw new Error('MapProvider must be used within a route with organizationId parameter')
+  }
   const [searchParams, setSearchParams] = useSearchParams()
   const loaderData = useLoaderData() as MapLoaderData | null
-  const { isOpen: sidebarOpen, isMobile } = useSidebar()
+  const { isOpen: sidebarOpen, isMobile } = useLayout()
 
   // Calculate sidebar width for overlay positioning
   const sidebarWidth = isMobile ? 0 : (sidebarOpen ? 240 : 64)
@@ -138,9 +141,9 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
 
   // Load asset types into cache on mount
   useEffect(() => {
-    if (!workspaceId || assetTypeCacheLoaded.current) return
+    if (!organizationId || assetTypeCacheLoaded.current) return
 
-    fetchAssetTypes(workspaceId)
+    fetchAssetTypes(organizationId, workspaceId)
       .then(response => {
         const types = Array.isArray(response) ? response : response.results || []
         types.forEach((type: { id: string; name: string }) => {
@@ -151,7 +154,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
       .catch(err => {
         console.error('Failed to load asset types for cache:', err)
       })
-  }, [workspaceId])
+  }, [organizationId, workspaceId])
 
   // Track if drawer was initially open from URL (to skip animation)
   const wasInitiallyOpen = Boolean(loaderData?.selectedAsset || loaderData?.selectedCluster)
@@ -194,6 +197,9 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   // Refs to track values without causing callback recreation
   const drawerStateRef = useRef(drawerState)
   drawerStateRef.current = drawerState
+
+  const organizationIdRef = useRef(organizationId)
+  organizationIdRef.current = organizationId
 
   const workspaceIdRef = useRef(workspaceId)
   workspaceIdRef.current = workspaceId
@@ -321,8 +327,8 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   const openClusterDrawer = useCallback((cluster: Cluster) => {
     // Skip if this cluster is already open
     if (drawerState.isOpen &&
-        drawerState.content?.type === 'cluster' &&
-        drawerState.content.cluster.h3Index === cluster.h3Index) {
+      drawerState.content?.type === 'cluster' &&
+      drawerState.content.cluster.h3Index === cluster.h3Index) {
       return
     }
 
@@ -379,7 +385,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
     filters.push(...attributeFilterGroups)
 
     // Fetch initial count and first batch
-    searchAssets(workspaceId, {
+    searchAssets(organizationId, workspaceId, {
       filters,
       limit: 20,
       offset: 0
@@ -438,6 +444,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
   const loadClusterAssetsRange = useCallback((startIndex: number, endIndex: number) => {
     // Read from ref to avoid dependency on drawerState
     const currentContent = drawerStateRef.current.content
+    const currentOrganizationId = organizationIdRef.current
     const currentWorkspaceId = workspaceIdRef.current
 
     // Only load if we have a cluster drawer open
@@ -500,7 +507,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
     filters.push(...attributeFilterGroups)
 
     // Fetch the specific range
-    searchAssets(currentWorkspaceId, {
+    searchAssets(currentOrganizationId, currentWorkspaceId, {
       filters,
       limit,
       offset: startIndex
@@ -649,6 +656,7 @@ export function MapProvider({ children, organizationId, workspaceId, onZoomToAss
         }}
       >
         <FilterBuilder
+          organizationId={organizationId}
           workspaceId={workspaceId}
           selectedAssetTypes={selectedAssetTypes}
           onAssetTypesChange={setSelectedAssetTypes}

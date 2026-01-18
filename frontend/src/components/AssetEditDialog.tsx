@@ -38,6 +38,7 @@ interface AssetEditDialogProps {
   open: boolean
   asset: Asset | null
   attributes: AssetTypeAttribute[]
+  organizationId: string
   workspaceId: string
   assetTypeId: string
   onClose: () => void
@@ -288,6 +289,7 @@ export default function AssetEditDialog({
   open,
   asset,
   attributes,
+  organizationId,
   workspaceId,
   onClose,
   onSuccess,
@@ -412,7 +414,7 @@ export default function AssetEditDialog({
         }
       }
 
-      const updatedAsset = await updateAsset(workspaceId, asset.id, payload)
+      const updatedAsset = await updateAsset(organizationId, workspaceId, asset.id, payload)
       onSuccess(updatedAsset)
       onClose()
     } catch (err) {
