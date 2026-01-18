@@ -92,7 +92,6 @@ class LoginInitView(TemplateView):
                     reverse(
                         "auth-manager:auth-callback",
                         args=(identity_provider.id,),
-                        request=request,
                     )
                 )
             elif isinstance(identity_provider, SAMLIdentityProvider):

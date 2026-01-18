@@ -34,7 +34,7 @@ class MFAView(TemplateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
-        devices = self.user.user_multifactor_auth_devices.exclude(verified=False)
+        devices = self.user.mfa_devices.filter(confirmed_at__isnull=False)
         if not devices.exists():
             # Redirect to enrollment with token
             enroll_url = f"{reverse('auth-manager:mfa-enroll')}?t={self.token}"
@@ -43,7 +43,7 @@ class MFAView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        devices = self.user.user_multifactor_auth_devices.exclude(verified=False)
+        devices = self.user.mfa_devices.filter(confirmed_at__isnull=False)
         device_list = []
 
         # Base URL for MFA device API endpoints
@@ -51,16 +51,16 @@ class MFAView(TemplateView):
 
         for device in devices:
             device_dict = {
-                "name": device.device_type,
-                "value": device.device_type,
+                "name": device.delivery_method_display,
+                "value": device.delivery_method,
                 "id": device.id,
                 "request_notification_endpoint": f"{base_url}/{device.id}/request-notification/",
                 "verify_endpoint": f"{base_url}/{device.id}/verify/",
             }
-            if device.device_type.lower() == "email":
-                device_dict["email"] = device.user.email
-            elif device.device_type.lower() == "sms":
-                device_dict["phone_number"] = device.phone_number
+            if device.delivery_method == "email":
+                device_dict["email"] = device.get_masked_destination()
+            elif device.delivery_method == "sms":
+                device_dict["phone_number"] = device.get_masked_destination()
 
             device_list.append(device_dict)
 

@@ -32,7 +32,7 @@ class MFAEnrollView(TemplateView):
             )
 
         # If user already has enrolled devices, redirect to the mfa page with token
-        if self.user.user_multifactor_auth_devices.exclude(verified=False).exists():
+        if self.user.mfa_devices.filter(confirmed_at__isnull=False).exists():
             mfa_url = f"{reverse('auth-manager:mfa')}?t={self.token}"
             return redirect(mfa_url)
 
@@ -41,12 +41,12 @@ class MFAEnrollView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Iterate over the devices of the user
-        available_devices = MFADevice.objects.filter(user=self.user, verified=False)
+        # Iterate over the devices of the user (unconfirmed devices available for enrollment)
+        available_devices = MFADevice.objects.filter(user=self.user, confirmed_at__isnull=True)
 
         # Sort so TOTP (Authenticator App) is always first
         available_devices = sorted(
-            available_devices, key=lambda d: 0 if d.device_type.upper() == "TOTP" else 1
+            available_devices, key=lambda d: 0 if d.delivery_method == "app" else 1
         )
 
         # Base URL for MFA device API endpoints
@@ -56,25 +56,16 @@ class MFAEnrollView(TemplateView):
         device_list = []
         for device in available_devices:
             device_dict = {
-                "name": device.device_type,
-                "value": device.device_type,
+                "name": device.delivery_method_display,
+                "value": device.delivery_method,
                 "id": device.id,
                 "request_notification_endpoint": f"{base_url}/{device.id}/request-notification/",
                 "verify_endpoint": f"{base_url}/{device.id}/enroll/",
                 "update_endpoint": f"{base_url}/{device.id}/",
             }
-            if device.device_type == "TOTP":
-                # thirdparty
-                from pyotp import TOTP
-
-                user_email = getattr(device.user, "email", "user")
-                issuer = "Power-View"
-                totp = TOTP(device.seed)
-                provisioning_uri = totp.provisioning_uri(
-                    name=user_email, issuer_name=issuer
-                )
-                device_dict["provisioning_uri"] = provisioning_uri
-                device_dict["seed"] = device.seed
+            if device.delivery_method == "app":
+                device_dict["provisioning_uri"] = device.get_totp_uri()
+                device_dict["seed"] = device.secret
 
             device_list.append(device_dict)
 

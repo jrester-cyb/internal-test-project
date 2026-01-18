@@ -192,6 +192,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
 
+    # Security fields
+    lock_expiration = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Account is locked until this time due to failed login attempts",
+    )
+
     # Timestamps
     date_joined = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(null=True, blank=True)
