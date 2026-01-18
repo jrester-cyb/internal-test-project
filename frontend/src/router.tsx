@@ -1,16 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { lazy } from 'react'
-import { organizationsLoader } from './loaders/organizations'
-import { workspacesLoader } from './loaders/workspaces'
-import { initialMapLoader } from './loaders/map'
-import { libraryLoader } from './loaders/library'
-import {
-  assetTypeDetailRouteLoader,
-  assetTypesRouteLoader,
-  assetGridRouteLoader,
-  assetAttributesRouteLoader,
-  assetDetailRouteLoader,
-} from './loaders/assetTypes'
 
 // Lazy load layout and route components
 const MainLayout = lazy(() => import('./components/MainLayout.tsx'))
@@ -30,10 +19,56 @@ const OrganizationIndexPage = lazy(() => import('./pages/OrganizationIndexPage.t
 const OrganizationLayout = lazy(() => import('./pages/OrganizationLayout.tsx'))
 const LandingPage = lazy(() => import('./pages/LandingPage.tsx'))
 
+// Lazy loader wrappers - dynamically import loader modules only when needed
+const lazyOrganizationsLoader = async () => {
+  const { organizationsLoader } = await import('./loaders/organizations')
+  return organizationsLoader()
+}
+
+const lazyWorkspacesLoader = async (args: any) => {
+  const { workspacesLoader } = await import('./loaders/workspaces')
+  return workspacesLoader(args)
+}
+
+const lazyMapLoader = async (args: any) => {
+  const { initialMapLoader } = await import('./loaders/map')
+  return initialMapLoader(args)
+}
+
+const lazyLibraryLoader = async (args: any) => {
+  const { libraryLoader } = await import('./loaders/library')
+  return libraryLoader(args)
+}
+
+const lazyAssetTypesLoader = async (args: any) => {
+  const { assetTypesRouteLoader } = await import('./loaders/assetTypes')
+  return assetTypesRouteLoader(args)
+}
+
+const lazyAssetTypeDetailLoader = async (args: any) => {
+  const { assetTypeDetailRouteLoader } = await import('./loaders/assetTypes')
+  return assetTypeDetailRouteLoader(args)
+}
+
+const lazyAssetGridLoader = async (args: any) => {
+  const { assetGridRouteLoader } = await import('./loaders/assetTypes')
+  return assetGridRouteLoader(args)
+}
+
+const lazyAssetAttributesLoader = async (args: any) => {
+  const { assetAttributesRouteLoader } = await import('./loaders/assetTypes')
+  return assetAttributesRouteLoader(args)
+}
+
+const lazyAssetDetailLoader = async (args: any) => {
+  const { assetDetailRouteLoader } = await import('./loaders/assetTypes')
+  return assetDetailRouteLoader(args)
+}
+
 // Routes shared between org-level and workspace-level
 const sharedRoutes = [
   {
-    loader: initialMapLoader,
+    loader: lazyMapLoader,
     shouldRevalidate: () => false,
     path: "map",
     element: <MapPage />,
@@ -47,12 +82,12 @@ const sharedRoutes = [
       {
         index: true,
         element: <AssetTypesPage />,
-        loader: assetTypesRouteLoader,
+        loader: lazyAssetTypesLoader,
       },
       {
         path: ":assetTypeId",
-        loader: assetTypeDetailRouteLoader,
-        shouldRevalidate: ({ currentParams, nextParams }) => {
+        loader: lazyAssetTypeDetailLoader,
+        shouldRevalidate: ({ currentParams, nextParams }: any) => {
           return currentParams.assetTypeId !== nextParams.assetTypeId
         },
         handle: {
@@ -77,8 +112,8 @@ const sharedRoutes = [
             handle: {
               crumb: "Attributes"
             },
-            loader: assetAttributesRouteLoader,
-            shouldRevalidate: ({ currentUrl, nextUrl }) => {
+            loader: lazyAssetAttributesLoader,
+            shouldRevalidate: ({ currentUrl, nextUrl }: any) => {
               return currentUrl.searchParams.get('search') !== nextUrl.searchParams.get('search') ||
                 currentUrl.searchParams.get('include_hidden') !== nextUrl.searchParams.get('include_hidden')
             },
@@ -92,8 +127,8 @@ const sharedRoutes = [
               {
                 index: true,
                 element: <AssetGridPage />,
-                loader: assetGridRouteLoader,
-                shouldRevalidate: ({ currentUrl, nextUrl }) => {
+                loader: lazyAssetGridLoader,
+                shouldRevalidate: ({ currentUrl, nextUrl }: any) => {
                   return currentUrl.pathname !== nextUrl.pathname
                 },
               },
@@ -104,7 +139,7 @@ const sharedRoutes = [
                   crumb: ({ loaderData, crumb }: any) => loaderData?.asset?.name || crumb?.assetName || 'Asset Detail',
                   hideNavbar: true,
                 },
-                loader: assetDetailRouteLoader,
+                loader: lazyAssetDetailLoader,
               }
             ]
           },
@@ -121,12 +156,12 @@ const sharedRoutes = [
       {
         index: true,
         element: <LibraryPage />,
-        loader: libraryLoader,
+        loader: lazyLibraryLoader,
       },
       {
         path: ":directoryId",
         element: <LibraryPage />,
-        loader: libraryLoader,
+        loader: lazyLibraryLoader,
       },
     ],
   },
@@ -136,7 +171,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <MainLayout />,
-    loader: organizationsLoader,
+    loader: lazyOrganizationsLoader,
     shouldRevalidate: () => false,
     children: [
       {
@@ -160,7 +195,7 @@ export const router = createBrowserRouter([
           {
             path: ":organizationId",
             id: "organization",
-            loader: workspacesLoader,
+            loader: lazyWorkspacesLoader,
             shouldRevalidate: () => false,
             element: <OrganizationLayout />,
             children: [

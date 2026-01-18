@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { Box, List, Drawer, IconButton, Typography, useTheme } from '@mui/material'
 import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import SidebarNavItem from '@app/components/SidebarNavItem'
@@ -39,10 +39,9 @@ export default function Sidebar() {
     prefetchLibrary(activeOrganization.id, activeWorkspace?.id)
   }, [activeOrganization.id, activeWorkspace?.id])
 
-  // Build map URL with saved position
-  const mapUrl = useMemo(() => {
-    return buildMapUrlWithPosition(basePath, activeOrganization.id, activeWorkspace?.id)
-  }, [basePath, activeOrganization.id, activeWorkspace?.id])
+  // Build map URL with saved position - reads from localStorage on each render
+  // This is fine since Sidebar re-renders when navigating away from the map
+  const mapUrl = buildMapUrlWithPosition(basePath, activeOrganization.id, activeWorkspace?.id)
 
   return (
     <Drawer
