@@ -26,6 +26,7 @@ import {
 import { Link } from 'react-router-dom'
 import { useUser } from '../contexts/UserContext'
 import { prefetchSessions } from '../utils/preload'
+import { authFetch } from '../api/authFetch'
 
 interface ActivityItem {
   id: string
@@ -75,10 +76,9 @@ export default function ProfilePage() {
     setEditError(null)
 
     try {
-      const response = await fetch('/api/auth/v2/profile/', {
+      const response = await authFetch('/api/auth/v2/profile/', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(editFormData),
       })
       if (!response.ok) throw new Error('Failed to update profile')

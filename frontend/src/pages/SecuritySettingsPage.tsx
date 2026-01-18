@@ -53,7 +53,7 @@ export default function SecuritySettingsPage() {
 
       {/* Content */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', mt: 2 }}>
-        <Paper sx={{ p: 3, borderRadius: 1 }}>
+        <Paper sx={{ p: 3, mb: 2, borderRadius: 1, flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Outlet context={{ userId }} />
         </Paper>
       </Box>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   Typography,
+  Box,
   Button,
   TextField,
   Stack,
@@ -52,7 +53,7 @@ export default function PasswordPage() {
   }
 
   return (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'auto' }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Change your password to keep your account secure. We recommend using a strong, unique password.
       </Typography>
@@ -106,6 +107,6 @@ export default function PasswordPage() {
           </Button>
         </Stack>
       </form>
-    </>
+    </Box>
   )
 }

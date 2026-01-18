@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material'
 import CopyableText from '@app/components/CopyableText'
 import type { RelatedAsset, RelatedAssetsResponse } from '@app/api/assets'
+import { authFetch } from '@app/api/authFetch'
 
 const PAGE_SIZE = 50
 
@@ -78,7 +79,7 @@ function TreeNode({
     if (children === null && asset.hasChildren) {
       setLoading(true)
       try {
-        const response = await fetch(asset.relatedUrl)
+        const response = await authFetch(asset.relatedUrl)
         if (response.ok) {
           const data: RelatedAssetsResponse = await response.json()
           setChildren(data.children)

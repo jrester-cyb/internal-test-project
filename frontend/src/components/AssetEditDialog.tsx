@@ -23,12 +23,13 @@ import {
 } from '@mui/material'
 import type { Asset, AssetTypeAttribute, AssetTypeAttributeChoice } from '@app/types'
 import { updateAsset } from '@app/api/assets'
+import { authFetch } from '@app/api/authFetch'
 import JsonEditor from '@app/components/JsonEditor'
 import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 
 // Fetch choices from an attribute's choices URL
 async function fetchChoicesFromUrl(choicesUrl: string): Promise<AssetTypeAttributeChoice[]> {
-  const response = await fetch(choicesUrl)
+  const response = await authFetch(choicesUrl)
   if (!response.ok) return []
   const data = await response.json()
   return data.results || []

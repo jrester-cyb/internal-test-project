@@ -133,7 +133,7 @@ export default function SessionsPage() {
       }}
       secondaryAction={
         session.isCurrent ? (
-          <Chip label="Current" size="small" color="primary" />
+          <Chip label="This device" size="small" color="primary" />
         ) : (
           <Button
             size="small"
@@ -172,12 +172,12 @@ export default function SessionsPage() {
   )
 
   return (
-    <Box sx={{ p: 3, flexGrow: 1 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         These are the devices currently logged into your account. You can revoke access to any session.
       </Typography>
 
-      <Box sx={{ height: 400 }}>
+      <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <InfiniteLoaderList<Session>
           items={sessions}
           totalCount={sessionsTotalCount}

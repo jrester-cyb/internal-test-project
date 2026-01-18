@@ -1,4 +1,5 @@
 import type { SearchRequest, UnitCategory } from '@app/types'
+import { authFetch } from './authFetch'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
 
@@ -13,14 +14,14 @@ function buildUrl(organizationId: string, workspaceId: string | undefined, path:
 
 // Fetch all organizations
 export async function fetchOrganizations() {
-  const response = await fetch(`${API_BASE}/organizations/`)
+  const response = await authFetch(`${API_BASE}/organizations/`)
   if (!response.ok) throw new Error('Failed to fetch organizations')
   return response.json()
 }
 
 // Fetch available attribute types
 export async function fetchAttributeTypes(): Promise<{ value: string; label: string }[]> {
-  const response = await fetch(`${API_BASE}/attribute-types/`)
+  const response = await authFetch(`${API_BASE}/attribute-types/`)
   if (!response.ok) throw new Error('Failed to fetch attribute types')
   return response.json()
 }
@@ -41,7 +42,7 @@ export async function fetchUnitCategories(search?: string, category?: string, mo
   let url: string | null = `${API_BASE}/utils/units/?${params}`
 
   while (url) {
-    const response = await fetch(url)
+    const response = await authFetch(url)
     if (!response.ok) throw new Error('Failed to fetch unit categories')
     const data = await response.json()
     allCategories.push(...data.results)
@@ -52,19 +53,19 @@ export async function fetchUnitCategories(search?: string, category?: string, mo
 }
 
 export async function fetchWorkspaces(organizationId: string) {
-  const response = await fetch(`${API_BASE}/organizations/${organizationId}/workspaces/`)
+  const response = await authFetch(`${API_BASE}/organizations/${organizationId}/workspaces/`)
   if (!response.ok) throw new Error('Failed to fetch workspaces')
   return response.json()
 }
 
 export async function fetchWorkspace(organizationId: string, workspaceId: string) {
-  const response = await fetch(`${API_BASE}/organizations/${organizationId}/workspaces/${workspaceId}/`)
+  const response = await authFetch(`${API_BASE}/organizations/${organizationId}/workspaces/${workspaceId}/`)
   if (!response.ok) throw new Error('Failed to fetch workspace')
   return response.json()
 }
 
 export async function fetchAsset(organizationId: string, workspaceId: string | undefined, assetId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `assets/${assetId}/`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/${assetId}/`))
   if (!response.ok) throw new Error('Failed to fetch asset')
   return response.json()
 }
@@ -85,7 +86,7 @@ export interface RelatedAssetsResponse {
 }
 
 export async function fetchRelatedAssets(organizationId: string, workspaceId: string | undefined, assetId: string): Promise<RelatedAssetsResponse> {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `assets/${assetId}/related/`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/${assetId}/related/`))
   if (!response.ok) throw new Error('Failed to fetch related assets')
   return response.json()
 }
@@ -99,7 +100,7 @@ export async function fetchClusters(organizationId: string, workspaceId: string 
   const url = buildUrl(organizationId, workspaceId, `assets/clusters/?${params}`)
 
   if (filters) {
-    const response = await fetch(url, {
+    const response = await authFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -110,7 +111,7 @@ export async function fetchClusters(organizationId: string, workspaceId: string 
     if (!response.ok) throw new Error('Failed to fetch clusters')
     return response.json()
   } else {
-    const response = await fetch(url, { signal })
+    const response = await authFetch(url, { signal })
     if (!response.ok) throw new Error('Failed to fetch clusters')
     return response.json()
   }
@@ -148,7 +149,7 @@ export async function fetchTiles(
   const url = buildUrl(organizationId, workspaceId, `assets/tiles/?${params}`)
 
   if (filters) {
-    const response = await fetch(url, {
+    const response = await authFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -159,7 +160,7 @@ export async function fetchTiles(
     if (!response.ok) throw new Error('Failed to fetch tiles')
     return response.json()
   } else {
-    const response = await fetch(url, { signal })
+    const response = await authFetch(url, { signal })
     if (!response.ok) throw new Error('Failed to fetch tiles')
     return response.json()
   }
@@ -174,7 +175,7 @@ export async function fetchTilesFromUrl(
   signal?: AbortSignal
 ): Promise<TilesResponse> {
   if (filters) {
-    const response = await fetch(url, {
+    const response = await authFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -185,7 +186,7 @@ export async function fetchTilesFromUrl(
     if (!response.ok) throw new Error('Failed to fetch tiles')
     return response.json()
   } else {
-    const response = await fetch(url, { signal })
+    const response = await authFetch(url, { signal })
     if (!response.ok) throw new Error('Failed to fetch tiles')
     return response.json()
   }
@@ -201,7 +202,7 @@ export async function searchAssets(organizationId: string, workspaceId: string |
   // Ensure filters are sent as expected
   const payload = { ...restRequest, filters }
 
-  const response = await fetch(buildUrl(organizationId, workspaceId, `assets/search/?${params}`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/search/?${params}`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -214,13 +215,13 @@ export async function searchAssets(organizationId: string, workspaceId: string |
 }
 
 export async function getAsset(organizationId: string, workspaceId: string | undefined, id: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `assets/${id}/`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/${id}/`))
   if (!response.ok) throw new Error('Failed to fetch asset')
   return response.json()
 }
 
 export async function interpretSearch(organizationId: string, workspaceId: string | undefined, query: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `assets/interpret_search/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/interpret_search/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -275,13 +276,13 @@ export async function fetchAssetTypes(
   }
   const queryString = searchParams.toString()
   const url = buildUrl(organizationId, workspaceId, `asset-types/`) + (queryString ? `?${queryString}` : '')
-  const response = await fetch(url)
+  const response = await authFetch(url)
   if (!response.ok) throw new Error('Failed to fetch asset types')
   return response.json()
 }
 
 export async function fetchAssetType(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/`))
   if (!response.ok) throw new Error('Failed to fetch asset type')
   return response.json()
 }
@@ -315,7 +316,7 @@ export async function fetchAssetsByType(
   })
   const url = buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/assets/?${params}`)
 
-  const response = await fetch(url)
+  const response = await authFetch(url)
   if (!response.ok) throw new Error('Failed to fetch assets by type')
   return response.json()
 }
@@ -356,7 +357,7 @@ export async function fetchAssetAttributeDefinitions(
     params.append('tags', options.tags.join(','))
   }
 
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   return response.json()
 }
@@ -366,14 +367,14 @@ export async function fetchAssetAttributeByApiKey(organizationId: string, worksp
     search: apiKey,
     page_size: '1'
   })
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
   if (!response.ok) throw new Error('Failed to fetch attribute')
   const data = await response.json()
   return data.results?.[0] || null
 }
 
 export async function fetchAttributeAssetCount(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/asset-count/`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/asset-count/`))
   if (!response.ok) throw new Error('Failed to fetch attribute asset count')
   return response.json()
 }
@@ -384,19 +385,19 @@ export async function fetchGlobalAttributeDefinition(organizationId: string, ass
     params.append('workspace_id', workspaceId)
   }
   const url = `${API_BASE}/organizations/${organizationId}/asset-types/${assetTypeId}/attributes/${attributeId}/${params.toString() ? '?' + params.toString() : ''}`
-  const response = await fetch(url)
+  const response = await authFetch(url)
   if (!response.ok) throw new Error('Failed to fetch global definition')
   return response.json()
 }
 
 export async function fetchAssetAttributeDefinitionsFromUrl(url: string) {
-  const response = await fetch(url)
+  const response = await authFetch(url)
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   return response.json()
 }
 
 export async function fetchAttributeTags(organizationId: string, workspaceId: string | undefined, assetTypeId: string): Promise<string[]> {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/tags/`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/tags/`))
   if (!response.ok) throw new Error('Failed to fetch attribute tags')
   return response.json()
 }
@@ -405,7 +406,7 @@ export async function fetchAllAssetAttributeDefinitions(organizationId: string, 
   const params = new URLSearchParams({
     page_size: '1000' // Fetch all attributes
   })
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/?${params}`))
   if (!response.ok) throw new Error('Failed to fetch attribute definitions')
   const data = await response.json()
   return data.results || []
@@ -436,7 +437,7 @@ export async function fetchAttributeValues(
     params.append('page', String(page))
   }
   const queryString = params.toString() ? `?${params.toString()}` : ''
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/${queryString}`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/${queryString}`))
   if (!response.ok) throw new Error('Failed to fetch attribute values')
   const data = await response.json()
   return {
@@ -448,7 +449,7 @@ export async function fetchAttributeValues(
 }
 
 export async function updateAssetTypeAttribute(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string, data: any) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json'
@@ -460,7 +461,7 @@ export async function updateAssetTypeAttribute(organizationId: string, workspace
 }
 
 export async function deleteAssetTypeAttribute(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/`), {
     method: 'DELETE'
   })
   if (!response.ok) {
@@ -471,7 +472,7 @@ export async function deleteAssetTypeAttribute(organizationId: string, workspace
 }
 
 export async function hideAssetTypeAttribute(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/hide/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/hide/`), {
     method: 'POST'
   })
   if (!response.ok) throw new Error('Failed to hide attribute')
@@ -479,7 +480,7 @@ export async function hideAssetTypeAttribute(organizationId: string, workspaceId
 }
 
 export async function unhideAssetTypeAttribute(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/unhide/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/unhide/`), {
     method: 'POST'
   })
   if (!response.ok) throw new Error('Failed to unhide attribute')
@@ -487,7 +488,7 @@ export async function unhideAssetTypeAttribute(organizationId: string, workspace
 }
 
 export async function createAssetTypeAttribute(organizationId: string, workspaceId: string | undefined, assetTypeId: string, data: any) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -499,7 +500,7 @@ export async function createAssetTypeAttribute(organizationId: string, workspace
 }
 
 export async function reorderAssetTypeAttributes(organizationId: string, workspaceId: string | undefined, assetTypeId: string, updates: Array<{id: string, order: number}>) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/reorder/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/reorder/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -511,7 +512,7 @@ export async function reorderAssetTypeAttributes(organizationId: string, workspa
 }
 
 export async function createAssetTypeAttributeChoice(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string, data: { value: any, icon?: string, color?: string, order?: number }) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -523,14 +524,14 @@ export async function createAssetTypeAttributeChoice(organizationId: string, wor
 }
 
 export async function fetchAssetTypeAttributeChoices(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/?page_size=1000`))
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/?page_size=1000`))
   if (!response.ok) throw new Error('Failed to fetch choices')
   const data = await response.json()
   return data.results || []
 }
 
 export async function deleteAssetTypeAttributeChoice(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string, choiceId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/${choiceId}/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/${choiceId}/`), {
     method: 'DELETE'
   })
   if (!response.ok) throw new Error('Failed to delete choice')
@@ -538,7 +539,7 @@ export async function deleteAssetTypeAttributeChoice(organizationId: string, wor
 }
 
 export async function reorderAssetTypeAttributeChoices(organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string, updates: Array<{id: string, order: number}>) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/reorder/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeId}/choices/reorder/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -608,13 +609,13 @@ export async function fetchFileTree(
     params.append('offset', offset.toString())
   }
   const url = buildUrl(organizationId, workspaceId, path) + (params.toString() ? `?${params}` : '')
-  const response = await fetch(url)
+  const response = await authFetch(url)
   if (!response.ok) throw new Error('Failed to fetch file tree')
   return response.json()
 }
 
 export async function createDirectory(organizationId: string, workspaceId: string | undefined, data: { name: string, parent: string, description?: string }) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, 'files/create-folder/'), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, 'files/create-folder/'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -626,7 +627,7 @@ export async function createDirectory(organizationId: string, workspaceId: strin
 }
 
 export async function deleteFileNode(organizationId: string, workspaceId: string | undefined, fileId: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `files/${fileId}/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `files/${fileId}/`), {
     method: 'DELETE'
   })
   if (!response.ok) throw new Error('Failed to delete file')
@@ -634,7 +635,7 @@ export async function deleteFileNode(organizationId: string, workspaceId: string
 }
 
 export async function renameFileNode(organizationId: string, workspaceId: string | undefined, fileId: string, name: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, `files/${fileId}/rename/`), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `files/${fileId}/rename/`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -646,7 +647,7 @@ export async function renameFileNode(organizationId: string, workspaceId: string
 }
 
 export async function moveFileNodes(organizationId: string, workspaceId: string | undefined, fileIds: string[], destinationParent: string) {
-  const response = await fetch(buildUrl(organizationId, workspaceId, 'files/move/'), {
+  const response = await authFetch(buildUrl(organizationId, workspaceId, 'files/move/'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -669,7 +670,7 @@ export async function updateAsset(
     geometry?: { type: string; coordinates: number[] } | null
   }
 ) {
-  const response = await fetch(
+  const response = await authFetch(
     buildUrl(organizationId, workspaceId, `assets/${assetId}/`),
     {
       method: 'PATCH',
@@ -694,7 +695,7 @@ export async function updateAssetAttributeValue(
   attributeId: string,
   value: any
 ) {
-  const response = await fetch(
+  const response = await authFetch(
     buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/assets/${assetId}/update-attribute/`),
     {
       method: 'POST',

@@ -14,6 +14,7 @@ import {
 } from '@mui/icons-material'
 import { Link as RouterLink } from 'react-router-dom'
 import type { AssetType, AssetTypeSummary } from '@app/types'
+import { authFetch } from '@app/api/authFetch'
 import PvDrawer from './PvDrawer'
 import { prefetchAssetTypeDetail } from '@app/utils/preload'
 import InfiniteLoaderTable, { type TableColumn } from './InfiniteLoaderTable'
@@ -80,7 +81,7 @@ export default function AssetTypeList({
   }>({ open: false, assetType: null })
 
   const fetchAssetTypeDetailed = async (assetTypeSummary: AssetTypeSummary): Promise<AssetType> => {
-    const res = await fetch(assetTypeSummary.apiUrl, { credentials: 'include' })
+    const res = await authFetch(assetTypeSummary.apiUrl)
     const data = await res.json()
     return data as AssetType
   }

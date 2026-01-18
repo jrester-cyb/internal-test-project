@@ -325,7 +325,7 @@ export default function MFADevicesPage() {
   }
 
   return (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="body2" color="text.secondary">
           Multi-factor authentication adds an extra layer of security to your account.
@@ -340,82 +340,84 @@ export default function MFADevicesPage() {
         </Button>
       </Box>
 
-      {mfaDevices.length === 0 ? (
-        <Box
-          sx={{
-            py: 4,
-            textAlign: 'center',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 1,
-            borderStyle: 'dashed',
-          }}
-        >
-          <SecurityIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            No MFA devices configured.
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Add a device to secure your account.
-          </Typography>
-        </Box>
-      ) : (
-        <List disablePadding>
-          {mfaDevices.map((device) => (
-            <ListItem
-              key={device.id}
-              sx={{
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-                mb: 1,
-                '&:last-child': { mb: 0 },
-              }}
-            >
-              <ListItemIcon sx={{ color: 'text.secondary' }}>{getMfaDeviceIcon(device.type)}</ListItemIcon>
-              <ListItemText
-                primary={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {device.name}
-                    <Chip
-                      label={getMfaDeviceTypeLabel(device.type)}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </Box>
-                }
-                secondary={
-                  <Box component="span" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
-                    {device.maskedDestination && (
+      <Box sx={{ flexGrow: 1, overflow: 'auto', minHeight: 0 }}>
+        {mfaDevices.length === 0 ? (
+          <Box
+            sx={{
+              py: 4,
+              textAlign: 'center',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              borderStyle: 'dashed',
+            }}
+          >
+            <SecurityIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+            <Typography variant="body2" color="text.secondary">
+              No MFA devices configured.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Add a device to secure your account.
+            </Typography>
+          </Box>
+        ) : (
+          <List disablePadding>
+            {mfaDevices.map((device) => (
+              <ListItem
+                key={device.id}
+                sx={{
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  mb: 1,
+                  '&:last-child': { mb: 0 },
+                }}
+              >
+                <ListItemIcon sx={{ color: 'text.secondary' }}>{getMfaDeviceIcon(device.type)}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {device.name}
+                      <Chip
+                        label={getMfaDeviceTypeLabel(device.type)}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <Box component="span" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
+                      {device.maskedDestination && (
+                        <Typography component="span" variant="body2" color="text.secondary">
+                          {device.maskedDestination}
+                        </Typography>
+                      )}
                       <Typography component="span" variant="body2" color="text.secondary">
-                        {device.maskedDestination}
+                        Added: {formatDate(device.createdAt)} &bull; Last used: {formatDate(device.lastUsedAt)}
                       </Typography>
-                    )}
-                    <Typography component="span" variant="body2" color="text.secondary">
-                      Added: {formatDate(device.createdAt)} &bull; Last used: {formatDate(device.lastUsedAt)}
-                    </Typography>
-                  </Box>
-                }
-              />
-              <IconButton
-                aria-label="rename"
-                onClick={() => handleRenameClick(device)}
-                sx={{ color: 'text.secondary' }}
-              >
-                <EditIcon />
-              </IconButton>
-              <IconButton
-                edge="end"
-                aria-label="delete"
-                onClick={() => handleDeleteClick(device)}
-                sx={{ color: 'text.secondary' }}
-              >
-                <DeleteIcon />
-              </IconButton>
-            </ListItem>
-          ))}
-        </List>
-      )}
+                    </Box>
+                  }
+                />
+                <IconButton
+                  aria-label="rename"
+                  onClick={() => handleRenameClick(device)}
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <EditIcon />
+                </IconButton>
+                <IconButton
+                  edge="end"
+                  aria-label="delete"
+                  onClick={() => handleDeleteClick(device)}
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Box>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onClose={handleRenameCancel} maxWidth="xs" fullWidth>
@@ -705,6 +707,6 @@ export default function MFADevicesPage() {
           )}
         </DialogContent>
       </Dialog >
-    </>
+    </Box>
   )
 }

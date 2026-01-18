@@ -6,6 +6,7 @@ import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
 import type { AssetTypeAttribute, UnitCategory } from '@app/types'
 import { useLoaderData, useParams, useSearchParams, useRouteLoaderData } from 'react-router-dom'
 import { updateAssetTypeAttribute, deleteAssetTypeAttribute, createAssetTypeAttribute, reorderAssetTypeAttributes, fetchAssetAttributeDefinitionsFromUrl, hideAssetTypeAttribute, unhideAssetTypeAttribute, fetchAssetAttributeByApiKey, fetchAttributeTags, fetchGlobalAttributeDefinition, fetchAssetAttributeDefinitions, fetchUnitCategories } from '@app/api/assets'
+import { authFetch } from '@app/api/authFetch'
 import { fetchAttributeAuditLog } from '@app/api/auditLog'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
@@ -453,7 +454,7 @@ export default function AssetTypeAttributesPage() {
     const fetchCount = async () => {
       setIsLoadingCount(true)
       try {
-        const response = await fetch(url)
+        const response = await authFetch(url)
         if (!response.ok) throw new Error('Failed to fetch asset count')
         const data = await response.json()
         setSelectedAttributeAssetCount(data.count)

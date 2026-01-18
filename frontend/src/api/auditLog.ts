@@ -1,3 +1,5 @@
+import { authFetch } from './authFetch'
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
 
 export interface AuditLogReference {
@@ -103,7 +105,7 @@ export async function fetchAuditLogEntries(filters: AuditLogFilters = {}): Promi
   if (filters.page_size) params.append('page_size', filters.page_size.toString())
   
   const url = `${API_BASE}/audit/entries/?${params}`
-  const response = await fetch(url)
+  const response = await authFetch(url)
   
   if (!response.ok) {
     throw new Error('Failed to fetch audit log entries')
