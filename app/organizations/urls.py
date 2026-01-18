@@ -129,6 +129,16 @@ choices_router.register(
     basename="organization-assettype-attribute-choice",
 )
 
+# Nested router for files under organizations (organization-level, aggregates all workspaces)
+org_files_router = NestedDefaultRouter(
+    router, r"organizations", lookup="organization"
+)
+org_files_router.register(
+    r"files",
+    FileNodeViewSet,
+    basename="organization-file",
+)
+
 urlpatterns = (
     router.urls
     + members_router.urls
@@ -143,4 +153,5 @@ urlpatterns = (
     + attributes_router.urls
     + choices_router.urls
     + org_assets_router.urls
+    + org_files_router.urls
 )

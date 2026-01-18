@@ -516,6 +516,7 @@ export interface FileNode {
   resourceType: 'directory' | 'file' | 'image' | 'document' | 'video' | 'audio'
   hasChildren: boolean
   childrenUrl: string | null
+  workspace: string | null
   createdAt: string
   updatedAt: string
 }
@@ -523,19 +524,20 @@ export interface FileNode {
 export interface DirectoryResponse {
   id: string
   name: string
-  parent: string | null
+  parent?: string | null
   isDirectory: boolean
-  workspace: string
-  description: string
-  color: string
-  icon: string
-  path: string
-  childrenCount: number
-  hasChildren: boolean
-  ancestors: Array<{ id: string; name: string }>
-  createdAt: string
-  updatedAt: string
-  children: {
+  workspace?: string
+  description?: string
+  color?: string
+  icon?: string
+  path?: string
+  childrenCount?: number
+  hasChildren?: boolean
+  ancestors?: Array<{ id: string; name: string }>
+  isOrganizationRoot?: boolean
+  createdAt?: string
+  updatedAt?: string
+  children?: {
     count: number
     next: string | null
     previous: string | null

@@ -220,6 +220,7 @@ class FileNodeTreeSerializer(serializers.ModelSerializer):
     is_directory = serializers.BooleanField(read_only=True)
     has_children = serializers.SerializerMethodField()
     children_url = serializers.SerializerMethodField()
+    workspace = serializers.SerializerMethodField()
 
     class Meta:
         model = FileNode
@@ -230,6 +231,7 @@ class FileNodeTreeSerializer(serializers.ModelSerializer):
             "resource_type",
             "has_children",
             "children_url",
+            "workspace",
             "created_at",
             "updated_at",
         ]
@@ -263,6 +265,10 @@ class FileNodeTreeSerializer(serializers.ModelSerializer):
             "AudioFile": "audio",
         }
         return type_mapping.get(obj.__class__.__name__, "file")
+
+    def get_workspace(self, obj):
+        """Return the workspace ID for this file node."""
+        return str(obj.workspace_id) if obj.workspace_id else None
 
 
 class FileUploadSerializer(serializers.Serializer):

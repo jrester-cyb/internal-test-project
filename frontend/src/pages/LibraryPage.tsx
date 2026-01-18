@@ -17,6 +17,9 @@ export default function LibraryPage() {
   const navigate = useNavigate()
   const revalidator = useRevalidator()
 
+  // Determine if we're at the organization level (no workspaceId in URL)
+  const isOrgLevel = !workspaceId
+
   // Virtual scroll state - totalCount determines scrollbar size, items loaded on demand
   const [items, setItems] = useState<Map<number, FileNode>>(new Map())
   const [totalCount, setTotalCount] = useState(0)
@@ -30,11 +33,11 @@ export default function LibraryPage() {
 
   // Initialize items when directory changes
   useEffect(() => {
-    const children = currentDir.children?.results || []
+    const children = currentDir?.children?.results || []
     const newItems = new Map<number, FileNode>()
     children.forEach((child, idx) => newItems.set(idx, child))
     setItems(newItems)
-    setTotalCount(currentDir.children?.count || 0)
+    setTotalCount(currentDir?.children?.count || 0)
     loadingPagesRef.current = new Set()
     // Clear search when navigating
     setSearchQuery('')
@@ -51,7 +54,7 @@ export default function LibraryPage() {
 
     setIsSearching(true)
     const timeoutId = setTimeout(async () => {
-      if (!organizationId || !workspaceId) return
+      if (!organizationId) return
 
       try {
         const results = await fetchFileTree(organizationId, workspaceId, directoryId, searchQuery, 100, 0)
@@ -67,13 +70,35 @@ export default function LibraryPage() {
   }, [searchQuery, organizationId, workspaceId, directoryId])
 
   // Build breadcrumbs from ancestors
-  const basePath = `/organizations/${organizationId}/workspaces/${workspaceId}/library`
+  const getBasePath = (itemWorkspaceId?: string) => {
+    if (isOrgLevel) {
+      return `/organizations/${organizationId}/library`
+    }
+    return `/organizations/${organizationId}/workspaces/${itemWorkspaceId || workspaceId}/library`
+  }
+
+  const basePath = getBasePath()
   const breadcrumbs: Breadcrumb[] = [
     { id: '', name: 'Library', path: basePath },
   ]
-  if (currentDir.ancestors) {
+
+  // For org-level, if we're viewing a directory, add the workspace as a breadcrumb
+  if (isOrgLevel && directoryId && currentDir?.workspace) {
+    // We're inside a workspace's directory tree at org level
+    // Find workspace name from ancestors or current dir
+    const workspaceName = currentDir.ancestors?.find(a => a.name !== 'Root')?.name || currentDir.name
+    breadcrumbs.push({
+      id: currentDir.workspace,
+      name: workspaceName,
+      path: `${basePath}/${currentDir.ancestors?.[0]?.id || currentDir.id}`,
+    })
+  }
+
+  if (currentDir?.ancestors) {
     for (const ancestor of currentDir.ancestors) {
       if (ancestor.name === 'Root') continue
+      // Skip if this is the workspace-level root we already added
+      if (isOrgLevel && breadcrumbs.some(b => b.id === ancestor.id)) continue
       breadcrumbs.push({
         id: ancestor.id,
         name: ancestor.name,
@@ -81,17 +106,30 @@ export default function LibraryPage() {
       })
     }
   }
-  if (currentDir.name !== 'Root') {
-    breadcrumbs.push({
-      id: currentDir.id,
-      name: currentDir.name,
-      path: `${basePath}/${currentDir.id}`,
-    })
+  if (currentDir && currentDir.name !== 'Root' && !currentDir.isOrganizationRoot) {
+    // Don't add current dir to breadcrumbs if it's already there
+    if (!breadcrumbs.some(b => b.id === currentDir.id)) {
+      breadcrumbs.push({
+        id: currentDir.id,
+        name: currentDir.name,
+        path: `${basePath}/${currentDir.id}`,
+      })
+    }
   }
 
   const handleNavigate = (item: FileNode) => {
     if (!item.isDirectory) return
-    navigate(`/organizations/${organizationId}/workspaces/${workspaceId}/library/${item.id}`)
+
+    // Use the item's workspace if available, otherwise fall back to URL workspace
+    const targetWorkspaceId = item.workspace || workspaceId
+
+    if (isOrgLevel) {
+      // At org level, navigate within org-level library route
+      navigate(`/organizations/${organizationId}/library/${item.id}`)
+    } else {
+      // At workspace level, stay in workspace context
+      navigate(`/organizations/${organizationId}/workspaces/${targetWorkspaceId}/library/${item.id}`)
+    }
   }
 
   const handleBreadcrumbClick = (path: string) => {
@@ -102,9 +140,12 @@ export default function LibraryPage() {
     revalidator.revalidate()
   }
 
+  // Get the effective workspace ID for operations (from current dir or URL)
+  const effectiveWorkspaceId = currentDir?.workspace || workspaceId
+
   const handleCreateFolder = async (name: string) => {
-    if (!organizationId || !workspaceId) return
-    await createDirectory(organizationId, workspaceId, {
+    if (!organizationId || !effectiveWorkspaceId) return
+    await createDirectory(organizationId, effectiveWorkspaceId, {
       name,
       parent: currentDir.id,
     })
@@ -112,14 +153,18 @@ export default function LibraryPage() {
   }
 
   const handleDelete = async (item: FileNode) => {
-    if (!organizationId || !workspaceId) return
-    await deleteFileNode(organizationId, workspaceId, item.id)
+    if (!organizationId) return
+    const itemWorkspaceId = item.workspace || effectiveWorkspaceId
+    if (!itemWorkspaceId) return
+    await deleteFileNode(organizationId, itemWorkspaceId, item.id)
     reloadCurrentDir()
   }
 
   const handleRename = async (item: FileNode, newName: string) => {
-    if (!organizationId || !workspaceId) return
-    await renameFileNode(organizationId, workspaceId, item.id, newName)
+    if (!organizationId) return
+    const itemWorkspaceId = item.workspace || effectiveWorkspaceId
+    if (!itemWorkspaceId) return
+    await renameFileNode(organizationId, itemWorkspaceId, item.id, newName)
     reloadCurrentDir()
   }
 
@@ -130,7 +175,7 @@ export default function LibraryPage() {
   // Load items for a specific range when they come into view
   const loadItemsInRange = useCallback(
     async (startIndex: number, stopIndex: number) => {
-      if (!organizationId || !workspaceId || searchQuery) return
+      if (!organizationId || searchQuery) return
 
       // Calculate which page(s) we need to fetch
       const startPage = Math.floor(startIndex / PAGE_SIZE)
@@ -183,6 +228,11 @@ export default function LibraryPage() {
   // Convert Map to array for display, with placeholders for unloaded items
   const displayedItems = searchResults ?? Array.from({ length: totalCount }, (_, i) => items.get(i) || null)
 
+  // Disable folder creation at the organization root (can only navigate into workspaces)
+  const canCreateFolder = !currentDir?.isOrganizationRoot && !!effectiveWorkspaceId
+  // Disable delete/rename at org root level
+  const canModifyItems = !currentDir?.isOrganizationRoot
+
   return (
     <Box
       sx={{
@@ -201,9 +251,9 @@ export default function LibraryPage() {
         breadcrumbs={breadcrumbs}
         onBreadcrumbClick={handleBreadcrumbClick}
         onNavigate={handleNavigate}
-        onCreateFolder={handleCreateFolder}
-        onDelete={handleDelete}
-        onRename={handleRename}
+        onCreateFolder={canCreateFolder ? handleCreateFolder : undefined}
+        onDelete={canModifyItems ? handleDelete : undefined}
+        onRename={canModifyItems ? handleRename : undefined}
         onSearchChange={handleSearchChange}
         searchQuery={searchQuery}
         isSearching={isSearching}

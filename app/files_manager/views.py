@@ -137,10 +137,15 @@ class FileNodeViewSet(viewsets.ModelViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        """Filter by workspace from URL kwargs."""
+        """Filter by workspace or organization from URL kwargs."""
         workspace_pk = self.kwargs.get("workspace_pk")
+        organization_pk = self.kwargs.get("organization_pk")
+
         if workspace_pk:
             return FileNode.objects.filter(workspace_id=workspace_pk)
+        elif organization_pk:
+            # Organization-level: return files from all workspaces in the org
+            return FileNode.objects.filter(workspace__organization_id=organization_pk)
         return FileNode.objects.none()
 
     def get_serializer_class(self):
@@ -309,78 +314,196 @@ class FileNodeViewSet(viewsets.ModelViewSet):
         """
         Internal method to get a directory and its paginated children.
         Supports search filtering via ?search= query param.
+        Works for both workspace-level and organization-level routes.
         """
         workspace_pk = self.kwargs.get("workspace_pk")
-        from workspaces.models import Workspace
-
-        workspace = Workspace.objects.get(pk=workspace_pk)
+        organization_pk = self.kwargs.get("organization_pk")
         search_query = request.query_params.get("search", "").strip()
 
-        if directory_id:
-            # Get specific directory by ID
-            try:
-                current_dir = Directory.objects.get(
-                    pk=directory_id,
-                    workspace=workspace,
-                    deleted_at__isnull=True,
-                )
-            except Directory.DoesNotExist:
-                return Response(
-                    {"error": "Directory not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-        else:
-            # Get root directory
-            current_dir = Directory.get_or_create_root(workspace)
-
-        # Get children queryset with ordering (directories first, then by name)
-        # Use Case/When to ensure directories come first regardless of polymorphic_ctype ordering
         from django.db.models import Case, When, Value, IntegerField
         from django.contrib.contenttypes.models import ContentType
 
         directory_ct = ContentType.objects.get_for_model(Directory)
 
-        children = (
-            FileNode.objects.filter(parent=current_dir)
-            .annotate(
-                dir_order=Case(
-                    When(polymorphic_ctype=directory_ct, then=Value(0)),
-                    default=Value(1),
-                    output_field=IntegerField(),
+        if directory_id:
+            # Get specific directory by ID - works for both workspace and org level
+            queryset = self.get_queryset()
+            try:
+                current_dir = Directory.objects.get(
+                    pk=directory_id,
+                    deleted_at__isnull=True,
                 )
+                # Verify it's accessible from the current context
+                if workspace_pk and str(current_dir.workspace_id) != str(workspace_pk):
+                    raise Directory.DoesNotExist()
+                if organization_pk and str(current_dir.workspace.organization_id) != str(organization_pk):
+                    raise Directory.DoesNotExist()
+            except Directory.DoesNotExist:
+                return Response(
+                    {"error": "Directory not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            children = (
+                FileNode.objects.filter(parent=current_dir)
+                .annotate(
+                    dir_order=Case(
+                        When(polymorphic_ctype=directory_ct, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("dir_order", "name")
             )
-            .order_by("dir_order", "name")
+
+            # Apply search filter if provided
+            if search_query:
+                children = children.filter(name__icontains=search_query)
+
+            # Paginate children
+            paginator = FileNodeTreePagination()
+            page = paginator.paginate_queryset(children, request)
+
+            if page is not None:
+                children_data = FileNodeTreeSerializer(
+                    page, many=True, context={"request": request}
+                ).data
+                children_response = paginator.get_paginated_response(children_data).data
+            else:
+                children_data = FileNodeTreeSerializer(
+                    children, many=True, context={"request": request}
+                ).data
+                children_response = {
+                    "count": len(children_data),
+                    "next": None,
+                    "previous": None,
+                    "results": children_data,
+                }
+
+            # Build response with directory info and paginated children
+            dir_data = DirectorySerializer(current_dir).data
+            dir_data["children"] = children_response
+
+            return Response(dir_data)
+
+        elif workspace_pk:
+            # Workspace-level root
+            from workspaces.models import Workspace
+            workspace = Workspace.objects.get(pk=workspace_pk)
+            current_dir = Directory.get_or_create_root(workspace)
+
+            children = (
+                FileNode.objects.filter(parent=current_dir)
+                .annotate(
+                    dir_order=Case(
+                        When(polymorphic_ctype=directory_ct, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("dir_order", "name")
+            )
+
+            if search_query:
+                children = children.filter(name__icontains=search_query)
+
+            paginator = FileNodeTreePagination()
+            page = paginator.paginate_queryset(children, request)
+
+            if page is not None:
+                children_data = FileNodeTreeSerializer(
+                    page, many=True, context={"request": request}
+                ).data
+                children_response = paginator.get_paginated_response(children_data).data
+            else:
+                children_data = FileNodeTreeSerializer(
+                    children, many=True, context={"request": request}
+                ).data
+                children_response = {
+                    "count": len(children_data),
+                    "next": None,
+                    "previous": None,
+                    "results": children_data,
+                }
+
+            dir_data = DirectorySerializer(current_dir).data
+            dir_data["children"] = children_response
+
+            return Response(dir_data)
+
+        elif organization_pk:
+            # Organization-level: show all workspace root directories as children
+            from workspaces.models import Workspace
+            from organizations.models import Organization
+
+            try:
+                organization = Organization.objects.get(pk=organization_pk)
+            except Organization.DoesNotExist:
+                return Response(
+                    {"error": "Organization not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Get all workspaces in this organization
+            workspaces = Workspace.objects.filter(
+                organization=organization,
+                deleted_at__isnull=True,
+            ).order_by("name")
+
+            # Get or create root directories for each workspace
+            root_directories = []
+            for ws in workspaces:
+                root = Directory.get_or_create_root(ws)
+                root_directories.append(root)
+
+            # Apply search filter if provided
+            if search_query:
+                root_directories = [
+                    d for d in root_directories
+                    if search_query.lower() in d.workspace.name.lower()
+                ]
+
+            # Paginate the root directories
+            paginator = FileNodeTreePagination()
+            page = paginator.paginate_queryset(root_directories, request)
+
+            if page is not None:
+                # Serialize with workspace name as the display name
+                children_data = []
+                for root_dir in page:
+                    dir_data = FileNodeTreeSerializer(root_dir, context={"request": request}).data
+                    # Override name to show workspace name instead of "Root"
+                    dir_data["name"] = root_dir.workspace.name
+                    children_data.append(dir_data)
+                children_response = paginator.get_paginated_response(children_data).data
+            else:
+                children_data = []
+                for root_dir in root_directories:
+                    dir_data = FileNodeTreeSerializer(root_dir, context={"request": request}).data
+                    # Override name to show workspace name instead of "Root"
+                    dir_data["name"] = root_dir.workspace.name
+                    children_data.append(dir_data)
+                children_response = {
+                    "count": len(children_data),
+                    "next": None,
+                    "previous": None,
+                    "results": children_data,
+                }
+
+            # Return a virtual root representing the organization
+            return Response({
+                "id": str(organization_pk),
+                "name": organization.name,
+                "isDirectory": True,
+                "isOrganizationRoot": True,
+                "ancestors": [],
+                "children": children_response,
+            })
+
+        return Response(
+            {"error": "Workspace or organization context required"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
-
-        # Apply search filter if provided
-        if search_query:
-            children = children.filter(name__icontains=search_query)
-
-        # Paginate children using limit/offset pagination
-        paginator = FileNodeTreePagination()
-        page = paginator.paginate_queryset(children, request)
-
-        if page is not None:
-            children_data = FileNodeTreeSerializer(
-                page, many=True, context={"request": request}
-            ).data
-            children_response = paginator.get_paginated_response(children_data).data
-        else:
-            children_data = FileNodeTreeSerializer(
-                children, many=True, context={"request": request}
-            ).data
-            children_response = {
-                "count": len(children_data),
-                "next": None,
-                "previous": None,
-                "results": children_data,
-            }
-
-        # Build response with directory info and paginated children
-        dir_data = DirectorySerializer(current_dir).data
-        dir_data["children"] = children_response
-
-        return Response(dir_data)
 
     @extend_schema(
         tags=["Files"],

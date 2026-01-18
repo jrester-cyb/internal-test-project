@@ -3,6 +3,7 @@ import { lazy } from 'react'
 import { organizationsLoader } from './loaders/organizations'
 import { workspacesLoader } from './loaders/workspaces'
 import { initialMapLoader } from './loaders/map'
+import { libraryLoader } from './loaders/library'
 
 // Lazy load layout and route components
 const MainLayout = lazy(() => import('./components/MainLayout.tsx'))
@@ -29,6 +30,140 @@ const sharedRoutes = [
     shouldRevalidate: () => false,
     path: "map",
     element: <MapPage />,
+  },
+  {
+    path: "asset-types",
+    handle: {
+      crumb: "Asset Types",
+    },
+    children: [
+      {
+        index: true,
+        element: <AssetTypesPage />,
+        loader: async ({ params }) => {
+          const { fetchAssetTypes } = await import('./api/assets')
+          const data = await fetchAssetTypes(params.organizationId!, params.workspaceId!)
+          return Array.isArray(data) ? data : data.results || []
+        },
+      },
+      {
+        path: ":assetTypeId",
+        loader: async ({ params }) => {
+          const { fetchAssetType } = await import('./api/assets')
+          return fetchAssetType(params.organizationId!, params.workspaceId!, params.assetTypeId!)
+        },
+        shouldRevalidate: ({ currentParams, nextParams }) => {
+          return currentParams.assetTypeId !== nextParams.assetTypeId
+        },
+        handle: {
+          crumb: (data: any) => data?.loaderData?.name || 'Asset Type'
+        },
+        element: <AssetTypeLayout />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="about" />,
+          },
+          {
+            path: "about",
+            element: <AssetTypeAboutPage />,
+            handle: {
+              crumb: "About"
+            }
+          },
+          {
+            path: "attributes",
+            element: <AssetTypeAttributesPage />,
+            handle: {
+              crumb: "Attributes"
+            },
+            loader: async ({ params, request }) => {
+              const url = new URL(request.url)
+              const search = url.searchParams.get('search') || undefined
+              const includeHidden = url.searchParams.get('include_hidden') === 'true'
+
+              const { fetchAssetAttributeDefinitions } = await import('./api/assets')
+              const response = await fetchAssetAttributeDefinitions(params.organizationId!, params.workspaceId!, params.assetTypeId!, 1, 25, { search, includeHidden })
+              const attributes = response.results || []
+              const count = response.count || 0
+
+              return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId, workspaceId: params.workspaceId, organizationId: params.organizationId, includeHidden };
+            },
+            shouldRevalidate: ({ currentUrl, nextUrl }) => {
+              return currentUrl.searchParams.get('search') !== nextUrl.searchParams.get('search') ||
+                currentUrl.searchParams.get('include_hidden') !== nextUrl.searchParams.get('include_hidden')
+            },
+          },
+          {
+            path: 'assets',
+            handle: {
+              crumb: "Assets"
+            },
+            children: [
+              {
+                index: true,
+                element: <AssetGridPage />,
+                loader: async ({ params }) => {
+                  const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
+
+                  const PAGE_SIZE = 20
+                  const response = await fetchAssetsByType(params.organizationId!, params.workspaceId!, params.assetTypeId!, PAGE_SIZE, 0)
+                  const assets = response.results || []
+
+                  const attributes = await fetchAllAssetAttributeDefinitions(params.organizationId!, params.workspaceId!, params.assetTypeId!)
+
+                  return {
+                    assets,
+                    attributes,
+                    totalCount: response.count,
+                    pageSize: PAGE_SIZE,
+                    workspaceId: params.workspaceId,
+                    organizationId: params.organizationId
+                  };
+                },
+                shouldRevalidate: ({ currentUrl, nextUrl }) => {
+                  return currentUrl.pathname !== nextUrl.pathname
+                },
+              },
+              {
+                path: ":assetId",
+                element: <AssetDetailPage />,
+                handle: {
+                  crumb: ({ loaderData, crumb }: any) => loaderData?.asset?.name || crumb?.assetName || 'Asset Detail',
+                  hideNavbar: true,
+                },
+                loader: async ({ params }) => {
+                  const { fetchAsset, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
+                  const [asset, attributes] = await Promise.all([
+                    fetchAsset(params.organizationId!, params.workspaceId!, params.assetId!),
+                    fetchAllAssetAttributeDefinitions(params.organizationId!, params.workspaceId!, params.assetTypeId!)
+                  ])
+                  return { asset, attributes, organizationId: params.organizationId, workspaceId: params.workspaceId }
+                },
+              }
+            ]
+          },
+        ]
+      }
+    ]
+  },
+  {
+    path: "library",
+    handle: {
+      crumb: "Library"
+    },
+    children: [
+      {
+        index: true,
+        element: <LibraryPage />,
+        loader: libraryLoader,
+      },
+      {
+        path: ":directoryId",
+        element: <LibraryPage />,
+        loader: libraryLoader,
+      },
+    ],
   },
 ]
 

@@ -9,7 +9,6 @@ export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen, isMobile, hideSidebar } = useLayout()
   const { activeOrganization, activeWorkspace, isGlobalMode } = useOrganization()
 
-  console.log('Sidebar render:', { sidebarOpen, isMobile, hideSidebar, activeOrganization, activeWorkspace, isGlobalMode })
   if (hideSidebar) {
     return null
   }
