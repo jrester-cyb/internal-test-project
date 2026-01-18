@@ -12,7 +12,7 @@ export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen, isMobile, hideSidebar } = useLayout()
   const { activeOrganization, activeWorkspace, isGlobalMode } = useOrganization()
 
-  if (hideSidebar) {
+  if (hideSidebar || isMobile) {
     return null
   }
 

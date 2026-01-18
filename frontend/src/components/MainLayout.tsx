@@ -1,7 +1,8 @@
 import { Suspense } from 'react'
-import { Outlet, useLoaderData, useNavigation, useLocation } from 'react-router-dom'
-import { Box, CircularProgress } from '@mui/material'
-import { OrganizationProvider } from '@app/contexts/OrganizationContext'
+import { Outlet, useLoaderData, useNavigation, useLocation, useNavigate } from 'react-router-dom'
+import { Box, CircularProgress, BottomNavigation, BottomNavigationAction } from '@mui/material'
+import { Map as MapIcon, Inventory as AssetsIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
+import { OrganizationProvider, useOrganization } from '@app/contexts/OrganizationContext'
 import { LayoutProvider, useLayout } from '@app/contexts/LayoutContext'
 import PvAppBar from '@app/components/PvAppBar'
 import Sidebar from '@app/components/Sidebar'
@@ -32,6 +33,8 @@ function MainLayoutContent() {
   const { sidebarOpen, isMobile, hideSidebar } = useLayout()
   const navigation = useNavigation()
   const location = useLocation()
+  const navigate = useNavigate()
+  const { activeOrganization, activeWorkspace, isGlobalMode } = useOrganization()
 
   // Calculate sidebar width for main content offset
   const sidebarWidth = hideSidebar ? 0 : (isMobile ? 0 : (sidebarOpen ? 240 : 64))
@@ -52,6 +55,12 @@ function MainLayoutContent() {
     (!location.pathname.includes('/asset-types') && targetPath.includes('/asset-types'))
   )
 
+  // Calculate bottom nav value for mobile
+  let bottomNavValue = -1
+  if (location.pathname.includes('/map')) bottomNavValue = 0
+  else if (location.pathname.includes('/asset-types')) bottomNavValue = 1
+  else if (location.pathname.includes('/library')) bottomNavValue = 2
+
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
       <PvAppBar />
@@ -66,6 +75,7 @@ function MainLayoutContent() {
           overflow: 'hidden',
           mt: 8, // Offset for AppBar height
           ml: `${sidebarWidth}px`,
+          pb: isMobile ? 7 : 0, // Offset for BottomNavigation height
           transition: 'margin-left 225ms cubic-bezier(0.4, 0, 0.6, 1)',
         }}
       >
@@ -88,6 +98,24 @@ function MainLayoutContent() {
           </Suspense>
         )}
       </Box>
+
+      {isMobile && (
+        <BottomNavigation
+          value={bottomNavValue}
+          onChange={(event, newValue) => {
+            const basePath = isGlobalMode
+              ? `/organizations/${activeOrganization.id}`
+              : `/organizations/${activeOrganization.id}/workspaces/${activeWorkspace?.id}`
+            const paths = [`${basePath}/map`, `${basePath}/asset-types`, `${basePath}/library`]
+            navigate(paths[newValue])
+          }}
+          sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000 }}
+        >
+          <BottomNavigationAction label="Map" icon={<MapIcon />} />
+          <BottomNavigationAction label="Assets" icon={<AssetsIcon />} />
+          <BottomNavigationAction label="Library" icon={<LibraryIcon />} />
+        </BottomNavigation>
+      )}
     </Box>
   )
 }
