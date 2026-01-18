@@ -1,14 +1,13 @@
 # django
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
-
-# local
-from auth_manager.models import OneTimeToken, SAMLIdentityProvider
 from django.urls import reverse
-from auth_manager.models import MULTIFACTOR_SESSION_KEY
 
 # thirdparty
 from rest_framework import status
+
+# local
+from auth_manager.models import OneTimeToken, SAMLIdentityProvider
 
 User = get_user_model()
 
@@ -69,7 +68,7 @@ class MagicLinkCallbackViewTestCase(TestCase):
         self.assertIn("Invalid or missing token provided.", response.content.decode())
         self.assertFalse("_auth_user_id" in self.client.session)
 
-    def test_when_user_linked_to_idp_mfa_works(self):
+    def test_when_user_linked_to_idp_login_works(self):
         # assign
         idp = SAMLIdentityProvider.objects.create(
             name="Test IdP",
@@ -87,5 +86,3 @@ class MagicLinkCallbackViewTestCase(TestCase):
         self.assertRedirects(response, "/", status_code=status.HTTP_302_FOUND, fetch_redirect_response=False)
         self.assertTrue("_auth_user_id" in self.client.session)
         self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
-        self.assertTrue(MULTIFACTOR_SESSION_KEY in self.client.session)
-        self.assertTrue(self.client.session[MULTIFACTOR_SESSION_KEY])

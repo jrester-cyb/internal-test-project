@@ -10,7 +10,6 @@ from django.views.generic import TemplateView
 
 # local
 from auth_manager.models.one_time_token import OneTimeToken
-from auth_manager.models import MULTIFACTOR_SESSION_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +27,6 @@ class MagicLinkCallbackView(TemplateView):
 
         # Log the user in
         login(request, user)
-        if user.identity_providers.exists():
-            request.session[MULTIFACTOR_SESSION_KEY] = True
-            request.session.save()
 
         # Redirect to the top page
         return redirect("/")

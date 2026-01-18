@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 AUTH_METHOD = "auth_method"
 PROVIDED_EMAIL = "provided_email"
 REDIRECT_URI = "redirect_uri"
-MULTIFACTOR_SESSION_KEY = "multifactor_verified"
 
 
 class BadRequest(Exception):
@@ -174,7 +173,7 @@ class IdentityProvider(PolymorphicModel, PolymorphicSoftDeleteMixin):
     def authenticate(self, _: HttpRequest) -> AbstractUser:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def login(self, request, skip_mfa=False):
+    def login(self, request):
         from .user_session import UserSession
 
         user = self.authenticate(request)
@@ -182,9 +181,6 @@ class IdentityProvider(PolymorphicModel, PolymorphicSoftDeleteMixin):
 
         # Create session record with request metadata
         UserSession.objects.create_from_request(user, request)
-
-        if skip_mfa:
-            request.session[MULTIFACTOR_SESSION_KEY] = True
 
     def generate_redirect_link(self, _request: HttpRequest) -> str:
         return reverse("auth-manager:login")

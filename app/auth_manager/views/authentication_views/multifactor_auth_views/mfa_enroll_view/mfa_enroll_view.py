@@ -5,8 +5,28 @@ from django.urls import reverse
 from django.views.generic import TemplateView
 
 # local
-from auth_manager.models import MFADevice, OneTimeToken
+from auth_manager.models import OneTimeToken
 from auth_manager.views.shortcuts import login_error_page
+
+
+# Available MFA device types for enrollment
+AVAILABLE_DEVICE_TYPES = [
+    {
+        "type": "app",
+        "name": "Authenticator App",
+        "description": "Use an authenticator app like Google Authenticator or Authy",
+    },
+    {
+        "type": "sms",
+        "name": "SMS",
+        "description": "Receive codes via text message",
+    },
+    {
+        "type": "email",
+        "name": "Email",
+        "description": "Receive a magic link via email",
+    },
+]
 
 
 class MFAEnrollView(TemplateView):
@@ -41,41 +61,28 @@ class MFAEnrollView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Iterate over the devices of the user (unconfirmed devices available for enrollment)
-        available_devices = MFADevice.objects.filter(user=self.user, confirmed_at__isnull=True)
-
-        # Sort so TOTP (Authenticator App) is always first
-        available_devices = sorted(
-            available_devices, key=lambda d: 0 if d.delivery_method == "app" else 1
-        )
-
         # Base URL for MFA device API endpoints
         base_url = f"/api/auth/users/{self.user.id}/mfa-devices"
 
-        # Attach device-specific endpoints to each device
-        device_list = []
-        for device in available_devices:
+        # Build list of available device types for enrollment
+        device_type_list = []
+        for device_type in AVAILABLE_DEVICE_TYPES:
             device_dict = {
-                "name": device.delivery_method_display,
-                "value": device.delivery_method,
-                "id": device.id,
-                "request_notification_endpoint": f"{base_url}/{device.id}/request-notification/",
-                "verify_endpoint": f"{base_url}/{device.id}/enroll/",
-                "update_endpoint": f"{base_url}/{device.id}/",
+                "type": device_type["type"],
+                "name": device_type["name"],
+                "description": device_type["description"],
+                "create_endpoint": f"{base_url}/",
             }
-            if device.delivery_method == "app":
-                device_dict["provisioning_uri"] = device.get_totp_uri()
-                device_dict["seed"] = device.secret
-
-            device_list.append(device_dict)
+            device_type_list.append(device_dict)
 
         # Build finalize URL with token (will be updated after MFA verification)
         finalize_url = f"{reverse('auth-manager:finalize')}?t={self.token}"
 
-        context["available_device_types"] = device_list
+        context["available_device_types"] = device_type_list
         context["mfa_required"] = getattr(self.user, "mfa_required", True)
         context["mfa_finalize_endpoint"] = finalize_url
         context["email"] = self.user.email
+        context["phone_number"] = getattr(self.user, "phone_number", "")
         context["skip_device_code_endpoint"] = f"{base_url}/skip/"
         context["auth_token"] = self.token  # Pass token to template for API calls
         return context
