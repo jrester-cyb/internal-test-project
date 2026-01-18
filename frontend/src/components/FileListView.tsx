@@ -43,6 +43,7 @@ interface VirtualListItemData {
   onNavigate: (item: FileNode) => void
   onContextMenu: (event: React.MouseEvent, item: FileNode) => void
   onMenuClick: (event: React.MouseEvent, item: FileNode) => void
+  onPrefetchDirectory?: (item: FileNode) => void
 }
 
 interface VirtualListItemProps {
@@ -52,7 +53,7 @@ interface VirtualListItemProps {
 }
 
 const VirtualListItem: React.FC<VirtualListItemProps> = ({ index, style, data }) => {
-  const { items, onNavigate, onContextMenu, onMenuClick } = data
+  const { items, onNavigate, onContextMenu, onMenuClick, onPrefetchDirectory } = data
   const item = items[index]
 
   // Show loading placeholder for unloaded items
@@ -71,8 +72,14 @@ const VirtualListItem: React.FC<VirtualListItemProps> = ({ index, style, data })
     )
   }
 
+  const handleMouseEnter = () => {
+    if (item.isDirectory && onPrefetchDirectory) {
+      onPrefetchDirectory(item)
+    }
+  }
+
   return (
-    <div style={style}>
+    <div style={style} onMouseEnter={handleMouseEnter}>
       <ListItem
         disablePadding
         onContextMenu={(e) => onContextMenu(e, item)}
@@ -113,6 +120,7 @@ interface FileListViewProps {
   onContextMenu: (event: React.MouseEvent, item: FileNode) => void
   onMenuClick: (event: React.MouseEvent, item: FileNode) => void
   onItemsRendered?: (startIndex: number, stopIndex: number) => void
+  onPrefetchDirectory?: (item: FileNode) => void
 }
 
 export default function FileListView({
@@ -122,6 +130,7 @@ export default function FileListView({
   onContextMenu,
   onMenuClick,
   onItemsRendered,
+  onPrefetchDirectory,
 }: FileListViewProps) {
   const itemSize = 73
   const listRef = useRef<VirtualList>(null)
@@ -146,6 +155,7 @@ export default function FileListView({
         onNavigate,
         onContextMenu,
         onMenuClick,
+        onPrefetchDirectory,
       }}
       onItemsRendered={handleItemsRendered}
     >

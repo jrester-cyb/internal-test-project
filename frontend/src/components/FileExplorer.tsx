@@ -50,11 +50,11 @@ export interface FileExplorerProps {
   /** Callback when navigating into a directory */
   onNavigate: (item: FileNode) => void
   /** Callback to create a new folder */
-  onCreateFolder: (name: string) => Promise<void>
+  onCreateFolder?: (name: string) => Promise<void>
   /** Callback to delete a file/folder */
-  onDelete: (item: FileNode) => Promise<void>
+  onDelete?: (item: FileNode) => Promise<void>
   /** Callback to rename a file/folder */
-  onRename: (item: FileNode, newName: string) => Promise<void>
+  onRename?: (item: FileNode, newName: string) => Promise<void>
   /** Callback when search query changes */
   onSearchChange?: (query: string) => void
   /** Current search query (controlled) */
@@ -65,6 +65,10 @@ export interface FileExplorerProps {
   onItemsRendered?: (startIndex: number, stopIndex: number) => void
   /** Optional callback when a file is selected (clicked) */
   onFileSelect?: (item: FileNode) => void
+  /** Callback to prefetch a directory's contents on hover */
+  onPrefetchDirectory?: (item: FileNode) => void
+  /** Callback to prefetch a breadcrumb directory on hover */
+  onPrefetchBreadcrumb?: (breadcrumb: Breadcrumb) => void
   /** Whether to show the search field */
   showSearch?: boolean
   /** Whether to show the new folder button */
@@ -89,6 +93,8 @@ export default function FileExplorer({
   isSearching = false,
   onItemsRendered,
   onFileSelect,
+  onPrefetchDirectory,
+  onPrefetchBreadcrumb,
   showSearch = true,
   showNewFolder = true,
   showViewToggle = true,
@@ -241,6 +247,8 @@ export default function FileExplorer({
                   underline="hover"
                   color="inherit"
                   onClick={() => onBreadcrumbClick(crumb.path)}
+                  onMouseEnter={() => onPrefetchBreadcrumb?.(crumb)}
+                  onFocus={() => onPrefetchBreadcrumb?.(crumb)}
                   sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -339,6 +347,7 @@ export default function FileExplorer({
               })
             }}
             onItemsRendered={onItemsRendered}
+            onPrefetchDirectory={onPrefetchDirectory}
           />
         </Box>
       ) : (
@@ -356,6 +365,7 @@ export default function FileExplorer({
               })
             }}
             onItemsRendered={onItemsRendered}
+            onPrefetchDirectory={onPrefetchDirectory}
           />
         </Box>
       )}

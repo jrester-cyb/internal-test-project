@@ -38,6 +38,7 @@ interface FileGalleryViewProps {
   onContextMenu: (event: React.MouseEvent, item: FileNode) => void
   onMenuClick: (event: React.MouseEvent, item: FileNode) => void
   onItemsRendered?: (startIndex: number, stopIndex: number) => void
+  onPrefetchDirectory?: (item: FileNode) => void
 }
 
 export default function FileGalleryView({
@@ -47,6 +48,7 @@ export default function FileGalleryView({
   onContextMenu,
   onMenuClick,
   onItemsRendered,
+  onPrefetchDirectory,
 }: FileGalleryViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -120,6 +122,7 @@ export default function FileGalleryView({
               data-index={index}
               onContextMenu={(e) => item && onContextMenu(e, item)}
               onClick={() => item?.isDirectory && onNavigate(item)}
+              onMouseEnter={() => item?.isDirectory && onPrefetchDirectory?.(item)}
               sx={{
                 height: 160,
                 display: 'flex',

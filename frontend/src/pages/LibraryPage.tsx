@@ -10,6 +10,7 @@ import {
   type FileNode,
 } from '@app/api/assets'
 import FileExplorer, { type Breadcrumb } from '@app/components/FileExplorer'
+import { prefetchLibrary } from '@app/utils/preload'
 
 export default function LibraryPage() {
   const currentDir = useLoaderData<DirectoryResponse>()
@@ -178,6 +179,30 @@ export default function LibraryPage() {
     setSearchQuery(query)
   }
 
+  // Prefetch directory contents on hover
+  const handlePrefetchDirectory = useCallback(
+    (item: FileNode) => {
+      if (!organizationId || !item.isDirectory) return
+      // Use item's workspace if available for proper prefetch key
+      const targetWorkspaceId = isOrgLevel ? undefined : (item.workspace || workspaceId)
+      prefetchLibrary(organizationId, targetWorkspaceId, item.id)
+    },
+    [organizationId, workspaceId, isOrgLevel]
+  )
+
+  // Prefetch breadcrumb directory on hover
+  const handlePrefetchBreadcrumb = useCallback(
+    (breadcrumb: Breadcrumb) => {
+      if (!organizationId) return
+      // For breadcrumbs, use the current workspace context (or undefined for org-level)
+      const targetWorkspaceId = isOrgLevel ? undefined : workspaceId
+      // breadcrumb.id is the directory ID, empty string means root (library home)
+      const directoryIdToPrefetch = breadcrumb.id || undefined
+      prefetchLibrary(organizationId, targetWorkspaceId, directoryIdToPrefetch)
+    },
+    [organizationId, workspaceId, isOrgLevel]
+  )
+
   // Load items for a specific range when they come into view
   const loadItemsInRange = useCallback(
     async (startIndex: number, stopIndex: number) => {
@@ -264,6 +289,8 @@ export default function LibraryPage() {
         searchQuery={searchQuery}
         isSearching={isSearching}
         onItemsRendered={loadItemsInRange}
+        onPrefetchDirectory={handlePrefetchDirectory}
+        onPrefetchBreadcrumb={handlePrefetchBreadcrumb}
       />
     </Box>
   )

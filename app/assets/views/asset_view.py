@@ -160,11 +160,23 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         # If accessed via nested route under asset type, filter by asset type
         if "assettype_pk" in self.kwargs:
-            # Filter by asset type AND workspace visibility
-            queryset = Asset.objects.filter(
-                asset_type_id=self.kwargs["assettype_pk"],
-                workspace_memberships__workspace_id=workspace_pk,
-            )
+            if workspace_pk:
+                # Filter by asset type AND workspace visibility
+                queryset = Asset.objects.filter(
+                    asset_type_id=self.kwargs["assettype_pk"],
+                    workspace_memberships__workspace_id=workspace_pk,
+                )
+            elif organization_pk:
+                # Organization-level: filter by asset type AND organization
+                queryset = Asset.objects.filter(
+                    asset_type_id=self.kwargs["assettype_pk"],
+                    organization_id=organization_pk,
+                )
+            else:
+                # No workspace or org filter - just filter by asset type
+                queryset = Asset.objects.filter(
+                    asset_type_id=self.kwargs["assettype_pk"],
+                )
         elif workspace_pk:
             # Filter by workspace via WorkspaceAsset join table
             queryset = Asset.objects.filter(
