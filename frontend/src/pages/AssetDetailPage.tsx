@@ -89,24 +89,32 @@ export default function AssetDetailPage() {
     setCurrentAsset(updatedAsset)
   }
 
-  const handleViewOnMap = () => {
-    // Open map page in new window with the asset selected
-    const coords = asset.location?.coordinates || asset.geometry?.coordinates
-    if (coords && coords.length >= 2) {
-      const lat = coords[1]
-      const lng = coords[0]
-      window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/map?lat=${lat}&lng=${lng}&zoom=18&assetId=${asset.id}`, '_blank')
-    } else {
-      // No coordinates, just open map with asset selected
-      window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/map?assetId=${asset.id}`, '_blank')
-    }
-  }
+  // Build the map URL based on context (workspace or organization level)
+  const viewOnMapUrl = useMemo(() => {
+    const basePath = workspaceId
+      ? `/organizations/${organizationId}/workspaces/${workspaceId}`
+      : `/organizations/${organizationId}`
 
-  const handleShare = () => {
-    // TODO: Implement share functionality
-    navigator.clipboard.writeText(window.location.href)
-    console.debug('Share asset:', asset.id)
-  }
+    const coords = asset.location?.coordinates || asset.geometry?.coordinates
+    const params = new URLSearchParams()
+    params.set('assetId', asset.id)
+
+    if (coords && coords.length >= 2) {
+      params.set('lat', coords[1].toString())
+      params.set('lng', coords[0].toString())
+      params.set('zoom', '18')
+    }
+
+    return `${basePath}/map?${params.toString()}`
+  }, [organizationId, workspaceId, asset.id, asset.location, asset.geometry])
+
+  // Build the share URL (current page URL)
+  const shareUrl = useMemo(() => {
+    const basePath = workspaceId
+      ? `/organizations/${organizationId}/workspaces/${workspaceId}`
+      : `/organizations/${organizationId}`
+    return `${window.location.origin}${basePath}/asset-types/${assetTypeId}/assets/${asset.id}`
+  }, [organizationId, workspaceId, assetTypeId, asset.id])
 
   const handleDownload = () => {
     // Download asset details as JSON
@@ -139,8 +147,8 @@ export default function AssetDetailPage() {
         globalValuesOnly={globalValuesOnly}
         onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
         onEdit={handleEdit}
-        onShare={handleShare}
-        onViewOnMap={handleViewOnMap}
+        shareUrl={shareUrl}
+        viewOnMapUrl={viewOnMapUrl}
         onClone={() => {
           // TODO: Implement clone functionality
           console.debug('Clone asset:', asset.id)

@@ -37,9 +37,12 @@ interface AssetOverviewCardProps {
   globalValuesOnly?: boolean
   onGlobalValuesToggle?: () => void
   onEdit?: (asset: Asset) => void
-  onShare?: () => void
-  onViewOnMap?: () => void
-  onViewDetails?: () => void
+  /** URL to share this asset (copies to clipboard on click) */
+  shareUrl?: string
+  /** URL to view this asset on the map (page mode) */
+  viewOnMapUrl?: string
+  /** URL to view asset details page (drawer mode) */
+  viewDetailsUrl?: string
   onZoomToAsset?: (asset: Asset) => void
   onClone?: () => void
   onDownload?: () => void
@@ -51,9 +54,9 @@ export default function AssetOverviewCard({
   globalValuesOnly = false,
   onGlobalValuesToggle,
   onEdit,
-  onShare,
-  onViewOnMap,
-  onViewDetails,
+  shareUrl,
+  viewOnMapUrl,
+  viewDetailsUrl,
   onZoomToAsset,
   onClone,
   onDownload
@@ -118,12 +121,12 @@ export default function AssetOverviewCard({
       })
     }
 
-    // Share (both modes)
-    if (onShare) {
+    // Share (both modes) - copies URL to clipboard
+    if (shareUrl) {
       actionsList.push({
         label: 'Share',
         icon: <ShareIcon fontSize="small" />,
-        onClick: onShare,
+        onClick: () => navigator.clipboard.writeText(shareUrl),
         color: 'inherit' as const,
         variant: 'outlined' as const,
         minWidth: mode === 'drawer' ? 680 : 1050
@@ -133,21 +136,25 @@ export default function AssetOverviewCard({
     // --- Menu-only items below (minWidth: Infinity) ---
 
     // View On Map (page mode) / View Asset Details Page (drawer mode) - pinned to top of menu
-    if (onViewOnMap && mode === 'page') {
+    if (viewOnMapUrl && mode === 'page') {
       actionsList.push({
         label: 'View On Map',
         icon: <OpenInNewIcon fontSize="small" />,
-        onClick: onViewOnMap,
+        component: 'a' as const,
+        href: viewOnMapUrl,
+        target: '_blank',
         color: 'inherit' as const,
         variant: 'outlined' as const,
         minWidth: Infinity
       })
     }
-    if (onViewDetails && mode === 'drawer') {
+    if (viewDetailsUrl && mode === 'drawer') {
       actionsList.push({
         label: 'View Asset Details Page',
         icon: <OpenInNewIcon fontSize="small" />,
-        onClick: onViewDetails,
+        component: 'a' as const,
+        href: viewDetailsUrl,
+        target: '_blank',
         color: 'inherit' as const,
         variant: 'outlined' as const,
         minWidth: Infinity
@@ -201,7 +208,7 @@ export default function AssetOverviewCard({
     }
 
     return actionsList
-  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, onShare, onViewOnMap, onViewDetails, onZoomToAsset, onClone, onDownload, asset])
+  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, shareUrl, viewOnMapUrl, viewDetailsUrl, onZoomToAsset, onClone, onDownload, asset])
 
   return (
     <Container maxWidth={false} sx={{ py: 2 }} ref={headerRef}>

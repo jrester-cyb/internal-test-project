@@ -1,4 +1,4 @@
-import { type ReactNode, Fragment, useState } from 'react'
+import { type ReactNode, Fragment, useState, type ElementType, type ComponentPropsWithoutRef } from 'react'
 import { Box, Button, Stack, IconButton, Menu, MenuItem, Collapse, Tooltip, Divider } from '@mui/material'
 import { MoreVert as MoreVertIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material'
 
@@ -15,8 +15,8 @@ export interface SubMenuItem {
   dividerBefore?: boolean
 }
 
-// Generic action button type
-export interface ActionButtonConfig {
+// Base action button properties
+interface ActionButtonBaseConfig {
   label: string
   icon?: ReactNode
   // Either onClick OR submenu, not both
@@ -35,6 +35,22 @@ export interface ActionButtonConfig {
   keepMenuOpen?: boolean // If true, don't close the parent menu when this item is clicked (only if no submenu)
   submenu?: SubMenuItem[] // If present, clicking opens this submenu (onClick and keepMenuOpen ignored)
 }
+
+// Action with custom component - extends base with component props
+interface ActionButtonWithComponent<C extends ElementType = 'button'> extends ActionButtonBaseConfig {
+  /** Custom component to render the MenuItem as (e.g., 'a' for links). All props of that component are available. */
+  component: C
+}
+
+// Standard action without custom component
+interface ActionButtonStandard extends ActionButtonBaseConfig {
+  component?: never
+}
+
+// Union type that allows either standard config or config with component + its props
+export type ActionButtonConfig<C extends ElementType = ElementType> =
+  | ActionButtonStandard
+  | (ActionButtonWithComponent<C> & Omit<ComponentPropsWithoutRef<C>, keyof ActionButtonBaseConfig | 'component'>)
 
 interface ActionButtonsProps {
   actions: ActionButtonConfig[]
@@ -288,14 +304,38 @@ export default function ActionButtons({
           // Only show divider if there's a visible item above this one
           const hasVisibleItemAbove = action.dividerBefore && actions.slice(0, index).some(a => !isButtonVisible(a.minWidth ?? 0))
 
+          // Destructure known props, spread the rest to the component
+          const {
+            label,
+            icon,
+            onClick,
+            color,
+            variant,
+            disabled,
+            tooltip,
+            minWidth,
+            dividerBefore,
+            dividerAfter,
+            customComponent,
+            keepMenuOpen,
+            submenu,
+            component,
+            ...componentProps
+          } = action as ActionButtonConfig & { component?: ElementType }
+
           const handleActionClick = (e: React.MouseEvent<HTMLElement>) => {
-            if (action.submenu) {
+            if (submenu) {
               // Open submenu
               handleSubmenuOpen(index, e.currentTarget)
-            } else if (action.onClick) {
+            } else if (onClick) {
               // Execute action
-              action.onClick(e)
-              if (!action.keepMenuOpen) {
+              onClick(e)
+              if (!keepMenuOpen) {
+                setCurrentMenuAnchor(null)
+              }
+            } else if (component) {
+              // For link components, close the menu after click
+              if (!keepMenuOpen) {
                 setCurrentMenuAnchor(null)
               }
             }
@@ -305,34 +345,36 @@ export default function ActionButtons({
             <Fragment key={index}>
               {hasVisibleItemAbove && <Divider />}
               <Tooltip
-                title={action.tooltip && action.disabled ? action.tooltip : ''}
+                title={tooltip && disabled ? tooltip : ''}
                 arrow
                 placement="left"
-                disableHoverListener={!action.tooltip || !action.disabled}
+                disableHoverListener={!tooltip || !disabled}
                 enterDelay={0}
                 leaveDelay={200}
               >
                 <span>
                   <MenuItem
                     onClick={handleActionClick}
-                    disabled={action.disabled}
+                    disabled={disabled}
+                    component={component}
+                    {...componentProps}
                   >
-                    {action.icon && (
+                    {icon && (
                       <Box component="span" sx={{ mr: 1, display: 'flex', alignItems: 'center', fontSize: 'small' }}>
-                        {action.icon}
+                        {icon}
                       </Box>
                     )}
-                    {action.label}
-                    {action.submenu && (
+                    {label}
+                    {submenu && (
                       <ChevronRightIcon sx={{ ml: 'auto', fontSize: 'small' }} />
                     )}
                   </MenuItem>
                 </span>
               </Tooltip>
-              {action.dividerAfter && <Divider />}
+              {dividerAfter && <Divider />}
 
               {/* Submenu for this action */}
-              {action.submenu && (
+              {submenu && (
                 <Menu
                   anchorEl={submenuAnchors[index]}
                   open={Boolean(submenuAnchors[index])}
@@ -341,7 +383,7 @@ export default function ActionButtons({
                   transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 >
                   <SubMenuRenderer
-                    items={action.submenu}
+                    items={submenu}
                     onClose={() => {
                       handleSubmenuClose(index)
                       setCurrentMenuAnchor(null)

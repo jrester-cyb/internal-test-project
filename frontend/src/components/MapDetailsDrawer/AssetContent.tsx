@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Box, Skeleton, Typography } from '@mui/material'
 import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
@@ -127,7 +127,7 @@ export default function AssetContent({
     setRelatedError(null)
 
     async function loadFullAsset() {
-      if (!workspaceId || !asset?.id) return
+      if (!organizationId || !asset?.id) return
 
       // If attributes are provided, assume the asset is already fully loaded
       if (propAttributes) {
@@ -158,7 +158,7 @@ export default function AssetContent({
 
   // Fetch related assets
   useEffect(() => {
-    if (organizationId && workspaceId && asset?.id) {
+    if (organizationId && asset?.id) {
       setRelatedLoading(true)
       setRelatedError(null)
       fetchRelatedAssets(organizationId, workspaceId, asset.id)
@@ -173,6 +173,22 @@ export default function AssetContent({
 
   // Always show what we have - use the passed asset immediately, update when full data loads
   const displayAsset = fullAsset || asset
+
+  // Build the share URL (current page URL)
+  const shareUrl = useMemo(() => {
+    const basePath = workspaceId
+      ? `/organizations/${organizationId}/workspaces/${workspaceId}`
+      : `/organizations/${organizationId}`
+    return `${window.location.origin}${basePath}/asset-types/${displayAsset.assetType}/assets/${displayAsset.id}`
+  }, [organizationId, workspaceId, displayAsset.assetType, displayAsset.id])
+
+  // Build the view details URL
+  const viewDetailsUrl = useMemo(() => {
+    const basePath = workspaceId
+      ? `/organizations/${organizationId}/workspaces/${workspaceId}`
+      : `/organizations/${organizationId}`
+    return `${basePath}/asset-types/${displayAsset.assetType}/assets/${displayAsset.id}`
+  }, [organizationId, workspaceId, displayAsset.assetType, displayAsset.id])
 
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -191,8 +207,8 @@ export default function AssetContent({
               globalValuesOnly={globalValuesOnly}
               onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
               onEdit={onEdit}
-              onShare={() => navigator.clipboard.writeText(window.location.href)}
-              onViewDetails={() => window.open(`/organizations/${organizationId}/workspaces/${workspaceId}/asset-types/${displayAsset.assetType}/assets/${displayAsset.id}`, '_blank')}
+              shareUrl={shareUrl}
+              viewDetailsUrl={viewDetailsUrl}
               onZoomToAsset={onZoomToAsset}
               onClone={() => console.debug('Clone asset:', asset.id)}
               onDownload={() => console.debug('Download asset:', asset.id)}
