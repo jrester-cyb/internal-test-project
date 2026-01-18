@@ -6,15 +6,14 @@ import ClearIcon from '@mui/icons-material/Clear'
 import MapIcon from '@mui/icons-material/Map'
 import { VisibilityOff as VisibilityOffIcon, Save as SaveIcon, Undo as DiscardIcon, Cancel as CancelIcon, Lock as LockClosedIcon, Visibility as VisibilityIcon } from '@mui/icons-material'
 
-import type { Asset, AssetTypeAttribute } from '@app/types'
+import type { Asset, AssetTypeAttribute, AssetTypeAttributeChoice } from '@app/types'
 import { useLoaderData, useLocation, useParams, Link as RouterLink, useBlocker, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { fetchAssetsByType, updateAsset } from '@app/api/assets'
+import { fetchAssetsByType, updateAsset, fetchAssetTypeAttributeChoices } from '@app/api/assets'
 import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '@app/components/VirtualizedGrid'
 import ActionButtons from '@app/components/ActionButtons'
 import { useLayout } from '@app/contexts/LayoutContext'
-import { useChoices } from '@app/contexts/ChoicesContext'
 
 // Type for tracking pending changes per asset
 // Stores name change and/or attribute changes (keyed by apiKey)
@@ -34,7 +33,35 @@ export default function AssetGridPage() {
   }
 
   const { isMobile, windowWidth } = useLayout()
-  const { getChoices, loadChoices, isLoading: isLoadingChoices } = useChoices()
+
+  // Local choices cache - stores loaded choices by attribute ID
+  const choicesCacheRef = useRef<Map<string, AssetTypeAttributeChoice[]>>(new Map())
+  const loadingChoicesRef = useRef<Set<string>>(new Set())
+  const [, forceChoicesUpdate] = useState(0)
+
+  const getChoices = useCallback((attributeId: string): AssetTypeAttributeChoice[] | undefined => {
+    return choicesCacheRef.current.get(attributeId)
+  }, [])
+
+  const loadChoices = useCallback((organizationId: string, workspaceId: string | undefined, assetTypeId: string, attributeId: string) => {
+    // Skip if already cached or loading
+    if (choicesCacheRef.current.has(attributeId) || loadingChoicesRef.current.has(attributeId)) {
+      return
+    }
+
+    loadingChoicesRef.current.add(attributeId)
+
+    fetchAssetTypeAttributeChoices(organizationId, workspaceId, assetTypeId, attributeId)
+      .then((choices) => {
+        choicesCacheRef.current.set(attributeId, choices)
+        loadingChoicesRef.current.delete(attributeId)
+        forceChoicesUpdate(n => n + 1)
+      })
+      .catch((error) => {
+        console.error(`Failed to load choices for attribute ${attributeId}:`, error)
+        loadingChoicesRef.current.delete(attributeId)
+      })
+  }, [])
 
   const { assetTypeId } = useParams()
   const location = useLocation()

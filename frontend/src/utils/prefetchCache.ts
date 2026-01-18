@@ -80,6 +80,16 @@ export const cacheKeys = {
 
   assetTypes: (orgId: string, workspaceId?: string) =>
     `assetTypes:${orgId}:${workspaceId || 'global'}`,
+
   assetTypeDetail: (orgId: string, workspaceId: string | undefined, assetTypeId: string) =>
     `assetTypeDetail:${orgId}:${workspaceId || 'global'}:${assetTypeId}`,
+
+  assetsByType: (orgId: string, workspaceId: string | undefined, assetTypeId: string) =>
+    `assetsByType:${orgId}:${workspaceId || 'global'}:${assetTypeId}`,
+
+  assetAttributeDefinitions: (orgId: string, workspaceId: string | undefined, assetTypeId: string) =>
+    `assetAttributeDefinitions:${orgId}:${workspaceId || 'global'}:${assetTypeId}`,
+
+  assetAttributeDefinitionsAll: (orgId: string, workspaceId: string | undefined, assetTypeId: string) =>
+    `assetAttributeDefinitionsAll:${orgId}:${workspaceId || 'global'}:${assetTypeId}`,
 }

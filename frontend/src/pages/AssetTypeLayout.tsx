@@ -3,8 +3,8 @@ import { Box, Tabs, Tab, Container, Skeleton, Stack } from "@mui/material";
 import { Outlet, useLocation, useParams, Link, useMatches, useNavigation } from "react-router-dom";
 import {
   preloadAssetTypeAboutPage,
-  preloadAssetTypeAttributesPage,
-  preloadAssetGridPage,
+  prefetchAssetGrid,
+  prefetchAssetAttributes,
 } from "@app/utils/preload";
 
 // Map path segments to tab indices
@@ -71,11 +71,29 @@ const AttributesSkeleton = () => (
 // Memoized tab bar to prevent unnecessary re-renders
 const TabBar = memo(function TabBar({
   currentTab,
-  hideNavbar
+  hideNavbar,
+  organizationId,
+  workspaceId,
+  assetTypeId,
 }: {
   currentTab: number
   hideNavbar: boolean
+  organizationId?: string
+  workspaceId?: string
+  assetTypeId?: string
 }) {
+  const handlePrefetchAssets = () => {
+    if (organizationId && assetTypeId) {
+      prefetchAssetGrid(organizationId, workspaceId, assetTypeId)
+    }
+  }
+
+  const handlePrefetchAttributes = () => {
+    if (organizationId && assetTypeId) {
+      prefetchAssetAttributes(organizationId, workspaceId, assetTypeId)
+    }
+  }
+
   return (
     <Box sx={{
       bgcolor: 'primary.main',
@@ -108,14 +126,14 @@ const TabBar = memo(function TabBar({
           component={Link}
           to="assets"
           value={1}
-          onMouseEnter={preloadAssetGridPage}
+          onMouseEnter={handlePrefetchAssets}
         />
         <Tab
           label="Attributes"
           component={Link}
           to="attributes"
           value={2}
-          onMouseEnter={preloadAssetTypeAttributesPage}
+          onMouseEnter={handlePrefetchAttributes}
         />
       </Tabs>
     </Box>
@@ -163,7 +181,13 @@ export default function AssetTypeLayout() {
 
   return (
     <Container maxWidth={false} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <TabBar currentTab={selectedTab} hideNavbar={hideNavbar} />
+      <TabBar
+        currentTab={selectedTab}
+        hideNavbar={hideNavbar}
+        organizationId={params.organizationId}
+        workspaceId={params.workspaceId}
+        assetTypeId={params.assetTypeId}
+      />
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {isNavigating ? (
           <Box sx={{ flexGrow: 1, bgcolor: 'background.paper', borderRadius: 1, m: 2, overflow: 'hidden' }}>

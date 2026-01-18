@@ -2,7 +2,7 @@
 // Call these on hover/focus to start loading the JS chunk before navigation
 
 import { getCachedFetch, cacheKeys } from './prefetchCache'
-import { fetchFileTree, fetchAssetTypes } from '../api/assets'
+import { fetchFileTree, fetchAssetTypes, fetchAssetsByType, fetchAssetAttributeDefinitions, fetchAllAssetAttributeDefinitions } from '../api/assets'
 
 export const preloadAssetTypeAboutPage = () => import('../pages/AssetTypeAboutPage')
 export const preloadAssetTypeAttributesPage = () => import('../pages/AssetTypeAttributesPage')
@@ -48,4 +48,26 @@ export function prefetchAssetTypeDetail(organizationId: string, workspaceId: str
   getCachedFetch(key, () => import('../api/assets').then(({ fetchAssetType }) =>
     fetchAssetType(organizationId, workspaceId, assetTypeId)
   ))
+}
+
+export function prefetchAssetGrid(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
+  // Load JS chunk
+  preloadAssetGridPage()
+
+  // Start fetching assets
+  const assetsKey = cacheKeys.assetsByType(organizationId, workspaceId, assetTypeId)
+  getCachedFetch(assetsKey, () => fetchAssetsByType(organizationId, workspaceId, assetTypeId, 20, 0))
+
+  // Start fetching all attribute definitions (needed for grid columns)
+  const attrsKey = cacheKeys.assetAttributeDefinitionsAll(organizationId, workspaceId, assetTypeId)
+  getCachedFetch(attrsKey, () => fetchAllAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId))
+}
+
+export function prefetchAssetAttributes(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
+  // Load JS chunk
+  preloadAssetTypeAttributesPage()
+
+  // Start fetching attribute definitions (first page)
+  const key = cacheKeys.assetAttributeDefinitions(organizationId, workspaceId, assetTypeId)
+  getCachedFetch(key, () => fetchAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId, 1, 25))
 }

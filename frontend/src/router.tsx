@@ -4,7 +4,12 @@ import { organizationsLoader } from './loaders/organizations'
 import { workspacesLoader } from './loaders/workspaces'
 import { initialMapLoader } from './loaders/map'
 import { libraryLoader } from './loaders/library'
-import { assetTypeDetailRouteLoader, assetTypesRouteLoader } from './loaders/assetTypes'
+import {
+  assetTypeDetailRouteLoader,
+  assetTypesRouteLoader,
+  assetGridRouteLoader,
+  assetAttributesRouteLoader,
+} from './loaders/assetTypes'
 
 // Lazy load layout and route components
 const MainLayout = lazy(() => import('./components/MainLayout.tsx'))
@@ -71,18 +76,7 @@ const sharedRoutes = [
             handle: {
               crumb: "Attributes"
             },
-            loader: async ({ params, request }) => {
-              const url = new URL(request.url)
-              const search = url.searchParams.get('search') || undefined
-              const includeHidden = url.searchParams.get('include_hidden') === 'true'
-
-              const { fetchAssetAttributeDefinitions } = await import('./api/assets')
-              const response = await fetchAssetAttributeDefinitions(params.organizationId!, params.workspaceId!, params.assetTypeId!, 1, 25, { search, includeHidden })
-              const attributes = response.results || []
-              const count = response.count || 0
-
-              return { initialData: attributes, initialNextUrl: response.next, count, assetTypeId: params.assetTypeId, workspaceId: params.workspaceId, organizationId: params.organizationId, includeHidden };
-            },
+            loader: assetAttributesRouteLoader,
             shouldRevalidate: ({ currentUrl, nextUrl }) => {
               return currentUrl.searchParams.get('search') !== nextUrl.searchParams.get('search') ||
                 currentUrl.searchParams.get('include_hidden') !== nextUrl.searchParams.get('include_hidden')
@@ -97,24 +91,7 @@ const sharedRoutes = [
               {
                 index: true,
                 element: <AssetGridPage />,
-                loader: async ({ params }) => {
-                  const { fetchAssetsByType, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
-
-                  const PAGE_SIZE = 20
-                  const response = await fetchAssetsByType(params.organizationId!, params.workspaceId!, params.assetTypeId!, PAGE_SIZE, 0)
-                  const assets = response.results || []
-
-                  const attributes = await fetchAllAssetAttributeDefinitions(params.organizationId!, params.workspaceId!, params.assetTypeId!)
-
-                  return {
-                    assets,
-                    attributes,
-                    totalCount: response.count,
-                    pageSize: PAGE_SIZE,
-                    workspaceId: params.workspaceId,
-                    organizationId: params.organizationId
-                  };
-                },
+                loader: assetGridRouteLoader,
                 shouldRevalidate: ({ currentUrl, nextUrl }) => {
                   return currentUrl.pathname !== nextUrl.pathname
                 },
