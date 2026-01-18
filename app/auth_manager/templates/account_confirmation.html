@@ -1,0 +1,30 @@
+{% extends "base_templates/base.html" %}
+{% block content %}
+<div class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <div class="mui-card" style="width:100%; margin: 0 auto 1.5em auto;">
+        <div class="mui-card-body" style="max-height: 600px;">
+            <div class="mui-card-body-content">
+                <div style="text-align: center;">
+                    <h5 class="mui-typography-h5">Confirm Account</h5>
+                    <form method="post" style="text-align: center;">
+                        {% csrf_token %}
+                        {% if user is None %}
+                        <p>This token is invalid or has expired.</p>
+                        {% elif account_confirmed %}
+                        <p>Your account has been confirmed! You will be redirected to complete your login.</p>
+                        {% elif user.is_confirmed %}
+                        <p>Your account is already confirmed.</p>
+                        {% else %}
+                        {% include "password_change_form.html" %}
+                        {% if error %}
+                        <div style="color: red; padding-bottom: 8px">{{ error }}</div>
+                        {% endif %}
+                        <button type="submit" class="mui-btn-contained">Confirm Account</button>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

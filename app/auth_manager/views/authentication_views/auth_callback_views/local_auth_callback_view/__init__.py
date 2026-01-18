@@ -1,0 +1,3 @@
+__all__ = ["LocalIdentityProviderAuthenticationCallbackView"]
+
+from .local_auth_callback_view import LocalIdentityProviderAuthenticationCallbackView

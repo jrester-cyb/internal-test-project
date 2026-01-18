@@ -1,0 +1,210 @@
+
+{% comment %} SMS MFA enrollment card content {% endcomment %}
+<div id="sms-card-content-{{ device.global_id }}">
+  <div style="padding-top: 24px">
+    <form
+      id="sms-number-form-{{ device.global_id }}"
+      onsubmit="event.preventDefault(); enrollSmsNumber('{{ device.global_id }}');"
+      style="display: flex; flex-direction: row; align-items: center; justify-content: space-evenly;"
+    >
+        <div class="mui-input-wrapper" style="margin-bottom:0">
+          <input
+            class="mui-input-contained"
+            type="tel"
+            id="sms-phone-input-{{ device.global_id }}"
+            name="sms-phone-input-{{ device.global_id }}"
+            maxlength="14" 
+            pattern="\(\d{3}\) \d{3}-\d{4}"
+            required
+            placeholder=" "
+            oninput="formatPhoneInput(this)" 
+            style="margin-bottom:0;"
+          />
+          <label for="sms-phone-input-{{ device.global_id }}" class="mui-input-label">SMS Phone Number</label>
+        </div>
+        <button
+          id="request-sms-code-btn-{{ device.global_id }}"
+          class="mui-btn-contained"
+          type="submit"
+        >
+          Send
+        </button>
+    </form>
+    <div
+      id="sms-phone-error-{{ device.global_id }}"
+      style="
+        display: none;
+        color: red;
+        margin-top: 0.5em;
+        font-size: 0.95em;
+        align-items: center;
+        gap: 0.3em;
+      "
+    >
+      <span
+        class="material-icons"
+        style="font-size: 1.1em; vertical-align: middle"
+        >error_outline</span
+      >
+      <span>Invalid phone number. Please enter a valid number.</span>
+      </div>
+  </div>
+    <div style="margin-top:1em; font-size:0.95em; color:#555; text-align:center;">
+      By clicking <strong>Send</strong>, you are granting permission for Power-View to send SMS messages to the number you provide. You are also accepting GridIntel's <a href="https://www.gridintel.com/terms-conditions/" target="_blank">Terms &amp; Conditions</a> for delivery of SMS messages from Power-View. Your SMS provider's charges will apply to all messages received from Power-View.
+    </div>
+  </form>
+
+</div>
+<script>
+  function formatPhoneInput(input) {
+    // Remove all non-digit chars
+    let value = input.value.replaceAll(/\D/g, "");
+    if (value.length > 10) value = value.slice(0, 10);
+    let formatted = value;
+    if (value.length > 6) {
+      formatted = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6)}`;
+    } else if (value.length > 3) {
+      formatted = `(${value.slice(0, 3)}) ${value.slice(3)}`;
+    } else if (value.length > 0) {
+      formatted = `(${value}`;
+    }
+    input.value = formatted;
+  }
+
+  const newRequestSmsCode = () => {
+    requestSmsCode().then((response) => {
+      if (response.ok) {
+        showMuiToast("A new code has been sent to your phone.", 'success');
+      } else {
+        showMuiToast("Failed to request code.", 'error');
+      }
+    }).catch(() => {
+      showMuiToast("Failed to request code.", 'error');
+    });
+  }
+
+  function requestSmsCode() {
+    return fetch("{{ device.request_notification_endpoint }}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "Content-Type": "application/json",
+        },
+      })
+  }
+
+  function enrollSmsNumber(globalId) {
+    const btn = document.getElementById("request-sms-code-btn-" + globalId);
+    const cardContent = document.getElementById("sms-card-content-" + globalId);
+    const phoneInput = document.getElementById("sms-phone-input-" + globalId);
+    const phoneError = document.getElementById("sms-phone-error-" + globalId);
+    let phone = phoneInput.value.replaceAll(/\D/g, "");
+    // Only allow 10 digits
+    if (/^\d{10}$/.test(phone)) {
+      phoneError.style.display = "none";
+    } else {
+      phoneError.style.display = "block";
+      return;
+    }
+    phone = '+1' + phone;
+    btn.disabled = true;
+    // PATCH the device with the new phone number first
+    fetch("{{ device.update_endpoint }}", {
+      method: "PATCH",
+      headers: {
+        "X-CSRFToken": getCookie("csrftoken"),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ phone_number: phone }),
+    })
+    .then((patchResponse) => {
+      if (!patchResponse.ok) {
+        phoneError.style.display = "block";
+        btn.disabled = false;
+        return null;
+      }
+      // Now request the code
+      return requestSmsCode();
+    })
+    .then((response) => {
+      if (!response) return; // PATCH failed, do nothing
+      if (!response.ok) {
+        phoneError.style.display = "block";
+        btn.disabled = false;
+        return;
+      }
+      cardContent.innerHTML = `
+        <div style="display:flex; flex-direction:column; justify-content: center; text-align: center; padding-bottom: 24px">
+          <p>Enter the authentication code below we sent to your phone. Please allow a few minutes for the SMS to arrive.</p>
+          <form id="verify-sms-code-form-{{ device.global_id }}" style="position: relative">
+            <div class="mui-input-wrapper" style="display: flex; flex-direction: column; margin-bottom:0px; z-index: 2;">
+                <input
+                  class="mui-input-contained"
+                  type="text"
+                  id="verify-sms-code-input-{{ device.global_id }}"
+                  name="verify-sms-code-input-{{ device.global_id }}"
+                  maxlength="6"
+                  pattern="\\d{6}"
+                  required
+                  placeholder=" "
+                  oninput="document.getElementById('verify-sms-code-error-{{ device.global_id }}').style.display='none'"
+                  style="margin-bottom:0;"
+                />
+                <label for="verify-sms-code-input-{{ device.global_id }}" class="mui-input-label">Enter Code</label>
+            </div>
+            <div id="verify-sms-code-error-{{ device.global_id }}" class="error-msg-display" style="top: 0">
+              <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
+              <span>Invalid code provided. Please try again.</span>
+            </div>
+            <br />
+            <button type="submit" class="mui-btn-contained" style="margin-top: 8px; margin-bottom:2px">Verify</button>
+            <div style="text-align:center; margin-top: 8px">
+              <a href="#" onclick="newRequestSmsCode(); return false;" style="font-size:0.98em; color:#1976d2; text-decoration:underline;">Resend code</a>
+            </div>
+          </form>
+        </div>
+      `;
+      // Attach JS handler for the new form
+      document.getElementById(
+        "verify-sms-code-form-{{ device.global_id }}"
+      ).onsubmit = function (e) {
+        e.preventDefault();
+        const code = document.getElementById(
+          "verify-sms-code-input-{{ device.global_id }}"
+        ).value;
+        const btn = this.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        const errorMsg = document.getElementById(
+          "verify-sms-code-error-{{ device.global_id }}"
+        );
+        errorMsg.style.display = "none";
+        fetch("{{ device.verify_endpoint }}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ token: `${code}` }),
+        })
+          .then((response) => {
+            if (response.ok) {
+              globalThis.location.href = "{{ mfa_finalize_endpoint }}";
+            } else {
+              errorMsg.style.display = "block";
+            }
+            btn.disabled = false;
+          })
+          .catch(() => {
+            errorMsg.style.display = "block";
+            btn.disabled = false;
+          });
+      };
+      btn.disabled = false;
+    })
+    .catch(() => {
+      alert("Failed to request code.");
+      btn.disabled = false;
+    });
+  }
+</script>
+

@@ -1,0 +1,3 @@
+__all__ = ["DynamicIdentityProviderAuthenticationCallbackView"]
+
+from .auth_callback_view import DynamicIdentityProviderAuthenticationCallbackView

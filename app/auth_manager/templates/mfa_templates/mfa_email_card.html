@@ -1,0 +1,121 @@
+{% comment %} Email MFA enrollment card content {% endcomment %}
+<div id="email-card-content-{{ device.global_id }}" style="display: flex; align-items: center; flex-direction: column;">
+  <p>
+    Request an authentication code to be sent to your email address at
+    <strong>{{ email }}</strong>.
+  </p>
+  <button
+    id="request-email-code-btn-{{ device.global_id }}"
+    class="mui-btn-contained"
+    onclick="requestEmailCode()"
+  >
+    Request Code
+  </button>
+</div>
+<script>
+  const requestNewEmailCode = () => {
+    requestDeviceNotification().then((response) => {
+      if (response.ok) {
+        showMuiToast("A new code has been sent to your email.", 'success');
+      } else {
+        showMuiToast("Failed to request code.", 'error');
+      }
+    }).catch(() => {
+      showMuiToast("Failed to request code.", 'error');
+    });
+  }
+
+  function requestDeviceNotification() {
+    return fetch("{{ device.request_notification_endpoint }}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": getCookie("csrftoken"),
+        "Content-Type": "application/json",
+      },
+    });
+  }
+  function requestEmailCode() {
+    const btn = document.getElementById("request-email-code-btn-{{ device.global_id }}");
+    const cardContent = document.getElementById(
+      "email-card-content-{{ device.global_id }}"
+    );
+    btn.disabled = true;
+    requestDeviceNotification()
+      .then((response) => {
+        if (response.ok) {
+          cardContent.innerHTML = `
+            <div style="display:flex; flex-direction:column; justify-content: center; text-align: center; padding-bottom: 24px">
+            <p>Enter the authentication code below we sent to <strong>{{ email }}</strong>. Please allow a few minutes for the email to arrive.</p>
+            <form id="verify-email-code-form-{{ device.global_id }}" style="position: relative">
+              <div class="mui-input-wrapper" style="display: flex; flex-direction: column; z-index: 2;">
+                <input
+                  class="mui-input-contained"
+                  type="text"
+                  id="verify-email-code-input-{{ device.global_id }}"
+                  name="verify-email-code-input-{{ device.global_id }}"
+                  maxlength="6"
+                  pattern="\\d{6}"
+                  required
+                  placeholder=" "
+                  oninput="document.getElementById('verify-email-code-error-{{ device.global_id }}').style.display='none'"
+                  style="margin-bottom:0;z-index: 2;"
+                />
+                <label for="verify-email-code-input-{{ device.global_id }}" class="mui-input-label">Enter Code</label>
+              </div>
+              <div id="verify-email-code-error-{{ device.global_id }}" class="error-msg-display" style="top:0">
+                <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
+                <span>Invalid code provided. Please try again.</span>
+              </div>
+              <button type="submit" class="mui-btn-contained">Verify</button>
+              <div style="text-align:center; margin-top: 8px">
+                <a onclick="requestNewEmailCode(); return false;" style="font-size:0.98em; color:#1976d2; text-decoration:underline; cursor: pointer;">Resend code</a>
+              </div>
+            </form>
+            </div>
+          `;
+          // Attach JS handler for the new form
+          document.getElementById(
+            "verify-email-code-form-{{ device.global_id }}"
+          ).onsubmit = function (e) {
+            e.preventDefault();
+            const code = document.getElementById(
+              "verify-email-code-input-{{ device.global_id }}"
+            ).value;
+            const btn = this.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            const errorMsg = document.getElementById(
+              "verify-email-code-error-{{ device.global_id }}"
+            );
+            errorMsg.style.display = "none";
+            fetch("{{ device.verify_endpoint }}", {
+              method: "POST",
+              headers: {
+                "X-CSRFToken": getCookie("csrftoken"),
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ token: `${code}` }),
+            })
+              .then((response) => {
+                if (response.ok) {
+                  globalThis.location.href = "{{ mfa_finalize_endpoint }}";
+                } else {
+                  errorMsg.style.display = "block";
+                }
+                btn.disabled = false;
+              })
+              .catch(() => {
+                errorMsg.style.display = "block";
+                btn.disabled = false;
+              });
+          };
+        } else {
+          showMuiToast("Failed to request code.", 'error');
+        }
+        btn.disabled = false;
+      })
+      .catch(() => {
+        showMuiToast("Failed to request code.", 'error');
+        btn.disabled = false;
+      });
+  }
+</script>

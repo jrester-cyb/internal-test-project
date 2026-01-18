@@ -1,0 +1,44 @@
+{% extends "base_templates/base.html" %}
+{% block content %}
+<script>
+  const handleRequestMagicLink = () => {
+    fetch("{% url 'auth-manager:magic-link-request' %}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token }}'
+      },
+      body: JSON.stringify({ token: '{{ request_token }}' })
+    }).then(() => {
+      const content = document.querySelector('.mui-card-body-content');
+      content.innerHTML = '<p>Please check your email for the login link. It will expire in {{ expiration_time }}.</p>'
+    }).catch(() => {
+      showMuiToast('Failed to request login link. Please try again.', 'error');
+    });
+  }
+</script>
+<div class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+  <div class="mui-card" style="width:100%; margin: 0 auto 1.5em auto;">
+    <div class="mui-card-body">
+      <div class="mui-card-body-content" style="padding-top: 1em; text-align: center;">
+          {% if admin_user %}
+            <p>This identity provider is disabled. As an administrator, you can re-enable it in the admin panel. Click the button below to send a login link to your registered email address.</p>
+            <button 
+              type="submit" class="mui-btn-contained"
+              style="max-width: 280px; width: 100%; margin: 0 auto;"
+              onclick="handleRequestMagicLink()"
+            >
+              Request Login Link
+            </button>
+          {% else %}
+            <p>This identity provider is disabled. Please contact an administrator for assistance.</p>
+          {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="center-align">
+    <a href="{% url 'auth-manager:login' %}"
+      style="cursor:pointer; color:rgb(255, 213, 8); font-weight:500; text-decoration:underline;">Restart Login</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% load phone_format %}
+{% comment %} SMS MFA enrollment card content {% endcomment %}
+<div id="sms-card-content-{{ device.global_id }}" style="display: flex; align-items: center; flex-direction: column;">
+  <p>Request an authentication code to be sent to your phone number at <strong>{{ device.phone_number|phone_format }}</strong>.</p>
+  <button
+    id="request-sms-code-btn-{{ device.global_id }}"
+    class="mui-btn-contained"
+    onclick="requestSmsCode()"
+  >
+    Request Code
+  </button>
+</div>
+<script>
+  const fetchNewDeviceNotification = () => {
+    requestDeviceNotification().then((response) => {
+      if (response.ok) {
+        showMuiToast("A new code has been sent to your phone.", 'success');
+      } else {
+        showMuiToast("Failed to request code.", 'error');
+      }
+    }).catch(() => {
+      showMuiToast("Failed to request code.", 'error');
+    });
+  }
+
+  function requestDeviceNotification() {
+    return fetch("{{ device.request_notification_endpoint }}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "Content-Type": "application/json",
+        },
+      })
+  }
+  function requestSmsCode() {
+    const cardContent = document.getElementById("sms-card-content-{{device.global_id}}");
+
+    requestDeviceNotification().then((response) => {
+      if (response.ok) {
+        showMuiToast("A code has been sent to your phone.", 'success');
+        cardContent.innerHTML = `
+        <div style="display:flex; flex-direction:column; justify-content: center; text-align: center; padding-bottom: 24px">
+          <p>Enter the authentication code below we sent to your phone. Please allow a few minutes for the SMS to arrive.</p>
+          <form id="verify-sms-code-form-{{ device.global_id }}" style="position: relative" onSubmit="handleSubmission(event)">
+            <div class="mui-input-wrapper" style="display: flex; flex-direction: column; margin-bottom:0px; z-index: 2;">
+                <input
+                  class="mui-input-contained"
+                  type="text"
+                  id="verify-sms-code-input-{{ device.global_id }}"
+                  name="verify-sms-code-input-{{ device.global_id }}"
+                  maxlength="6"
+                  pattern="\\d{6}"
+                  required
+                  placeholder=" "
+                  oninput="document.getElementById('verify-sms-code-error-{{ device.global_id }}').style.display='none'"
+                  style="margin-bottom:0;"
+                />
+                <label for="verify-sms-code-input-{{ device.global_id }}" class="mui-input-label">Enter Code</label>
+            </div>
+            <div id="verify-sms-code-error-{{ device.global_id }}" class="error-msg-display" style="top: 0">
+              <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
+              <span>Invalid code provided. Please try again.</span>
+            </div>
+            <br />
+            <button type="submit" class="mui-btn-contained" style="margin-top: 8px; margin-bottom:2px">Verify</button>
+            <div style="text-align:center; margin-top: 8px">
+              <a href="#" onclick="fetchNewDeviceNotification(); return false;" style="font-size:0.98em; color:#1976d2; text-decoration:underline;">Resend code</a>
+            </div>
+          </form>
+        </div>
+      `;
+        // Attach JS handler for the new form
+        document.getElementById(
+            "verify-sms-code-form-{{ device.global_id }}"
+          ).onsubmit = function (e) {
+            e.preventDefault();
+            const code = document.getElementById(
+              "verify-sms-code-input-{{ device.global_id }}"
+            ).value;
+            const btn = this.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            const errorMsg = document.getElementById(
+              "verify-sms-code-error-{{ device.global_id }}"
+            );
+            errorMsg.style.display = "none";
+            fetch("{{device.verify_endpoint}}", {
+              method: "POST",
+              headers: {
+                "X-CSRFToken": getCookie("csrftoken"),
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ token: `${code}` }),
+            })
+              .then((response) => {
+                if (response.ok) {
+                  globalThis.location.href = "{{ mfa_finalize_endpoint }}";
+                } else {
+                  errorMsg.style.display = "block";
+                }
+              })
+              .catch(() => {
+                errorMsg.style.display = "block";
+              }).finally(() => {
+                btn.disabled = false;
+
+              });
+          };
+     }
+  })
+  }
+</script>
+

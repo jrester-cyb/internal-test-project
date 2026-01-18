@@ -1,0 +1,23 @@
+<tr>
+  <td
+    text-align="left"
+    style="
+      padding: 18px 18px 18px 18px;
+      mso-alt-padding: 18px 18px 18px 18px !important;
+    "
+  >
+    Hi {{ first_name }},<br /><br />To log in, click the link below:
+  </td>
+</tr>
+{% include 'email_templates/button_base.html' %}
+<tr>
+  <td
+    text-align="left"
+    style="
+      padding: 18px 18px 18px 18px;
+      mso-alt-padding: 18px 18px 18px 18px !important;
+    "
+  >
+    Link: {{ login_url }}
+  </td>
+</tr>

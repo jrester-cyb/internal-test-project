@@ -1,0 +1,83 @@
+{% extends "base_templates/base.html" %}
+{% block header %}
+<script>
+  function setCardBodyHeight(card, open) {
+    const body = card.querySelector('.mui-card-body');
+    if (open) {
+      body.style.transition = 'max-height 0.4s cubic-bezier(.4,0,.2,1), opacity 0.4s cubic-bezier(.4,0,.2,1)';
+      body.style.maxHeight = '600px';
+      body.style.opacity = '1';
+    } else {
+      body.style.transition = 'max-height 0.4s cubic-bezier(.4,0,.2,1), opacity 0.4s cubic-bezier(.4,0,.2,1)';
+      body.style.maxHeight = '0';
+      body.style.opacity = '0';
+    }
+  }
+  function setupListeners() {
+  const cards = document.querySelectorAll('.mui-card');
+  // Set initial state
+  for (const [idx, card] of cards.entries()) {
+    setCardBodyHeight(card, idx === 0);
+    if (idx !== 0) card.classList.add('mui-card-collapsed');
+  }
+  
+  for (const card of cards) {
+    const header = card.querySelector('.mui-card-header');
+    header.addEventListener('click', function (e) {
+      // If this card is already the only open card, do nothing
+      const openCards = Array.from(cards).filter(c => !c.classList.contains('mui-card-collapsed'));
+      if (openCards.length === 1 && openCards[0] === card) {
+        return;
+      }
+      
+      for (const c of cards) {
+        if (c === card) {
+          c.classList.remove('mui-card-collapsed');
+          setCardBodyHeight(c, true);
+        } else {
+          c.classList.add('mui-card-collapsed');
+          setCardBodyHeight(c, false);
+        }
+      }
+    });
+  }
+}
+  document.addEventListener('DOMContentLoaded', setupListeners);
+</script>
+{% endblock %}
+{% block content %}
+<div class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+  {% for device in devices %}
+  <div class="mui-card{% if forloop.counter > 1 %} mui-card-collapsed{% endif %}"
+    style="width:100%; margin: 0 auto 1.5em auto;">
+    <div class="mui-card-header">
+      {% if device.name|lower == 'totp' %}Authenticator App
+      {% elif device.name|lower == 'email' %}Email
+      {% elif device.name|lower == 'sms' %}SMS{% else %}{{ device.name }}{% endif %}
+    </div>
+    <div class="mui-card-body">
+      <div class="mui-card-body-content">
+        {% if device.name|lower == 'email' %}
+        {% include "mfa_templates/mfa_email_card.html" %}
+        {% elif device.name|lower == 'sms' %}
+        {% include "mfa_templates/mfa_sms_card.html" %}
+        {% elif device.name|lower == 'totp' %}
+        {% include "mfa_templates/mfa_totp_card.html" with device=device %}
+        {% else %}
+        <a href="/auth/mfa/enroll/{{ device.global_id }}/" class="waves-effect waves-light btn blue darken-4"
+          style="margin-top:1em;">Enroll</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="center-align">
+    <form action="{% url 'auth-manager:logout' %}" method="post" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit"
+        style="cursor:pointer; color:rgb(255, 213, 8); font-weight:500; text-decoration:underline; background:none; border:none; padding:0; font-size:1em;">Back
+        to Login</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

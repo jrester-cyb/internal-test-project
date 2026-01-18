@@ -1,0 +1,3 @@
+__all__ = ["SAMLIdentityProviderAuthenticationCallbackView"]
+
+from .saml_auth_callback_view import SAMLIdentityProviderAuthenticationCallbackView

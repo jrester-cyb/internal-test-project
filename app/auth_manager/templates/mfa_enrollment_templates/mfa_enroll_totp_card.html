@@ -1,0 +1,81 @@
+{% load qr_code %}
+<script>
+  function enrollTotpCode(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('verify-totp-code-error-{{ device.global_id }}');
+    const code = document.getElementById('totp-input-{{ device.global_id }}').value;
+    const btn = document.getElementById('verify-totp-submit-{{ device.global_id }}');
+    errorDiv.style.display = 'none';
+    
+    // Send request to enroll the input
+    fetch("{{ device.verify_endpoint }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: JSON.stringify({ token: code }),
+    })
+      .then((response) => {
+            if (response.ok) {
+              globalThis.location.href = "{{ mfa_finalize_endpoint }}";
+            } else {
+              errorDiv.style.display = "block";
+            }
+          })
+          .finally(() => {
+            btn.disabled = false;
+          });
+    
+  }
+</script>
+<div class="center-align">
+  <p>Scan this QR code with your authenticator app, or copy the secret key below:</p>
+  {% if device.seed and device.provisioning_uri %}
+  <form id="totp-form-{{ device.global_id }}" onsubmit="enrollTotpCode(event)" style="text-align: center;">
+    {% csrf_token %}
+    <div id="qr-placeholder" style="margin:1em 0; display:flex; align-items:center; justify-content:center; height:200px;">
+      <div style="max-width: 200px; max-height: 200px;">
+        {% qr_from_text device.provisioning_uri size="T" image_format="png" error_correction="L" %}
+      </div>
+    </div>
+    <div style="margin-bottom:1em; display:flex; justify-content:center; align-items:center;">
+      <div style="display:flex; align-items:center; background:#f5f5f5; border:1px solid #ccc; border-radius:4px; min-width:220px; max-width:260px; position:relative;">
+        <span id="totp-seed" style="font-size:0.82em; font-family:monospace; color:#333; display:flex; align-items:center; min-width:140px; max-width:200px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:3px 10px 3px 10px;">
+          {{ device.seed }}
+        </span>
+        <span style="width:1px; background:#ddd; margin:2px 0;"></span>
+        <button type="button" class="btn-flat blue-text mui-tooltip-btn" style="background:transparent; box-shadow:none; min-width:18px; padding:0 2px; display:flex; align-items:center; border:none; height:22px; position:relative;" onclick="navigator.clipboard.writeText(document.getElementById('totp-seed').innerText.trim());showMuiToast('Seed copied to clipboard');" tabindex="0" aria-label="Copy to clipboard">
+          <i class="material-icons" style="font-size:15px; line-height:1; color:#333;">content_copy</i>
+          <span class="mui-tooltip">Copy seed to clipboard</span>
+        </button>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: center; flex-direction: column; margin-top: 1.5em; position: relative">
+      <div class="mui-input-wrapper" style="display: flex; flex-direction: column; z-index: 2;">
+          <input
+            class="mui-input-contained"
+            type="text"
+            id="totp-input-{{ device.global_id }}"
+            name="totp-input-{{ device.global_id }}"
+            maxlength="6"
+            pattern="\d{6}"
+            required
+            placeholder=" "
+            oninput="document.getElementById('verify-totp-code-error-{{ device.global_id }}').style.display='none'"
+            style="margin-bottom:0;"
+          />
+          <label for="totp-input-{{ device.global_id }}" class="mui-input-label">Enter Code</label>
+      </div>
+      <div id="verify-totp-code-error-{{ device.global_id }}" class="error-msg-display">
+        <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
+        <span>Invalid code provided. Please try again.</span>
+      </div>
+    </div>
+    <button type="submit" id="verify-totp-submit-{{ device.global_id }}" name="verify_code" value="1" class="mui-btn-contained">Verify</button>
+    </form>
+  {% else %}
+    <p class="red-text">Unable to generate QR code. Please try again.</p>
+  {% endif %}
+</div>
+
