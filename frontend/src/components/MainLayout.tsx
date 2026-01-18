@@ -7,13 +7,15 @@ import { LayoutProvider, useLayout } from '@app/contexts/LayoutContext'
 import PvAppBar from '@app/components/PvAppBar'
 import Sidebar from '@app/components/Sidebar'
 import { AssetTypesPageSkeleton, LibraryPageSkeleton, MapPageSkeleton, GenericPageSkeleton } from '@app/components/PageSkeletons'
+import { isMapPreloaded } from '@app/utils/preload'
 import type { Organization } from '@app/types'
 import AppBreadcrumbs from './AppBreadcrumbs'
 
 /**
  * Returns the appropriate skeleton component based on the navigation target path
+ * Returns null if the page has been preloaded (no skeleton needed)
  */
-function getSkeletonForPath(path: string): React.ReactNode {
+function getSkeletonForPath(path: string): React.ReactNode | null {
   // Check which page we're navigating to
   if (path.includes('/asset-types') && !path.match(/\/asset-types\/[^/]+/)) {
     // Asset types list page (not a specific asset type)
@@ -23,6 +25,10 @@ function getSkeletonForPath(path: string): React.ReactNode {
     return <LibraryPageSkeleton />
   }
   if (path.includes('/map')) {
+    // Skip skeleton if map has been preloaded
+    if (isMapPreloaded()) {
+      return null
+    }
     return <MapPageSkeleton />
   }
   // Default fallback
@@ -85,8 +91,8 @@ function MainLayoutContent() {
             <AppBreadcrumbs />
           </Box>
         )}
-        {/* Show skeleton when navigating between main sections */}
-        {isNavigatingToNewSection && targetPath ? (
+        {/* Show skeleton when navigating between main sections (unless preloaded) */}
+        {isNavigatingToNewSection && targetPath && getSkeletonForPath(targetPath) ? (
           getSkeletonForPath(targetPath)
         ) : (
           <Suspense fallback={

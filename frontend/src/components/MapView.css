@@ -1,4 +1,17 @@
-/* Leaflet Dark Mode Styles */
+/* Light mode - match OpenStreetMap tile background */
+.leaflet-container {
+  background: #aad3df;
+}
+
+/* Remove Leaflet's default tile fade-in animation */
+.leaflet-tile {
+  opacity: 1 !important;
+}
+.leaflet-fade-anim .leaflet-tile {
+  transition: none !important;
+}
+
+/* Dark mode - match CartoDB dark tile background */
 .dark-mode .leaflet-container {
   background: #1a1a1a;
 }

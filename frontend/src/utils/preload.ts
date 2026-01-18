@@ -3,6 +3,7 @@
 
 import { getCachedFetch, cacheKeys } from './prefetchCache'
 import { fetchFileTree, fetchAssetTypes, fetchAssetsByType, fetchAssetAttributeDefinitions, fetchAllAssetAttributeDefinitions } from '../api/assets'
+import { prefetchMapTilesForPosition } from './mapPosition'
 import {
   preloadMapLoader,
   preloadAssetTypesLoader,
@@ -12,6 +13,9 @@ import {
   preloadAssetAttributesLoader,
   preloadAssetDetailLoader,
 } from '../router'
+
+// Track which pages have been preloaded (JS chunks loaded)
+const preloadedPages = new Set<string>()
 
 // Page component preloaders
 export const preloadAssetTypeAboutPage = () => import('../pages/AssetTypeAboutPage')
@@ -47,9 +51,17 @@ export function prefetchAssetTypes(organizationId: string, workspaceId?: string)
 
 export function prefetchMap(organizationId: string, workspaceId?: string) {
   // Load JS chunks (page) and warm up cached lazy loader
-  // Map data depends on viewport which we don't know yet
-  preloadMapPage()
+  preloadMapPage().then(() => preloadedPages.add('map'))
   preloadMapLoader()
+
+  // Prefetch map tiles for the saved position (or default)
+  // This loads tiles into browser cache so they appear instantly
+  prefetchMapTilesForPosition(organizationId, workspaceId)
+}
+
+// Check if the map page has been preloaded
+export function isMapPreloaded(): boolean {
+  return preloadedPages.has('map')
 }
 
 export function prefetchAssetTypeDetail(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {

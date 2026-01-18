@@ -88,7 +88,9 @@ export function LibraryPageSkeleton() {
 }
 
 /**
- * Skeleton for MapPage - shows map placeholder
+ * Skeleton for MapPage - shows map placeholder with theme-aware background
+ * Light mode: #aad3df (OpenStreetMap water color)
+ * Dark mode: #1a1a1a (CartoDB dark background)
  */
 export function MapPageSkeleton() {
   return (
@@ -98,29 +100,10 @@ export function MapPageSkeleton() {
         display: 'flex',
         height: '100%',
         minHeight: 0,
-        bgcolor: 'background.default',
+        // Match leaflet container background colors
+        bgcolor: (theme) => theme.palette.mode === 'dark' ? '#1a1a1a' : '#aad3df',
       }}
-    >
-      {/* Map area skeleton */}
-      <Box
-        sx={{
-          flexGrow: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: 'grey.100',
-        }}
-      >
-        <Skeleton
-          variant="rectangular"
-          sx={{
-            width: '100%',
-            height: '100%',
-            bgcolor: 'grey.200',
-          }}
-        />
-      </Box>
-    </Box>
+    />
   )
 }
 

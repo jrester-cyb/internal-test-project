@@ -376,8 +376,8 @@ export default function AssetTypesPage() {
       <Typography variant="h4" sx={{ mb: 2 }}>Asset Types</Typography>
 
       {/* Search bar, Sort, Filter, and Add button */}
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: { md: 'space-between' }, alignItems: { xs: 'stretch', md: 'center' }, mb: 2, gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {!isMobile && (
             <TextField
               size={isMobile ? "small" : "medium"}
