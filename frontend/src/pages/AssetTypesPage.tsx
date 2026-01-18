@@ -18,17 +18,23 @@ import {
   IconButton,
   Stack,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material'
 import {
   Search as SearchIcon,
   Add as AddIcon,
   Clear as ClearIcon,
   FilterList as FilterIcon,
+  Sort as SortIcon,
 } from '@mui/icons-material'
 import AssetTypeList from '@app/components/AssetTypeList'
 import ResponsiveButton from '@app/components/ResponsiveButton'
 import { fetchAssetTypes, type AssetTypesQueryParams } from '@app/api/assets'
 import type { AssetType } from '@app/types'
+import { useLayout } from '@app/contexts/LayoutContext'
 
 interface LoaderData {
   results: AssetType[]
@@ -57,6 +63,7 @@ export default function AssetTypesPage() {
   const navigate = useNavigate()
   const { organizationId, workspaceId } = useParams()
   const theme = useTheme()
+  const { isMobile } = useLayout()
 
   // Virtualized list state - Map for sparse data
   // Initialize directly from loader data to avoid flash of empty content
@@ -87,6 +94,9 @@ export default function AssetTypesPage() {
     workspaceCountRange: null,
     assetCountRange: null,
   })
+
+  const [sortAnchorEl, setSortAnchorEl] = useState<HTMLButtonElement | null>(null)
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false)
 
   const hasActiveFilters = activeFilters.workspaceCountRange !== null || activeFilters.assetCountRange !== null
 
@@ -366,49 +376,72 @@ export default function AssetTypesPage() {
       <Typography variant="h4" sx={{ mb: 2 }}>Asset Types</Typography>
 
       {/* Search bar, Sort, Filter, and Add button */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <TextField
-            size="small"
-            placeholder="Search asset types..."
-            value={searchInput}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  {isSearching ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    <SearchIcon color="action" />
-                  )}
-                </InputAdornment>
-              ),
-              endAdornment: searchInput && (
-                <InputAdornment position="end">
-                  <ClearIcon
-                    sx={{ cursor: 'pointer', fontSize: 20 }}
-                    onClick={handleClearSearch}
-                  />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ width: 300 }}
-          />
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: { md: 'space-between' }, alignItems: { xs: 'stretch', md: 'center' }, mb: 2, gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          {!isMobile && (
+            <TextField
+              size={isMobile ? "small" : "medium"}
+              placeholder="Search asset types..."
+              value={searchInput}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    {isSearching ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      <SearchIcon color="action" />
+                    )}
+                  </InputAdornment>
+                ),
+                endAdornment: searchInput && (
+                  <InputAdornment position="end">
+                    <ClearIcon
+                      sx={{ cursor: 'pointer', fontSize: 20 }}
+                      onClick={handleClearSearch}
+                    />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ width: { xs: 200, md: 300 }, flexShrink: 0 }}
+            />
+          )}
 
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Sort by</InputLabel>
-            <Select
-              value={sortBy}
-              label="Sort by"
-              onChange={(e) => handleSortChange(e.target.value as SortOption)}
-            >
-              {SORT_OPTIONS.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {isMobile ? (
+            <>
+              <IconButton onClick={(e) => setSortAnchorEl(e.currentTarget)} size="small">
+                <SortIcon />
+              </IconButton>
+              <Popover
+                open={!!sortAnchorEl}
+                anchorEl={sortAnchorEl}
+                onClose={() => setSortAnchorEl(null)}
+              >
+                <Box sx={{ p: 1 }}>
+                  {SORT_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} onClick={() => { handleSortChange(option.value); setSortAnchorEl(null) }}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Box>
+              </Popover>
+            </>
+          ) : (
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Sort by</InputLabel>
+              <Select
+                value={sortBy}
+                label="Sort by"
+                onChange={(e) => handleSortChange(e.target.value as SortOption)}
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           <IconButton onClick={handleFilterClick} size="small" color={hasActiveFilters ? (theme.palette.mode === 'light' ? 'primary' : 'secondary') : 'default'}>
             <FilterIcon />
@@ -482,12 +515,53 @@ export default function AssetTypesPage() {
           </Popover>
         </Box>
 
-        <ResponsiveButton
-          icon={<AddIcon />}
-          text="Add Asset Type"
-          onClick={handleAdd}
-          variant="contained"
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ResponsiveButton
+            icon={<AddIcon />}
+            text="Add Asset Type"
+            onClick={handleAdd}
+            variant="contained"
+          />
+          {isMobile && (
+            <IconButton onClick={() => setSearchDialogOpen(true)} size="small">
+              <SearchIcon />
+            </IconButton>
+          )}
+        </Box>
+
+        <Dialog open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)} fullWidth maxWidth="sm">
+          <DialogTitle>Search Asset Types</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              placeholder="Search asset types..."
+              value={searchInput}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    {isSearching ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      <SearchIcon color="action" />
+                    )}
+                  </InputAdornment>
+                ),
+                endAdornment: searchInput && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={handleClearSearch}>
+                      <ClearIcon />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSearchDialogOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
 
       {/* Active filters display */}

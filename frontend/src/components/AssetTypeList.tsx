@@ -125,7 +125,7 @@ export default function AssetTypeList({
           },
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ minWidth: 0, minWidth: 200 }}>
           <Link
             onMouseEnter={handlePreload}
             onFocus={handlePreload}
@@ -214,9 +214,11 @@ export default function AssetTypeList({
         bgcolor: 'background.paper',
       }}
     >
-      <Typography variant="subtitle2" fontWeight={600}>
-        Name
-      </Typography>
+      <Box sx={{ minWidth: 200 }}>
+        <Typography variant="subtitle2" fontWeight={600}>
+          Name
+        </Typography>
+      </Box>
       <Typography variant="subtitle2" fontWeight={600}>
         Created
       </Typography>

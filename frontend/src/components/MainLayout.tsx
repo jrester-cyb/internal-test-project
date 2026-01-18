@@ -101,6 +101,7 @@ function MainLayoutContent() {
 
       {isMobile && (
         <BottomNavigation
+          showLabels={true}
           value={bottomNavValue}
           onChange={(event, newValue) => {
             const basePath = isGlobalMode
@@ -109,7 +110,24 @@ function MainLayoutContent() {
             const paths = [`${basePath}/map`, `${basePath}/asset-types`, `${basePath}/library`]
             navigate(paths[newValue])
           }}
-          sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000 }}
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            bgcolor: 'primary.main',
+            '& .MuiBottomNavigationAction-root': {
+              color: 'primary.contrastText',
+            },
+            '& .MuiBottomNavigationAction-root.Mui-selected': {
+              color: 'secondary.main',
+            },
+            '& .MuiBottomNavigationAction-label': {
+              fontSize: '0.875rem',
+              transition: 'none',
+            },
+          }}
         >
           <BottomNavigationAction label="Map" icon={<MapIcon />} />
           <BottomNavigationAction label="Assets" icon={<AssetsIcon />} />
