@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
 import { Box, Container, Grid, Typography } from '@mui/material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
@@ -9,10 +9,14 @@ import TasksCard from '@app/components/TasksCard'
 import FilesCard from '@app/components/FilesCard'
 import { AssetAuditLogSection } from '@app/components/AssetAuditLogSection'
 import AssetEditDialog from '@app/components/AssetEditDialog'
-import { fetchRelatedAssets, type RelatedAssetsResponse, type RelatedAsset } from '@app/api/assets'
+import { fetchRelatedAssets, fetchAssetAttributeDefinitions, type RelatedAssetsResponse, type RelatedAsset } from '@app/api/assets'
+import type { AssetDetailLoaderData } from '@app/loaders/assetTypes'
+
+const ATTRIBUTES_PAGE_SIZE = 20
 
 export default function AssetDetailPage() {
-  const { asset, attributes } = useLoaderData() as { asset: Asset, attributes: AssetTypeAttribute[] }
+  const loaderData = useLoaderData() as AssetDetailLoaderData
+  const { asset, initialAttributes, totalAttributeCount, assetTypeId: loaderAssetTypeId } = loaderData
   const { organizationId, workspaceId, assetTypeId } = useParams<{ organizationId: string; workspaceId: string; assetTypeId: string }>()
 
   // Early return if asset is not loaded yet
@@ -37,14 +41,59 @@ export default function AssetDetailPage() {
   const [globalValuesOnly, setGlobalValuesOnly] = useState(false)
   const [loadingGlobalValues, setLoadingGlobalValues] = useState(false)
 
-  // Get all unique tags from attributes
-  const availableTags = useMemo(() => {
-    const tagSet = new Set<string>()
-    attributes.forEach(attr => {
-      attr.tags?.forEach(tag => tagSet.add(tag))
-    })
-    return Array.from(tagSet).sort()
-  }, [attributes])
+  // Attributes state for infinite scrolling
+  const [attributesMap, setAttributesMap] = useState<Map<number, AssetTypeAttribute>>(() => {
+    const map = new Map<number, AssetTypeAttribute>()
+    initialAttributes.forEach((attr, index) => map.set(index, attr))
+    return map
+  })
+  const [attributesLoading, setAttributesLoading] = useState(false)
+
+  // Reset attributes when loader data changes (e.g., navigating to different asset)
+  useEffect(() => {
+    const map = new Map<number, AssetTypeAttribute>()
+    initialAttributes.forEach((attr, index) => map.set(index, attr))
+    setAttributesMap(map)
+  }, [initialAttributes])
+
+  // Load more attributes when scrolling
+  const handleLoadAttributeRange = useCallback(async (startIndex: number, endIndex: number) => {
+    if (!organizationId || !assetTypeId || attributesLoading) return
+
+    // Calculate page number based on range
+    const page = Math.floor(startIndex / ATTRIBUTES_PAGE_SIZE) + 1
+
+    setAttributesLoading(true)
+    try {
+      const response = await fetchAssetAttributeDefinitions(
+        organizationId,
+        workspaceId,
+        assetTypeId,
+        page,
+        ATTRIBUTES_PAGE_SIZE
+      )
+
+      // Calculate the starting index for this page
+      const pageStartIndex = (page - 1) * ATTRIBUTES_PAGE_SIZE
+
+      setAttributesMap(prev => {
+        const newMap = new Map(prev)
+        response.results?.forEach((attr: AssetTypeAttribute, i: number) => {
+          newMap.set(pageStartIndex + i, attr)
+        })
+        return newMap
+      })
+    } catch (err) {
+      console.error('Failed to load more attributes:', err)
+    } finally {
+      setAttributesLoading(false)
+    }
+  }, [organizationId, workspaceId, assetTypeId, attributesLoading])
+
+  // Get all loaded attributes as an array for the edit dialog
+  const allLoadedAttributes = useMemo(() => {
+    return Array.from(attributesMap.values())
+  }, [attributesMap])
 
   // Refetch asset when globalValuesOnly toggle changes
   useEffect(() => {
@@ -164,7 +213,9 @@ export default function AssetDetailPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <AttributesCard
                 asset={currentAsset}
-                attributes={attributes}
+                attributesMap={attributesMap}
+                totalAttributeCount={totalAttributeCount}
+                onLoadRange={handleLoadAttributeRange}
                 showHidden={showHidden}
                 onShowHiddenChange={setShowHidden}
                 selectedTags={selectedTags}
@@ -173,7 +224,7 @@ export default function AssetDetailPage() {
                 onSelectedTypesChange={setSelectedTypes}
                 excludedScopes={excludedScopes}
                 onExcludedScopesChange={setExcludedScopes}
-                isLoading={loadingGlobalValues}
+                isLoading={loadingGlobalValues || attributesLoading}
               />
             </Grid>
 
@@ -217,7 +268,7 @@ export default function AssetDetailPage() {
         open={editDialogOpen}
         onClose={handleEditDialogClose}
         asset={currentAsset}
-        attributes={attributes}
+        attributes={allLoadedAttributes}
         organizationId={organizationId || ''}
         workspaceId={workspaceId || ''}
         assetTypeId={assetTypeId || ''}

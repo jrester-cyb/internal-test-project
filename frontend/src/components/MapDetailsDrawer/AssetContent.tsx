@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Box, Skeleton, Typography } from '@mui/material'
 import { DragHandle as DragHandleIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
@@ -10,6 +10,8 @@ import TasksCard from '@app/components/TasksCard'
 import FilesCard from '@app/components/FilesCard'
 import { useOrganization } from '@app/contexts/OrganizationContext'
 import type { RelatedAssetsResponse } from '@app/api/assets'
+
+const ATTRIBUTES_PAGE_SIZE = 20
 import {
   useSensors,
   useSensor,
@@ -42,8 +44,16 @@ export default function AssetContent({
 }: AssetContentProps) {
   const { activeOrganization } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
-  const [attributes, setAttributes] = useState<AssetTypeAttribute[]>(Array.isArray(propAttributes) ? propAttributes : [])
+  const [attributesMap, setAttributesMap] = useState<Map<number, AssetTypeAttribute>>(() => {
+    const map = new Map<number, AssetTypeAttribute>()
+    if (Array.isArray(propAttributes)) {
+      propAttributes.forEach((attr, index) => map.set(index, attr))
+    }
+    return map
+  })
+  const [totalAttributeCount, setTotalAttributeCount] = useState(Array.isArray(propAttributes) ? propAttributes.length : 0)
   const [loading, setLoading] = useState(false)
+  const [attributesLoading, setAttributesLoading] = useState(false)
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
@@ -122,7 +132,12 @@ export default function AssetContent({
   useEffect(() => {
     // Reset state when asset changes - this ensures we show the new asset immediately
     setFullAsset(null)
-    setAttributes(Array.isArray(propAttributes) ? propAttributes : [])
+    const newMap = new Map<number, AssetTypeAttribute>()
+    if (Array.isArray(propAttributes)) {
+      propAttributes.forEach((attr, index) => newMap.set(index, attr))
+    }
+    setAttributesMap(newMap)
+    setTotalAttributeCount(Array.isArray(propAttributes) ? propAttributes.length : 0)
     setRelatedAssets(null)
     setRelatedError(null)
 
@@ -132,7 +147,10 @@ export default function AssetContent({
       // If attributes are provided, assume the asset is already fully loaded
       if (propAttributes) {
         setFullAsset(asset)
-        setAttributes(propAttributes)
+        const map = new Map<number, AssetTypeAttribute>()
+        propAttributes.forEach((attr, index) => map.set(index, attr))
+        setAttributesMap(map)
+        setTotalAttributeCount(propAttributes.length)
         setLoading(false)
         return
       }
@@ -144,8 +162,12 @@ export default function AssetContent({
 
         // Fetch attributes if not provided and we have an asset type
         if (!propAttributes && data.assetType) {
-          const attrsResponse = await fetchAssetAttributeDefinitions(organizationId, workspaceId, data.assetType)
-          setAttributes(Array.isArray(attrsResponse.results) ? attrsResponse.results : [])
+          const attrsResponse = await fetchAssetAttributeDefinitions(organizationId, workspaceId, data.assetType, 1, ATTRIBUTES_PAGE_SIZE)
+          const map = new Map<number, AssetTypeAttribute>()
+          const results = Array.isArray(attrsResponse.results) ? attrsResponse.results : []
+          results.forEach((attr: AssetTypeAttribute, index: number) => map.set(index, attr))
+          setAttributesMap(map)
+          setTotalAttributeCount(attrsResponse.count || results.length)
         }
       } catch (error) {
         console.error('Error loading asset details:', error)
@@ -155,6 +177,41 @@ export default function AssetContent({
     }
     loadFullAsset()
   }, [asset?.id, organizationId, workspaceId, propAttributes])
+
+  // Load more attributes when scrolling
+  const handleLoadAttributeRange = useCallback(async (startIndex: number, endIndex: number) => {
+    const displayAsset = fullAsset || asset
+    if (!organizationId || !displayAsset?.assetType || attributesLoading) return
+
+    // Calculate page number based on range
+    const page = Math.floor(startIndex / ATTRIBUTES_PAGE_SIZE) + 1
+
+    setAttributesLoading(true)
+    try {
+      const response = await fetchAssetAttributeDefinitions(
+        organizationId,
+        workspaceId,
+        displayAsset.assetType,
+        page,
+        ATTRIBUTES_PAGE_SIZE
+      )
+
+      // Calculate the starting index for this page
+      const pageStartIndex = (page - 1) * ATTRIBUTES_PAGE_SIZE
+
+      setAttributesMap(prev => {
+        const newMap = new Map(prev)
+        response.results?.forEach((attr: AssetTypeAttribute, i: number) => {
+          newMap.set(pageStartIndex + i, attr)
+        })
+        return newMap
+      })
+    } catch (err) {
+      console.error('Failed to load more attributes:', err)
+    } finally {
+      setAttributesLoading(false)
+    }
+  }, [organizationId, workspaceId, fullAsset, asset, attributesLoading])
 
   // Fetch related assets
   useEffect(() => {
@@ -256,7 +313,9 @@ export default function AssetContent({
                             ) : (
                               <AttributesCard
                                 asset={displayAsset}
-                                attributes={attributes}
+                                attributesMap={attributesMap}
+                                totalAttributeCount={totalAttributeCount}
+                                onLoadRange={handleLoadAttributeRange}
                                 showHidden={showHidden}
                                 onShowHiddenChange={setShowHidden}
                                 selectedTags={selectedTags}
@@ -265,7 +324,7 @@ export default function AssetContent({
                                 onSelectedTypesChange={setSelectedTypes}
                                 excludedScopes={excludedScopes}
                                 onExcludedScopesChange={setExcludedScopes}
-                                isLoading={loading}
+                                isLoading={loading || attributesLoading}
                                 dragHandleProps={dragHandleProps}
                               />
                             )}

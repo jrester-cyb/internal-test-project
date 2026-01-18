@@ -137,10 +137,14 @@ export async function assetAttributesRouteLoader({ params, request }: LoaderFunc
 // Asset Detail loader
 export interface AssetDetailLoaderData {
   asset: Asset
-  attributes: AssetTypeAttribute[]
+  initialAttributes: AssetTypeAttribute[]
+  totalAttributeCount: number
   organizationId: string
   workspaceId: string | undefined
+  assetTypeId: string
 }
+
+const ASSET_DETAIL_ATTRIBUTES_PAGE_SIZE = 20
 
 export async function assetDetailRouteLoader({ params }: LoaderFunctionArgs): Promise<AssetDetailLoaderData> {
   const { organizationId, workspaceId, assetTypeId, assetId } = params
@@ -151,21 +155,23 @@ export async function assetDetailRouteLoader({ params }: LoaderFunctionArgs): Pr
 
   // Use cache keys for prefetch compatibility
   const assetKey = cacheKeys.assetDetail(organizationId, workspaceId, assetId)
-  const attrsKey = cacheKeys.assetAttributeDefinitionsAll(organizationId, workspaceId, assetTypeId)
+  const attrsKey = cacheKeys.assetAttributeDefinitions(organizationId, workspaceId, assetTypeId)
 
-  const [asset, attributes] = await Promise.all([
+  const [asset, attributesResponse] = await Promise.all([
     getCachedFetch(assetKey, () =>
       fetchAsset(organizationId, workspaceId, assetId)
     ),
     getCachedFetch(attrsKey, () =>
-      fetchAllAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId)
+      fetchAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId, 1, ASSET_DETAIL_ATTRIBUTES_PAGE_SIZE)
     ),
   ])
 
   return {
     asset,
-    attributes,
+    initialAttributes: attributesResponse.results || [],
+    totalAttributeCount: attributesResponse.count || 0,
     organizationId,
     workspaceId,
+    assetTypeId,
   }
 }
