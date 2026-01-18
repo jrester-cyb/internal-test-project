@@ -527,10 +527,16 @@ export default function InfiniteLoaderTable<T>({
 
     const item = currentItems.get(index)
 
+    // Offset the row position by the header height to account for the sticky header
+    const adjustedStyle = {
+      ...style,
+      top: typeof style.top === 'number' ? style.top + headerHeight : style.top,
+    }
+
     // Show placeholder for items not yet loaded
     if (item === undefined) {
       return (
-        <div style={style}>
+        <div style={adjustedStyle}>
           {currentPlaceholder}
         </div>
       )
@@ -546,7 +552,7 @@ export default function InfiniteLoaderTable<T>({
     const handleClick = currentOnRowClick ? () => currentOnRowClick(item, index) : undefined
 
     return (
-      <div style={style}>
+      <div style={adjustedStyle}>
         <div
           ref={measureRef}
           onClick={handleClick}
@@ -579,7 +585,7 @@ export default function InfiniteLoaderTable<T>({
         </div>
       </div>
     )
-  }, [setRowHeight])
+  }, [setRowHeight, headerHeight])
 
 
   if (totalCount === 0 && !isLoading) {

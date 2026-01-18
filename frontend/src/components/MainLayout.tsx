@@ -103,6 +103,34 @@ function MainLayoutContent() {
             <Outlet />
           </Suspense>
         )}
+
+        {/* Footer - hidden on mobile */}
+        {!isMobile && (
+          <Box
+            component="footer"
+            sx={{
+              py: 0.5,
+              px: 3,
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Box
+              component="span"
+              sx={{
+                fontSize: '0.75rem',
+                color: 'text.secondary',
+              }}
+            >
+              © {new Date().getFullYear()} Your Company
+            </Box>
+          </Box>
+        )}
       </Box>
 
       {isMobile && (
