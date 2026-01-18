@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom'
 import {
   Box,
@@ -7,16 +7,16 @@ import {
   Button,
   Paper,
   Typography,
+  CircularProgress,
 } from '@mui/material'
 import {
   Search as SearchIcon,
   Add as AddIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material'
 import AssetTypeList from '@app/components/AssetTypeList'
 import { fetchAssetTypes } from '@app/api/assets'
 import type { AssetType } from '@app/types'
-import TruncatedText from '@app/components/TruncatedText'
-import PvDrawer from '@app/components/PvDrawer'
 
 interface LoaderData {
   results: AssetType[]
@@ -24,6 +24,7 @@ interface LoaderData {
 }
 
 const PAGE_SIZE = 50
+const SEARCH_DEBOUNCE_MS = 300
 
 export default function AssetTypesPage() {
   const loaderData = useLoaderData() as LoaderData
@@ -37,10 +38,15 @@ export default function AssetTypesPage() {
   const loadingPagesRef = useRef<Set<number>>(new Set())
 
   // Search state
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [activeSearch, setActiveSearch] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Initialize from loader data
   useEffect(() => {
+    if (activeSearch) return // Don't reset if we're searching
+
     const results = loaderData?.results || []
     const count = loaderData?.count || 0
 
@@ -49,35 +55,76 @@ export default function AssetTypesPage() {
     setItems(newItems)
     setTotalCount(count)
     loadingPagesRef.current.clear()
-  }, [loaderData])
+  }, [loaderData, activeSearch])
 
-  // Filter items by search query (client-side for now)
-  const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return { items, count: totalCount }
+  // Perform server-side search
+  const performSearch = useCallback(
+    async (query: string) => {
+      if (!organizationId) return
+
+      setIsSearching(true)
+      setActiveSearch(query)
+      loadingPagesRef.current.clear()
+
+      try {
+        const data = await fetchAssetTypes(
+          organizationId,
+          workspaceId,
+          PAGE_SIZE,
+          0,
+          query || undefined
+        )
+
+        const newItems = new Map<number, AssetType>()
+        ;(data.results || []).forEach((item, idx) => newItems.set(idx, item))
+        setItems(newItems)
+        setTotalCount(data.count || 0)
+      } catch (error) {
+        console.error('Failed to search asset types:', error)
+      } finally {
+        setIsSearching(false)
+      }
+    },
+    [organizationId, workspaceId]
+  )
+
+  // Handle search input change with debounce
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value)
+
+    // Clear existing debounce timer
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current)
     }
 
-    const query = searchQuery.toLowerCase()
-    const filtered = new Map<number, AssetType>()
-    let idx = 0
+    // Debounce the search
+    searchDebounceRef.current = setTimeout(() => {
+      performSearch(value)
+    }, SEARCH_DEBOUNCE_MS)
+  }
 
-    items.forEach((item) => {
-      if (
-        item.name.toLowerCase().includes(query) ||
-        item.description?.toLowerCase().includes(query)
-      ) {
-        filtered.set(idx, item)
-        idx++
+  // Clear search
+  const handleClearSearch = () => {
+    setSearchInput('')
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current)
+    }
+    performSearch('')
+  }
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current)
       }
-    })
-
-    return { items: filtered, count: filtered.size }
-  }, [items, totalCount, searchQuery])
+    }
+  }, [])
 
   // Load items for a specific range
   const handleLoadRange = useCallback(
     async (startIndex: number, endIndex: number) => {
-      if (!organizationId || isLoading || searchQuery) return
+      if (!organizationId || isLoading) return
 
       // Calculate which page(s) we need to fetch
       const startPage = Math.floor(startIndex / PAGE_SIZE)
@@ -106,7 +153,13 @@ export default function AssetTypesPage() {
         for (const page of pagesToLoad) {
           const offset = page * PAGE_SIZE
 
-          const data = await fetchAssetTypes(organizationId, workspaceId, PAGE_SIZE, offset)
+          const data = await fetchAssetTypes(
+            organizationId,
+            workspaceId,
+            PAGE_SIZE,
+            offset,
+            activeSearch || undefined
+          )
           const newResults = data.results || []
 
           setItems((prev) => {
@@ -123,7 +176,7 @@ export default function AssetTypesPage() {
         setIsLoading(false)
       }
     },
-    [organizationId, workspaceId, isLoading, items, searchQuery]
+    [organizationId, workspaceId, isLoading, items, activeSearch]
   )
 
   const handleEdit = (assetType: AssetType) => {
@@ -162,12 +215,24 @@ export default function AssetTypesPage() {
         <TextField
           size="small"
           placeholder="Search asset types..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={searchInput}
+          onChange={(e) => handleSearchChange(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon color="action" />
+                {isSearching ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <SearchIcon color="action" />
+                )}
+              </InputAdornment>
+            ),
+            endAdornment: searchInput && (
+              <InputAdornment position="end">
+                <ClearIcon
+                  sx={{ cursor: 'pointer', fontSize: 20 }}
+                  onClick={handleClearSearch}
+                />
               </InputAdornment>
             ),
           }}
@@ -178,10 +243,10 @@ export default function AssetTypesPage() {
       {/* Table */}
       <Paper sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <AssetTypeList
-          items={filteredItems.items}
-          totalCount={filteredItems.count}
-          onLoadRange={searchQuery ? undefined : handleLoadRange}
-          isLoading={isLoading}
+          items={items}
+          totalCount={totalCount}
+          onLoadRange={handleLoadRange}
+          isLoading={isLoading || isSearching}
           onEdit={handleEdit}
           onDelete={handleDelete}
         />

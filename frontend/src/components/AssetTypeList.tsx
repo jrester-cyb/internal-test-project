@@ -6,6 +6,7 @@ import {
   Skeleton,
   Typography,
   CircularProgress,
+  Tooltip,
 } from '@mui/material'
 import {
   Edit as EditIcon,
@@ -148,13 +149,15 @@ export default function AssetTypeList({
           {formatDate(assetType.createdAt)}
         </Typography>
         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-          <IconButton
-            size="small"
-            onClick={() => handleSystemDetailsOpen(assetType)}
-            title="System Details"
-          >
-            <InfoIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="System Details" placement="left" arrow>
+            <IconButton
+              size="small"
+              onClick={() => handleSystemDetailsOpen(assetType)}
+              title="System Details"
+            >
+              <InfoIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           {onEdit && (
             <IconButton
               size="small"
@@ -181,7 +184,7 @@ export default function AssetTypeList({
             </IconButton>
           )}
         </Box>
-      </Box>
+      </Box >
     )
   }
 

@@ -236,7 +236,8 @@ export async function fetchAssetTypes(
   organizationId: string,
   workspaceId: string | undefined,
   limit?: number,
-  offset?: number
+  offset?: number,
+  search?: string
 ): Promise<OffsetPaginatedResponse<any>> {
   const params = new URLSearchParams()
   if (limit !== undefined) {
@@ -244,6 +245,9 @@ export async function fetchAssetTypes(
   }
   if (offset !== undefined) {
     params.append('offset', offset.toString())
+  }
+  if (search) {
+    params.append('search', search)
   }
   const queryString = params.toString()
   const url = buildUrl(organizationId, workspaceId, `asset-types/`) + (queryString ? `?${queryString}` : '')
