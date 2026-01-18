@@ -8,6 +8,7 @@ import type { AttributeFilter } from '@app/components/FilterBuilder'
 import { MapProvider, useMapContext } from '@app/contexts/MapContext'
 import MapView from '@app/components/MapView'
 import MapEvents from '@app/components/MapEvents'
+import { saveMapPosition } from '@app/utils/mapPosition'
 
 // Fix for default marker icon in Leaflet with React
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -206,7 +207,10 @@ function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation
     newSearchParams.set('zoom', zoom.toString())
     setSearchParams(newSearchParams, { replace: true })
     initialUrlUpdateDone.current = true
-  }, [center, zoom, setSearchParams, searchParams])
+
+    // Save position to localStorage for sidebar link
+    saveMapPosition(organizationId, workspaceId, { lat: center[0], lng: center[1], zoom })
+  }, [center, zoom, setSearchParams, searchParams, organizationId, workspaceId])
 
   return (
     <MapView

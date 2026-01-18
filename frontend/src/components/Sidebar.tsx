@@ -1,10 +1,11 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Box, List, Drawer, IconButton, Typography, useTheme } from '@mui/material'
 import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import SidebarNavItem from '@app/components/SidebarNavItem'
 import { useLayout } from '@app/contexts/LayoutContext'
 import { useOrganization } from '@app/contexts/OrganizationContext'
 import { prefetchMap, prefetchAssetTypes, prefetchLibrary } from '@app/utils/preload'
+import { buildMapUrlWithPosition } from '@app/utils/mapPosition'
 
 export default function Sidebar() {
   const theme = useTheme()
@@ -37,6 +38,11 @@ export default function Sidebar() {
   const handlePrefetchLibrary = useCallback(() => {
     prefetchLibrary(activeOrganization.id, activeWorkspace?.id)
   }, [activeOrganization.id, activeWorkspace?.id])
+
+  // Build map URL with saved position
+  const mapUrl = useMemo(() => {
+    return buildMapUrlWithPosition(basePath, activeOrganization.id, activeWorkspace?.id)
+  }, [basePath, activeOrganization.id, activeWorkspace?.id])
 
   return (
     <Drawer
@@ -79,7 +85,7 @@ export default function Sidebar() {
             </Typography>
           )}
           <SidebarNavItem
-            to={`${basePath}/map`}
+            to={mapUrl}
             icon={<MapIcon />}
             label="Map"
             onPreload={handlePrefetchMap}
