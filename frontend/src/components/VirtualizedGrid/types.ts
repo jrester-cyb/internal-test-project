@@ -87,12 +87,14 @@ export interface ColumnDefinition<T> {
   key: string
   /** Header label for the column */
   header: ReactNode
-  /** Width of the column in pixels */
+  /** Width of the column in pixels (base width, will be scaled if columns don't fill container) */
   width: number
   /** Minimum width for resizing */
   minWidth?: number
   /** Maximum width for resizing */
   maxWidth?: number
+  /** Flex grow factor - columns with flex will share remaining space proportionally (default: 1) */
+  flex?: number
   /** Whether this column can be resized */
   resizable?: boolean
   /** Render function for cell content */

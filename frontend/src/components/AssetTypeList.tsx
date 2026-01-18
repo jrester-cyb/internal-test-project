@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import {
   Box,
   Link,
@@ -16,7 +16,7 @@ import { Link as RouterLink } from 'react-router-dom'
 import type { AssetType, AssetTypeSummary } from '@app/types'
 import PvDrawer from './PvDrawer'
 import { prefetchAssetTypeDetail } from '@app/utils/preload'
-import VirtualizedList from './VirtualizedList'
+import InfiniteLoaderTable, { type TableColumn } from './InfiniteLoaderTable'
 import SystemDetailsGrid, { type FieldConfig } from './SystemDetailsGrid'
 
 function formatDate(dateString?: string) {
@@ -44,22 +44,10 @@ const ASSET_TYPE_SYSTEM_DETAILS_FIELDS: FieldConfig[] = [
   { key: 'workspaceName', label: 'Workspace' },
 ]
 
-// Custom skeleton placeholder for table rows
-const TableRowPlaceholder = (
-  <Box
-    sx={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 150px 100px',
-      alignItems: 'center',
-      height: ROW_HEIGHT,
-      px: 2,
-      borderBottom: 1,
-      borderColor: 'divider',
-    }}
-  >
-    <Skeleton variant="text" width="60%" />
-    <Skeleton variant="text" width="80%" />
-    <Skeleton variant="text" width="50%" />
+// Custom skeleton placeholder for loading rows
+const RowLoadingPlaceholder = (
+  <Box sx={{ py: 1, px: 2 }}>
+    <Skeleton variant="text" width="60%" height={20} />
   </Box>
 )
 
@@ -105,68 +93,80 @@ export default function AssetTypeList({
     }
   }
 
-  const renderItem = (assetType: AssetTypeSummary, _index: number, _style: CSSProperties) => {
-    const handlePreload = () => {
-      prefetchAssetTypeDetail(assetType.organization, undefined, assetType.id)
-    }
+  // Define columns for the table
+  const columns: TableColumn<AssetTypeSummary>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      width: 300,
+      render: (assetType) => {
+        const handlePreload = () => {
+          prefetchAssetTypeDetail(assetType.organization, undefined, assetType.id)
+        }
 
-    return (
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 150px 100px',
-          alignItems: 'center',
-          height: ROW_HEIGHT,
-          px: 2,
-          borderBottom: 1,
-          borderColor: 'divider',
-          '&:hover': {
-            bgcolor: 'action.hover',
-          },
-        }}
-      >
-        <Box sx={{ minWidth: 0, minWidth: 200 }}>
-          <Link
-            onMouseEnter={handlePreload}
-            onFocus={handlePreload}
-            component={RouterLink}
-            to={`${assetType.id}`}
-            underline="hover"
-            state={{ breadcrumb: assetType.name }}
-            sx={{
-              fontWeight: 500,
-              display: 'block',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {assetType.name}
-          </Link>
-          {assetType.description && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
+        return (
+          <Box sx={{ minWidth: 0 }}>
+            <Link
+              onMouseEnter={handlePreload}
+              onFocus={handlePreload}
+              component={RouterLink}
+              to={`${assetType.id}`}
+              underline="hover"
+              state={{ breadcrumb: assetType.name }}
               sx={{
+                fontWeight: 500,
                 display: 'block',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
             >
-              {assetType.description}
-            </Typography>
-          )}
-        </Box>
+              {assetType.name}
+            </Link>
+            {assetType.description && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  display: 'block',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {assetType.description}
+              </Typography>
+            )}
+          </Box>
+        )
+      },
+      resizable: true,
+    },
+    {
+      key: 'createdAt',
+      header: 'Created',
+      width: 150,
+      render: (assetType) => (
         <Typography variant="body2" color="text.secondary">
           {formatDate(assetType.createdAt)}
         </Typography>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      width: 120,
+      headerSx: { justifyContent: 'flex-end' },
+      cellSx: { justifyContent: 'flex-end' },
+      render: (assetType) => (
         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
           <Tooltip title="System Details" placement="left" arrow>
             <IconButton
               size="small"
-              onClick={() => handleSystemDetailsOpen(assetType)}
-              title="System Details"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSystemDetailsOpen(assetType)
+              }}
             >
               <InfoIcon fontSize="small" />
             </IconButton>
@@ -197,52 +197,25 @@ export default function AssetTypeList({
             </IconButton>
           )}
         </Box>
-      </Box >
-    )
-  }
-
-  const tableHeader = (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 150px 100px',
-        alignItems: 'center',
-        px: 2,
-        py: 1.5,
-        borderBottom: 1,
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
-      }}
-    >
-      <Box sx={{ minWidth: 200 }}>
-        <Typography variant="subtitle2" fontWeight={600}>
-          Name
-        </Typography>
-      </Box>
-      <Typography variant="subtitle2" fontWeight={600}>
-        Created
-      </Typography>
-      <Typography variant="subtitle2" fontWeight={600} sx={{ textAlign: 'right' }}>
-        Actions
-      </Typography>
-    </Box>
-  )
+      ),
+    },
+  ]
 
   return (
     <>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <VirtualizedList<AssetTypeSummary>
+        <InfiniteLoaderTable<AssetTypeSummary>
           items={items}
           totalCount={totalCount}
-          getItemKey={(item) => item.id}
-          renderItem={renderItem}
+          getRowKey={(item) => item.id}
+          columns={columns}
           onLoadRange={onLoadRange}
           isLoading={isLoading}
-          estimatedItemHeight={ROW_HEIGHT}
-          header={tableHeader}
+          estimatedRowHeight={ROW_HEIGHT}
           emptyMessage="No asset types found"
           emptyDescription="Create an asset type to get started"
-          loadingPlaceholder={TableRowPlaceholder}
+          loadingPlaceholder={RowLoadingPlaceholder}
+          headerHeight={44}
         />
       </Box>
 
