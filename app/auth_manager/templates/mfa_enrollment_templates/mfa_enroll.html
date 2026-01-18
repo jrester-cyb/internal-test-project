@@ -62,7 +62,7 @@
         {% elif device.name|lower == 'totp' %}
         {% include "mfa_enrollment_templates/mfa_enroll_totp_card.html" with device=device %}
         {% else %}
-        <a href="/auth/mfa/enroll/{{ device.global_id }}/" class="waves-effect waves-light btn blue darken-4"
+        <a href="/auth/mfa/enroll/{{ device.id }}/" class="waves-effect waves-light btn blue darken-4"
           style="margin-top:1em;">Enroll</a>
         {% endif %}
       </div>

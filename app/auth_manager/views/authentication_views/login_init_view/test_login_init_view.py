@@ -16,7 +16,10 @@ class LoginInitViewTestCase(TestCase):
     def setUp(self):
         self.client = Client()
         self.user = User.objects.create_user(
-            email="admin@test.local", first_name="Admin", last_name="User", password="Secure!"
+            email="admin@test.local",
+            first_name="Admin",
+            last_name="User",
+            password="Secure!",
         )
         self.local_idp = LocalIdentityProvider.objects.get()
 
@@ -29,28 +32,48 @@ class LoginInitViewTestCase(TestCase):
         # assign
 
         # act
-        response = self.client.post(reverse("auth-manager:login"), {"email": self.user.email})
+        response = self.client.post(
+            reverse("auth-manager:login"), {"email": self.user.email}
+        )
 
         # assert
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertRedirects(
             response,
-            reverse("auth-manager:auth-callback", args=(self.local_idp.global_id_str,), request=response.wsgi_request),
+            reverse(
+                "auth-manager:auth-callback",
+                args=(self.local_idp.id,),
+                request=response.wsgi_request,
+            ),
         )
 
-    def test__hitting_login_init_with_user_who_is_already_authenticated_redirects_to_mfa(self):
+    def test__hitting_login_init_with_user_who_is_already_authenticated_redirects_to_mfa(
+        self,
+    ):
         # assign
         self.client.force_login(self.user)
 
         # act
         response = self.client.get(reverse("auth-manager:login"))
-        response_2 = self.client.post(reverse("auth-manager:login"), {"email": self.user.email})
+        response_2 = self.client.post(
+            reverse("auth-manager:login"), {"email": self.user.email}
+        )
 
         # assert
-        self.assertRedirects(response, expected_url=reverse("auth-manager:mfa"), fetch_redirect_response=False)
-        self.assertRedirects(response_2, expected_url=reverse("auth-manager:mfa"), fetch_redirect_response=False)
+        self.assertRedirects(
+            response,
+            expected_url=reverse("auth-manager:mfa"),
+            fetch_redirect_response=False,
+        )
+        self.assertRedirects(
+            response_2,
+            expected_url=reverse("auth-manager:mfa"),
+            fetch_redirect_response=False,
+        )
 
-    def test__hitting_login_init_with_user_who_is_using_disabled_idp_redirects_to_callback_url(self):
+    def test__hitting_login_init_with_user_who_is_using_disabled_idp_redirects_to_callback_url(
+        self,
+    ):
         # assign
         saml_idp = SAMLIdentityProvider.objects.create(
             name="Test SAML IdP",
@@ -63,13 +86,17 @@ class LoginInitViewTestCase(TestCase):
         saml_idp.save()
 
         # act
-        response = self.client.post(reverse("auth-manager:login"), {"email": self.user.email})
+        response = self.client.post(
+            reverse("auth-manager:login"), {"email": self.user.email}
+        )
 
         # assert
         self.assertRedirects(
             response,
             expected_url=reverse(
-                "auth-manager:auth-callback", args=(saml_idp.global_id_str,), request=response.wsgi_request
+                "auth-manager:auth-callback",
+                args=(saml_idp.id,),
+                request=response.wsgi_request,
             ),
             fetch_redirect_response=False,
         )

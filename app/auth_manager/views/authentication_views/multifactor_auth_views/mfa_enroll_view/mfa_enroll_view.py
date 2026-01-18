@@ -27,7 +27,9 @@ class MFAEnrollView(TemplateView):
             consume=False,
         )
         if not is_valid or not self.user:
-            return login_error_page(request, message="Invalid or expired authentication token.", status=401)
+            return login_error_page(
+                request, message="Invalid or expired authentication token.", status=401
+            )
 
         # If user already has enrolled devices, redirect to the mfa page with token
         if self.user.user_multifactor_auth_devices.exclude(verified=False).exists():
@@ -43,10 +45,12 @@ class MFAEnrollView(TemplateView):
         available_devices = MFADevice.objects.filter(user=self.user, verified=False)
 
         # Sort so TOTP (Authenticator App) is always first
-        available_devices = sorted(available_devices, key=lambda d: 0 if d.device_type.upper() == "TOTP" else 1)
+        available_devices = sorted(
+            available_devices, key=lambda d: 0 if d.device_type.upper() == "TOTP" else 1
+        )
 
         # Base URL for MFA device API endpoints
-        base_url = f"/api/auth/users/{self.user.global_id}/mfa-devices"
+        base_url = f"/api/auth/users/{self.user.id}/mfa-devices"
 
         # Attach device-specific endpoints to each device
         device_list = []
@@ -54,10 +58,10 @@ class MFAEnrollView(TemplateView):
             device_dict = {
                 "name": device.device_type,
                 "value": device.device_type,
-                "global_id": device.global_id,
-                "request_notification_endpoint": f"{base_url}/{device.global_id}/request-notification/",
-                "verify_endpoint": f"{base_url}/{device.global_id}/enroll/",
-                "update_endpoint": f"{base_url}/{device.global_id}/",
+                "id": device.id,
+                "request_notification_endpoint": f"{base_url}/{device.id}/request-notification/",
+                "verify_endpoint": f"{base_url}/{device.id}/enroll/",
+                "update_endpoint": f"{base_url}/{device.id}/",
             }
             if device.device_type == "TOTP":
                 # thirdparty
@@ -66,7 +70,9 @@ class MFAEnrollView(TemplateView):
                 user_email = getattr(device.user, "email", "user")
                 issuer = "Power-View"
                 totp = TOTP(device.seed)
-                provisioning_uri = totp.provisioning_uri(name=user_email, issuer_name=issuer)
+                provisioning_uri = totp.provisioning_uri(
+                    name=user_email, issuer_name=issuer
+                )
                 device_dict["provisioning_uri"] = provisioning_uri
                 device_dict["seed"] = device.seed
 

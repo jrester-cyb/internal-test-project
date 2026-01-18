@@ -7,9 +7,16 @@ from django.views.generic import TemplateView
 
 # local
 from auth_manager.constants import NORMALIZED_EMAIL
-from auth_manager.models import IdentityProvider, LocalIdentityProvider, SAMLIdentityProvider
+from auth_manager.models import (
+    IdentityProvider,
+    LocalIdentityProvider,
+    SAMLIdentityProvider,
+)
 from auth_manager.models.one_time_token import OneTimeToken
-from auth_manager.views.shortcuts import identity_provider_disabled_page, login_error_page
+from auth_manager.views.shortcuts import (
+    identity_provider_disabled_page,
+    login_error_page,
+)
 from .local_auth_callback_view import LocalIdentityProviderAuthenticationCallbackView
 from .saml_auth_callback_view import SAMLIdentityProviderAuthenticationCallbackView
 
@@ -37,11 +44,13 @@ class DynamicIdentityProviderAuthenticationCallbackView(TemplateView):
         except User.DoesNotExist:
             return None
 
-    def dispatch(self, request: HttpRequest, global_id: str, *args, **kwargs) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, id: str, *args, **kwargs) -> HttpResponse:
         try:
-            idp = IdentityProvider.objects.get(global_id=global_id)
+            idp = IdentityProvider.objects.get(id=id)
         except IdentityProvider.DoesNotExist:
-            return login_error_page(request, message="Identity provider not found.", status=404)
+            return login_error_page(
+                request, message="Identity provider not found.", status=404
+            )
 
         if not idp.enabled:
             user = self.get_user_from_session(request)
@@ -62,5 +71,7 @@ class DynamicIdentityProviderAuthenticationCallbackView(TemplateView):
         elif isinstance(idp, SAMLIdentityProvider):
             view = SAMLIdentityProviderAuthenticationCallbackView.as_view()
         else:
-            return login_error_page(request, message="Unsupported identity provider type.", status=400)
-        return view(request, global_id=global_id, *args, **kwargs)
+            return login_error_page(
+                request, message="Unsupported identity provider type.", status=400
+            )
+        return view(request, id=id, *args, **kwargs)

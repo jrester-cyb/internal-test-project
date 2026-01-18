@@ -61,7 +61,9 @@ class LoginInitView(TemplateView):
             # If no exact match is found, check for a domain match
             domain = normalized_email.split("@")[-1]
             try:
-                return IdentityProvider.objects.exclude(enabled=False).get(domains__icontains=domain)
+                return IdentityProvider.objects.exclude(enabled=False).get(
+                    domains__icontains=domain
+                )
             except IdentityProvider.DoesNotExist:
                 # Get the local identity provider as a fallback
                 # If the local identity provider is not found, return None
@@ -77,9 +79,15 @@ class LoginInitView(TemplateView):
         # If password is not provided, this is the first step (email submission)
         if email:
             identity_provider = self.get_identity_provider(email)
-            if isinstance(identity_provider, LocalIdentityProvider) or not getattr(identity_provider, "enabled", False):
+            if isinstance(identity_provider, LocalIdentityProvider) or not getattr(
+                identity_provider, "enabled", False
+            ):
                 return redirect(
-                    reverse("auth-manager:auth-callback", args=(identity_provider.global_id_str,), request=request)
+                    reverse(
+                        "auth-manager:auth-callback",
+                        args=(identity_provider.id,),
+                        request=request,
+                    )
                 )
             elif isinstance(identity_provider, SAMLIdentityProvider):
                 # Start login process

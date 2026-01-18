@@ -22,10 +22,10 @@ router = DefaultRouter()
 router.register(r"", IdentityProviderViewSet, basename="identity-provider")
 
 # Nested router for MFA devices under users
-# Creates URLs like: /api/auth/users/{user_global_id}/mfa-devices/{device_global_id}/verify/
+# Creates URLs like: /api/auth/users/{user_id}/mfa-devices/{device_id}/verify/
 mfa_router = nested_routers.SimpleRouter()
 mfa_router.register(
-    r"users/(?P<user_global_id>[^/.]+)/mfa-devices",
+    r"users/(?P<user_id>[^/.]+)/mfa-devices",
     MFADeviceViewSet,
     basename="multifactor-auth-devices",
 )
@@ -41,5 +41,9 @@ urlpatterns = [
     # MFA device endpoints
     path("", include(mfa_router.urls)),
     # Password reset
-    path("password/reset/", ResetPasswordRequestTokenOverride.as_view(), name="reset-password-request"),
+    path(
+        "password/reset/",
+        ResetPasswordRequestTokenOverride.as_view(),
+        name="reset-password-request",
+    ),
 ]

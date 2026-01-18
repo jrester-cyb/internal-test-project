@@ -2,9 +2,9 @@
 <script>
   function enrollTotpCode(event) {
     event.preventDefault();
-    const errorDiv = document.getElementById('verify-totp-code-error-{{ device.global_id }}');
-    const code = document.getElementById('totp-input-{{ device.global_id }}').value;
-    const btn = document.getElementById('verify-totp-submit-{{ device.global_id }}');
+    const errorDiv = document.getElementById('verify-totp-code-error-{{ device.id }}');
+    const code = document.getElementById('totp-input-{{ device.id }}').value;
+    const btn = document.getElementById('verify-totp-submit-{{ device.id }}');
     errorDiv.style.display = 'none';
     
     // Send request to enroll the input
@@ -32,7 +32,7 @@
 <div class="center-align">
   <p>Scan this QR code with your authenticator app, or copy the secret key below:</p>
   {% if device.seed and device.provisioning_uri %}
-  <form id="totp-form-{{ device.global_id }}" onsubmit="enrollTotpCode(event)" style="text-align: center;">
+  <form id="totp-form-{{ device.id }}" onsubmit="enrollTotpCode(event)" style="text-align: center;">
     {% csrf_token %}
     <div id="qr-placeholder" style="margin:1em 0; display:flex; align-items:center; justify-content:center; height:200px;">
       <div style="max-width: 200px; max-height: 200px;">
@@ -56,23 +56,23 @@
           <input
             class="mui-input-contained"
             type="text"
-            id="totp-input-{{ device.global_id }}"
-            name="totp-input-{{ device.global_id }}"
+            id="totp-input-{{ device.id }}"
+            name="totp-input-{{ device.id }}"
             maxlength="6"
             pattern="\d{6}"
             required
             placeholder=" "
-            oninput="document.getElementById('verify-totp-code-error-{{ device.global_id }}').style.display='none'"
+            oninput="document.getElementById('verify-totp-code-error-{{ device.id }}').style.display='none'"
             style="margin-bottom:0;"
           />
-          <label for="totp-input-{{ device.global_id }}" class="mui-input-label">Enter Code</label>
+          <label for="totp-input-{{ device.id }}" class="mui-input-label">Enter Code</label>
       </div>
-      <div id="verify-totp-code-error-{{ device.global_id }}" class="error-msg-display">
+      <div id="verify-totp-code-error-{{ device.id }}" class="error-msg-display">
         <span class="material-icons" style="font-size:1.1em; vertical-align:middle;">error_outline</span>
         <span>Invalid code provided. Please try again.</span>
       </div>
     </div>
-    <button type="submit" id="verify-totp-submit-{{ device.global_id }}" name="verify_code" value="1" class="mui-btn-contained">Verify</button>
+    <button type="submit" id="verify-totp-submit-{{ device.id }}" name="verify_code" value="1" class="mui-btn-contained">Verify</button>
     </form>
   {% else %}
     <p class="red-text">Unable to generate QR code. Please try again.</p>

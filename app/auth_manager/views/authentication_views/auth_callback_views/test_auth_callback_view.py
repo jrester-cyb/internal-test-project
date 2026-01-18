@@ -7,7 +7,10 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 # local
-from auth_manager.models.identity_provider_models import LocalIdentityProvider, SAMLIdentityProvider
+from auth_manager.models.identity_provider_models import (
+    LocalIdentityProvider,
+    SAMLIdentityProvider,
+)
 
 User = get_user_model()
 
@@ -21,16 +24,18 @@ class DynamicIdentityProviderAuthenticationCallbackViewTestCase(TestCase):
         self.local_idp = LocalIdentityProvider.objects.get()
         self.saml_idp = SAMLIdentityProvider.objects.create(
             name="Test SAML IdP",
-            global_id=str(uuid4()),
+            id=str(uuid4()),
             entity_id="test-entity-id",
             sso_url="https://example.com/sso",
             x509_cert="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
             enabled=True,
         )
 
-    def test__shows_login_error_page_when_invalid_idp_global_id_provided(self):
+    def test__shows_login_error_page_when_invalid_idp_id_provided(self):
         # act
-        response = self.client.get(reverse("auth-manager:auth-callback", args=(str(uuid4()),)))
+        response = self.client.get(
+            reverse("auth-manager:auth-callback", args=(str(uuid4()),))
+        )
 
         # assert
         self.assertContains(response, "Identity provider not found.", status_code=404)
@@ -44,9 +49,13 @@ class DynamicIdentityProviderAuthenticationCallbackViewTestCase(TestCase):
         self.saml_idp.system_users.add(self.user)
 
         # act
-        login_init_response = self.client.post(reverse("auth-manager:login"), data={"email": self.user.email})
+        login_init_response = self.client.post(
+            reverse("auth-manager:login"), data={"email": self.user.email}
+        )
         self.assertEqual(login_init_response.status_code, 302)
-        response = self.client.get(reverse("auth-manager:auth-callback", args=(self.saml_idp.global_id,)))
+        response = self.client.get(
+            reverse("auth-manager:auth-callback", args=(self.saml_idp.id,))
+        )
 
         # assert
         self.assertContains(
@@ -55,13 +64,17 @@ class DynamicIdentityProviderAuthenticationCallbackViewTestCase(TestCase):
             status_code=200,
         )
 
-    def test__shows_error_page_without_button_when_idp_is_disabled_and_user_is_not_admin(self):
+    def test__shows_error_page_without_button_when_idp_is_disabled_and_user_is_not_admin(
+        self,
+    ):
         # arrange
         self.saml_idp.enabled = False
         self.saml_idp.save()
 
         # act
-        response = self.client.get(reverse("auth-manager:auth-callback", args=(self.saml_idp.global_id,)))
+        response = self.client.get(
+            reverse("auth-manager:auth-callback", args=(self.saml_idp.id,))
+        )
 
         # assert
         self.assertContains(

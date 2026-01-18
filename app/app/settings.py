@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.gis",
+    "django.contrib.postgres",
     "rest_framework",
     "rest_framework_gis",
     "drf_spectacular",
@@ -58,6 +59,7 @@ INSTALLED_APPS = [
     "audit_log",
     "actions",
     "auth_manager",
+    "django_rest_passwordreset",
 ]
 
 # Custom User Model

@@ -26,10 +26,12 @@ class AccountConfirmationView(TemplateView):
         """
         # decode token find user
         try:
-            userid = signing.loads(token, max_age=settings.EXPIRATION_DAYS_ACCOUNT_CONFIRMATION)  # Valid for 2 days
+            userid = signing.loads(
+                token, max_age=settings.EXPIRATION_DAYS_ACCOUNT_CONFIRMATION
+            )  # Valid for 2 days
             user_pk = userid.get("pk", None)
             if user_pk is None:
-                user = get_object_or_404(User, global_id=userid.get("global_id"))
+                user = get_object_or_404(User, id=userid.get("id"))
             return user
         except (SignatureExpired, BadSignature):
             return None
@@ -40,7 +42,9 @@ class AccountConfirmationView(TemplateView):
         return context
 
     def get(self, request, *args, **kwargs):
-        return self.render_to_response(self.get_context_data(token=kwargs.get("uidb64")))
+        return self.render_to_response(
+            self.get_context_data(token=kwargs.get("uidb64"))
+        )
 
     def post(self, request, *args, **kwargs):
         token = kwargs.get("uidb64")
@@ -53,7 +57,8 @@ class AccountConfirmationView(TemplateView):
         serializer = CreatePasswordSerializer(data=request.POST, context={"user": user})
         if not serializer.is_valid():
             context["error"] = (
-                serializer.errors.get("non_field_errors", [None])[0] or next(iter(serializer.errors.values()))[0]
+                serializer.errors.get("non_field_errors", [None])[0]
+                or next(iter(serializer.errors.values()))[0]
             )
             return self.render_to_response(context)
 
@@ -62,6 +67,8 @@ class AccountConfirmationView(TemplateView):
         user.is_confirmed = True
         user.save()
         login(request, user)
-        response = render(request, self.template_name, {**context, "account_confirmed": True})
+        response = render(
+            request, self.template_name, {**context, "account_confirmed": True}
+        )
         response["Refresh"] = f'2; url={reverse("auth-manager:mfa", request=request)}'
         return response

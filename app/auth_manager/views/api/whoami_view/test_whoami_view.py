@@ -16,7 +16,7 @@ class WhoAmIViewTestCase(ApiClientTestBase):
 
         # assert
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["global_id"], self.admin_user.global_id_str)
+        self.assertEqual(response.data["id"], self.admin_user.id)
 
     def test__whoami_view_returns_expected_response_when_not_authenticated(self):
         # act

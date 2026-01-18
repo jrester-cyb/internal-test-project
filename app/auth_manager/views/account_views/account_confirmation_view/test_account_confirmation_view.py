@@ -15,12 +15,14 @@ class AccountConfirmationViewTestCase(TestCase):
         self.user = User.objects.create_user(
             email="admin@test.local", first_name="Admin", last_name="User", password=""
         )
-        self.token = signing.dumps({"global_id": self.user.global_id_str})
+        self.token = signing.dumps({"id": self.user.id})
         self.client = Client()
 
     def test__get_with_valid_token_displays_expected_fields(self):
         # act
-        response = self.client.get(reverse("auth-manager:account-confirmation", args=[self.token]))
+        response = self.client.get(
+            reverse("auth-manager:account-confirmation", args=[self.token])
+        )
 
         # assert
         self.assertTemplateUsed(response, "account_confirmation.html")
@@ -29,13 +31,17 @@ class AccountConfirmationViewTestCase(TestCase):
 
     def test__get_with_invalid_token_shows_error_message(self):
         # act
-        response = self.client.get(reverse("auth-manager:account-confirmation", args=["invalidtoken:t"]))
+        response = self.client.get(
+            reverse("auth-manager:account-confirmation", args=["invalidtoken:t"])
+        )
 
         # assert
         self.assertTemplateUsed(response, "account_confirmation.html")
         self.assertContains(response, "This token is invalid or has expired.")
 
-    def test__post_with_valid_token_and_matching_passwords_sets_password_and_logs_in_user(self):
+    def test__post_with_valid_token_and_matching_passwords_sets_password_and_logs_in_user(
+        self,
+    ):
         # act
         response = self.client.post(
             reverse("auth-manager:account-confirmation", args=[self.token]),
@@ -44,7 +50,11 @@ class AccountConfirmationViewTestCase(TestCase):
 
         # assert
         self.assertIn("Refresh", response)
-        self.assertTrue(response["Refresh"].endswith(reverse("auth-manager:mfa", request=response.wsgi_request)))
+        self.assertTrue(
+            response["Refresh"].endswith(
+                reverse("auth-manager:mfa", request=response.wsgi_request)
+            )
+        )
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("Newpassword123!"))
 
@@ -66,7 +76,10 @@ class AccountConfirmationViewTestCase(TestCase):
         )
 
         # assert
-        self.assertContains(response, "This password is too short. It must contain at least 12 characters.")
+        self.assertContains(
+            response,
+            "This password is too short. It must contain at least 12 characters.",
+        )
 
     def test__post_with_missing_characters_shows_expected_errors(self):
         # act
@@ -76,4 +89,6 @@ class AccountConfirmationViewTestCase(TestCase):
         )
 
         # assert
-        self.assertContains(response, "The password must contain at least 1 uppercase character.")
+        self.assertContains(
+            response, "The password must contain at least 1 uppercase character."
+        )

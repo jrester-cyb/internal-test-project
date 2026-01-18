@@ -2,7 +2,11 @@
 import copy
 
 # local
-from auth_manager.models.identity_provider_models import IdentityProvider, LocalIdentityProvider, SAMLIdentityProvider
+from auth_manager.models.identity_provider_models import (
+    IdentityProvider,
+    LocalIdentityProvider,
+    SAMLIdentityProvider,
+)
 from rest_framework.reverse import reverse
 
 # thirdparty
@@ -13,12 +17,12 @@ from rest_framework import serializers
 class BaseIdentityProviderSerializer(serializers.ModelSerializer):
     domains = serializers.ListField(child=serializers.CharField(), allow_empty=True)
     callback_url = serializers.SerializerMethodField(read_only=True)
-    global_id = serializers.UUIDField(required=False)
+    id = serializers.UUIDField(required=False)
 
     class Meta:
         model = IdentityProvider
         fields = (
-            "global_id",
+            "id",
             "name",
             "description",
             "enabled",
@@ -32,7 +36,11 @@ class BaseIdentityProviderSerializer(serializers.ModelSerializer):
         enabled = attrs.get("enabled", getattr(self.instance, "enabled", True))
         if self.instance and not enabled:
             # Exclude self and check for any other enabled IdP
-            others_enabled = IdentityProvider.objects.exclude(pk=self.instance.pk).filter(enabled=True).exists()
+            others_enabled = (
+                IdentityProvider.objects.exclude(pk=self.instance.pk)
+                .filter(enabled=True)
+                .exists()
+            )
             if not others_enabled:
                 raise serializers.ValidationError(
                     "You cannot disable this identity provider unless another identity provider is enabled."
@@ -56,11 +64,15 @@ class BaseIdentityProviderSerializer(serializers.ModelSerializer):
             normalized_domains.add(domain)
 
         # Check for overlapping domains with other IdPs
-        overlapping_idps_qs = IdentityProvider.objects.filter(domains__overlap=list(normalized_domains))
+        overlapping_idps_qs = IdentityProvider.objects.filter(
+            domains__overlap=list(normalized_domains)
+        )
         if self.instance:
             overlapping_idps_qs = overlapping_idps_qs.exclude(pk=self.instance.pk)
         if overlapping_idps_qs.exists():
-            raise serializers.ValidationError("One or more domains are already in use by another identity provider.")
+            raise serializers.ValidationError(
+                "One or more domains are already in use by another identity provider."
+            )
 
         # Return the normalized list of domains
         return list(normalized_domains)
@@ -68,7 +80,9 @@ class BaseIdentityProviderSerializer(serializers.ModelSerializer):
     def get_callback_url(self, obj):
         request = self.context.get("request")
         if request:
-            return reverse("auth-manager:auth-callback", args=(obj.global_id_str,), request=request)
+            return reverse(
+                "auth-manager:auth-callback", args=(obj.id,), request=request
+            )
         return None
 
 
@@ -87,14 +101,20 @@ class LocalIdentityProviderSerializer(BaseIdentityProviderSerializer):
         enabled = attrs.get("enabled", getattr(self.instance, "enabled", True))
         if self.instance and not enabled:
             # Exclude self and check for any other enabled IdP
-            others_enabled = IdentityProvider.objects.exclude(pk=self.instance.pk).filter(enabled=True).exists()
+            others_enabled = (
+                IdentityProvider.objects.exclude(pk=self.instance.pk)
+                .filter(enabled=True)
+                .exists()
+            )
             if not others_enabled:
                 raise serializers.ValidationError(
                     "You cannot disable this identity provider unless another identity provider is enabled."
                 )
         # Prevent creating more than one LocalIdentityProvider
         if not self.instance and LocalIdentityProvider.objects.exists():
-            raise serializers.ValidationError("Only one LocalIdentityProvider instance is allowed.")
+            raise serializers.ValidationError(
+                "Only one LocalIdentityProvider instance is allowed."
+            )
         return attrs
 
 
@@ -139,7 +159,9 @@ class IdentityProviderSerializer(serializers.Serializer):
             elif isinstance(self.instance, SAMLIdentityProvider):
                 serializer_class = SAMLIdentityProviderSerializer
             else:
-                raise serializers.ValidationError("Cannot update base IdentityProvider; use a concrete subclass.")
+                raise serializers.ValidationError(
+                    "Cannot update base IdentityProvider; use a concrete subclass."
+                )
             serializer = serializer_class(
                 self.instance,
                 data=data,
@@ -171,7 +193,9 @@ class IdentityProviderSerializer(serializers.Serializer):
             return LocalIdentityProviderSerializer(instance, context=self.context).data
         elif isinstance(instance, SAMLIdentityProvider):
             return SAMLIdentityProviderSerializer(instance, context=self.context).data
-        raise serializers.ValidationError("Cannot serialize base IdentityProvider; use a concrete subclass.")
+        raise serializers.ValidationError(
+            "Cannot serialize base IdentityProvider; use a concrete subclass."
+        )
 
     def create(self, validated_data):
         idp_type = self.initial_data.get("type").lower()
@@ -179,7 +203,9 @@ class IdentityProviderSerializer(serializers.Serializer):
             return LocalIdentityProvider.objects.create(**validated_data)
         elif idp_type == "saml":
             return SAMLIdentityProvider.objects.create(**validated_data)
-        raise serializers.ValidationError("'type' must be 'local' or 'saml'. Base IdentityProvider is not allowed.")
+        raise serializers.ValidationError(
+            "'type' must be 'local' or 'saml'. Base IdentityProvider is not allowed."
+        )
 
     def update(self, instance, validated_data):
         # Use the correct serializer for the instance type
@@ -194,6 +220,8 @@ class IdentityProviderSerializer(serializers.Serializer):
                 instance, data=validated_data, partial=partial, context=self.context
             )
         else:
-            raise serializers.ValidationError("Cannot update base IdentityProvider; use a concrete subclass.")
+            raise serializers.ValidationError(
+                "Cannot update base IdentityProvider; use a concrete subclass."
+            )
         serializer.is_valid(raise_exception=True)
         return serializer.save()

@@ -12,25 +12,29 @@ from auth_manager.views.shortcuts import login_error_page
 
 class SAMLIdentityProviderAuthenticationCallbackView(View):
 
-    def get_identity_provider(self, global_id: str) -> IdentityProvider | None:
+    def get_identity_provider(self, id: str) -> IdentityProvider | None:
         """
         Retrieve the Identity Provider based on the global ID.
         """
         try:
-            return IdentityProvider.objects.get(global_id=global_id)
+            return IdentityProvider.objects.get(id=id)
         except IdentityProvider.DoesNotExist:
             return None
 
-    def get(self, request: HttpRequest, global_id: str) -> HttpResponse:
-        idp = self.get_identity_provider(global_id)
+    def get(self, request: HttpRequest, id: str) -> HttpResponse:
+        idp = self.get_identity_provider(id)
         if not idp:
-            return login_error_page(request, message="Identity provider not found.", status=404)
+            return login_error_page(
+                request, message="Identity provider not found.", status=404
+            )
         return redirect(idp.generate_redirect_link(request))
 
-    def post(self, request: HttpRequest, global_id: str) -> HttpResponse:
-        idp = self.get_identity_provider(global_id)
+    def post(self, request: HttpRequest, id: str) -> HttpResponse:
+        idp = self.get_identity_provider(id)
         if not idp:
-            return login_error_page(request, message="Identity provider not found.", status=404)
+            return login_error_page(
+                request, message="Identity provider not found.", status=404
+            )
         try:
             # Authenticate user via SAML (validates SAML response) but don't create session
             user = idp.authenticate(request)

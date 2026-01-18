@@ -27,7 +27,9 @@ class MFAView(TemplateView):
             consume=False,  # Don't consume the token yet
         )
         if not is_valid or not self.user:
-            return login_error_page(request, message="Invalid or expired authentication token.", status=401)
+            return login_error_page(
+                request, message="Invalid or expired authentication token.", status=401
+            )
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -45,15 +47,15 @@ class MFAView(TemplateView):
         device_list = []
 
         # Base URL for MFA device API endpoints
-        base_url = f"/api/auth/users/{self.user.global_id}/mfa-devices"
+        base_url = f"/api/auth/users/{self.user.id}/mfa-devices"
 
         for device in devices:
             device_dict = {
                 "name": device.device_type,
                 "value": device.device_type,
-                "global_id": device.global_id,
-                "request_notification_endpoint": f"{base_url}/{device.global_id}/request-notification/",
-                "verify_endpoint": f"{base_url}/{device.global_id}/verify/",
+                "id": device.id,
+                "request_notification_endpoint": f"{base_url}/{device.id}/request-notification/",
+                "verify_endpoint": f"{base_url}/{device.id}/verify/",
             }
             if device.device_type.lower() == "email":
                 device_dict["email"] = device.user.email

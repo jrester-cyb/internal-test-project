@@ -18,8 +18,12 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
     def test_cannot_delete_only_enabled_local_idp(self):
         # Use the LocalIdentityProvider created by migrations
         local = LocalIdentityProvider.objects.first()
-        self.assertIsNotNone(local, "Expected a LocalIdentityProvider to exist from migrations.")
-        delete_url = reverse("auth-manager-api:identity-provider-detail", args=(local.global_id,))
+        self.assertIsNotNone(
+            local, "Expected a LocalIdentityProvider to exist from migrations."
+        )
+        delete_url = reverse(
+            "auth-manager-api:identity-provider-detail", args=(local.id,)
+        )
         response = self.admin_client.delete(delete_url)
         # Should not allow deletion if it's the only enabled IdP
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -45,13 +49,17 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         self.assertEqual(response.data["entity_id"], "https://idp.example.com/entity")
         self.assertEqual(response.data["sso_url"], "https://idp.example.com/sso")
         self.assertEqual(response.data["x509_cert"], "CERTDATA")
-        self.assertEqual(response.data["metadata_url"], "https://idp.example.com/metadata")
+        self.assertEqual(
+            response.data["metadata_url"], "https://idp.example.com/metadata"
+        )
         self.assertEqual(response.data["attribute_mappings"], {"email": "EmailAddress"})
 
     def test_can_disable_local_idp_if_another_enabled(self):
         # Use the LocalIdentityProvider created by migrations
         local = LocalIdentityProvider.objects.first()
-        self.assertIsNotNone(local, "Expected a LocalIdentityProvider to exist from migrations.")
+        self.assertIsNotNone(
+            local, "Expected a LocalIdentityProvider to exist from migrations."
+        )
         # Create a SAML IdP
         saml_data = {
             "type": "saml",
@@ -68,8 +76,12 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         saml_response = self.admin_client.post(self.list_url, saml_data, format="json")
         self.assertEqual(saml_response.status_code, status.HTTP_201_CREATED)
         # Now disable the local IdP
-        patch_url = reverse("auth-manager-api:identity-provider-detail", args=(local.global_id,))
-        patch_response = self.admin_client.patch(patch_url, {"enabled": False}, format="json")
+        patch_url = reverse(
+            "auth-manager-api:identity-provider-detail", args=(local.id,)
+        )
+        patch_response = self.admin_client.patch(
+            patch_url, {"enabled": False}, format="json"
+        )
         self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
         self.assertFalse(patch_response.data["enabled"])
 
@@ -84,14 +96,16 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         }
         response2 = self.admin_client.post(self.list_url, data2, format="json")
         self.assertEqual(response2.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Only one LocalIdentityProvider instance is allowed.", str(response2.data))
+        self.assertIn(
+            "Only one LocalIdentityProvider instance is allowed.", str(response2.data)
+        )
 
     def test_attempting_to_disable_local_idp_does_not_work_without_another_idp(self):
         local_idp = LocalIdentityProvider.objects.first()
         response = self.admin_client.patch(
             reverse(
                 "auth-manager-api:identity-provider-detail",
-                args=(local_idp.global_id,),
+                args=(local_idp.id,),
             ),
             {"enabled": False},
         )
@@ -125,7 +139,7 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         response = self.admin_client.patch(
             reverse(
                 "auth-manager-api:identity-provider-detail",
-                args=(saml_idp.global_id,),
+                args=(saml_idp.id,),
             ),
             {"enabled": False},
         )
@@ -150,7 +164,7 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         response = self.admin_client.delete(
             reverse(
                 "auth-manager-api:identity-provider-detail",
-                args=(saml_idp.global_id,),
+                args=(saml_idp.id,),
             )
         )
         local_idp.refresh_from_db()
@@ -223,7 +237,8 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         # assert
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
-            response.data["domains"][0], "One or more domains are already in use by another identity provider."
+            response.data["domains"][0],
+            "One or more domains are already in use by another identity provider.",
         )
 
     def test_cannot_update_idp_to_have_same_domain_as_existing_idp(self):
@@ -247,7 +262,7 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
 
         # act
         response = self.admin_client.patch(
-            reverse("auth-manager-api:identity-provider-detail", args=(idp2.global_id,)),
+            reverse("auth-manager-api:identity-provider-detail", args=(idp2.id,)),
             {"domains": ["example.com"]},
             format="json",
         )
@@ -255,7 +270,8 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
         # assert
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
-            response.data["domains"][0], "One or more domains are already in use by another identity provider."
+            response.data["domains"][0],
+            "One or more domains are already in use by another identity provider.",
         )
 
     def test_cannot_send_dupliate_domains_in_idp_create(self):
@@ -290,7 +306,7 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
 
         # act
         response = self.admin_client.patch(
-            reverse("auth-manager-api:identity-provider-detail", args=(idp.global_id,)),
+            reverse("auth-manager-api:identity-provider-detail", args=(idp.id,)),
             {"domains": ["example.com", "example.com"]},
             format="json",
         )
@@ -302,7 +318,9 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
     def test_non_admin_cannot_access_idp_endpoints(self):
         # assign
         local = LocalIdentityProvider.objects.first()
-        detail_url = reverse("auth-manager-api:identity-provider-detail", args=(local.global_id,))
+        detail_url = reverse(
+            "auth-manager-api:identity-provider-detail", args=(local.id,)
+        )
 
         # act
         list_response = self.client.get(self.list_url)
@@ -332,8 +350,13 @@ class IdentityProviderViewSetTests(ApiClientTestBase):
 
         # act
         response = self.admin_client.patch(
-            reverse("auth-manager-api:identity-provider-detail", args=(idp.global_id,)),
-            {"attribute_mappings": {"email": "EmailAddress", "first_name": "FirstName"}},
+            reverse("auth-manager-api:identity-provider-detail", args=(idp.id,)),
+            {
+                "attribute_mappings": {
+                    "email": "EmailAddress",
+                    "first_name": "FirstName",
+                }
+            },
             format="json",
         )
 

@@ -17,7 +17,7 @@ class IdentityProviderViewSet(viewsets.ModelViewSet):
     Supports create, list, retrieve, update, and delete.
     """
 
-    lookup_field = "global_id"
+    lookup_field = "id"
     queryset = IdentityProvider.objects.all()
     permission_classes = [IsAdminUser]
     serializer_class = IdentityProviderSerializer

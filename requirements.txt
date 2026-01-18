@@ -20,3 +20,5 @@ django-silk
 django-pgtrigger
 redis
 pint
+django-rest-passwordreset
+humanfriendly

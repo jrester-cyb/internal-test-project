@@ -8,7 +8,12 @@ from django.views.generic import TemplateView
 
 # local
 from auth_manager.constants import PROVIDED_EMAIL
-from auth_manager.exceptions.api_exceptions import BadRequest, IncorrectCredentials, LockedAccount, UserAlreadyLinked
+from auth_manager.exceptions.api_exceptions import (
+    BadRequest,
+    IncorrectCredentials,
+    LockedAccount,
+    UserAlreadyLinked,
+)
 from auth_manager.models import IdentityProvider, OneTimeToken
 
 
@@ -29,21 +34,26 @@ class LocalIdentityProviderAuthenticationCallbackView(TemplateView):
             context_data["password"] = self.request.POST.get("password", "")
         return context_data
 
-    def get(self, _request: HttpRequest, global_id: str) -> HttpResponse:
+    def get(self, _request: HttpRequest, id: str) -> HttpResponse:
         context = self.get_context_data()
-        context["global_id"] = global_id
+        context["id"] = id
         return self.render_to_response(context)
 
-    def post(self, request: HttpRequest, global_id: str) -> HttpResponse:
+    def post(self, request: HttpRequest, id: str) -> HttpResponse:
         try:
-            idp = IdentityProvider.objects.get(global_id=global_id, enabled=True)
+            idp = IdentityProvider.objects.get(id=id, enabled=True)
             # Authenticate user (validates credentials) but don't create session
             user = idp.authenticate(request)
         except IdentityProvider.DoesNotExist:
             context = self.get_context_data()
             context["error_message"] = "Identity provider not found"
             return self.render_to_response(context, status=404)
-        except (UserAlreadyLinked, BadRequest, IncorrectCredentials, LockedAccount) as err:
+        except (
+            UserAlreadyLinked,
+            BadRequest,
+            IncorrectCredentials,
+            LockedAccount,
+        ) as err:
             context = self.get_context_data()
             context["error_message"] = err.detail
             return self.render_to_response(context, status=err.status_code)
