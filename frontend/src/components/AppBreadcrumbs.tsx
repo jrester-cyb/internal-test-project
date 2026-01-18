@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Breadcrumbs, Link, Typography } from '@mui/material'
 import { Link as RouterLink, useLocation, useMatches, useNavigation } from 'react-router-dom'
 
@@ -22,16 +22,25 @@ export default function AppBreadcrumbs() {
 
   // Track optimistic breadcrumb truncation when clicking a link
   const [optimisticEndIndex, setOptimisticEndIndex] = useState<number | null>(null)
+  // Track the path we clicked to navigate to
+  const clickedPathRef = useRef<string | null>(null)
 
   // Check if we're navigating to a new location
   const pendingLocation = navigation.state === 'loading' ? navigation.location : null
 
-  // Reset optimistic state when navigation completes
+  // Reset optimistic state when navigation completes or location changes
   useEffect(() => {
     if (navigation.state === 'idle') {
+      // Only keep the truncation if we actually ended up at the clicked path
+      // This handles redirects - if we clicked on a path but got redirected elsewhere,
+      // we should show the full breadcrumbs for where we actually landed
+      if (clickedPathRef.current && location.pathname !== clickedPathRef.current) {
+        setOptimisticEndIndex(null)
+      }
+      clickedPathRef.current = null
       setOptimisticEndIndex(null)
     }
-  }, [navigation.state])
+  }, [navigation.state, location.pathname])
 
   // Generate breadcrumbs from route handles
   let breadcrumbs: Breadcrumb[] = matches
@@ -111,9 +120,11 @@ export default function AppBreadcrumbs() {
     return null
   }
 
-  const handleBreadcrumbClick = (index: number) => {
+  const handleBreadcrumbClick = (index: number, path: string) => {
     // Immediately truncate breadcrumbs to show only up to the clicked one
     setOptimisticEndIndex(index)
+    // Track where we're navigating to detect redirects
+    clickedPathRef.current = path
   }
 
   return (
@@ -137,7 +148,7 @@ export default function AppBreadcrumbs() {
             underline="hover"
             color="inherit"
             sx={{ fontSize: 'inherit' }}
-            onClick={() => handleBreadcrumbClick(index)}
+            onClick={() => handleBreadcrumbClick(index, breadcrumb.path)}
           >
             {breadcrumb.label}
           </Link>
