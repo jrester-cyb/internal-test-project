@@ -26,6 +26,7 @@ import {
   FilterList as FilterIcon,
 } from '@mui/icons-material'
 import AssetTypeList from '@app/components/AssetTypeList'
+import ResponsiveButton from '@app/components/ResponsiveButton'
 import { fetchAssetTypes, type AssetTypesQueryParams } from '@app/api/assets'
 import type { AssetType } from '@app/types'
 
@@ -481,13 +482,12 @@ export default function AssetTypesPage() {
           </Popover>
         </Box>
 
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
+        <ResponsiveButton
+          icon={<AddIcon />}
+          text="Add Asset Type"
           onClick={handleAdd}
-        >
-          Add Asset Type
-        </Button>
+          variant="contained"
+        />
       </Box>
 
       {/* Active filters display */}
