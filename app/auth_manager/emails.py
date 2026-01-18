@@ -6,7 +6,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 
 # local
-from users.emails import PowerEmail
+from core.emails import PowerEmail
 
 # thirdparty
 from humanfriendly import format_timespan

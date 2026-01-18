@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     "django_filters",
     "polymorphic",
     "silk",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "core",
     "organizations",
     "workspaces",
@@ -55,6 +57,7 @@ INSTALLED_APPS = [
     "users_manager",
     "audit_log",
     "actions",
+    "auth_manager",
 ]
 
 # Custom User Model
@@ -165,6 +168,10 @@ REST_FRAMEWORK = {
     # FlexiblePagination supports both page number (?page=2&page_size=50)
     # and limit/offset (?limit=50&offset=100) styles
     "DEFAULT_PAGINATION_CLASS": "app.pagination.FlexiblePagination",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "auth_manager.authentication.JWTCookieAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
     "DEFAULT_RENDERER_CLASSES": [
         "djangorestframework_camel_case.render.CamelCaseJSONRenderer",
         "djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer",
@@ -218,3 +225,32 @@ AUDIT_LOG_AUTO_CAPTURE = False  # Set to True to auto-capture all model changes
 AUDIT_LOG_AUTO_CAPTURE_MODELS = []  # e.g., ['assets.Asset', 'workspaces.Workspace']
 AUDIT_LOG_RETENTION_DAYS = 365  # How long to keep audit logs
 PERMISSION_CACHE_TIMEOUT = 300  # 5 minutes
+
+# AWS Configuration
+AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+AWS_KMS_KEY_ID = os.environ.get("AWS_KMS_KEY_ID")
+AWS_KMS_ENDPOINT_URL = os.environ.get("AWS_KMS_ENDPOINT_URL")  # For LocalStack
+
+# JWT Configuration (djangorestframework-simplejwt)
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# JWT Cookie settings
+JWT_AUTH_COOKIE = "access_token"
+JWT_AUTH_REFRESH_COOKIE = "refresh_token"
+JWT_AUTH_SECURE = not DEBUG  # HTTPS only in production
+JWT_AUTH_HTTPONLY = True
+JWT_AUTH_SAMESITE = "Lax"
+
+# Auth Manager settings
+SHORT_TOKEN_EXPIRATION = 60 * 15  # 15 minutes for OneTimeToken
+MAGIC_LINK_TOKEN_EXPIRATION_TIME = 60 * 60  # 1 hour for magic links

@@ -4,7 +4,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 # local
-from multifactor_auth.test import Client as MFAClient
+from auth_manager.test import Client as MFAClient
 
 
 class MFAEnrollViewTestCase(TestCase):

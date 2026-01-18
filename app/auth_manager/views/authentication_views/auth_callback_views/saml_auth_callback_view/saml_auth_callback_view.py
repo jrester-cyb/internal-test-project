@@ -1,10 +1,12 @@
 # django
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views import View
 
 # local
 from auth_manager.models.identity_provider_models import IdentityProvider
+from auth_manager.models.one_time_token import OneTimeToken
 from auth_manager.views.shortcuts import login_error_page
 
 
@@ -30,8 +32,16 @@ class SAMLIdentityProviderAuthenticationCallbackView(View):
         if not idp:
             return login_error_page(request, message="Identity provider not found.", status=404)
         try:
-            idp.login(request, skip_mfa=True)
-            return redirect("auth-manager:mfa")
+            # Authenticate user via SAML (validates SAML response) but don't create session
+            user = idp.authenticate(request)
+
+            # Generate OneTimeToken for sessionless auth flow
+            token = OneTimeToken.objects.generate_token(user)
+
+            # SAML users skip MFA (already verified by their corporate IdP)
+            # Redirect directly to finalize with token
+            finalize_url = f"{reverse('auth-manager:finalize')}?t={token}"
+            return redirect(finalize_url)
         except Exception as e:
             return login_error_page(
                 request,

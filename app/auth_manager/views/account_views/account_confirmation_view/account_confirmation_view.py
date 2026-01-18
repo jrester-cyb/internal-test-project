@@ -8,7 +8,7 @@ from django.views.generic import TemplateView
 
 # local
 from auth_manager.views.account_views.serializer import CreatePasswordSerializer
-from mainapp.utils import reverse
+from django.urls import reverse
 
 User = get_user_model()
 

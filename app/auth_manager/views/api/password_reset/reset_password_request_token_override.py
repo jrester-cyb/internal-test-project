@@ -2,18 +2,15 @@
 from django.contrib.auth import get_user_model
 from django_rest_passwordreset.views import ResetPasswordRequestToken
 
-# local
-from users.models.user_model.user_model import UserTypes
-
 User = get_user_model()
 
 
 def eligible_for_reset(user) -> bool:
     """
-    Determines if the user is eligible for a password reset
+    Determines if the user is eligible for a password reset.
+    Users linked to an identity provider cannot reset their password locally.
     """
-    # If the user is not a robotic user OR is linked to an identity provider
-    if user.user_type == UserTypes.ROBOTIC or user.identity_providers.exists():
+    if user.identity_providers.exists():
         return False
     return True
 

@@ -3,7 +3,7 @@ import copy
 
 # local
 from auth_manager.models.identity_provider_models import IdentityProvider, LocalIdentityProvider, SAMLIdentityProvider
-from mainapp.utils import reverse
+from rest_framework.reverse import reverse
 
 # thirdparty
 from rest_framework import serializers

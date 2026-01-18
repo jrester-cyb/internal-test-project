@@ -1,12 +1,14 @@
+# django
+from django.urls import reverse
+
 # local
-from mainapp.tests.base import BaseTests
-from mainapp.utils import reverse
+from auth_manager.tests.base import ApiClientTestBase
 
 # thirdparty
 from rest_framework import status
 
 
-class WhoAmIViewTestCase(BaseTests.ApiClientTestBase):
+class WhoAmIViewTestCase(ApiClientTestBase):
 
     def test__whoami_view_returns_expected_user_when_authenticated(self):
         # act

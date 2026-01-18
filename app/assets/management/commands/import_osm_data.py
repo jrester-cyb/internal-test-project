@@ -170,6 +170,7 @@ class OSMImporter:
         limit: int = 100,
         max_retries: int = 3,
         retry_delay: int = 10,
+        batch_size: int = 1000,
     ) -> tuple:
         """Import OSM features and return (created_count, created_assets)."""
         south, west, north, east = bbox
@@ -204,8 +205,15 @@ class OSMImporter:
         elements = data.get("elements", [])
         print(f"Found {len(elements)} elements")
         asset_type = self.get_or_create_asset_type(feature_type)
-        created_count = 0
-        created_assets = []
+
+        # Build list of assets to create, tracking element data for later attribute storage
+        existing_names = set(
+            Asset.objects.filter(asset_type=asset_type).values_list("name", flat=True)
+        )
+
+        assets_to_create = []
+        element_data_map = {}  # name -> (osm_id, osm_type, tags)
+
         for element in elements:
             osm_id = element.get("id")
             osm_type = element.get("type")
@@ -216,27 +224,45 @@ class OSMImporter:
             name = tags.get("name", tags.get("ref", f"{feature_type} {osm_id}"))
             name = self.sanitize_text(name)
             description = self.sanitize_text(tags.get("description", ""))
-            asset, created = Asset.objects.update_or_create(
-                asset_type=asset_type,
-                name=f"{name}",
-                defaults={
-                    "organization": self.organization,
-                    "description": description,
-                    "geometry": geometry,
-                },
-            )
-            if created:
-                created_count += 1
-                created_assets.append(asset)
 
-            # Link asset to workspace
-            if self.workspace:
-                WorkspaceAsset.objects.get_or_create(
-                    workspace=self.workspace,
-                    asset=asset,
+            if name not in existing_names:
+                asset = Asset(
+                    asset_type=asset_type,
+                    name=name,
+                    organization=self.organization,
+                    description=description,
+                    geometry=geometry,
                 )
+                assets_to_create.append(asset)
+                element_data_map[name] = (osm_id, osm_type, tags)
+                existing_names.add(name)  # Prevent duplicates within this batch
 
-            self.store_osm_attributes(asset, osm_id, osm_type, tags)
+        # Bulk create assets
+        created_assets = []
+        for i in range(0, len(assets_to_create), batch_size):
+            batch = assets_to_create[i : i + batch_size]
+            created_batch = Asset.objects.bulk_create(batch, ignore_conflicts=True)
+            created_assets.extend(created_batch)
+            print(f"Created batch {i // batch_size + 1}: {len(created_batch)} assets")
+
+        created_count = len(created_assets)
+
+        # Bulk create workspace asset links
+        if self.workspace and created_assets:
+            workspace_assets_to_create = [
+                WorkspaceAsset(workspace=self.workspace, asset=asset)
+                for asset in created_assets
+            ]
+            WorkspaceAsset.objects.bulk_create(
+                workspace_assets_to_create, ignore_conflicts=True
+            )
+
+        # Store attributes for created assets
+        for asset in created_assets:
+            if asset.name in element_data_map:
+                osm_id, osm_type, tags = element_data_map[asset.name]
+                self.store_osm_attributes(asset, osm_id, osm_type, tags)
+
         print(f"Created {created_count} new assets")
         return created_count, created_assets
 

@@ -34,7 +34,7 @@ services:
       - redis_data:/data
   web:
     build:
-      context: ./app
+      context: .
       args:
         USER_ID: 1000
         GROUP_ID: 1000
@@ -46,6 +46,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      localstack:
+        condition: service_healthy
     environment:
       - DJANGO_SETTINGS_MODULE=app.settings
       - DJANGO_DB_HOST=db
@@ -53,10 +55,12 @@ services:
       - DJANGO_DB_USER=myuser
       - DJANGO_DB_PASSWORD=mypassword
       - REDIS_HOST=redis
-      - LAMBDA_ENDPOINT=http://localstack:4566
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
+      - AWS_KMS_ENDPOINT_URL=http://localstack:4566
+      - AWS_KMS_KEY_ID=alias/mfa-key
+      - AWS_S3_ENDPOINT_URL=http://localstack:4566
   frontend:
     build:
       context: ./frontend
@@ -79,19 +83,24 @@ services:
     depends_on:
       - web
       - frontend
-  # localstack:
-  #   image: localstack/localstack:latest
-  #   ports:
-  #     - "4566:4566"
-  #   environment:
-  #     - SERVICES=lambda
-  #     - DEBUG=1
-  #     - LAMBDA_EXECUTOR=docker
-  #     - DOCKER_HOST=unix:///var/run/docker.sock
-  #   volumes:
-  #     - "/var/run/docker.sock:/var/run/docker.sock"
-  #     - "./lambda-functions:/etc/localstack/init/ready.d"
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,kms
+      - DEBUG=1
+      - PERSISTENCE=1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./localstack/init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4566/_localstack/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
   redis_data:
+  localstack_data:

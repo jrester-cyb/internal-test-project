@@ -11,7 +11,7 @@ from auth_manager.models.identity_provider_models import (
     SAMLIdentityProvider,
 )
 from auth_manager.views.shortcuts import login_error_page
-from mainapp.utils import reverse
+from django.urls import reverse
 
 
 class LoginInitView(TemplateView):

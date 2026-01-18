@@ -1,5 +1,6 @@
 Django>=6.0,<7.0
 djangorestframework
+djangorestframework-simplejwt
 djangorestframework-camel-case
 djangorestframework-gis
 drf-spectacular
@@ -11,6 +12,8 @@ gunicorn
 psycopg2-binary
 requests
 boto3
+cryptography
+python3-saml
 pytest
 pytest-django
 django-silk

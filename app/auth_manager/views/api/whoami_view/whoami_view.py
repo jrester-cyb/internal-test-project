@@ -1,6 +1,6 @@
 # local
-from multifactor_auth.permissions import IsMultiFactorAuthenticated
-from users.serializers import UserDetailSerializer
+from auth_manager.permissions import IsMultiFactorAuthenticated
+from users_manager.serializers import UserSerializer
 
 # thirdparty
 from rest_framework.response import Response
@@ -14,4 +14,4 @@ class WhoAmIView(APIView):
         """
         Get the details of the currently authenticated user.
         """
-        return Response(UserDetailSerializer(request.user, context={"request": request}).data)
+        return Response(UserSerializer(request.user, context={"request": request}).data)

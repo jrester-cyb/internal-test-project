@@ -4,7 +4,7 @@ from django.test import Client, TestCase
 
 # local
 from auth_manager.models import LocalIdentityProvider, SAMLIdentityProvider
-from mainapp.utils import reverse
+from django.urls import reverse
 
 # thirdparty
 from rest_framework import status

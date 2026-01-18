@@ -4,11 +4,11 @@ from django.db import transaction
 # local
 from auth_manager.models import IdentityProvider, LocalIdentityProvider
 from auth_manager.serializers import IdentityProviderSerializer
-from users.permissions import IsAdmin
 
 # thirdparty
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAdminUser
 
 
 class IdentityProviderViewSet(viewsets.ModelViewSet):
@@ -19,7 +19,7 @@ class IdentityProviderViewSet(viewsets.ModelViewSet):
 
     lookup_field = "global_id"
     queryset = IdentityProvider.objects.all()
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminUser]
     serializer_class = IdentityProviderSerializer
 
     def get_serializer_context(self):

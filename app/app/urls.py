@@ -26,6 +26,10 @@ from assets.views import get_attribute_types
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Auth manager
+    path("auth/", include("auth_manager.auth_urls")),
+    path("api/auth/", include("auth_manager.urls")),
+    # API routes
     path("api/", include("todos.urls")),
     path("api/", include("organizations.urls")),
     # path("api/", include("users_manager.urls")),

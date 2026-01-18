@@ -4,8 +4,8 @@ from django.test import Client, TestCase, override_settings
 
 # local
 from auth_manager.models import OneTimeToken, SAMLIdentityProvider
-from mainapp.utils import reverse
-from multifactor_auth.constants import MULTIFACTOR_SESSION_KEY
+from django.urls import reverse
+from auth_manager.models import MULTIFACTOR_SESSION_KEY
 
 # thirdparty
 from rest_framework import status

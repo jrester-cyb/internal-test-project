@@ -5,7 +5,7 @@ from django.core.exceptions import PermissionDenied
 # local
 from auth_manager.emails import MagicLinkRequestEmail
 from auth_manager.models import OneTimeToken
-from mainapp.utils import reverse
+from django.urls import reverse
 
 # thirdparty
 from rest_framework import status

@@ -1,6 +1,7 @@
 # django
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from django.views.generic import TemplateView
@@ -8,7 +9,7 @@ from django.views.generic import TemplateView
 # local
 from auth_manager.constants import PROVIDED_EMAIL
 from auth_manager.exceptions.api_exceptions import BadRequest, IncorrectCredentials, LockedAccount, UserAlreadyLinked
-from auth_manager.models import IdentityProvider
+from auth_manager.models import IdentityProvider, OneTimeToken
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -36,7 +37,8 @@ class LocalIdentityProviderAuthenticationCallbackView(TemplateView):
     def post(self, request: HttpRequest, global_id: str) -> HttpResponse:
         try:
             idp = IdentityProvider.objects.get(global_id=global_id, enabled=True)
-            idp.login(request)
+            # Authenticate user (validates credentials) but don't create session
+            user = idp.authenticate(request)
         except IdentityProvider.DoesNotExist:
             context = self.get_context_data()
             context["error_message"] = "Identity provider not found"
@@ -46,4 +48,9 @@ class LocalIdentityProviderAuthenticationCallbackView(TemplateView):
             context["error_message"] = err.detail
             return self.render_to_response(context, status=err.status_code)
 
-        return redirect("auth-manager:mfa")
+        # Generate OneTimeToken for sessionless auth flow
+        token = OneTimeToken.objects.generate_token(user)
+
+        # Redirect to MFA with token in URL
+        mfa_url = f"{reverse('auth-manager:mfa')}?t={token}"
+        return redirect(mfa_url)

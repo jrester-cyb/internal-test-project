@@ -4,7 +4,7 @@ from django.core import signing
 from django.test import Client, TestCase
 
 # local
-from mainapp.utils import reverse
+from django.urls import reverse
 
 User = get_user_model()
 

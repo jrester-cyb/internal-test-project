@@ -21,8 +21,21 @@ logger = logging.getLogger(__name__)
 
 class OneTimeTokenQueryset(models.QuerySet):
     def validate_token(
-        self, token: str, token_expiration_time=None
+        self, token: str, token_expiration_time=None, consume: bool = True
     ) -> tuple[bool, AbstractUser | None]:
+        """
+        Validate a one-time token and optionally consume it.
+
+        Args:
+            token: The signed token string to validate
+            token_expiration_time: Optional custom expiration time in seconds
+            consume: If True, delete the token after validation (default).
+                     If False, keep the token for subsequent validations.
+
+        Returns:
+            tuple: (is_valid, user) where is_valid is a boolean and user is the
+                   associated user or None
+        """
         signer = TimestampSigner()
         try:
             unsigned_obj = signer.unsign_object(
@@ -34,7 +47,8 @@ class OneTimeTokenQueryset(models.QuerySet):
             except self.model.DoesNotExist:
                 return False, None
             user = existing_instance.user
-            existing_instance.delete()  # Invalidate the token after use
+            if consume:
+                existing_instance.delete()  # Invalidate the token after use
             return True, user
         except (BadSignature, SignatureExpired):
             return False, None
@@ -52,8 +66,8 @@ class OneTimeTokenManager(models.Manager):
             deleted_at__isnull=True
         )
 
-    def validate_token(self, token: str, token_expiration_time=None):
-        return self.get_queryset().validate_token(token, token_expiration_time)
+    def validate_token(self, token: str, token_expiration_time=None, consume: bool = True):
+        return self.get_queryset().validate_token(token, token_expiration_time, consume)
 
     def generate_token(self, user: AbstractUser) -> str:
         return self.get_queryset().generate_token(user)

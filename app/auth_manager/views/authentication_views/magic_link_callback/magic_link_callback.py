@@ -10,7 +10,7 @@ from django.views.generic import TemplateView
 
 # local
 from auth_manager.models.one_time_token import OneTimeToken
-from multifactor_auth.constants import MULTIFACTOR_SESSION_KEY
+from auth_manager.models import MULTIFACTOR_SESSION_KEY
 
 logger = logging.getLogger(__name__)
 

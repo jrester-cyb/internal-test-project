@@ -1,10 +1,10 @@
 # django
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 # local
 from auth_manager.models import LocalIdentityProvider, SAMLIdentityProvider
-from mainapp.tests.base import BaseTests
-from mainapp.utils import reverse
+from auth_manager.tests.base import ApiClientTestBase
 
 # thirdparty
 from rest_framework import status
@@ -12,7 +12,7 @@ from rest_framework import status
 User = get_user_model()
 
 
-class IdentityProviderViewSetTests(BaseTests.ApiClientTestBase):
+class IdentityProviderViewSetTests(ApiClientTestBase):
     list_url = reverse("auth-manager-api:identity-provider-list")
 
     def test_cannot_delete_only_enabled_local_idp(self):

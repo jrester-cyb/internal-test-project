@@ -1,37 +1,46 @@
 # django
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.conf import settings
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views.generic import TemplateView
 
 # local
-from mainapp.utils import reverse
-from multifactor_auth.constants import MULTIFACTOR_SESSION_KEY
-from multifactor_auth.models import Device
+from auth_manager.models import MFADevice, OneTimeToken
+from auth_manager.views.shortcuts import login_error_page
 
 
-class MFAEnrollView(LoginRequiredMixin, TemplateView):
+class MFAEnrollView(TemplateView):
     template_name = "mfa_enrollment_templates/mfa_enroll.html"
+    user = None
+    token = None
 
     def dispatch(self, request, *args, **kwargs):
-        # If the user is not authenticated, redirect to login
-        if not request.user.is_authenticated:
+        # Get token from URL parameter
+        self.token = request.GET.get("t")
+        if not self.token:
             return redirect("auth-manager:login")
-        # If the user is already mfa verified, redirect to the original request URI
-        if request.session.get(MULTIFACTOR_SESSION_KEY, False):
-            return redirect("auth-manager:finalize")
 
-        # If user already has enrolled devices, redirect to the mfa page
-        if request.user.user_multifactor_auth_devices.exclude(verified=False).exists():
-            return redirect("auth-manager:mfa")
+        # Validate token to get user (don't consume - we need it for the whole flow)
+        is_valid, self.user = OneTimeToken.objects.validate_token(
+            self.token,
+            token_expiration_time=settings.SHORT_TOKEN_EXPIRATION,
+            consume=False,
+        )
+        if not is_valid or not self.user:
+            return login_error_page(request, message="Invalid or expired authentication token.", status=401)
+
+        # If user already has enrolled devices, redirect to the mfa page with token
+        if self.user.user_multifactor_auth_devices.exclude(verified=False).exists():
+            mfa_url = f"{reverse('auth-manager:mfa')}?t={self.token}"
+            return redirect(mfa_url)
 
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
 
         # Iterate over the devices of the user
-        available_devices = Device.objects.filter(user=self.request.user, verified=False)
+        available_devices = MFADevice.objects.filter(user=self.user, verified=False)
 
         # Sort so TOTP (Authenticator App) is always first
         available_devices = sorted(available_devices, key=lambda d: 0 if d.device_type.upper() == "TOTP" else 1)
@@ -45,17 +54,17 @@ class MFAEnrollView(LoginRequiredMixin, TemplateView):
                 "global_id": device.global_id,
                 "request_notification_endpoint": reverse(
                     "multifactor-auth-devices-request-device-notification",
-                    args=(self.request.user.global_id, device.global_id),
+                    args=(self.user.global_id, device.global_id),
                     request=self.request,
                 ),
                 "verify_endpoint": reverse(
                     "multifactor-auth-devices-enroll_device",
-                    args=(self.request.user.global_id, device.global_id),
+                    args=(self.user.global_id, device.global_id),
                     request=self.request,
                 ),
                 "update_endpoint": reverse(
                     "multifactor-auth-devices-detail",
-                    args=(self.request.user.global_id, device.global_id),
+                    args=(self.user.global_id, device.global_id),
                     request=self.request,
                 ),
             }
@@ -72,11 +81,15 @@ class MFAEnrollView(LoginRequiredMixin, TemplateView):
 
             device_list.append(device_dict)
 
+        # Build finalize URL with token
+        finalize_url = f"{reverse('auth-manager:finalize')}?t={self.token}"
+
         context["available_device_types"] = device_list
-        context["mfa_required"] = getattr(self.request.user, "mfa_required", True)
-        context["mfa_finalize_endpoint"] = reverse("auth-manager:finalize", request=self.request)
-        context["email"] = user.email
+        context["mfa_required"] = getattr(self.user, "mfa_required", True)
+        context["mfa_finalize_endpoint"] = finalize_url
+        context["email"] = self.user.email
         context["skip_device_code_endpoint"] = reverse(
-            "multifactor-auth-devices-skip-device-code", args=(self.request.user.global_id,), request=self.request
+            "multifactor-auth-devices-skip-device-code", args=(self.user.global_id,), request=self.request
         )
+        context["auth_token"] = self.token  # Pass token to template for hidden field
         return context

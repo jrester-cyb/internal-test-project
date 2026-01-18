@@ -175,8 +175,14 @@ class IdentityProvider(PolymorphicModel, PolymorphicSoftDeleteMixin):
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def login(self, request, skip_mfa=False):
+        from .user_session import UserSession
+
         user = self.authenticate(request)
         login(request, user)
+
+        # Create session record with request metadata
+        UserSession.objects.create_from_request(user, request)
+
         if skip_mfa:
             request.session[MULTIFACTOR_SESSION_KEY] = True
 
@@ -200,24 +206,6 @@ class FailedLoginAttempt(SoftDeleteMixin):
 
     def __str__(self):
         return f"Failed login for {self.user} at {self.created_at}"
-
-
-class UserLogin(SoftDeleteMixin):
-    """Tracks successful user logins."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="user_logins",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta(SoftDeleteMixin.Meta):
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Login for {self.user} at {self.created_at}"
 
 
 class LocalIdentityProvider(IdentityProvider):
@@ -268,10 +256,9 @@ class LocalIdentityProvider(IdentityProvider):
         if user is None:
             self._log_failed_login_attempt(user=existing_user)
 
-        with transaction.atomic():
-            UserLogin.objects.create(user=user)
-            user.lock_expiration = None
-            user.save(update_fields=["lock_expiration"])
+        # Clear lock expiration on successful login
+        user.lock_expiration = None
+        user.save(update_fields=["lock_expiration"])
 
         return user
 
@@ -426,7 +413,6 @@ class SAMLIdentityProvider(IdentityProvider):
                 identity_provider=self, user=user
             )
 
-            UserLogin.objects.create(user=user)
             user.lock_expiration = None
             update_fields = ["lock_expiration"]
 

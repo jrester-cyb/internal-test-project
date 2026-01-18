@@ -6,7 +6,7 @@ from django_rest_passwordreset.models import ResetPasswordToken
 
 # local
 from auth_manager.views.account_views.serializer import CreatePasswordSerializer
-from mainapp.utils.url_utils import reverse
+from rest_framework.reverse import reverse
 
 User = get_user_model()
 

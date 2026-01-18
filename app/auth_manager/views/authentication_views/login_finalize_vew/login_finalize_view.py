@@ -2,13 +2,15 @@
 from urllib.parse import ParseResult, parse_qs, urlencode, urlparse, urlunparse
 
 # django
+from django.conf import settings
 from django.http import HttpResponseRedirect as DefaultHttpResponseRedirect
 from django.shortcuts import redirect
 from django.views import View
 
 # local
+from auth_manager.jwt_utils import create_tokens_for_user, set_jwt_cookies
 from auth_manager.models.one_time_token import OneTimeToken
-from multifactor_auth.constants import MULTIFACTOR_SESSION_KEY
+from auth_manager.views.shortcuts import login_error_page
 
 
 def add_token_to_url(url: str, token: str) -> str:
@@ -45,22 +47,42 @@ class HttpResponseRedirect(DefaultHttpResponseRedirect):
 
 
 class LoginFinalizeView(View):
+    user = None
+    token = None
 
     def dispatch(self, request, *args, **kwargs):
-        # If the user is authenticated, proceed to the next step
-        if not request.user.is_authenticated:
+        # Get token from URL parameter
+        self.token = request.GET.get("t")
+        if not self.token:
             return redirect("auth-manager:login")
-        elif not request.session.get(MULTIFACTOR_SESSION_KEY, False):
-            return redirect("auth-manager:mfa")
+
+        # Validate and consume the token (one-time use)
+        is_valid, self.user = OneTimeToken.objects.validate_token(
+            self.token,
+            token_expiration_time=settings.SHORT_TOKEN_EXPIRATION,
+            consume=True,  # Consume the token - this is the final step
+        )
+        if not is_valid or not self.user:
+            return login_error_page(request, message="Invalid or expired authentication token.", status=401)
+
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
+        # Get auth method and redirect URI from session (set during login init)
         method = request.session.pop("auth_method", "c")
         redirect_to_uri = request.session.pop("redirect_uri", None)
-        # If the method is "t" that means that we are going to be
-        # Generating a short-lived token and updating the "redirect-uri" to include that token
-        # As a queryparam. This is to allow that
-        if method == "t" and redirect_to_uri:
-            redirect_to_uri = add_token_to_url(redirect_to_uri, OneTimeToken.objects.generate_token(request.user))
 
-        return HttpResponseRedirect(redirect_to_uri or "/")
+        # For mobile (method="t"), pass a new token in redirect URL
+        # Mobile app will exchange this token for JWT via API
+        if method == "t" and redirect_to_uri:
+            # Generate a new token for the mobile app to exchange
+            new_token = OneTimeToken.objects.generate_token(self.user)
+            redirect_to_uri = add_token_to_url(redirect_to_uri, new_token)
+            return HttpResponseRedirect(redirect_to_uri)
+
+        # For web (method="c"), generate JWT and set cookies
+        access_token, refresh_token = create_tokens_for_user(self.user)
+        response = HttpResponseRedirect(redirect_to_uri or "/")
+        set_jwt_cookies(response, access_token, refresh_token)
+
+        return response

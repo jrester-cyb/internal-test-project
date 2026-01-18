@@ -15,6 +15,8 @@ __all__ = [
     "ResetPasswordRequestTokenOverride",
     "MagicLinkCallbackView",
     "RequestMagicLinkAPIView",
+    "TokenRefreshView",
+    "TokenLogoutView",
 ]
 
 from .api import (
@@ -23,6 +25,8 @@ from .api import (
     APITokenInitView,
     ResetPasswordRequestTokenOverride,
     RequestMagicLinkAPIView,
+    TokenRefreshView,
+    TokenLogoutView,
 )
 from .authentication_views import (
     LoginInitView,

@@ -5,7 +5,7 @@ from django_rest_passwordreset.models import ResetPasswordToken
 
 # local
 from auth_manager.models import SAMLIdentityProvider
-from mainapp.utils import reverse
+from rest_framework.reverse import reverse
 
 User = get_user_model()
 

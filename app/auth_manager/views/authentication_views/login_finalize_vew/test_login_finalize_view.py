@@ -4,8 +4,8 @@ from django.test import Client, TestCase
 
 # local
 from auth_manager.models import LocalIdentityProvider
-from mainapp.utils import reverse
-from multifactor_auth.test import Client as MFAClient
+from django.urls import reverse
+from auth_manager.test import Client as MFAClient
 
 User = get_user_model()
 
