@@ -527,6 +527,7 @@ export interface DirectoryResponse {
   parent?: string | null
   isDirectory: boolean
   workspace?: string
+  workspaceName?: string
   description?: string
   color?: string
   icon?: string

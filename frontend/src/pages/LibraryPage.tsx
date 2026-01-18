@@ -82,23 +82,25 @@ export default function LibraryPage() {
     { id: '', name: 'Library', path: basePath },
   ]
 
+  // Track the root directory ID so we can skip it in ancestors
+  const rootDirectoryId = currentDir?.ancestors?.[0]?.id
+
   // For org-level, if we're viewing a directory, add the workspace as a breadcrumb
   if (isOrgLevel && directoryId && currentDir?.workspace) {
     // We're inside a workspace's directory tree at org level
-    // Find workspace name from ancestors or current dir
-    const workspaceName = currentDir.ancestors?.find(a => a.name !== 'Root')?.name || currentDir.name
+    // Use workspaceName from the response, or fall back to the directory name
+    const workspaceName = currentDir.workspaceName || currentDir.name
     breadcrumbs.push({
-      id: currentDir.workspace,
+      id: rootDirectoryId || currentDir.id,
       name: workspaceName,
-      path: `${basePath}/${currentDir.ancestors?.[0]?.id || currentDir.id}`,
+      path: `${basePath}/${rootDirectoryId || currentDir.id}`,
     })
   }
 
   if (currentDir?.ancestors) {
     for (const ancestor of currentDir.ancestors) {
-      if (ancestor.name === 'Root') continue
-      // Skip if this is the workspace-level root we already added
-      if (isOrgLevel && breadcrumbs.some(b => b.id === ancestor.id)) continue
+      // Skip if this ancestor is already in breadcrumbs (e.g., workspace root we added above)
+      if (breadcrumbs.some(b => b.id === ancestor.id)) continue
       breadcrumbs.push({
         id: ancestor.id,
         name: ancestor.name,
@@ -106,12 +108,16 @@ export default function LibraryPage() {
       })
     }
   }
-  if (currentDir && currentDir.name !== 'Root' && !currentDir.isOrganizationRoot) {
+  if (currentDir && !currentDir.isOrganizationRoot) {
     // Don't add current dir to breadcrumbs if it's already there
     if (!breadcrumbs.some(b => b.id === currentDir.id)) {
+      // Use workspaceName for root directories, otherwise use the directory name
+      const displayName = (currentDir.parent === null && currentDir.workspaceName)
+        ? currentDir.workspaceName
+        : currentDir.name
       breadcrumbs.push({
         id: currentDir.id,
-        name: currentDir.name,
+        name: displayName,
         path: `${basePath}/${currentDir.id}`,
       })
     }

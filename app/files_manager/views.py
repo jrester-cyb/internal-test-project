@@ -384,6 +384,24 @@ class FileNodeViewSet(viewsets.ModelViewSet):
             dir_data = DirectorySerializer(current_dir).data
             dir_data["children"] = children_response
 
+            # Add workspace name for display purposes
+            if current_dir.workspace:
+                dir_data["workspace_name"] = current_dir.workspace.name
+
+                # For org-level requests, update ancestors to show workspace name instead of "Root"
+                if organization_pk and dir_data.get("ancestors"):
+                    for ancestor in dir_data["ancestors"]:
+                        # Check if this ancestor is a root directory
+                        try:
+                            ancestor_dir = Directory.objects.select_related("workspace").get(
+                                pk=ancestor["id"],
+                                parent__isnull=True
+                            )
+                            # It's a root directory, use workspace name
+                            ancestor["name"] = ancestor_dir.workspace.name
+                        except Directory.DoesNotExist:
+                            pass
+
             return Response(dir_data)
 
         elif workspace_pk:
