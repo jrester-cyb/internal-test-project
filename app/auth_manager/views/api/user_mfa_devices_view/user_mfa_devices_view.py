@@ -1,10 +1,12 @@
 # django
 from django.conf import settings
+from django.db import IntegrityError
 from django.utils import timezone
 
 # local
 from auth_manager.models import MFADevice, TOTPDevice, SMSDevice
 from auth_manager.permissions import IsMultiFactorAuthenticated
+from auth_manager.utils import generate_qr_code_data_url
 
 # thirdparty
 from rest_framework import serializers, status
@@ -58,6 +60,41 @@ class UserMFADeviceDetailView(APIView):
 
     permission_classes = [IsMultiFactorAuthenticated]
 
+    def patch(self, request, device_id) -> Response:
+        """
+        Update an MFA device for the authenticated user (e.g., rename).
+        """
+        try:
+            device = MFADevice.objects.get(
+                id=device_id,
+                user=request.user,
+                confirmed_at__isnull=False,
+            )
+        except MFADevice.DoesNotExist:
+            return Response(
+                {"detail": "Device not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        name = request.data.get("name")
+        if name is not None:
+            if not name or not name.strip():
+                return Response(
+                    {"detail": "Name cannot be empty."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            device.name = name.strip()
+            try:
+                device.save(update_fields=["name"])
+            except IntegrityError:
+                return Response(
+                    {"detail": "A device with this name already exists."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        serializer = MFADeviceSerializer(device)
+        return Response(serializer.data)
+
     def delete(self, request, device_id) -> Response:
         """
         Delete (soft delete) an MFA device for the authenticated user.
@@ -105,10 +142,14 @@ class MFAEnrollmentSetupView(APIView):
             f"&period=30"
         )
 
+        # Generate QR code as base64 data URL
+        qr_code_data_url = generate_qr_code_data_url(provisioning_uri)
+
         return Response(
             {
                 "seed": totp_seed,
                 "provisioning_uri": provisioning_uri,
+                "qr_code": qr_code_data_url,
                 "issuer": issuer,
                 "account_name": account_name,
             }
@@ -129,9 +170,13 @@ class MFAEnrollTOTPView(APIView):
         Required fields:
         - seed: The TOTP secret key
         - code: The verification code from the authenticator app
+
+        Optional fields:
+        - name: Custom name/nickname for the device
         """
         seed = request.data.get("seed", "")
         code = request.data.get("code", "")
+        name = request.data.get("name", "").strip() or "Authenticator App"
 
         if not seed:
             return Response(
@@ -148,10 +193,16 @@ class MFAEnrollTOTPView(APIView):
         # Create TOTP device with provided seed
         device = TOTPDevice(
             user=request.user,
-            name="Authenticator App",
+            name=name,
         )
         device.secret = seed
-        device.save()
+        try:
+            device.save()
+        except IntegrityError:
+            return Response(
+                {"detail": "A device with this name already exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Verify the code
         if not device.verify_totp(code):
@@ -182,8 +233,12 @@ class MFAEnrollSMSInitiateView(APIView):
 
         Required fields:
         - phone_number: The phone number for SMS delivery
+
+        Optional fields:
+        - name: Custom name/nickname for the device
         """
         phone_number = request.data.get("phone_number", "")
+        name = request.data.get("name", "").strip() or "SMS"
 
         if not phone_number:
             return Response(
@@ -195,11 +250,17 @@ class MFAEnrollSMSInitiateView(APIView):
         SMSDevice.objects.filter(user=request.user, confirmed_at__isnull=True).delete()
 
         # Create SMS device
-        device = SMSDevice.objects.create(
-            user=request.user,
-            name="SMS",
-            phone_number=phone_number,
-        )
+        try:
+            device = SMSDevice.objects.create(
+                user=request.user,
+                name=name,
+                phone_number=phone_number,
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "A device with this name already exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Send the verification code
         try:

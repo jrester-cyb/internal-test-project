@@ -18,6 +18,7 @@ import {
   TextField,
   Alert,
   CircularProgress,
+  Tooltip,
 } from '@mui/material'
 import {
   Security as SecurityIcon,
@@ -26,7 +27,10 @@ import {
   Email as EmailIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
   ArrowBack as ArrowBackIcon,
+  ContentCopy as ContentCopyIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material'
 import { useLoaderData, useRevalidator } from 'react-router-dom'
 import type { MFADevice, MFADevicesLoaderData } from '../../loaders/security'
@@ -37,6 +41,7 @@ type EnrollmentStep = 'select' | 'totp' | 'sms-phone' | 'sms-verify'
 interface TOTPSetupData {
   seed: string
   provisioningUri: string
+  qrCode: string
   issuer: string
   accountName: string
 }
@@ -50,6 +55,13 @@ export default function MFADevicesPage() {
   const [deviceToDelete, setDeviceToDelete] = useState<MFADevice | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // Rename dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [deviceToRename, setDeviceToRename] = useState<MFADevice | null>(null)
+  const [newDeviceName, setNewDeviceName] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
+
   // Enrollment dialog state
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false)
   const [enrollmentStep, setEnrollmentStep] = useState<EnrollmentStep>('select')
@@ -59,6 +71,10 @@ export default function MFADevicesPage() {
   // TOTP enrollment state
   const [totpSetup, setTotpSetup] = useState<TOTPSetupData | null>(null)
   const [totpCode, setTotpCode] = useState('')
+  const [qrEnlarged, setQrEnlarged] = useState(false)
+
+  // Device nickname state (shared across enrollment types)
+  const [deviceNickname, setDeviceNickname] = useState('')
 
   // SMS enrollment state
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -93,6 +109,46 @@ export default function MFADevicesPage() {
     }
   }
 
+  // Rename handlers
+  const handleRenameClick = (device: MFADevice) => {
+    setDeviceToRename(device)
+    setNewDeviceName(device.name)
+    setRenameError(null)
+    setRenameDialogOpen(true)
+  }
+
+  const handleRenameCancel = () => {
+    setRenameDialogOpen(false)
+    setDeviceToRename(null)
+    setNewDeviceName('')
+    setRenameError(null)
+  }
+
+  const handleRenameConfirm = async () => {
+    if (!deviceToRename || !newDeviceName.trim()) return
+
+    setIsRenaming(true)
+    setRenameError(null)
+    try {
+      const response = await authFetch(`/api/auth/v2/mfa-devices/${deviceToRename.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newDeviceName.trim() }),
+      })
+      if (response.ok) {
+        revalidator.revalidate()
+        handleRenameCancel()
+      } else {
+        const error = await response.json()
+        setRenameError(error.detail || 'Failed to rename device')
+      }
+    } catch {
+      setRenameError('Network error')
+    } finally {
+      setIsRenaming(false)
+    }
+  }
+
   // Enrollment handlers
   const handleEnrollClick = () => {
     setEnrollDialogOpen(true)
@@ -106,6 +162,7 @@ export default function MFADevicesPage() {
     setEnrollmentError(null)
     setTotpSetup(null)
     setTotpCode('')
+    setDeviceNickname('')
     setPhoneNumber('')
     setSmsDeviceId(null)
     setSmsCode('')
@@ -145,7 +202,11 @@ export default function MFADevicesPage() {
       const response = await authFetch('/api/auth/v2/mfa-devices/enroll/totp/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seed: totpSetup.seed, code: totpCode }),
+        body: JSON.stringify({
+          seed: totpSetup.seed,
+          code: totpCode,
+          name: deviceNickname.trim() || undefined,
+        }),
       })
       if (response.ok) {
         revalidator.revalidate()
@@ -170,7 +231,10 @@ export default function MFADevicesPage() {
       const response = await authFetch('/api/auth/v2/mfa-devices/enroll/sms/initiate/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: phoneNumber }),
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+          name: deviceNickname.trim() || undefined,
+        }),
       })
       if (response.ok) {
         const data = await response.json()
@@ -334,6 +398,13 @@ export default function MFADevicesPage() {
                 }
               />
               <IconButton
+                aria-label="rename"
+                onClick={() => handleRenameClick(device)}
+                sx={{ color: 'text.secondary' }}
+              >
+                <EditIcon />
+              </IconButton>
+              <IconButton
                 edge="end"
                 aria-label="delete"
                 onClick={() => handleDeleteClick(device)}
@@ -345,6 +416,38 @@ export default function MFADevicesPage() {
           ))}
         </List>
       )}
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialogOpen} onClose={handleRenameCancel} maxWidth="xs" fullWidth>
+        <DialogTitle>Rename Device</DialogTitle>
+        <DialogContent>
+          {renameError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {renameError}
+            </Alert>
+          )}
+          <TextField
+            label="Device Name"
+            value={newDeviceName}
+            onChange={(e) => setNewDeviceName(e.target.value)}
+            fullWidth
+            autoFocus
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleRenameCancel} disabled={isRenaming}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRenameConfirm}
+            variant="contained"
+            disabled={isRenaming || !newDeviceName.trim()}
+          >
+            {isRenaming ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
         <DialogTitle>Remove MFA Device</DialogTitle>
@@ -436,38 +539,68 @@ export default function MFADevicesPage() {
                   justifyContent: 'center',
                   mb: 2,
                   p: 2,
-                  bgcolor: 'white',
                   borderRadius: 1,
+                  position: 'relative',
                 }}
               >
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpSetup.provisioningUri)}`}
+                <Box
+                  component="img"
+                  src={totpSetup.qrCode}
                   alt="QR Code"
                   style={{ width: 200, height: 200 }}
+                  onClick={() => setQrEnlarged(true)}
+                  sx={{
+                    cursor: 'pointer',
+                  }}
                 />
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 Manual entry key:
               </Typography>
-              <Typography
-                variant="body2"
+              <Box
                 sx={{
-                  fontFamily: 'monospace',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
                   bgcolor: 'action.hover',
                   p: 1,
                   borderRadius: 1,
                   mb: 2,
-                  wordBreak: 'break-all',
                 }}
               >
-                {totpSetup.seed}
-              </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontFamily: 'monospace',
+                    wordBreak: 'break-all',
+                    flex: 1,
+                  }}
+                >
+                  {totpSetup.seed}
+                </Typography>
+                <Tooltip title="Copy to clipboard" arrow placement="left">
+                  <IconButton
+                    size="small"
+                    onClick={() => navigator.clipboard.writeText(totpSetup.seed)}
+                  >
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <TextField
+                label="Device Nickname"
+                value={deviceNickname}
+                onChange={(e) => setDeviceNickname(e.target.value)}
+                fullWidth
+                placeholder="e.g., Work Phone, Personal"
+                helperText="Optional - helps identify this device later"
+                sx={{ mb: 2 }}
+              />
               <TextField
                 label="Verification Code"
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value)}
                 fullWidth
-                autoFocus
                 inputProps={{ maxLength: 6, inputMode: 'numeric', pattern: '[0-9]*' }}
                 helperText="Enter the 6-digit code from your authenticator app"
               />
@@ -487,6 +620,15 @@ export default function MFADevicesPage() {
                 autoFocus
                 placeholder="+1234567890"
                 helperText="Enter in international format (e.g., +1234567890)"
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                label="Device Nickname"
+                value={deviceNickname}
+                onChange={(e) => setDeviceNickname(e.target.value)}
+                fullWidth
+                placeholder="e.g., Work Phone, Personal"
+                helperText="Optional - helps identify this device later"
               />
             </Box>
           )}
@@ -541,6 +683,28 @@ export default function MFADevicesPage() {
           )}
         </DialogActions>
       </Dialog>
+
+      {/* Enlarged QR Code Dialog */}
+      <Dialog open={qrEnlarged} onClose={() => setQrEnlarged(false)} maxWidth="md">
+        <DialogContent sx={{ p: 2, bgcolor: 'white' }}>
+          <IconButton onClick={() => setQrEnlarged(false)} sx={{
+            position: 'absolute',
+            top: 2,
+            right: 2,
+            color: 'grey.500', '&:hover': { color: 'grey.700' }
+          }}>
+            <CloseIcon />
+          </IconButton>
+          {totpSetup && (
+            <Box
+              component="img"
+              src={totpSetup.qrCode}
+              alt="QR Code"
+              style={{ width: '100%', maxWidth: 600, height: 'auto' }}
+            />
+          )}
+        </DialogContent>
+      </Dialog >
     </>
   )
 }

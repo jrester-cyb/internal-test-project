@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material'
 import { Link } from 'react-router-dom'
 import { useUser } from '../contexts/UserContext'
+import { prefetchSessions } from '../utils/preload'
 
 interface ActivityItem {
   id: string
@@ -161,6 +162,7 @@ export default function ProfilePage() {
             <ListItem
               component={Link}
               to="/profile/security"
+              onMouseEnter={() => prefetchSessions(user.id)}
               sx={{
                 borderRadius: 1,
                 '&:hover': { bgcolor: 'action.hover' },
