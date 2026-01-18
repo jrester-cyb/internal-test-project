@@ -5,7 +5,7 @@ import type { Asset, AssetTypeAttribute } from '@app/types'
 import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
 import TagsDisplay from '@app/components/TagsDisplay'
-import VirtualizedList from '@app/components/VirtualizedList'
+import InfiniteLoaderList from '@app/components/InfiniteLoaderList'
 import CollapsibleCard from '@app/components/CollapsibleCard'
 
 interface AttributesCardProps {
@@ -283,7 +283,7 @@ function AttributesListContent({
   const hasActiveFilters = selectedTags.length > 0 || selectedTypes.length > 0 || excludedScopes.length > 0
 
   // When loading and no data yet, show placeholder rows
-  // Use a reasonable default count so VirtualizedList shows skeletons
+  // Use a reasonable default count so InfiniteLoaderList shows skeletons
   const displayCount = hasActiveFilters
     ? filteredCount
     : (totalAttributeCount > 0 ? totalAttributeCount : (isLoading ? 5 : 0))
@@ -300,7 +300,7 @@ function AttributesListContent({
   }
 
   return (
-    <VirtualizedList
+    <InfiniteLoaderList
       items={hasActiveFilters ? filteredMap : attributesMap}
       totalCount={displayCount}
       getItemKey={getItemKey}

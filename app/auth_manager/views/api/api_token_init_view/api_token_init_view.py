@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 # local
 from auth_manager.jwt_utils import create_tokens_for_user, set_jwt_cookies
 from auth_manager.models.one_time_token import OneTimeToken
+from auth_manager.models.user_session import UserSession
 from users_manager.serializers import UserSerializer
 
 # thirdparty
@@ -45,5 +46,8 @@ class APITokenInitView(APIView):
 
         # Also set cookies in case this is called from a web context
         set_jwt_cookies(response, access_token, refresh_token)
+
+        # Create session record for tracking (for mobile/API clients)
+        UserSession.objects.create_from_request(user, request)
 
         return response

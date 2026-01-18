@@ -19,6 +19,7 @@ __all__ = [
     "TokenLogoutView",
     "MFADeviceViewSet",
     "UserMFADevicesView",
+    "UserSessionsViewSet",
 ]
 
 from .api import (
@@ -31,6 +32,7 @@ from .api import (
     TokenLogoutView,
     MFADeviceViewSet,
     UserMFADevicesView,
+    UserSessionsViewSet,
 )
 from .authentication_views import (
     LoginInitView,

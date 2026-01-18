@@ -15,7 +15,7 @@ import {
 import { FilterList as FilterListIcon } from '@mui/icons-material'
 import { ChevronRight as ChevronRightIcon } from '@mui/icons-material'
 import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues, type AttributeValuesResponse } from '@app/api/assets'
-import VirtualizedList from '@app/components/VirtualizedList'
+import InfiniteLoaderList from '@app/components/InfiniteLoaderList'
 import SearchableVirtualList from '@app/components/SearchableVirtualList'
 import CopyableText from '@app/components/CopyableText'
 import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
@@ -960,7 +960,7 @@ export default function FilterBuilder({
                   }
 
                   return (
-                    <VirtualizedList
+                    <InfiniteLoaderList
                       items={filteredItems}
                       totalCount={filteredTotalCount}
                       getItemKey={(value, index) => `value-${index}-${String(value)}`}

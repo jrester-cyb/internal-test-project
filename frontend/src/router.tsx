@@ -20,6 +20,9 @@ const OrganizationLayout = lazy(() => import('./pages/OrganizationLayout.tsx'))
 const LandingPage = lazy(() => import('./pages/LandingPage.tsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.tsx'))
 const SecuritySettingsPage = lazy(() => import('./pages/SecuritySettingsPage.tsx'))
+const SessionsPage = lazy(() => import('./pages/security/SessionsPage.tsx'))
+const MFADevicesPage = lazy(() => import('./pages/security/MFADevicesPage.tsx'))
+const PasswordPage = lazy(() => import('./pages/security/PasswordPage.tsx'))
 
 // Helper to create a lazy loader that caches the imported function after first load
 // First call: async import -> cache -> call loader
@@ -239,6 +242,24 @@ export const router = createBrowserRouter([
             handle: {
               crumb: "Security",
             },
+            children: [
+              {
+                index: true,
+                element: <Navigate to="sessions" replace />,
+              },
+              {
+                path: "sessions",
+                element: <SessionsPage />,
+              },
+              {
+                path: "mfa",
+                element: <MFADevicesPage />,
+              },
+              {
+                path: "password",
+                element: <PasswordPage />,
+              },
+            ],
           },
         ],
       },

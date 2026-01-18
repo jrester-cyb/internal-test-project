@@ -10,6 +10,7 @@ from django.views import View
 # local
 from auth_manager.jwt_utils import create_tokens_for_user, set_jwt_cookies
 from auth_manager.models.one_time_token import OneTimeToken
+from auth_manager.models.user_session import UserSession
 from auth_manager.views.shortcuts import login_error_page
 
 
@@ -84,5 +85,8 @@ class LoginFinalizeView(View):
         access_token, refresh_token = create_tokens_for_user(self.user)
         response = HttpResponseRedirect(redirect_to_uri or "/")
         set_jwt_cookies(response, access_token, refresh_token)
+
+        # Create session record for tracking
+        UserSession.objects.create_from_request(self.user, request)
 
         return response

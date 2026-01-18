@@ -10,6 +10,7 @@ from auth_manager.views import (
     TokenLogoutView,
     TokenRefreshView,
     UserMFADevicesView,
+    UserSessionsViewSet,
     WhoAmIView,
 )
 
@@ -31,6 +32,15 @@ mfa_router.register(
     basename="multifactor-auth-devices",
 )
 
+# Nested router for sessions under users
+# Creates URLs like: /api/auth/v2/users/{user_id}/sessions/
+sessions_router = nested_routers.SimpleRouter()
+sessions_router.register(
+    r"users/(?P<user_id>[^/.]+)/sessions",
+    UserSessionsViewSet,
+    basename="user-sessions",
+)
+
 urlpatterns = [
     # DRF/SSO API only
     path("idp/", include(router.urls)),
@@ -42,6 +52,8 @@ urlpatterns = [
     # MFA device endpoints
     path("", include(mfa_router.urls)),
     path("mfa-devices/", UserMFADevicesView.as_view(), name="user-mfa-devices"),
+    # User sessions endpoints
+    path("", include(sessions_router.urls)),
     # Password reset
     path(
         "password/reset/",

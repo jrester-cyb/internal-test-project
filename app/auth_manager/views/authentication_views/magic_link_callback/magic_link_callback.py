@@ -10,6 +10,7 @@ from django.views.generic import TemplateView
 
 # local
 from auth_manager.models.one_time_token import OneTimeToken
+from auth_manager.models.user_session import UserSession
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,9 @@ class MagicLinkCallbackView(TemplateView):
 
         # Log the user in
         login(request, user)
+
+        # Create session record for tracking
+        UserSession.objects.create_from_request(user, request)
 
         # Redirect to the top page
         return redirect("/")

@@ -14,7 +14,7 @@ const DefaultLoadingPlaceholder = (
   </Box>
 )
 
-export interface VirtualizedListProps<T> {
+export interface InfiniteLoaderListProps<T> {
   /** Map of index to item for sparse data */
   items: Map<number, T>
   /** Unique key extractor for each item */
@@ -58,7 +58,7 @@ interface ListHandle {
   resetAfterIndex: (index: number, shouldForceUpdate?: boolean) => void
 }
 
-export default function VirtualizedList<T>({
+export default function InfiniteLoaderList<T>({
   items,
   getItemKey,
   renderItem,
@@ -77,7 +77,7 @@ export default function VirtualizedList<T>({
   className,
   padding = 0,
   loadingPlaceholder,
-}: VirtualizedListProps<T>) {
+}: InfiniteLoaderListProps<T>) {
   const listRef = useRef<List>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   const itemHeights = useRef<Map<number, number>>(new Map())
@@ -359,4 +359,4 @@ export default function VirtualizedList<T>({
 }
 
 // Export the handle type for consumers who want to control the list
-export type { ListHandle as VirtualizedListHandle }
+export type { ListHandle as InfiniteLoaderListHandle }

@@ -4,7 +4,7 @@ import { Box, Skeleton, Chip, IconButton, List, ListItem, ListItemText, ListItem
 import { LocationOn as LocationIcon, OpenInNew as OpenInNewIcon, Place as PlaceIcon, Layers as LayersIcon, MyLocation as ZoomIcon, Share as ShareIcon } from '@mui/icons-material'
 import type { Asset, Cluster } from '@app/types'
 import CopyableText from '@app/components/CopyableText'
-import VirtualizedList from '@app/components/VirtualizedList'
+import InfiniteLoaderList from '@app/components/InfiniteLoaderList'
 
 export interface ClusterContentProps {
   organizationId: string
@@ -33,10 +33,10 @@ export default function ClusterContent({
   onZoomToAsset,
   onLoadRange,
 }: ClusterContentProps) {
-  // Memoize callbacks to prevent VirtualizedList from re-rendering
+  // Memoize callbacks to prevent InfiniteLoaderList from re-rendering
   const getItemKey = useCallback((asset: Asset) => asset.id, [])
 
-  // Memoize the loading placeholder to prevent VirtualizedList re-renders
+  // Memoize the loading placeholder to prevent InfiniteLoaderList re-renders
   const loadingPlaceholder = useMemo(() => (
     <ListItem disablePadding>
       <ListItemButton sx={{ py: 1.5, pr: onZoomToAsset ? 10 : 6 }}>
@@ -166,7 +166,7 @@ export default function ClusterContent({
               ))}
             </List>
           ) : (
-            <VirtualizedList
+            <InfiniteLoaderList
               items={assets}
               getItemKey={getItemKey}
               estimatedItemHeight={72}
