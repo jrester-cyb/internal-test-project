@@ -17,6 +17,7 @@ __all__ = [
     "RequestMagicLinkAPIView",
     "TokenRefreshView",
     "TokenLogoutView",
+    "MFADeviceViewSet",
 ]
 
 from .api import (
@@ -27,6 +28,7 @@ from .api import (
     RequestMagicLinkAPIView,
     TokenRefreshView,
     TokenLogoutView,
+    MFADeviceViewSet,
 )
 from .authentication_views import (
     LoginInitView,

@@ -43,21 +43,17 @@ class MFAView(TemplateView):
         context = super().get_context_data(**kwargs)
         devices = self.user.user_multifactor_auth_devices.exclude(verified=False)
         device_list = []
+
+        # Base URL for MFA device API endpoints
+        base_url = f"/api/auth/users/{self.user.global_id}/mfa-devices"
+
         for device in devices:
             device_dict = {
                 "name": device.device_type,
                 "value": device.device_type,
                 "global_id": device.global_id,
-                "request_notification_endpoint": reverse(
-                    "multifactor-auth-devices-request-device-notification",
-                    args=(self.user.global_id, device.global_id),
-                    request=self.request,
-                ),
-                "verify_endpoint": reverse(
-                    "multifactor-auth-devices-verify-device-code",
-                    args=(self.user.global_id, device.global_id),
-                    request=self.request,
-                ),
+                "request_notification_endpoint": f"{base_url}/{device.global_id}/request-notification/",
+                "verify_endpoint": f"{base_url}/{device.global_id}/verify/",
             }
             if device.device_type.lower() == "email":
                 device_dict["email"] = device.user.email
@@ -66,10 +62,10 @@ class MFAView(TemplateView):
 
             device_list.append(device_dict)
 
-        # Build finalize URL with token
+        # Build finalize URL with token (will be updated after MFA verification)
         finalize_url = f"{reverse('auth-manager:finalize')}?t={self.token}"
         context["mfa_finalize_endpoint"] = finalize_url
         context["devices"] = device_list
         context["email"] = self.user.email
-        context["auth_token"] = self.token  # Pass token to template for hidden field
+        context["auth_token"] = self.token  # Pass token to template for API calls
         return context

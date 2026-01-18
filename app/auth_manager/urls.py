@@ -5,6 +5,7 @@ from django.urls import include, path
 from auth_manager.views import (
     APITokenInitView,
     IdentityProviderViewSet,
+    MFADeviceViewSet,
     ResetPasswordRequestTokenOverride,
     TokenLogoutView,
     TokenRefreshView,
@@ -13,11 +14,21 @@ from auth_manager.views import (
 
 # thirdparty
 from rest_framework.routers import DefaultRouter
+from rest_framework_nested import routers as nested_routers
 
 app_name = "auth-manager-api"
 
 router = DefaultRouter()
 router.register(r"", IdentityProviderViewSet, basename="identity-provider")
+
+# Nested router for MFA devices under users
+# Creates URLs like: /api/auth/users/{user_global_id}/mfa-devices/{device_global_id}/verify/
+mfa_router = nested_routers.SimpleRouter()
+mfa_router.register(
+    r"users/(?P<user_global_id>[^/.]+)/mfa-devices",
+    MFADeviceViewSet,
+    basename="multifactor-auth-devices",
+)
 
 urlpatterns = [
     # DRF/SSO API only
@@ -27,6 +38,8 @@ urlpatterns = [
     path("token/login/", APITokenInitView.as_view(), name="token-login"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("token/logout/", TokenLogoutView.as_view(), name="token-logout"),
+    # MFA device endpoints
+    path("", include(mfa_router.urls)),
     # Password reset
     path("password/reset/", ResetPasswordRequestTokenOverride.as_view(), name="reset-password-request"),
 ]

@@ -45,6 +45,9 @@ class MFAEnrollView(TemplateView):
         # Sort so TOTP (Authenticator App) is always first
         available_devices = sorted(available_devices, key=lambda d: 0 if d.device_type.upper() == "TOTP" else 1)
 
+        # Base URL for MFA device API endpoints
+        base_url = f"/api/auth/users/{self.user.global_id}/mfa-devices"
+
         # Attach device-specific endpoints to each device
         device_list = []
         for device in available_devices:
@@ -52,21 +55,9 @@ class MFAEnrollView(TemplateView):
                 "name": device.device_type,
                 "value": device.device_type,
                 "global_id": device.global_id,
-                "request_notification_endpoint": reverse(
-                    "multifactor-auth-devices-request-device-notification",
-                    args=(self.user.global_id, device.global_id),
-                    request=self.request,
-                ),
-                "verify_endpoint": reverse(
-                    "multifactor-auth-devices-enroll_device",
-                    args=(self.user.global_id, device.global_id),
-                    request=self.request,
-                ),
-                "update_endpoint": reverse(
-                    "multifactor-auth-devices-detail",
-                    args=(self.user.global_id, device.global_id),
-                    request=self.request,
-                ),
+                "request_notification_endpoint": f"{base_url}/{device.global_id}/request-notification/",
+                "verify_endpoint": f"{base_url}/{device.global_id}/enroll/",
+                "update_endpoint": f"{base_url}/{device.global_id}/",
             }
             if device.device_type == "TOTP":
                 # thirdparty
@@ -81,15 +72,13 @@ class MFAEnrollView(TemplateView):
 
             device_list.append(device_dict)
 
-        # Build finalize URL with token
+        # Build finalize URL with token (will be updated after MFA verification)
         finalize_url = f"{reverse('auth-manager:finalize')}?t={self.token}"
 
         context["available_device_types"] = device_list
         context["mfa_required"] = getattr(self.user, "mfa_required", True)
         context["mfa_finalize_endpoint"] = finalize_url
         context["email"] = self.user.email
-        context["skip_device_code_endpoint"] = reverse(
-            "multifactor-auth-devices-skip-device-code", args=(self.user.global_id,), request=self.request
-        )
-        context["auth_token"] = self.token  # Pass token to template for hidden field
+        context["skip_device_code_endpoint"] = f"{base_url}/skip/"
+        context["auth_token"] = self.token  # Pass token to template for API calls
         return context
