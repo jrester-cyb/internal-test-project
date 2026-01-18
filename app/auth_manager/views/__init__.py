@@ -18,6 +18,11 @@ __all__ = [
     "TokenRefreshView",
     "TokenLogoutView",
     "MFADeviceViewSet",
+    "MFAEnrollmentSetupView",
+    "MFAEnrollSMSInitiateView",
+    "MFAEnrollSMSVerifyView",
+    "MFAEnrollTOTPView",
+    "UserMFADeviceDetailView",
     "UserMFADevicesView",
     "UserSessionsViewSet",
 ]
@@ -31,6 +36,11 @@ from .api import (
     TokenRefreshView,
     TokenLogoutView,
     MFADeviceViewSet,
+    MFAEnrollmentSetupView,
+    MFAEnrollSMSInitiateView,
+    MFAEnrollSMSVerifyView,
+    MFAEnrollTOTPView,
+    UserMFADeviceDetailView,
     UserMFADevicesView,
     UserSessionsViewSet,
 )

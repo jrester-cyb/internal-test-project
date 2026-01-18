@@ -6,9 +6,14 @@ from auth_manager.views import (
     APITokenInitView,
     IdentityProviderViewSet,
     MFADeviceViewSet,
+    MFAEnrollmentSetupView,
+    MFAEnrollSMSInitiateView,
+    MFAEnrollSMSVerifyView,
+    MFAEnrollTOTPView,
     ResetPasswordRequestTokenOverride,
     TokenLogoutView,
     TokenRefreshView,
+    UserMFADeviceDetailView,
     UserMFADevicesView,
     UserSessionsViewSet,
     WhoAmIView,
@@ -52,6 +57,32 @@ urlpatterns = [
     # MFA device endpoints
     path("", include(mfa_router.urls)),
     path("mfa-devices/", UserMFADevicesView.as_view(), name="user-mfa-devices"),
+    path(
+        "mfa-devices/<uuid:device_id>/",
+        UserMFADeviceDetailView.as_view(),
+        name="user-mfa-device-detail",
+    ),
+    # MFA enrollment endpoints (for authenticated users)
+    path(
+        "mfa-devices/enroll/setup/",
+        MFAEnrollmentSetupView.as_view(),
+        name="mfa-enroll-setup",
+    ),
+    path(
+        "mfa-devices/enroll/totp/",
+        MFAEnrollTOTPView.as_view(),
+        name="mfa-enroll-totp",
+    ),
+    path(
+        "mfa-devices/enroll/sms/initiate/",
+        MFAEnrollSMSInitiateView.as_view(),
+        name="mfa-enroll-sms-initiate",
+    ),
+    path(
+        "mfa-devices/enroll/sms/verify/",
+        MFAEnrollSMSVerifyView.as_view(),
+        name="mfa-enroll-sms-verify",
+    ),
     # User sessions endpoints
     path("", include(sessions_router.urls)),
     # Password reset

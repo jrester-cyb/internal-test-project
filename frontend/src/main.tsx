@@ -1,18 +1,20 @@
 // Boot loader: minimal public entry that confirms auth before importing the full app
 
-async function checkAuth(): Promise<boolean> {
+import type { UserProfile } from './contexts/UserContext'
+
+async function checkAuth(): Promise<UserProfile | null> {
   try {
     const res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
     if (!res.ok) {
       // Not authenticated, redirect to login page
       window.location.href = '/auth/login/?redirect_uri=' + encodeURIComponent(window.location.pathname)
-      return false
+      return null
     }
-    return true
+    return res.json()
   } catch {
     // Network error, redirect to login page
     window.location.href = '/auth/login/'
-    return false
+    return null
   }
 }
 
@@ -43,13 +45,16 @@ const spinnerSvg = `
 root.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:rgba(255,255,255,0.87);gap:10px">${spinnerSvg}<span>${randomMessage}</span></div>`
 
   ; (async () => {
+    let user: UserProfile | null = null
     try {
-      const authed = await checkAuth()
-        ; (window as any).__AUTH__ = { authed }
+      user = await checkAuth()
+        ; (window as any).__AUTH__ = { authed: !!user, user }
     } catch (e) {
-      ; (window as any).__AUTH__ = { authed: false }
+      ; (window as any).__AUTH__ = { authed: false, user: null }
     }
 
-    const m = await import('./mainApp')
-    m.mountApp()
+    if (user) {
+      const m = await import('./mainApp')
+      m.mountApp(user)
+    }
   })()

@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Typography,
   Paper,
   Box,
   Avatar,
   Divider,
-  CircularProgress,
   List,
   ListItem,
   ListItemIcon,
@@ -24,16 +23,8 @@ import {
   Edit as EditIcon,
   History as HistoryIcon,
 } from '@mui/icons-material'
-import { useNavigate, Link } from 'react-router-dom'
-
-interface UserProfile {
-  id: string
-  email: string
-  first_name: string
-  last_name: string
-  username: string
-  job_title?: string
-}
+import { Link } from 'react-router-dom'
+import { useUser } from '../contexts/UserContext'
 
 interface ActivityItem {
   id: string
@@ -43,9 +34,7 @@ interface ActivityItem {
 }
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
+  const { user } = useUser()
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -62,27 +51,10 @@ export default function ProfilePage() {
     { id: '5', action: 'Added MFA device', timestamp: new Date(Date.now() - 345600000).toISOString(), details: 'Authenticator App' },
   ])
 
-  useEffect(() => {
-    async function fetchProfile() {
-      try {
-        const response = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
-        if (!response.ok) throw new Error('Failed to fetch profile')
-        const data = await response.json()
-        setProfile(data)
-      } catch (err) {
-        console.error('Failed to load profile', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProfile()
-  }, [])
-
   const handleOpenEditDialog = () => {
     setEditFormData({
-      first_name: profile?.first_name || '',
-      last_name: profile?.last_name || '',
+      first_name: user.firstName || '',
+      last_name: user.lastName || '',
     })
     setEditError(null)
     setEditDialogOpen(true)
@@ -109,8 +81,7 @@ export default function ProfilePage() {
         body: JSON.stringify(editFormData),
       })
       if (!response.ok) throw new Error('Failed to update profile')
-      const updatedProfile = await response.json()
-      setProfile(updatedProfile)
+      // TODO: Update user context with new profile data
       setEditDialogOpen(false)
     } catch (err) {
       setEditError('Failed to update profile')
@@ -134,17 +105,9 @@ export default function ProfilePage() {
     return date.toLocaleDateString()
   }
 
-  if (loading) {
-    return (
-      <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <CircularProgress />
-      </Box>
-    )
-  }
-
-  const displayName = profile?.first_name || profile?.last_name
-    ? `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim()
-    : profile?.username || 'User'
+  const displayName = user.firstName || user.lastName
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+    : user.email || 'User'
 
   return (
     <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
@@ -167,13 +130,8 @@ export default function ProfilePage() {
             <Typography variant="h6" align="center">
               {displayName}
             </Typography>
-            {profile?.job_title && (
-              <Typography variant="body2" color="text.secondary" align="center">
-                {profile.job_title}
-              </Typography>
-            )}
             <Typography variant="body2" color="text.secondary" align="center">
-              {profile?.email}
+              {user.email}
             </Typography>
           </Box>
 
@@ -283,17 +241,10 @@ export default function ProfilePage() {
           <Stack spacing={3} sx={{ mt: 1 }}>
             <TextField
               label="Email"
-              value={profile?.email || ''}
+              value={user.email}
               disabled
               fullWidth
               helperText="Email cannot be changed"
-            />
-            <TextField
-              label="Username"
-              value={profile?.username || ''}
-              disabled
-              fullWidth
-              helperText="Username cannot be changed"
             />
             <TextField
               label="First Name"

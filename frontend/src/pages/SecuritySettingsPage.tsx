@@ -1,18 +1,13 @@
-import { useCallback } from 'react'
-import {
-  Paper,
-  Box,
-  Tabs,
-  Tab,
-  Container,
-} from '@mui/material'
-import { Link, useLocation, Outlet, useLoaderData } from 'react-router-dom'
+import { useCallback, useMemo } from 'react'
+import { Paper, Box, Container } from '@mui/material'
+import { useLocation, Outlet, useLoaderData } from 'react-router-dom'
 import type { SecurityLayoutLoaderData } from '../loaders/security'
 import {
   prefetchSessions,
   prefetchMfaDevices,
   prefetchPassword,
 } from '../utils/preload'
+import NavTabBar, { type NavTab } from '../components/NavTabBar'
 
 // Map path to tab index
 const getTabFromPath = (pathname: string): number => {
@@ -31,53 +26,37 @@ export default function SecuritySettingsPage() {
     prefetchSessions(userId)
   }, [userId])
 
-  return (
-    <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-      <Container maxWidth={false} disableGutters>
-        {/* Tab Bar */}
-        <Box
-          sx={{
-            bgcolor: 'primary.main',
-            color: 'primary.contrastText',
-            borderRadius: '8px 8px 0 0',
-            '& .MuiTabs-indicator': {
-              bgcolor: 'secondary.main',
-            },
-            '& .MuiTab-root': {
-              color: 'rgba(255, 255, 255, 0.7)',
-              '&.Mui-selected': {
-                color: '#ffffff',
-              },
-            },
-          }}
-        >
-          <Tabs value={currentTab} textColor="inherit">
-            <Tab
-              label="Sessions"
-              component={Link}
-              to="/profile/security/sessions"
-              onMouseEnter={handlePrefetchSessions}
-            />
-            <Tab
-              label="MFA Devices"
-              component={Link}
-              to="/profile/security/mfa"
-              onMouseEnter={prefetchMfaDevices}
-            />
-            <Tab
-              label="Password"
-              component={Link}
-              to="/profile/security/password"
-              onMouseEnter={prefetchPassword}
-            />
-          </Tabs>
-        </Box>
+  const tabs: NavTab[] = useMemo(
+    () => [
+      {
+        label: 'Sessions',
+        to: '/profile/security/sessions',
+        onMouseEnter: handlePrefetchSessions,
+      },
+      {
+        label: 'MFA Devices',
+        to: '/profile/security/mfa',
+        onMouseEnter: prefetchMfaDevices,
+      },
+      {
+        label: 'Password',
+        to: '/profile/security/password',
+        onMouseEnter: prefetchPassword,
+      },
+    ],
+    [handlePrefetchSessions]
+  )
 
-        {/* Content */}
-        <Paper sx={{ p: 3, borderRadius: '0 0 8px 8px' }}>
+  return (
+    <Container maxWidth={false} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <NavTabBar tabs={tabs} currentTab={currentTab} />
+
+      {/* Content */}
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', mt: 2 }}>
+        <Paper sx={{ p: 3, borderRadius: 1 }}>
           <Outlet context={{ userId }} />
         </Paper>
-      </Container>
-    </Box>
+      </Box>
+    </Container>
   )
 }

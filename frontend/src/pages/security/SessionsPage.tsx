@@ -172,7 +172,7 @@ export default function SessionsPage() {
   )
 
   return (
-    <>
+    <Box sx={{ p: 3, flexGrow: 1 }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         These are the devices currently logged into your account. You can revoke access to any session.
       </Typography>
@@ -192,6 +192,6 @@ export default function SessionsPage() {
           loadingPlaceholder={sessionLoadingPlaceholder}
         />
       </Box>
-    </>
+    </Box>
   )
 }

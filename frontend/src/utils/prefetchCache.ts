@@ -99,4 +99,5 @@ export const cacheKeys = {
   // Security pages
   sessions: (userId: string) => `sessions:${userId}`,
   mfaDevices: () => `mfaDevices`,
+  whoami: () => `whoami`,
 }
