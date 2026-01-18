@@ -825,15 +825,22 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         description="Returns the parent asset (if any), sibling assets, and all child assets for the specified asset. Each related asset includes a 'relatedUrl' to fetch its own relationships.",
     )
     @action(detail=True, methods=["get"])
-    def related(self, request, workspace_pk=None, assettype_pk=None, pk=None):
+    def related(
+        self, request, workspace_pk=None, assettype_pk=None, organization_pk=None, pk=None
+    ):
         """Get related assets (parent, siblings, and children) for an asset"""
         asset = self.get_object()
 
         def build_related_url(asset_id):
             """Build the URL to fetch related assets for a given asset"""
-            return request.build_absolute_uri(
-                f"/api/workspaces/{workspace_pk}/assets/{asset_id}/related/"
-            )
+            if workspace_pk:
+                return request.build_absolute_uri(
+                    f"/api/workspaces/{workspace_pk}/assets/{asset_id}/related/"
+                )
+            else:
+                return request.build_absolute_uri(
+                    f"/api/organizations/{organization_pk}/assets/{asset_id}/related/"
+                )
 
         def serialize_asset(a):
             """Serialize an asset for the response"""

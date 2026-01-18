@@ -62,7 +62,7 @@ export default function AssetDetailPage() {
 
   // Fetch related assets
   useEffect(() => {
-    if (organizationId && workspaceId && asset.id) {
+    if (organizationId && asset.id) {
       setRelatedLoading(true)
       setRelatedError(null)
       fetchRelatedAssets(organizationId, workspaceId, asset.id)
