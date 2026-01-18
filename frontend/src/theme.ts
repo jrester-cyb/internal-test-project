@@ -22,21 +22,6 @@ const sharedComponents: Components<Theme> = {
       }),
     },
   },
-  MuiOutlinedInput: {
-    styleOverrides: {
-      root: ({ theme }) => ({
-        '& .MuiOutlinedInput-notchedOutline': {
-          borderColor: 'rgba(255, 255, 255, 0.23)',
-        },
-        '&:hover .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.primary.light,
-        },
-        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.primary.light,
-        },
-      }),
-    },
-  },
   MuiInputLabel: {
     styleOverrides: {
       root: ({ theme }) => ({
@@ -148,7 +133,13 @@ export const lightTheme = createTheme({
       secondary: '#757575',
     },
   },
-  components: sharedComponents,
+  components: {...sharedComponents,   MuiCircularProgress: {
+    styleOverrides: {
+      colorPrimary: ({ theme }) => ({
+        color: theme.palette.primary,
+      }),
+    },
+  },}
 })
 
 export const darkTheme = createTheme({
@@ -197,6 +188,13 @@ export const darkTheme = createTheme({
           color: theme.palette.secondary.light,
           textDecorationColor: theme.palette.secondary.light,
         },
+      }),
+    },
+  },
+  MuiCircularProgress: {
+    styleOverrides: {
+      colorPrimary: ({ theme }) => ({
+        color: theme.palette.secondary,
       }),
     },
   },

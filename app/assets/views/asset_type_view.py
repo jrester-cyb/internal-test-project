@@ -12,6 +12,7 @@ from ..serializers import (
     WorkspaceAssetTypeWriteSerializer,
 )
 from workspaces.models import Workspace
+from django.db.models import Count
 
 
 @extend_schema_view(
@@ -75,6 +76,10 @@ class AssetTypeViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         "hidden_attribute__workspacelocalassettypeattribute",
                         "hidden_attribute__workspaceoverrideassettypeattribute",
                     ),
+                )
+            ).annotate(
+                _workspace_count=Count(
+                    "workspace_asset_types__workspace", distinct=True
                 )
             )
 

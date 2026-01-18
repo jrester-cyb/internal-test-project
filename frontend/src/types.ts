@@ -23,7 +23,11 @@ export interface AssetType {
   organizationName?: string
   createdAt?: string
   updatedAt?: string
+  apiUrl: string
+  workspaceCount: number
 }
+
+export interface AssetTypeSummary extends Omit<AssetType, 'workspaceCount'> {}
 
 export interface AssetTypeAttributeChoice {
   id: string

@@ -37,3 +37,15 @@ export function prefetchMap(organizationId: string, workspaceId?: string) {
   // Load JS chunk only - map data depends on viewport which we don't know yet
   preloadMapPage()
 }
+
+export function prefetchAssetTypeDetail(organizationId: string, workspaceId: string | undefined, assetTypeId: string) {
+  // Load JS chunk
+  preloadAssetTypeAboutPage()
+  preloadAssetTypeAttributesPage()
+
+  // Start fetching data
+  const key = cacheKeys.assetTypeDetail(organizationId, workspaceId, assetTypeId)
+  getCachedFetch(key, () => import('../api/assets').then(({ fetchAssetType }) =>
+    fetchAssetType(organizationId, workspaceId, assetTypeId)
+  ))
+}

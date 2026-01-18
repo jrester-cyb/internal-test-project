@@ -13,7 +13,7 @@ import { fetchAssetsByType, updateAsset } from '@app/api/assets'
 import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '@app/components/VirtualizedGrid'
 import ActionButtons from '@app/components/ActionButtons'
-import { useSidebar } from '@app/contexts/SidebarContext'
+import { useLayout } from '@app/contexts/LayoutContext'
 import { useChoices } from '@app/contexts/ChoicesContext'
 
 // Type for tracking pending changes per asset
@@ -33,7 +33,7 @@ export default function AssetGridPage() {
     organizationId: string
   }
 
-  const { isOpen, setIsOpen, isMobile, windowWidth } = useSidebar()
+  const { isMobile, windowWidth } = useLayout()
   const { getChoices, loadChoices, isLoading: isLoadingChoices } = useChoices()
 
   const { assetTypeId } = useParams()

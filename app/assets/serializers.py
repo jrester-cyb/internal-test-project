@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from rest_framework_gis.serializers import GeometryField
 from silk.profiling.profiler import silk_profile
+from django.urls import reverse
+
 from .models import (
     AssetType,
     WorkspaceAssetType,
@@ -210,7 +212,6 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Get URL to the asset-count endpoint."""
         request = self.context.get("request")
         if request:
-            from django.urls import reverse
 
             # Build the URL based on whether we have workspace context
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
@@ -281,7 +282,6 @@ class GlobalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Return the API URL for this attribute based on current request context."""
         request = self.context.get("request")
         if request:
-            from django.urls import reverse
 
             # Check for workspace context first (workspace endpoint)
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
@@ -477,7 +477,6 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Get URL to the asset-count endpoint."""
         request = self.context.get("request")
         if request:
-            from django.urls import reverse
 
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
             organization_pk = request.parser_context.get("kwargs", {}).get(
@@ -526,7 +525,6 @@ class WorkspaceLocalAssetTypeAttributeSerializer(serializers.ModelSerializer):
         """Return the API URL for this attribute based on current request context."""
         request = self.context.get("request")
         if request:
-            from django.urls import reverse
 
             workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
             organization_id = request.parser_context.get("kwargs", {}).get(
@@ -688,7 +686,8 @@ class AssetTypeSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(
         source="organization.name", read_only=True
     )
-    # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
+    api_url = serializers.SerializerMethodField()
+    workspace_count = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetType
@@ -697,12 +696,62 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "organization",
             "organization_name",
             "name",
+            "api_url",
             "description",
             "attributes",
             "created_at",
             "updated_at",
+            "workspace_count",
         ]
-        read_only_fields = ["id", "organization", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "organization",
+            "created_at",
+            "updated_at",
+            "workspace_count",
+        ]
+
+    def get_workspace_count(self, obj):
+        """Get the number of workspaces using this asset type."""
+        # Attempt to use annotated count if available
+        annotated_count = getattr(obj, "_workspace_count", None)
+        if annotated_count is not None:
+            return annotated_count
+        # Fallback to counting related workspaces
+        return obj.workspaces.count()
+
+    def get_api_url(self, obj):
+        """Return the API URL for this attribute based on current request context."""
+        request = self.context.get("request")
+
+        if request:
+
+            workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            organization_id = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
+            if workspace_id and organization_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "organization-workspace-assettype-detail",
+                        kwargs={
+                            "organization_pk": organization_id,
+                            "workspace_pk": workspace_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif workspace_id:
+                # Fallback for non-org-nested routes
+                return request.build_absolute_uri(
+                    reverse(
+                        "assettype-detail",
+                        kwargs={
+                            "pk": obj.id,
+                        },
+                    )
+                )
+        return None
 
 
 class AssetTypeSummarySerializer(serializers.ModelSerializer):
@@ -711,12 +760,13 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(
         source="organization.name", read_only=True
     )
-    # Remove asset_count to avoid N+1 queries - can be added back with annotation if needed
+    api_url = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetType
         fields = [
             "id",
+            "api_url",
             "organization",
             "organization_name",
             "name",
@@ -725,6 +775,40 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "organization", "created_at", "updated_at"]
+
+    def get_api_url(self, obj):
+        """Return the API URL for this attribute based on current request context."""
+        request = self.context.get("request")
+
+        if request:
+
+            workspace_id = request.parser_context.get("kwargs", {}).get("workspace_pk")
+            organization_id = request.parser_context.get("kwargs", {}).get(
+                "organization_pk"
+            )
+            if organization_id and workspace_id:
+                return request.build_absolute_uri(
+                    reverse(
+                        "organization-workspace-assettype-detail",
+                        kwargs={
+                            "organization_pk": organization_id,
+                            "workspace_pk": workspace_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+            elif organization_id and not workspace_id:
+                # Fallback for non-org-nested routes
+                return request.build_absolute_uri(
+                    reverse(
+                        "organization-assettype-detail",
+                        kwargs={
+                            "organization_pk": organization_id,
+                            "pk": obj.id,
+                        },
+                    )
+                )
+        return None
 
 
 class WorkspaceAssetTypeSerializer(serializers.ModelSerializer):
@@ -893,7 +977,10 @@ class AssetSerializer(serializers.ModelSerializer):
         from .models import WorkspaceAttributeValueOverride
 
         # Use batch-loaded data if available, otherwise query
-        if all_override_ids_by_asset is not None and workspace_overrides_by_asset is not None:
+        if (
+            all_override_ids_by_asset is not None
+            and workspace_overrides_by_asset is not None
+        ):
             # Use pre-loaded override data from context
             all_override_value_ids = all_override_ids_by_asset.get(obj.id, set())
             overrides = workspace_overrides_by_asset.get(obj.id, [])

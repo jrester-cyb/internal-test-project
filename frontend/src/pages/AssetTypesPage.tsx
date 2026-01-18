@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom'
 import {
   Box,
-  Typography,
   TextField,
   InputAdornment,
   Button,
   Paper,
+  Typography,
 } from '@mui/material'
 import {
   Search as SearchIcon,
@@ -15,6 +15,8 @@ import {
 import AssetTypeList from '@app/components/AssetTypeList'
 import { fetchAssetTypes } from '@app/api/assets'
 import type { AssetType } from '@app/types'
+import TruncatedText from '@app/components/TruncatedText'
+import PvDrawer from '@app/components/PvDrawer'
 
 interface LoaderData {
   results: AssetType[]

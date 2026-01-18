@@ -80,4 +80,6 @@ export const cacheKeys = {
 
   assetTypes: (orgId: string, workspaceId?: string) =>
     `assetTypes:${orgId}:${workspaceId || 'global'}`,
+  assetTypeDetail: (orgId: string, workspaceId: string | undefined, assetTypeId: string) =>
+    `assetTypeDetail:${orgId}:${workspaceId || 'global'}:${assetTypeId}`,
 }

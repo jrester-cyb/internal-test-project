@@ -4,7 +4,7 @@ import { organizationsLoader } from './loaders/organizations'
 import { workspacesLoader } from './loaders/workspaces'
 import { initialMapLoader } from './loaders/map'
 import { libraryLoader } from './loaders/library'
-import { assetTypesRouteLoader } from './loaders/assetTypes'
+import { assetTypeDetailRouteLoader, assetTypesRouteLoader } from './loaders/assetTypes'
 
 // Lazy load layout and route components
 const MainLayout = lazy(() => import('./components/MainLayout.tsx'))
@@ -45,10 +45,7 @@ const sharedRoutes = [
       },
       {
         path: ":assetTypeId",
-        loader: async ({ params }) => {
-          const { fetchAssetType } = await import('./api/assets')
-          return fetchAssetType(params.organizationId!, params.workspaceId!, params.assetTypeId!)
-        },
+        loader: assetTypeDetailRouteLoader,
         shouldRevalidate: ({ currentParams, nextParams }) => {
           return currentParams.assetTypeId !== nextParams.assetTypeId
         },
