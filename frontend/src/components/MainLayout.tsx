@@ -54,7 +54,6 @@ function MainLayoutContent() {
 
   return (
     <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
-      <AppBreadcrumbs />
       <PvAppBar />
       <Sidebar />
 
@@ -70,6 +69,9 @@ function MainLayoutContent() {
           transition: 'margin-left 225ms cubic-bezier(0.4, 0, 0.6, 1)',
         }}
       >
+        <Box sx={{ px: 3, pt: 2 }}>
+          <AppBreadcrumbs />
+        </Box>
         {/* Show skeleton when navigating between main sections */}
         {isNavigatingToNewSection && targetPath ? (
           getSkeletonForPath(targetPath)

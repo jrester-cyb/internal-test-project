@@ -120,7 +120,7 @@ export default function AppBreadcrumbs() {
     <Breadcrumbs
       aria-label="breadcrumb"
       separator=">"
-      sx={{ mb: 2, fontSize: '0.875rem' }}
+      sx={{ fontSize: '0.875rem' }}
     >
       {breadcrumbs.map((breadcrumb, index) => {
         const isLast = index === breadcrumbs.length - 1
