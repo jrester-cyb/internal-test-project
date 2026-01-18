@@ -71,3 +71,18 @@ export function prefetchAssetAttributes(organizationId: string, workspaceId: str
   const key = cacheKeys.assetAttributeDefinitions(organizationId, workspaceId, assetTypeId)
   getCachedFetch(key, () => fetchAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId, 1, 25))
 }
+
+export function prefetchAssetDetail(organizationId: string, workspaceId: string | undefined, assetTypeId: string, assetId: string) {
+  // Load JS chunk
+  preloadAssetDetailPage()
+
+  // Start fetching asset data
+  const assetKey = cacheKeys.assetDetail(organizationId, workspaceId, assetId)
+  getCachedFetch(assetKey, () => import('../api/assets').then(({ fetchAsset }) =>
+    fetchAsset(organizationId, workspaceId, assetId)
+  ))
+
+  // Also prefetch attribute definitions (needed for the detail page)
+  const attrsKey = cacheKeys.assetAttributeDefinitionsAll(organizationId, workspaceId, assetTypeId)
+  getCachedFetch(attrsKey, () => fetchAllAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId))
+}

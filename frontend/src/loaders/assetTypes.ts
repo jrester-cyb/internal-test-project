@@ -2,6 +2,7 @@ import {
   fetchAssetType,
   fetchAssetTypes,
   fetchAssetsByType,
+  fetchAsset,
   fetchAssetAttributeDefinitions,
   fetchAllAssetAttributeDefinitions,
   type OffsetPaginatedResponse
@@ -130,5 +131,41 @@ export async function assetAttributesRouteLoader({ params, request }: LoaderFunc
     workspaceId,
     organizationId,
     includeHidden,
+  }
+}
+
+// Asset Detail loader
+export interface AssetDetailLoaderData {
+  asset: Asset
+  attributes: AssetTypeAttribute[]
+  organizationId: string
+  workspaceId: string | undefined
+}
+
+export async function assetDetailRouteLoader({ params }: LoaderFunctionArgs): Promise<AssetDetailLoaderData> {
+  const { organizationId, workspaceId, assetTypeId, assetId } = params
+
+  if (!organizationId || !assetTypeId || !assetId) {
+    throw new Error('Organization ID, Asset Type ID, and Asset ID are required')
+  }
+
+  // Use cache keys for prefetch compatibility
+  const assetKey = cacheKeys.assetDetail(organizationId, workspaceId, assetId)
+  const attrsKey = cacheKeys.assetAttributeDefinitionsAll(organizationId, workspaceId, assetTypeId)
+
+  const [asset, attributes] = await Promise.all([
+    getCachedFetch(assetKey, () =>
+      fetchAsset(organizationId, workspaceId, assetId)
+    ),
+    getCachedFetch(attrsKey, () =>
+      fetchAllAssetAttributeDefinitions(organizationId, workspaceId, assetTypeId)
+    ),
+  ])
+
+  return {
+    asset,
+    attributes,
+    organizationId,
+    workspaceId,
   }
 }

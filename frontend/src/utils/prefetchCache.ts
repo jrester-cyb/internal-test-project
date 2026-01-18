@@ -92,4 +92,7 @@ export const cacheKeys = {
 
   assetAttributeDefinitionsAll: (orgId: string, workspaceId: string | undefined, assetTypeId: string) =>
     `assetAttributeDefinitionsAll:${orgId}:${workspaceId || 'global'}:${assetTypeId}`,
+
+  assetDetail: (orgId: string, workspaceId: string | undefined, assetId: string) =>
+    `assetDetail:${orgId}:${workspaceId || 'global'}:${assetId}`,
 }

@@ -9,6 +9,7 @@ import {
   assetTypesRouteLoader,
   assetGridRouteLoader,
   assetAttributesRouteLoader,
+  assetDetailRouteLoader,
 } from './loaders/assetTypes'
 
 // Lazy load layout and route components
@@ -103,14 +104,7 @@ const sharedRoutes = [
                   crumb: ({ loaderData, crumb }: any) => loaderData?.asset?.name || crumb?.assetName || 'Asset Detail',
                   hideNavbar: true,
                 },
-                loader: async ({ params }) => {
-                  const { fetchAsset, fetchAllAssetAttributeDefinitions } = await import('./api/assets')
-                  const [asset, attributes] = await Promise.all([
-                    fetchAsset(params.organizationId!, params.workspaceId!, params.assetId!),
-                    fetchAllAssetAttributeDefinitions(params.organizationId!, params.workspaceId!, params.assetTypeId!)
-                  ])
-                  return { asset, attributes, organizationId: params.organizationId, workspaceId: params.workspaceId }
-                },
+                loader: assetDetailRouteLoader,
               }
             ]
           },

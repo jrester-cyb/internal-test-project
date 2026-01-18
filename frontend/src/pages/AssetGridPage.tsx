@@ -14,6 +14,7 @@ import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
 import VirtualizedGrid, { type ColumnDefinition, type CellEditorProps } from '@app/components/VirtualizedGrid'
 import ActionButtons from '@app/components/ActionButtons'
 import { useLayout } from '@app/contexts/LayoutContext'
+import { prefetchAssetDetail, prefetchMap } from '@app/utils/preload'
 
 // Type for tracking pending changes per asset
 // Stores name change and/or attribute changes (keyed by apiKey)
@@ -1474,49 +1475,63 @@ export default function AssetGridPage() {
         width: 250,
         minWidth: 180,
         editable: editingEnabled,
-        render: (asset) => (
-          <Box sx={{ px: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Tooltip title="View on Map" arrow placement="right">
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // Open map in new window with asset centered
-                  const coords = asset.location?.coordinates
-                  const basePath = window.location.pathname.replace(/\/asset-types\/.*/, '/map')
-                  if (coords && coords.length >= 2) {
-                    window.open(`${basePath}?lat=${coords[1]}&lng=${coords[0]}&zoom=16&assetId=${asset.id}`, '_blank')
-                  } else {
-                    window.open(`${basePath}?assetId=${asset.id}`, '_blank')
-                  }
-                }}
-                sx={{
-                  p: 0.5,
-                  color: 'text.secondary',
-                  '&:hover': { color: 'primary.main' }
-                }}
-              >
-                <MapIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            {editingEnabled ? (
-              asset.name
-            ) : (
-              <Link
-                component={RouterLink}
-                to={asset.id}
-                underline="hover"
-                state={{
-                  ...location.state,
-                  assetName: asset.name
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {asset.name}
-              </Link>
-            )}
-          </Box>
-        ),
+        render: (asset) => {
+          const handlePrefetchDetail = () => {
+            if (assetTypeId) {
+              prefetchAssetDetail(initialData.organizationId, initialData.workspaceId, assetTypeId, asset.id)
+            }
+          }
+
+          const handlePrefetchMap = () => {
+            prefetchMap(initialData.organizationId, initialData.workspaceId)
+          }
+
+          return (
+            <Box sx={{ px: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Tooltip title="View on Map" arrow placement="right">
+                <IconButton
+                  size="small"
+                  onMouseEnter={handlePrefetchMap}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Open map in new window with asset centered
+                    const coords = asset.location?.coordinates
+                    const basePath = window.location.pathname.replace(/\/asset-types\/.*/, '/map')
+                    if (coords && coords.length >= 2) {
+                      window.open(`${basePath}?lat=${coords[1]}&lng=${coords[0]}&zoom=16&assetId=${asset.id}`, '_blank')
+                    } else {
+                      window.open(`${basePath}?assetId=${asset.id}`, '_blank')
+                    }
+                  }}
+                  sx={{
+                    p: 0.5,
+                    color: 'text.secondary',
+                    '&:hover': { color: 'primary.main' }
+                  }}
+                >
+                  <MapIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              {editingEnabled ? (
+                asset.name
+              ) : (
+                <Link
+                  component={RouterLink}
+                  to={asset.id}
+                  underline="hover"
+                  state={{
+                    ...location.state,
+                    assetName: asset.name
+                  }}
+                  onMouseEnter={handlePrefetchDetail}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {asset.name}
+                </Link>
+              )}
+            </Box>
+          )
+        },
         getCellValue: (asset) => asset.name,
         headerSx: { fontWeight: 600 },
       },
