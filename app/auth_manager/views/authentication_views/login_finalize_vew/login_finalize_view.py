@@ -12,6 +12,7 @@ from auth_manager.jwt_utils import create_tokens_for_user, set_jwt_cookies
 from auth_manager.models.one_time_token import OneTimeToken
 from auth_manager.models.user_session import UserSession
 from auth_manager.views.shortcuts import login_error_page
+from users_manager.permissions.caching import warmup_user_permissions
 
 
 def add_token_to_url(url: str, token: str) -> str:
@@ -83,6 +84,9 @@ class LoginFinalizeView(View):
 
         # Create session record for tracking (before JWT so we can include session_id)
         session = UserSession.objects.create_from_request(self.user, request)
+
+        # Pre-calculate and cache permissions for faster first API request
+        warmup_user_permissions(self.user)
 
         # For web (method="c"), generate JWT and set cookies
         access_token, refresh_token = create_tokens_for_user(self.user, session_id=session.id)

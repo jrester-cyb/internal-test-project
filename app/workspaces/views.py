@@ -3,6 +3,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 from audit_log.mixins import AuditLogMixin
+from users_manager.permissions import permission_cache
 from .models import Workspace
 
 
@@ -52,11 +53,20 @@ class WorkspaceViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        """Filter workspaces to only those the user has access to."""
+        user = self.request.user
+        if not user.is_authenticated:
+            return Workspace.objects.none()
+
+        # Get cached workspace IDs the user has access to
+        accessible_ws_ids = permission_cache.get_user_workspace_ids(user)
+        queryset = Workspace.objects.filter(id__in=accessible_ws_ids)
+
         # Filter by organization from URL if present
         organization_pk = self.kwargs.get("organization_pk")
         if organization_pk:
             queryset = queryset.filter(organization_id=organization_pk)
+
         return queryset
 
     def perform_create(self, serializer):

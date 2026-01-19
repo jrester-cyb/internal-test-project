@@ -135,13 +135,6 @@ class PermissionCache:
 
     def get_user_organization_ids(self, user: "User") -> set[str]:
         """Get all organization IDs the user has access to."""
-        if user.is_superuser:
-            from organizations.models import Organization
-
-            return set(
-                str(oid) for oid in Organization.objects.values_list("id", flat=True)
-            )
-
         cache_key = _user_orgs_key(user.id)
 
         cached = cache.get(cache_key)
@@ -176,13 +169,6 @@ class PermissionCache:
 
     def get_user_workspace_ids(self, user: "User") -> set[str]:
         """Get all workspace IDs the user has access to."""
-        if user.is_superuser:
-            from workspaces.models import Workspace
-
-            return set(
-                str(wid) for wid in Workspace.objects.values_list("id", flat=True)
-            )
-
         cache_key = _user_workspaces_key(user.id)
 
         cached = cache.get(cache_key)
@@ -213,14 +199,10 @@ class PermissionCache:
 
     def has_organization_access(self, user: "User", organization_id) -> bool:
         """Check if user has any access to an organization."""
-        if user.is_superuser:
-            return True
         return str(organization_id) in self.get_user_organization_ids(user)
 
     def has_workspace_access(self, user: "User", workspace_id) -> bool:
         """Check if user has any access to a workspace."""
-        if user.is_superuser:
-            return True
         return str(workspace_id) in self.get_user_workspace_ids(user)
 
     # =========================================================================
@@ -410,6 +392,55 @@ class PermissionCache:
 
 # Global instance
 permission_cache = PermissionCache()
+
+
+def warmup_user_permissions(user: "User") -> None:
+    """
+    Pre-calculate and cache all permissions for a user at login time.
+
+    This eagerly fetches and caches:
+    - List of accessible organization IDs
+    - List of accessible workspace IDs
+    - Permissions for each organization
+    - Permissions for each workspace
+
+    Call this during login finalization to ensure permissions are cached
+    before the user makes their first API request.
+    """
+    if not user or not user.is_authenticated:
+        return
+
+    # Superusers don't need permission caching (they have all permissions)
+    if user.is_superuser:
+        # Just ensure the "all permissions" cache is warmed
+        permission_cache._get_all_permissions()
+        return
+
+    # Get and cache organization IDs (this also caches the list)
+    org_ids = permission_cache.get_user_organization_ids(user)
+
+    # Get and cache workspace IDs (this also caches the list)
+    ws_ids = permission_cache.get_user_workspace_ids(user)
+
+    # Pre-fetch and cache permissions for each organization
+    from organizations.models import Organization
+
+    for org_id in org_ids:
+        try:
+            org = Organization.objects.get(id=org_id)
+            permission_cache.get_organization_permissions(user, org)
+        except Organization.DoesNotExist:
+            continue
+
+    # Pre-fetch and cache permissions for each workspace
+    from workspaces.models import Workspace
+
+    for ws_id in ws_ids:
+        try:
+            ws = Workspace.objects.get(id=ws_id)
+            permission_cache.get_workspace_permissions(user, ws)
+        except Workspace.DoesNotExist:
+            continue
 
 
 # =============================================================================

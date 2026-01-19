@@ -25,6 +25,13 @@ from .caching import (
     get_request_accessible_orgs,
     get_request_accessible_workspaces,
 )
+from .drf_permissions import (
+    IsAuthenticatedWithAccess,
+    IsOrganizationMember,
+    IsWorkspaceMember,
+    HasPermission,
+    make_permission_class,
+)
 
 __all__ = [
     # Registry
@@ -50,4 +57,10 @@ __all__ = [
     "get_request_permissions",
     "get_request_accessible_orgs",
     "get_request_accessible_workspaces",
+    # DRF Permission classes
+    "IsAuthenticatedWithAccess",
+    "IsOrganizationMember",
+    "IsWorkspaceMember",
+    "HasPermission",
+    "make_permission_class",
 ]

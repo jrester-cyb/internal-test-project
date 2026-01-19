@@ -5,6 +5,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 from audit_log.mixins import AuditLogMixin
+from users_manager.permissions import permission_cache
 from .models import Organization, OrganizationMembership
 from workspaces.models import Workspace
 
@@ -85,6 +86,16 @@ class OrganizationViewSet(AuditLogMixin, viewsets.ModelViewSet):
         "destroy": "Deleted organization: {obj}",
     }
 
+    def get_queryset(self):
+        """Filter organizations to only those the user has access to."""
+        user = self.request.user
+        if not user.is_authenticated:
+            return Organization.objects.none()
+
+        # Get cached organization IDs the user has access to
+        accessible_org_ids = permission_cache.get_user_organization_ids(user)
+        return Organization.objects.filter(id__in=accessible_org_ids)
+
     @extend_schema(tags=["Organizations"])
     @action(detail=True, methods=["get"])
     def workspaces(self, request, pk=None):
@@ -140,8 +151,18 @@ class OrganizationMembershipViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
+        user = self.request.user
+        org_id = self.kwargs["organization_pk"]
+
+        # Verify user has access to this organization
+        if not user.is_authenticated:
+            return OrganizationMembership.objects.none()
+
+        if not permission_cache.has_organization_access(user, org_id):
+            return OrganizationMembership.objects.none()
+
         return OrganizationMembership.objects.filter(
-            organization_id=self.kwargs["organization_pk"]
+            organization_id=org_id
         ).select_related("user")
 
     def perform_create(self, serializer):
