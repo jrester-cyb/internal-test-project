@@ -1068,15 +1068,182 @@ class AssetSerializer(serializers.ModelSerializer):
         # Update attributes if provided in initial_data
         if "attributes" in self.initial_data:
             attributes = self.initial_data["attributes"]
-            for api_key, value in attributes.items():
-                try:
-                    instance.set_attribute(api_key, value)
-                except BaseAssetTypeAttribute.DoesNotExist:
-                    pass  # Skip unknown fields
-                except ValueError as e:
-                    raise serializers.ValidationError({f"attributes.{api_key}": str(e)})
+            workspace = self.context.get("workspace")
+
+            if workspace:
+                # Workspace context: create workspace-specific attribute overrides
+                self._update_attributes_for_workspace(instance, attributes, workspace)
+            else:
+                # No workspace: update global/base attribute values
+                for api_key, value in attributes.items():
+                    try:
+                        instance.set_attribute(api_key, value)
+                    except BaseAssetTypeAttribute.DoesNotExist:
+                        pass  # Skip unknown fields
+                    except ValueError as e:
+                        raise serializers.ValidationError(
+                            {f"attributes.{api_key}": str(e)}
+                        )
 
         return instance
+
+    def _update_attributes_for_workspace(self, instance, attributes, workspace):
+        """Create or update workspace-specific attribute value overrides.
+
+        When updating an asset's attributes within a workspace context,
+        we create workspace-specific overrides rather than modifying global values.
+        """
+        from .models import (
+            WorkspaceAttributeValueOverride,
+            TextAttributeValue,
+            NumberAttributeValue,
+            BooleanAttributeValue,
+            DateAttributeValue,
+            DateTimeAttributeValue,
+            JSONAttributeValue,
+            LinkAttributeValue,
+            ChoiceAttributeValue,
+        )
+
+        # Map attribute types to value model classes
+        type_to_model = {
+            "text": TextAttributeValue,
+            "number": NumberAttributeValue,
+            "boolean": BooleanAttributeValue,
+            "date": DateAttributeValue,
+            "datetime": DateTimeAttributeValue,
+            "json": JSONAttributeValue,
+            "link": LinkAttributeValue,
+        }
+
+        # Get merged attributes for this workspace
+        field_defs = instance.asset_type.get_attributes_for_workspace(workspace)
+        field_def_map = {fd.api_key: fd for fd in field_defs}
+
+        for api_key, value in attributes.items():
+            field_def = field_def_map.get(api_key)
+            if not field_def:
+                continue  # Skip unknown fields
+
+            # Get the real attribute instance (resolve any proxy types)
+            real_attr = field_def.get_real_instance()
+            attr_with_type = real_attr
+
+            # Resolve reference types to get the attribute with type info
+            if not hasattr(real_attr, "attribute_type") or not real_attr.attribute_type:
+                if hasattr(real_attr, "hidden_attribute_id"):
+                    attr_with_type = real_attr.hidden_attribute.get_real_instance()
+                elif hasattr(real_attr, "base_attribute_id"):
+                    attr_with_type = real_attr.base_attribute.get_real_instance()
+
+            attr_type = getattr(attr_with_type, "attribute_type", None)
+            if not attr_type:
+                continue
+
+            # Handle choice attributes
+            if field_def.choices.exists():
+                self._update_choice_attribute_for_workspace(
+                    instance, field_def, attr_with_type, value, workspace
+                )
+                continue
+
+            ValueModel = type_to_model.get(attr_type)
+            if not ValueModel:
+                continue
+
+            # Find existing base value for this asset+attribute
+            base_value = None
+            try:
+                base_value = ValueModel.objects.get(
+                    asset=instance, asset_type_attribute_id=attr_with_type.id
+                )
+            except ValueModel.DoesNotExist:
+                pass
+
+            # Check for existing workspace override
+            existing_override = WorkspaceAttributeValueOverride.objects.filter(
+                asset_type_attribute_id=attr_with_type.id,
+                override_value__asset=instance,
+                workspace=workspace,
+            ).select_related("override_value").first()
+
+            if existing_override:
+                # Update existing override value
+                override_value = existing_override.override_value.get_real_instance()
+                override_value.value = value
+                override_value.save()
+            else:
+                # Create new workspace-specific override
+                override_value = ValueModel(
+                    asset=instance,
+                    asset_type_attribute_id=attr_with_type.id,
+                )
+                override_value.value = value
+                override_value.save()
+
+                WorkspaceAttributeValueOverride.objects.create(
+                    asset_type_attribute_id=attr_with_type.id,
+                    base_value=base_value,  # May be None if no global value
+                    override_value=override_value,
+                    workspace=workspace,
+                )
+
+    def _update_choice_attribute_for_workspace(
+        self, instance, field_def, attr_with_type, value, workspace
+    ):
+        """Handle choice attribute updates for workspace context."""
+        from .models import (
+            WorkspaceAttributeValueOverride,
+            ChoiceAttributeValue,
+        )
+
+        # Find matching choice
+        choice = None
+        for c in field_def.choices.all():
+            choice_value = getattr(c, "value", None)
+            if choice_value == value or str(choice_value) == str(value):
+                choice = c
+                break
+
+        if not choice:
+            raise serializers.ValidationError(
+                {f"attributes.{field_def.api_key}": f"Invalid choice value: {value}"}
+            )
+
+        # Find existing base value
+        base_value = None
+        try:
+            base_value = ChoiceAttributeValue.objects.get(
+                asset=instance, asset_type_attribute_id=attr_with_type.id
+            )
+        except ChoiceAttributeValue.DoesNotExist:
+            pass
+
+        # Check for existing workspace override
+        existing_override = WorkspaceAttributeValueOverride.objects.filter(
+            asset_type_attribute_id=attr_with_type.id,
+            override_value__asset=instance,
+            workspace=workspace,
+        ).select_related("override_value").first()
+
+        if existing_override:
+            override_value = existing_override.override_value.get_real_instance()
+            if isinstance(override_value, ChoiceAttributeValue):
+                override_value.choice = choice
+                override_value.save()
+        else:
+            override_value = ChoiceAttributeValue.objects.create(
+                asset=instance,
+                asset_type_attribute_id=attr_with_type.id,
+                choice=choice,
+            )
+
+            WorkspaceAttributeValueOverride.objects.create(
+                asset_type_attribute_id=attr_with_type.id,
+                base_value=base_value,
+                override_value=override_value,
+                workspace=workspace,
+            )
 
     def validate(self, data):
         """Validate attributes on create/update"""
