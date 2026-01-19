@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.contrib.gis.db import models as gis_models
+from django.contrib.postgres.indexes import GistIndex
 import uuid
 import pgtrigger
 from core.models.soft_delete import SoftDeleteMixin
@@ -71,6 +72,9 @@ class Asset(SoftDeleteMixin):
                 name="idx_org_h3",
                 condition=models.Q(deleted_at__isnull=True),
             ),
+            # GiST indexes to accelerate spatial predicates (ST_Intersects, &&, ST_DWithin, etc.)
+            GistIndex(fields=["geometry"], name="gist_idx_geometry"),
+            GistIndex(fields=["location"], name="gist_idx_location"),
         ]
         triggers = [
             pgtrigger.Trigger(
@@ -190,7 +194,7 @@ class Asset(SoftDeleteMixin):
             # we need to iterate and compare values (polymorphic filter on child fields doesn't work)
             choice = None
             for c in field_def.choices.all():
-                choice_value = getattr(c, 'value', None)
+                choice_value = getattr(c, "value", None)
                 # For numbers, compare with type coercion (e.g., 42 == 42.0)
                 if choice_value == value:
                     choice = c

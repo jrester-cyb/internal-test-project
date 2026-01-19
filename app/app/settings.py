@@ -168,7 +168,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
-        "users_manager.permissions.IsAuthenticatedWithAccess",
+        "rest_framework.permissions.IsAuthenticated",
+        # "users_manager.permissions.IsAuthenticatedWithAccess",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     # FlexiblePagination supports both page number (?page=2&page_size=50)

@@ -26,9 +26,13 @@ def get_attribute_info_by_api_key(api_key: str) -> dict | None:
 
     from itertools import chain
 
-    global_attrs = GlobalAssetTypeAttribute.objects.filter(
-        api_key=api_key, deleted_at__isnull=True
-    ).only("attribute_type", "unit").first()
+    global_attrs = (
+        GlobalAssetTypeAttribute.objects.filter(
+            api_key=api_key, deleted_at__isnull=True
+        )
+        .only("attribute_type", "unit")
+        .first()
+    )
 
     if global_attrs:
         result = {
@@ -38,9 +42,13 @@ def get_attribute_info_by_api_key(api_key: str) -> dict | None:
         cache.set(cache_key, result, timeout=300)
         return result
 
-    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
-        api_key=api_key, deleted_at__isnull=True
-    ).only("attribute_type", "unit").first()
+    local_attrs = (
+        WorkspaceLocalAssetTypeAttribute.objects.filter(
+            api_key=api_key, deleted_at__isnull=True
+        )
+        .only("attribute_type", "unit")
+        .first()
+    )
 
     if local_attrs:
         result = {
@@ -146,13 +154,48 @@ class FilterGroupSerializer(serializers.Serializer):
         value = self.validated_data["value"]
         query_unit = self.validated_data.get("unit", "")
 
+        # Support a convenience field name `geometry_intersects` which applies
+        # a bbox-prefilter followed by a precise ST_Intersects check to encourage
+        # GiST index usage in PostGIS.
+        if field in ("geometry_intersects", "geom_intersects"):
+            return self._build_geometry_intersects_query(value)
+
         if field.startswith("attributes.") or field.startswith("attributes__"):
-            return self._build_cached_attributes_query(field, operator, value, query_unit)
+            return self._build_cached_attributes_query(
+                field, operator, value, query_unit
+            )
 
         # Special handling for geometry_type filter
         return self._build_regular_field_query(field, operator, value)
 
-    def _build_cached_attributes_query(self, field: str, operator: str, value: Any, query_unit: str) -> Q:
+    def _build_geometry_intersects_query(self, value: Any) -> Q:
+        """Build a Q object that first applies a bbox overlap prefilter and then
+        a precise intersects check. Accepts GeoJSON dict, WKT string, or
+        a GEOSGeometry instance."""
+        geom = None
+        if isinstance(value, GEOSGeometry):
+            geom = value
+        elif isinstance(value, dict) and "type" in value and "coordinates" in value:
+            geom = GEOSGeometry(json.dumps(value), srid=4326)
+        elif isinstance(value, str):
+            try:
+                geom = GEOSGeometry(value, srid=4326)
+            except Exception:
+                geom = None
+
+        if geom is None:
+            return Q()
+
+        # Apply bbox-prefilter (fast && operator) then precise intersects
+        try:
+            return Q(geometry__bboverlaps=geom) & Q(geometry__intersects=geom)
+        except Exception:
+            # Fallback to intersects-only if bboverlaps isn't available
+            return Q(geometry__intersects=geom)
+
+    def _build_cached_attributes_query(
+        self, field: str, operator: str, value: Any, query_unit: str
+    ) -> Q:
         """
         Build a Q object for filtering on Asset.cached_attributes JSONB field.
 
@@ -187,7 +230,9 @@ class FilterGroupSerializer(serializers.Serializer):
         if len(parts) > 2:
             # Build nested JSONB path: cached_attributes__api_key__nested__key
             json_path = "__".join(parts[1:])
-            return self._build_jsonb_query(f"cached_attributes__{json_path}", operator, filter_value)
+            return self._build_jsonb_query(
+                f"cached_attributes__{json_path}", operator, filter_value
+            )
 
         # Simple attribute lookup: cached_attributes__api_key
         json_field = f"cached_attributes__{api_key}"
@@ -212,7 +257,9 @@ class FilterGroupSerializer(serializers.Serializer):
         if actual_operator == "in":
             if has_null and non_null_values:
                 # Match null OR any of the non-null values
-                q = Q(**{f"{json_field}__isnull": True}) | Q(**{f"{json_field}__in": non_null_values})
+                q = Q(**{f"{json_field}__isnull": True}) | Q(
+                    **{f"{json_field}__in": non_null_values}
+                )
             elif has_null:
                 # Match null only
                 q = Q(**{f"{json_field}__isnull": True})
@@ -245,7 +292,9 @@ class FilterGroupSerializer(serializers.Serializer):
         elif actual_operator == "range":
             # Range expects a tuple/list of (start, end)
             if isinstance(value, (list, tuple)) and len(value) == 2:
-                q = Q(**{f"{json_field}__gte": value[0]}) & Q(**{f"{json_field}__lte": value[1]})
+                q = Q(**{f"{json_field}__gte": value[0]}) & Q(
+                    **{f"{json_field}__lte": value[1]}
+                )
             else:
                 q = Q()
         elif actual_operator == "ne":
@@ -284,6 +333,34 @@ class FilterGroupSerializer(serializers.Serializer):
             if self.validated_data.get("inverse", False):
                 query_obj = ~query_obj
             return query_obj
+
+        # For direct geometry filters (field == 'geometry'), prefer a bbox
+        # prefilter before running the expensive ST_Intersects check so the
+        # planner can use GiST indexes. Use the same helper as
+        # `geometry_intersects` convenience field.
+        if field == "geometry" and operator == "intersects":
+            try:
+                return self._build_geometry_intersects_query(value)
+            except Exception:
+                return Q(geometry__intersects=value)
+
+        # Special-case H3 prefix startswith to produce a metadata-only Q that
+        # callers can use to add an index-friendly LEFT(h3_index, N) prefilter.
+        if field == "h3_index" and operator in ("startswith", "istartswith"):
+            prefix = value if isinstance(value, str) else str(value)
+            prefix_len = len(prefix)
+            if operator == "istartswith":
+                prefix = prefix.lower()
+            q = Q()
+            # Attach prefilter metadata for callers to inspect
+            q._h3_prefilter = {
+                "prefix": prefix,
+                "len": prefix_len,
+                "case_insensitive": operator == "istartswith",
+            }
+            if self.validated_data.get("inverse", False):
+                q = ~q
+            return q
 
         # Handle nin (not in) operator for regular fields
         if operator == "nin":
@@ -324,12 +401,31 @@ class FilterSerializer(serializers.Serializer):
             result = Q()
             result.connector = Q.OR
             result.children = list(q_objects)
+            # Collect any h3 prefilter metadata from children
+            h3s = []
+            for q in q_objects:
+                if hasattr(q, "_h3_prefilter"):
+                    h3s.append(q._h3_prefilter)
+                if hasattr(q, "_h3_prefilters"):
+                    h3s.extend(q._h3_prefilters)
+            if h3s:
+                result._h3_prefilters = h3s
             return result
         else:
             # AND logic - combine with &
             result = q_objects[0]
             for q in q_objects[1:]:
                 result &= q
+            # Collect any h3 prefilter metadata from children
+            h3s = []
+            for q in q_objects:
+                if hasattr(q, "_h3_prefilter"):
+                    h3s.append(q._h3_prefilter)
+                if hasattr(q, "_h3_prefilters"):
+                    h3s.extend(q._h3_prefilters)
+            if h3s:
+                # Attach to the combined result for callers to use
+                result._h3_prefilters = h3s
             return result
 
     def validate_filters(self, value):
