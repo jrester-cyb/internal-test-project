@@ -3,7 +3,7 @@ import logging
 
 # django
 from django.conf import settings
-from django.contrib.auth import update_last_login
+from django.contrib.auth.models import update_last_login
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.generic import TemplateView

@@ -3,7 +3,7 @@ from urllib.parse import ParseResult, parse_qs, urlencode, urlparse, urlunparse
 
 # django
 from django.conf import settings
-from django.contrib.auth import update_last_login
+from django.contrib.auth.models import update_last_login
 from django.http import HttpResponseRedirect as DefaultHttpResponseRedirect
 from django.shortcuts import redirect
 from django.views import View

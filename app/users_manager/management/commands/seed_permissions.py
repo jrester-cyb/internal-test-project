@@ -107,6 +107,7 @@ class Command(BaseCommand):
                     "user:read",
                     "user:write",
                     "user:delete",
+                    "role:read",
                 ),
             },
         ]

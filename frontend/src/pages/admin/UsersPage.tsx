@@ -72,12 +72,14 @@ export default function UsersPage() {
         limit: endIndex - startIndex + 1,
         search: debouncedSearch || undefined,
       })
+      console.log('fetchUsers response:', data)
       setTotalCount(data.count)
       setUsers(prev => {
         const next = new Map(prev)
         data.results.forEach((user, i) => {
           next.set(startIndex + i, user)
         })
+        console.log('Users map size:', next.size)
         return next
       })
     } catch (err) {

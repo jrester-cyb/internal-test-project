@@ -553,10 +553,10 @@ export default function InfiniteLoaderTable<T>({
 
     return (
       <div style={adjustedStyle}>
-        <div
+        <Box
           ref={measureRef}
           onClick={handleClick}
-          style={{
+          sx={{
             display: 'flex',
             cursor: currentOnRowClick ? 'pointer' : undefined,
             minWidth: currentWidths.reduce((sum, w) => sum + w, 0),
@@ -582,7 +582,7 @@ export default function InfiniteLoaderTable<T>({
               {column.render(item, index)}
             </Box>
           ))}
-        </div>
+        </Box>
       </div>
     )
   }, [setRowHeight, headerHeight])
@@ -632,6 +632,7 @@ export default function InfiniteLoaderTable<T>({
         border: '1px solid',
         borderColor: 'divider',
         borderRadius: 1,
+        bgcolor: 'background.paper',
       }}
       className={className}
     >
