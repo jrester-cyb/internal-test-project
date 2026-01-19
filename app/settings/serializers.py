@@ -8,11 +8,12 @@ HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
 class ThemeColorSetSerializer(serializers.Serializer):
-    """Serializer for a color set (main, light, dark)."""
+    """Serializer for a color set (main, light, dark, contrastText)."""
 
     main = serializers.CharField(required=False, allow_blank=True)
     light = serializers.CharField(required=False, allow_blank=True)
     dark = serializers.CharField(required=False, allow_blank=True)
+    contrastText = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
         for key, value in data.items():
@@ -28,6 +29,7 @@ class ThemeCustomizationsSerializer(serializers.Serializer):
 
     primary = ThemeColorSetSerializer(required=False)
     secondary = ThemeColorSetSerializer(required=False)
+    button = ThemeColorSetSerializer(required=False)  # Separate button colors
     background = serializers.DictField(
         child=serializers.CharField(), required=False
     )

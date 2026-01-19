@@ -13,11 +13,56 @@ import {
   Chip,
   CircularProgress,
 } from '@mui/material'
-import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
+import { ThemeProvider as MuiThemeProvider, useTheme } from '@mui/material/styles'
 import MenuIcon from '@mui/icons-material/Menu'
 import NotificationsIcon from '@mui/icons-material/Notifications'
-import type { EffectiveTheme } from '@app/types'
+import type { EffectiveTheme, ThemeCustomizations } from '@app/types'
 import { buildMuiThemeFromEffective } from '@app/theme'
+
+/**
+ * Helper to check if a color is dark (for determining contrast text color).
+ */
+function isColorDark(hexColor: string): boolean {
+  const hex = hexColor.replace('#', '')
+  const r = parseInt(hex.substr(0, 2), 16)
+  const g = parseInt(hex.substr(2, 2), 16)
+  const b = parseInt(hex.substr(4, 2), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance < 0.5
+}
+
+/**
+ * Get button styles from customizations, with fallback to primary colors.
+ */
+function getButtonStyles(customizations: ThemeCustomizations) {
+  const buttonMain = customizations.button?.main || customizations.primary?.main || '#003162'
+  const buttonDark = customizations.button?.dark || customizations.primary?.dark || buttonMain
+  const contrastText = isColorDark(buttonMain) ? '#ffffff' : '#000000'
+
+  return {
+    contained: {
+      backgroundColor: buttonMain,
+      color: contrastText,
+      '&:hover': {
+        backgroundColor: buttonDark,
+      },
+    },
+    outlined: {
+      color: buttonMain,
+      borderColor: buttonMain,
+      '&:hover': {
+        borderColor: buttonDark,
+        backgroundColor: `${buttonMain}14`, // 8% opacity
+      },
+    },
+    text: {
+      color: buttonMain,
+      '&:hover': {
+        backgroundColor: `${buttonMain}14`, // 8% opacity
+      },
+    },
+  }
+}
 
 interface ThemePreviewProps {
   effectiveTheme: EffectiveTheme
@@ -31,6 +76,10 @@ function PreviewPanel({ effectiveTheme, isDark }: { effectiveTheme: EffectiveThe
     () => buildMuiThemeFromEffective(effectiveTheme, isDark),
     [effectiveTheme, isDark]
   )
+
+  // Get the appropriate customizations for this mode
+  const customizations = isDark ? effectiveTheme.darkCustomizations : effectiveTheme.lightCustomizations
+  const buttonStyles = useMemo(() => getButtonStyles(customizations || {}), [customizations])
 
   return (
     <MuiThemeProvider theme={previewTheme}>
@@ -102,13 +151,13 @@ function PreviewPanel({ effectiveTheme, isDark }: { effectiveTheme: EffectiveThe
 
           {/* Buttons */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-            <Button variant="contained" size="small">
+            <Button variant="contained" size="small" sx={buttonStyles.contained}>
               Primary
             </Button>
-            <Button variant="outlined" size="small">
+            <Button variant="outlined" size="small" sx={buttonStyles.outlined}>
               Outlined
             </Button>
-            <Button variant="text" size="small">
+            <Button variant="text" size="small" sx={buttonStyles.text}>
               Text
             </Button>
           </Box>

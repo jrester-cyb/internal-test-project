@@ -23,9 +23,11 @@ export default function NavTabBar({ tabs, currentTab }: NavTabBarProps) {
           bgcolor: 'secondary.main',
         },
         '& .MuiTab-root': {
-          color: 'rgba(255, 255, 255, 0.7)',
+          color: 'primary.contrastText',
+          opacity: 0.7,
           '&.Mui-selected': {
-            color: '#ffffff',
+            color: 'inherit',
+            opacity: 1,
           },
         },
       }}

@@ -15,9 +15,43 @@ function isColorDark(hexColor: string): boolean {
 }
 
 /**
- * Generate shared component overrides that work with any theme.
+ * Helper to create a function that gets button color from theme's custom button palette or fallback to primary.
+ * We pass buttonCustomizations at theme creation time so the overrides have access to it.
  */
-function getSharedComponents(): Components<Theme> {
+function createButtonColorGetter(buttonCustomizations?: { main: string; light?: string; dark?: string }) {
+  return (theme: Theme): { main: string; light: string; dark: string; contrastText: string } => {
+    if (buttonCustomizations?.main) {
+      return {
+        main: buttonCustomizations.main,
+        light: buttonCustomizations.light || buttonCustomizations.main,
+        dark: buttonCustomizations.dark || buttonCustomizations.main,
+        contrastText: isColorDark(buttonCustomizations.main) ? '#ffffff' : '#000000',
+      }
+    }
+    return theme.palette.primary
+  }
+}
+
+/**
+ * Helper to convert hex color to rgba string.
+ */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+/**
+ * Generate shared component overrides that work with any theme.
+ * @param buttonCustomizations - Optional button color customizations to use instead of primary
+ *
+ * Note: MUI v7 deprecated variant+color class combinations (e.g., containedPrimary).
+ * We now use the root styleOverride with CSS selectors to target the combinations.
+ */
+function getSharedComponents(buttonCustomizations?: { main: string; light?: string; dark?: string }): Components<Theme> {
+  const getButtonColor = createButtonColorGetter(buttonCustomizations)
+
   return {
     MuiLink: {
       styleOverrides: {
@@ -42,85 +76,94 @@ function getSharedComponents(): Components<Theme> {
     },
     MuiButton: {
       styleOverrides: {
-        containedPrimary: ({ theme }) => ({
-          backgroundColor: theme.palette.primary.main,
-          color: theme.palette.primary.contrastText,
-          '&:hover': {
-            backgroundColor: theme.palette.primary.dark,
-          },
-        }),
-        textPrimary: ({ theme }) => ({
-          color: theme.palette.primary.main,
-          '&:hover': {
-            backgroundColor: `rgba(${parseInt(theme.palette.primary.main.slice(1, 3), 16)}, ${parseInt(theme.palette.primary.main.slice(3, 5), 16)}, ${parseInt(theme.palette.primary.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
-        outlinedPrimary: ({ theme }) => ({
-          color: theme.palette.primary.main,
-          borderColor: theme.palette.primary.main,
-          '&:hover': {
-            borderColor: theme.palette.primary.dark,
-            backgroundColor: `rgba(${parseInt(theme.palette.primary.main.slice(1, 3), 16)}, ${parseInt(theme.palette.primary.main.slice(3, 5), 16)}, ${parseInt(theme.palette.primary.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
-        outlinedWarning: ({ theme }) => ({
-          '&:hover': {
-            borderColor: theme.palette.warning.main,
-            backgroundColor: `rgba(${parseInt(theme.palette.warning.main.slice(1, 3), 16)}, ${parseInt(theme.palette.warning.main.slice(3, 5), 16)}, ${parseInt(theme.palette.warning.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
-        outlinedSuccess: ({ theme }) => ({
-          '&:hover': {
-            borderColor: theme.palette.success.main,
-            backgroundColor: `rgba(${parseInt(theme.palette.success.main.slice(1, 3), 16)}, ${parseInt(theme.palette.success.main.slice(3, 5), 16)}, ${parseInt(theme.palette.success.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
-        outlinedInfo: ({ theme }) => ({
-          '&:hover': {
-            borderColor: theme.palette.info.main,
-            backgroundColor: `rgba(${parseInt(theme.palette.info.main.slice(1, 3), 16)}, ${parseInt(theme.palette.info.main.slice(3, 5), 16)}, ${parseInt(theme.palette.info.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
-        outlinedError: ({ theme }) => ({
-          '&:hover': {
-            borderColor: theme.palette.error.main,
-            backgroundColor: `rgba(${parseInt(theme.palette.error.main.slice(1, 3), 16)}, ${parseInt(theme.palette.error.main.slice(3, 5), 16)}, ${parseInt(theme.palette.error.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
-        containedSuccess: ({ theme }) => ({
-          backgroundColor: theme.palette.success.main,
-          '&:hover': {
-            backgroundColor: theme.palette.success.dark,
-          },
-        }),
-        containedError: ({ theme }) => ({
-          backgroundColor: theme.palette.error.main,
-          '&:hover': {
-            backgroundColor: theme.palette.error.dark,
-          },
-        }),
-        containedInfo: ({ theme }) => ({
-          backgroundColor: theme.palette.info.main,
-          '&:hover': {
-            backgroundColor: theme.palette.info.dark,
-          },
-        }),
+        root: ({ theme }) => {
+          const btn = getButtonColor(theme)
+          return {
+            // Contained + Primary (default)
+            '&.MuiButton-contained.MuiButton-colorPrimary': {
+              backgroundColor: btn.main,
+              color: btn.contrastText,
+              '&:hover': {
+                backgroundColor: btn.dark,
+              },
+            },
+            // Outlined + Primary
+            '&.MuiButton-outlined.MuiButton-colorPrimary': {
+              color: btn.main,
+              borderColor: btn.main,
+              '&:hover': {
+                borderColor: btn.dark,
+                backgroundColor: hexToRgba(btn.main, 0.08),
+              },
+            },
+            // Text + Primary
+            '&.MuiButton-text.MuiButton-colorPrimary': {
+              color: btn.main,
+              '&:hover': {
+                backgroundColor: hexToRgba(btn.main, 0.08),
+              },
+            },
+            // Outlined variants for other colors
+            '&.MuiButton-outlined.MuiButton-colorWarning:hover': {
+              borderColor: theme.palette.warning.main,
+              backgroundColor: hexToRgba(theme.palette.warning.main, 0.08),
+            },
+            '&.MuiButton-outlined.MuiButton-colorSuccess:hover': {
+              borderColor: theme.palette.success.main,
+              backgroundColor: hexToRgba(theme.palette.success.main, 0.08),
+            },
+            '&.MuiButton-outlined.MuiButton-colorInfo:hover': {
+              borderColor: theme.palette.info.main,
+              backgroundColor: hexToRgba(theme.palette.info.main, 0.08),
+            },
+            '&.MuiButton-outlined.MuiButton-colorError:hover': {
+              borderColor: theme.palette.error.main,
+              backgroundColor: hexToRgba(theme.palette.error.main, 0.08),
+            },
+            // Contained variants for other colors
+            '&.MuiButton-contained.MuiButton-colorSuccess': {
+              backgroundColor: theme.palette.success.main,
+              '&:hover': {
+                backgroundColor: theme.palette.success.dark,
+              },
+            },
+            '&.MuiButton-contained.MuiButton-colorError': {
+              backgroundColor: theme.palette.error.main,
+              '&:hover': {
+                backgroundColor: theme.palette.error.dark,
+              },
+            },
+            '&.MuiButton-contained.MuiButton-colorInfo': {
+              backgroundColor: theme.palette.info.main,
+              '&:hover': {
+                backgroundColor: theme.palette.info.dark,
+              },
+            },
+          }
+        },
       },
     },
     MuiIconButton: {
       styleOverrides: {
-        colorPrimary: ({ theme }) => ({
-          color: theme.palette.primary.main,
-          '&:hover': {
-            backgroundColor: `rgba(${parseInt(theme.palette.primary.main.slice(1, 3), 16)}, ${parseInt(theme.palette.primary.main.slice(3, 5), 16)}, ${parseInt(theme.palette.primary.main.slice(5, 7), 16)}, 0.08)`,
-          },
-        }),
+        root: ({ theme }) => {
+          const btn = getButtonColor(theme)
+          return {
+            '&.MuiIconButton-colorPrimary': {
+              color: btn.main,
+              '&:hover': {
+                backgroundColor: hexToRgba(btn.main, 0.08),
+              },
+            },
+          }
+        },
       },
     },
     MuiCircularProgress: {
       styleOverrides: {
-        colorPrimary: ({ theme }) => ({
-          color: theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+        root: ({ theme }) => ({
+          '&.MuiCircularProgress-colorPrimary': {
+            color: theme.palette.mode === 'dark' ? theme.palette.secondary.main : theme.palette.primary.main,
+          },
         }),
       },
     },
@@ -235,8 +278,8 @@ function buildThemeFromCustomizations(
     palette.success = customizations.success
   }
 
-  // Build component overrides
-  const sharedComponents = getSharedComponents()
+  // Build component overrides, passing button customizations so they're available at creation time
+  const sharedComponents = getSharedComponents(customizations.button)
   const components: Components<Theme> = {
     ...sharedComponents,
     MuiAppBar: {
@@ -275,16 +318,16 @@ export const DEFAULT_EFFECTIVE_THEME: EffectiveTheme = {
   lightCustomizations: {
     primary: { main: '#003162', light: '#42a5f5', dark: '#1565c0' },
     secondary: { main: '#fecf18', light: '#fed54a', dark: '#cab210' },
+    button: { main: '#003162', light: '#42a5f5', dark: '#1565c0' },
     background: { default: '#f5f5f5', paper: '#ffffff' },
     text: { primary: '#212121', secondary: '#757575' },
-    appBar: { background: '#003162', text: '#ffffff' },
   },
   darkCustomizations: {
-    primary: { main: '#42a5f5', light: '#80d6ff', dark: '#0077c2' },
+    primary: { main: '#003162', light: '#42a5f5', dark: '#1565c0' },
     secondary: { main: '#fecf18', light: '#fed54a', dark: '#cab210' },
-    background: { default: '#121212', paper: '#1e1e1e' },
+    button: { main: '#fecf18', light: '#fed54a', dark: '#cab210' },
+    background: { default: '#3a3a3a', paper: '#4a4a4a' },
     text: { primary: '#ffffff', secondary: '#b0b0b0' },
-    appBar: { background: '#1e1e1e', text: '#ffffff' },
   },
   source: 'default',
 }

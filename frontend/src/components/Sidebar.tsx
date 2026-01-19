@@ -67,7 +67,7 @@ export default function Sidebar() {
           width: drawerWidth,
           boxSizing: 'border-box',
           backgroundColor: theme.palette.primary.main,
-          color: '#ffffff',
+          color: theme.palette.primary.contrastText,
           transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1)',
           overflowX: 'hidden',
           zIndex: theme.zIndex.appBar - 1,
@@ -81,7 +81,7 @@ export default function Sidebar() {
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
               <IconButton
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                sx={{ color: 'white' }}
+                sx={{ color: 'inherit' }}
               >
                 {sidebarOpen ? <ChevronLeftIcon /> : <MenuIcon />}
               </IconButton>
@@ -89,7 +89,7 @@ export default function Sidebar() {
           )}
           <List>
             {(isMobile || sidebarOpen) && (
-              <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
+              <Typography variant="caption" sx={{ px: 2, py: 1, opacity: 0.7, display: 'block' }}>
                 {modeLabel}
               </Typography>
             )}
@@ -117,7 +117,7 @@ export default function Sidebar() {
         {/* Bottom section with Settings */}
         {showSettings && (
           <Box sx={{ pb: 2 }}>
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.2)', mb: 1 }} />
+            <Divider sx={{ borderColor: 'currentColor', opacity: 0.2, mb: 1 }} />
             <List disablePadding>
               <SidebarNavItem
                 to="/settings"

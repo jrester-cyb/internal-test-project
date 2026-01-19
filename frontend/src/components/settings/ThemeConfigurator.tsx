@@ -515,6 +515,44 @@ export function ThemeConfigurator({
                 </AccordionDetails>
               </Accordion>
 
+              {/* Button Colors */}
+              <Accordion
+                expanded={expandedPanel === 'button'}
+                onChange={handlePanelChange('button')}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography>Button Colors</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <ColorPicker
+                        label="Main"
+                        value={getColor('button', 'main', getColor('primary', 'main', '#003162'))}
+                        onChange={(v) => handleColorChange('button', 'main', v)}
+                        disabled={!canEdit}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <ColorPicker
+                        label="Light"
+                        value={getColor('button', 'light', getColor('primary', 'light', '#42a5f5'))}
+                        onChange={(v) => handleColorChange('button', 'light', v)}
+                        disabled={!canEdit}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <ColorPicker
+                        label="Dark"
+                        value={getColor('button', 'dark', getColor('primary', 'dark', '#1565c0'))}
+                        onChange={(v) => handleColorChange('button', 'dark', v)}
+                        disabled={!canEdit}
+                      />
+                    </Grid>
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+
               {/* Background Colors */}
               <Accordion
                 expanded={expandedPanel === 'background'}

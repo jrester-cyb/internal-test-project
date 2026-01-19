@@ -11,12 +11,15 @@ PRESET_THEMES = {
         "light_customizations": {
             "primary": {"main": "#003162", "light": "#42a5f5", "dark": "#1565c0"},
             "secondary": {"main": "#fecf18", "light": "#fed54a", "dark": "#cab210"},
+            "button": {"main": "#003162", "light": "#42a5f5", "dark": "#1565c0"},
             "background": {"default": "#f5f5f5", "paper": "#ffffff"},
             "text": {"primary": "#212121", "secondary": "#757575"},
         },
         "dark_customizations": {
             "primary": {"main": "#003162", "light": "#42a5f5", "dark": "#1565c0"},
             "secondary": {"main": "#fecf18", "light": "#fed54a", "dark": "#cab210"},
+            # Use secondary color for buttons in dark mode
+            "button": {"main": "#fecf18", "light": "#fed54a", "dark": "#cab210"},
             "background": {"default": "#3a3a3a", "paper": "#4a4a4a"},
             "text": {"primary": "#ffffff", "secondary": "#b0b0b0"},
         },
@@ -25,20 +28,23 @@ PRESET_THEMES = {
         "light_customizations": {
             "primary": {"main": "#1565c0", "light": "#5e92f3", "dark": "#003c8f"},
             "secondary": {"main": "#00acc1", "light": "#5ddef4", "dark": "#007c91"},
+            "button": {"main": "#1565c0", "light": "#5e92f3", "dark": "#003c8f"},
             "background": {"default": "#e8f4fc", "paper": "#ffffff"},
             "text": {"primary": "#1a237e", "secondary": "#3949ab"},
         },
         "dark_customizations": {
             "primary": {"main": "#1565c0", "light": "#5e92f3", "dark": "#003c8f"},
             "secondary": {"main": "#4dd0e1", "light": "#88ffff", "dark": "#009faf"},
+            "button": {"main": "#4dd0e1", "light": "#88ffff", "dark": "#009faf"},
             "background": {"default": "#0a1929", "paper": "#102a43"},
             "text": {"primary": "#e3f2fd", "secondary": "#90caf9"},
         },
     },
     "High Contrast": {
         "light_customizations": {
-            "primary": {"main": "#000000", "light": "#333333", "dark": "#000000"},
-            "secondary": {"main": "#0000cc", "light": "#0000ff", "dark": "#000099"},
+            "primary": {"main": "#000000", "light": "#333333", "dark": "#000000", "contrastText": "#ffffff"},
+            "secondary": {"main": "#0000cc", "light": "#0000ff", "dark": "#000099", "contrastText": "#ffffff"},
+            "button": {"main": "#000000", "light": "#333333", "dark": "#000000"},
             "background": {"default": "#ffffff", "paper": "#ffffff"},
             "text": {"primary": "#000000", "secondary": "#000000"},
             "error": {"main": "#cc0000"},
@@ -47,8 +53,9 @@ PRESET_THEMES = {
             "info": {"main": "#0000cc"},
         },
         "dark_customizations": {
-            "primary": {"main": "#ffff00", "light": "#ffff66", "dark": "#cccc00"},
-            "secondary": {"main": "#00ffff", "light": "#66ffff", "dark": "#00cccc"},
+            "primary": {"main": "#ffff00", "light": "#ffff66", "dark": "#cccc00", "contrastText": "#000000"},
+            "secondary": {"main": "#00ffff", "light": "#66ffff", "dark": "#00cccc", "contrastText": "#000000"},
+            "button": {"main": "#ffff00", "light": "#ffff66", "dark": "#cccc00"},
             "background": {"default": "#000000", "paper": "#121212"},
             "text": {"primary": "#ffffff", "secondary": "#e0e0e0"},
             "error": {"main": "#ff4444"},

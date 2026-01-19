@@ -38,9 +38,11 @@ const TabBar = memo(function TabBar({
         bgcolor: 'secondary.main'
       },
       '& .MuiTab-root': {
-        color: '#ffffff',
+        color: 'primary.contrastText',
+        opacity: 0.7,
         '&.Mui-selected': {
-          color: '#ffffff'
+          color: 'primary.contrastText',
+          opacity: 1,
         }
       },
     }}>

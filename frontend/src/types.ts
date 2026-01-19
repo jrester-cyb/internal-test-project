@@ -332,11 +332,13 @@ export interface ThemeColorSet {
   main: string
   light?: string
   dark?: string
+  contrastText?: string
 }
 
 export interface ThemeCustomizations {
   primary?: ThemeColorSet
   secondary?: ThemeColorSet
+  button?: ThemeColorSet  // Separate button colors (defaults to primary if not set)
   background?: {
     default?: string
     paper?: string
