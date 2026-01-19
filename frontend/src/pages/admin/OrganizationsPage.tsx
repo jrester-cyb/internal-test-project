@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Typography,
@@ -21,6 +22,7 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   People as MembersIcon,
+  Settings as ManageIcon,
 } from '@mui/icons-material'
 import type { Organization } from '../../types'
 import { fetchOrganizations, deleteOrganization } from '../../api/organizations'
@@ -29,6 +31,7 @@ import OrganizationMembersDialog from './OrganizationMembersDialog'
 import ConfirmDialog from '../../components/ConfirmDialog'
 
 export default function OrganizationsPage() {
+  const navigate = useNavigate()
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -102,6 +105,10 @@ export default function OrganizationsPage() {
   const handleManageMembers = (organization: Organization) => {
     setMembersOrganization(organization)
     setMembersDialogOpen(true)
+  }
+
+  const handleManageOrganization = (organization: Organization) => {
+    navigate(`/settings/organizations/${organization.id}/manage`)
   }
 
   // Filter organizations by search query
@@ -222,6 +229,14 @@ export default function OrganizationsPage() {
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
+                    <Tooltip title="Manage organization">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleManageOrganization(organization)}
+                      >
+                        <ManageIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Manage members">
                       <IconButton
                         size="small"

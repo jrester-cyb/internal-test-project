@@ -30,6 +30,7 @@ const SettingsIndexPage = lazy(() => import('./pages/settings/SettingsIndexPage.
 const UsersPage = lazy(() => import('./pages/admin/UsersPage.tsx'))
 const GroupsPage = lazy(() => import('./pages/admin/GroupsPage.tsx'))
 const AdminOrganizationsPage = lazy(() => import('./pages/admin/OrganizationsPage.tsx'))
+const OrganizationManagePage = lazy(() => import('./pages/OrganizationManagePage.tsx'))
 
 // Helper to create a lazy loader that caches the imported function after first load
 // First call: async import -> cache -> call loader
@@ -356,10 +357,28 @@ export const router = createBrowserRouter([
           },
           {
             path: "organizations",
-            element: <AdminOrganizationsPage />,
             handle: {
               crumb: "Organizations",
             },
+            children: [
+              {
+                index: true,
+                element: <AdminOrganizationsPage />,
+              },
+              {
+                path: ":organizationId",
+                children: [
+                  // Organization management (members & workspaces)
+                  {
+                    path: "manage",
+                    element: <OrganizationManagePage />,
+                    handle: {
+                      crumb: "Manage",
+                    },
+                  },
+                ]
+              }
+            ]
           },
         ],
       },
@@ -387,7 +406,6 @@ export const router = createBrowserRouter([
               },
               // Org-level routes
               ...sharedRoutes,
-
               // Workspace-level routes
               {
                 path: "workspaces",

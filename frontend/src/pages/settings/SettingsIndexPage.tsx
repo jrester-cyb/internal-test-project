@@ -78,7 +78,7 @@ export default function SettingsIndexPage() {
           label: activeOrganization?.name || 'Organization Settings',
           description: 'Manage organization settings and members',
           icon: <OrganizationIcon />,
-          path: `/organizations/${activeOrganization?.id}/settings`,
+          path: `/settings/organizations/${activeOrganization?.id}/manage`,
           visible: !!canManageOrganization,
         },
       ],

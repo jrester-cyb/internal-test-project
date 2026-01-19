@@ -301,3 +301,23 @@ export interface OrganizationUpdateInput {
   name?: string
   description?: string
 }
+
+// Workspace member types
+export interface WorkspaceMember {
+  id: string
+  workspace: string
+  workspaceName: string
+  user: string
+  userEmail: string
+  userName: string
+  role: string
+  roleName: string
+  grantedAt: string
+  grantedBy?: string
+}
+
+export interface WorkspaceMemberCreateInput {
+  workspace: string
+  user: string
+  role: string
+}
