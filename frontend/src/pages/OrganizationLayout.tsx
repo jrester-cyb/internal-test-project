@@ -13,12 +13,16 @@ export default function OrganizationLayout() {
   const { setWorkspaces, organizations, setActiveOrganization } = useOrganization()
   const navigation = useNavigation()
 
-  // Skip syncing during navigation to prevent race conditions where old layout
-  // overwrites the new org selection
+  // Skip syncing during navigation - the old component is still mounted while
+  // loading the new route, and we don't want to overwrite the pending navigation
   const isNavigating = navigation.state === 'loading'
 
   useEffect(() => {
-    if (isNavigating) return
+    // Don't sync during navigation - this prevents the old org from being set
+    // while we're loading data for the new org
+    if (isNavigating) {
+      return
+    }
 
     // Set workspaces in context
     setWorkspaces(workspaces)

@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useMap, useMapEvents } from 'react-leaflet'
-import { useNavigation } from 'react-router-dom'
 
 interface MapEventsProps {
-  onLoadData: (bounds: number[], zoom: number, filters?: any) => void
+  onLoadData: (bounds: number[], zoom: number) => void
   filters?: any
   selectedAssetTypes: string[]
   attributeFilters: any[]
@@ -15,29 +14,12 @@ interface MapEventsProps {
   workspaceId?: string
 }
 
-export default function MapEvents({ onLoadData, filters, selectedAssetTypes, attributeFilters, geometryTypeFilter, onCenterChange, onZoomChange, hasInitialData = false, organizationId, workspaceId }: MapEventsProps) {
+export default function MapEvents({ onLoadData, onCenterChange, onZoomChange, hasInitialData = false }: MapEventsProps) {
   const map = useMap()
-  const navigation = useNavigation()
   const initialLoadDone = useRef(false)
-
-  // Track navigation state in ref for use in event handlers
-  const isNavigatingRef = useRef(false)
-  isNavigatingRef.current = navigation.state === 'loading'
-
-  // Capture the org/workspace this component was created for
-  // If props change to different values, this component is stale
-  const initialOrgRef = useRef(organizationId)
-  const initialWorkspaceRef = useRef(workspaceId)
-
-  // Check if component is stale (org/workspace changed from initial)
-  const isStale = organizationId !== initialOrgRef.current || workspaceId !== initialWorkspaceRef.current
 
   useMapEvents({
     moveend: () => {
-      // Skip if navigating away or component is stale
-      if (isNavigatingRef.current) return
-      if (isStale) return
-
       const bounds = map.getBounds()
       const bbox = [
         bounds.getWest(),
@@ -63,16 +45,13 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
         onZoomChange(currentZoom)
       }
 
-      onLoadData(bbox, currentZoom, filters)
+      // Trigger data load via context
+      onLoadData(bbox, currentZoom)
     }
   })
 
-  // Load initial data once when map is ready
+  // Load initial data once when map is ready (if not preloaded)
   useEffect(() => {
-    // Skip if navigating away or component is stale
-    if (isNavigatingRef.current) return
-    if (isStale) return
-
     if (!initialLoadDone.current && !hasInitialData) {
       const bounds = map.getBounds()
       const bbox = [
@@ -82,45 +61,12 @@ export default function MapEvents({ onLoadData, filters, selectedAssetTypes, att
         bounds.getNorth()
       ]
       const currentZoom = map.getZoom()
-      onLoadData(bbox, currentZoom, filters)
+      onLoadData(bbox, currentZoom)
       initialLoadDone.current = true
     } else if (!initialLoadDone.current && hasInitialData) {
       initialLoadDone.current = true
     }
-  }, [map, onLoadData, filters, hasInitialData])
-
-  // Reload data when selected asset types, attribute filters, or geometry type filter change
-  useEffect(() => {
-    console.log('[MapEvents] filter effect triggered', {
-      isNavigating: isNavigatingRef.current,
-      isStale,
-      propOrgId: organizationId,
-      initialOrgId: initialOrgRef.current,
-      initialLoadDone: initialLoadDone.current
-    })
-    // Skip if navigating away or component is stale
-    if (isNavigatingRef.current) {
-      console.log('[MapEvents] skipping - navigating')
-      return
-    }
-    if (isStale) {
-      console.log('[MapEvents] skipping - stale component')
-      return
-    }
-
-    if (initialLoadDone.current) {
-      console.log('[MapEvents] FIRING request')
-      const bounds = map.getBounds()
-      const bbox = [
-        bounds.getWest(),
-        bounds.getSouth(),
-        bounds.getEast(),
-        bounds.getNorth()
-      ]
-      const currentZoom = map.getZoom()
-      onLoadData(bbox, currentZoom, filters)
-    }
-  }, [selectedAssetTypes, attributeFilters, geometryTypeFilter, map, onLoadData, filters, isStale])
+  }, [map, onLoadData, hasInitialData])
 
   return null
 }

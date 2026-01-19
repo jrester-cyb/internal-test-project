@@ -80,6 +80,10 @@ const workspacesLoaderBundle = createCachedLazyLoader(
   () => import('./loaders/workspaces').then((m) => m.workspacesLoader)
 )
 
+const organizationIndexLoaderBundle = createCachedLazyLoader(
+  () => import('./loaders/workspaces').then((m) => m.organizationIndexLoader)
+)
+
 const mapLoaderBundle = createCachedLazyLoader(
   () => import('./loaders/map').then((m) => m.initialMapLoader)
 )
@@ -180,7 +184,20 @@ const profileChildRoutes = [
 const sharedRoutes = [
   {
     loader: mapLoaderBundle.loader,
-    shouldRevalidate: ({ currentParams, nextParams }: any) => {
+    shouldRevalidate: ({ currentParams, nextParams, nextUrl, currentUrl }: any) => {
+      // Never revalidate for search param changes only (lat/lng/zoom updates)
+      if (currentUrl.pathname === nextUrl.pathname &&
+          currentParams.organizationId === nextParams.organizationId &&
+          currentParams.workspaceId === nextParams.workspaceId) {
+        return false
+      }
+
+      // Only revalidate if we're actually navigating TO a map route
+      const isNavigatingToMap = nextUrl.pathname.endsWith('/map') || nextUrl.pathname.includes('/map?')
+      if (!isNavigatingToMap) {
+        return false
+      }
+
       // Revalidate when organization or workspace changes
       return currentParams.organizationId !== nextParams.organizationId ||
         currentParams.workspaceId !== nextParams.workspaceId
@@ -409,6 +426,7 @@ export const router = createBrowserRouter([
             children: [
               {
                 index: true,
+                loader: organizationIndexLoaderBundle.loader,
                 element: <OrganizationIndexPage />,
               },
               // Org-level routes

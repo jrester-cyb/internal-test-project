@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { useSearchParams, useLoaderData, useParams } from 'react-router-dom'
+import { useSearchParams, useLoaderData, useParams, useNavigation } from 'react-router-dom'
 import { Box } from '@mui/material'
 import type { Asset, AssetTypeAttribute, Cluster } from '@app/types'
-import { searchAssets, fetchAssetTypes, getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '@app/api/assets'
+import { searchAssets, fetchAssetTypes, getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets, fetchClusters, fetchTiles } from '@app/api/assets'
 import { useLayout } from '@app/contexts/LayoutContext'
 import MapDetailsDrawer from '@app/components/MapDetailsDrawer'
 import FilterBuilder from '@app/components/FilterBuilder'
@@ -53,6 +53,18 @@ interface MapLoaderData {
 }
 
 interface MapContextType {
+  // Map data state (owned by context, initialized from loader)
+  assets: Asset[]
+  clusters: Cluster[]
+  center: [number, number]
+  zoom: number
+  bounds: number[] | null
+
+  // Map data actions
+  loadMapData: (bounds: number[], zoom: number) => void
+  setCenter: (center: [number, number]) => void
+  setZoom: (zoom: number) => void
+
   // Drawer state
   drawerState: DrawerState
 
@@ -104,11 +116,11 @@ export function useMapContext() {
 interface MapProviderProps {
   children: ReactNode
   onZoomToAsset?: (asset: Asset) => void
-  currentBounds?: number[] | null
 }
 
-export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProviderProps) {
+export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
   const { organizationId, workspaceId } = useParams<{ organizationId: string; workspaceId?: string }>()
+  const navigation = useNavigation()
 
   if (!organizationId) {
     throw new Error('MapProvider must be used within a route with organizationId parameter')
@@ -116,6 +128,19 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
   const [searchParams, setSearchParams] = useSearchParams()
   const loaderData = useLoaderData() as MapLoaderData | null
   const { sidebarOpen, isMobile } = useLayout()
+
+  // Check if we're navigating away
+  const isNavigating = navigation.state === 'loading'
+
+  // Map data state - initialized from loader
+  const [assets, setAssets] = useState<Asset[]>(loaderData?.initialAssets || [])
+  const [clusters, setClusters] = useState<Cluster[]>(loaderData?.initialClusters || [])
+  const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [39.0, -98.0])
+  const [zoom, setZoom] = useState(loaderData?.initialZoom || 5)
+  const [bounds, setBounds] = useState<number[] | null>(null)
+
+  // Abort controller for canceling pending requests
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Calculate sidebar width for overlay positioning
   const sidebarWidth = isMobile ? 0 : (sidebarOpen ? 240 : 64)
@@ -209,8 +234,17 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
   const workspaceIdRef = useRef(workspaceId)
   workspaceIdRef.current = workspaceId
 
-  const currentBoundsRef = useRef(currentBounds)
-  currentBoundsRef.current = currentBounds
+  const boundsRef = useRef(bounds)
+  boundsRef.current = bounds
+
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+
+  const clusteringDisabledRef = useRef(clusteringDisabled)
+  clusteringDisabledRef.current = clusteringDisabled
+
+  const isNavigatingRef = useRef(isNavigating)
+  isNavigatingRef.current = isNavigating
 
   const selectedAssetTypesRef = useRef(selectedAssetTypes)
   selectedAssetTypesRef.current = selectedAssetTypes
@@ -223,6 +257,9 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
 
   const geometryTypeFilterRef = useRef(geometryTypeFilter)
   geometryTypeFilterRef.current = geometryTypeFilter
+
+  // Ref for loadMapData to avoid dependency cycles
+  const loadMapDataRef = useRef<((bounds: number[], zoom: number) => void) | null>(null)
 
   // Helper to build all filters for API requests
   const buildFilters = useCallback(() => {
@@ -302,6 +339,182 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
     return filterGroups
   }, [])
 
+  // Track if this is the first load (to allow loading even during navigation transition)
+  const isFirstLoadRef = useRef(true)
+
+  // Main data loading function - called on map move and filter changes
+  const loadMapData = useCallback(async (newBounds: number[], newZoom: number) => {
+    // Skip if navigating away, but allow the first load (navigation state might still be 'loading' when component mounts)
+    if (isNavigatingRef.current && !isFirstLoadRef.current) {
+      return
+    }
+    isFirstLoadRef.current = false
+
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
+    // Store bounds for use in other parts of context
+    setBounds(newBounds)
+
+    const currentOrgId = organizationIdRef.current
+    const currentWorkspaceId = workspaceIdRef.current
+    const currentClusteringDisabled = clusteringDisabledRef.current
+
+    if (!currentOrgId) return
+
+    try {
+      // Build filters from current filter state
+      const filterGroups = buildFilters()
+      let mergedFilters: any = null
+      if (filterGroups.length > 0) {
+        mergedFilters = {
+          filters: filterGroups,
+          logic: 'AND'
+        }
+      }
+
+      // When clustering is disabled, always fetch tiles regardless of zoom level
+      if (!currentClusteringDisabled && newZoom < 12) {
+        const clusterData = await fetchClusters(currentOrgId, currentWorkspaceId, newZoom, newBounds, mergedFilters, abortController.signal)
+
+        if (abortController.signal.aborted) return
+
+        const geojsonAssets: Asset[] = []
+        const realClusters: Cluster[] = []
+        for (const c of clusterData.clusters) {
+          if (c.type === 'Feature' && c.geometry && c.properties) {
+            geojsonAssets.push({
+              id: c.id,
+              name: c.properties.name,
+              assetType: c.properties.assetTypeId,
+              h3Index: c.properties.h3Index,
+              geometry: c.geometry
+            })
+          } else {
+            realClusters.push(c)
+          }
+        }
+        setClusters(realClusters)
+        setAssets(geojsonAssets)
+      } else {
+        // Fetch tiles with pagination
+        setClusters([])
+
+        const serverZoom = currentClusteringDisabled ? newZoom : undefined
+        const pageSize = 250
+        const parallelRequests = 3
+
+        // Fetch first page to get total count
+        const firstPageData = await fetchTiles(currentOrgId, currentWorkspaceId, newBounds, pageSize, mergedFilters, abortController.signal, 0, serverZoom)
+
+        if (abortController.signal.aborted) return
+
+        // Parse features
+        const parseFeatures = (features: any[]): Asset[] => {
+          return features.map(f => ({
+            id: f.id,
+            name: f.properties.name,
+            assetType: f.properties.assetTypeId,
+            h3Index: f.properties.h3Index,
+            geometry: f.geometry
+          }))
+        }
+
+        const firstBatch = parseFeatures(firstPageData.features)
+        let allNewAssets = [...firstBatch]
+
+        // Update UI with first batch immediately
+        const newAssetIds = new Set(firstBatch.map(a => a.id))
+        setAssets(prev => {
+          const merged = [...prev.filter(a => !newAssetIds.has(a.id)), ...firstBatch]
+          return merged
+        })
+
+        // Calculate remaining pages needed
+        const total = firstPageData.total
+        const remainingCount = total - firstPageData.features.length
+
+        if (remainingCount > 0 && !abortController.signal.aborted) {
+          const offsets: number[] = []
+          for (let offset = pageSize; offset < total; offset += pageSize) {
+            offsets.push(offset)
+          }
+
+          // Fetch remaining pages in parallel batches
+          for (let i = 0; i < offsets.length && !abortController.signal.aborted; i += parallelRequests) {
+            const batchOffsets = offsets.slice(i, i + parallelRequests)
+
+            const batchPromises = batchOffsets.map(offset =>
+              fetchTiles(currentOrgId, currentWorkspaceId, newBounds, pageSize, mergedFilters, abortController.signal, offset, serverZoom)
+            )
+
+            try {
+              const batchResults = await Promise.all(batchPromises)
+
+              if (abortController.signal.aborted) return
+
+              const batchAssets: Asset[] = []
+              for (const pageData of batchResults) {
+                batchAssets.push(...parseFeatures(pageData.features))
+              }
+
+              allNewAssets = [...allNewAssets, ...batchAssets]
+              const allNewIds = new Set(allNewAssets.map(a => a.id))
+
+              setAssets(prev => {
+                const merged = [...prev.filter(a => !allNewIds.has(a.id)), ...allNewAssets]
+                return merged
+              })
+            } catch (error) {
+              if (error instanceof Error && error.name === 'AbortError') {
+                return
+              }
+              throw error
+            }
+          }
+        }
+
+        // After all pages loaded: remove stale assets
+        if (!abortController.signal.aborted) {
+          const finalIds = new Set(allNewAssets.map(a => a.id))
+          setAssets(prev => prev.filter(a => finalIds.has(a.id)))
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
+      console.error('Error loading map data:', error)
+    }
+  }, [buildFilters])
+
+  // Keep ref updated
+  loadMapDataRef.current = loadMapData
+
+  // Re-fetch when filters change (using stored bounds/zoom)
+  // Note: We use loadMapDataRef to avoid infinite loops - loadMapData is NOT in deps
+  useEffect(() => {
+    // Skip on initial mount or if we don't have bounds yet
+    const currentBounds = boundsRef.current
+    if (!currentBounds || isNavigatingRef.current) return
+
+    loadMapDataRef.current?.(currentBounds, zoomRef.current)
+  }, [selectedAssetTypes, attributeFilters, nameFilter, geometryTypeFilter, clusteringDisabled])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
   const openAssetDrawer = useCallback((asset: Asset, attributes?: AssetTypeAttribute[]) => {
     // Enrich asset with cached asset type name if not already present
     const enrichedAsset = { ...asset }
@@ -372,7 +585,7 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
         operator: 'startswith'
       })
       // Use ref to get latest bounds value
-      const bounds = currentBoundsRef.current
+      const bounds = boundsRef.current
       if (bounds?.length === 4) {
         // Convert bbox to WKT polygon for geometry intersects filter
         const [minLon, minLat, maxLon, maxLat] = bounds
@@ -498,7 +711,7 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
         value: cluster.h3Index,
         operator: 'startswith'
       })
-      const bounds = currentBoundsRef.current
+      const bounds = boundsRef.current
       if (bounds?.length === 4) {
         // Convert bbox to WKT polygon for geometry intersects filter
         const [minLon, minLat, maxLon, maxLat] = bounds
@@ -614,7 +827,7 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
         value: cluster.h3Index,
         operator: 'startswith'
       })
-      const bounds = currentBoundsRef.current
+      const bounds = boundsRef.current
       if (bounds?.length === 4) {
         const [minLon, minLat, maxLon, maxLat] = bounds
         const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
@@ -644,6 +857,11 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
 
   // Sync drawer state to URL
   useEffect(() => {
+    // Don't update URL while navigating - this can cancel the pending navigation
+    if (isNavigating) {
+      return
+    }
+
     const newParams = new URLSearchParams(searchParams)
 
     if (drawerState.isOpen && drawerState.content) {
@@ -660,7 +878,7 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
     }
 
     setSearchParams(newParams, { replace: true })
-  }, [drawerState, setSearchParams, searchParams])
+  }, [drawerState, setSearchParams, searchParams, isNavigating])
 
   // Build drawer props based on content type
   const getDrawerProps = () => {
@@ -711,6 +929,17 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
 
   return (
     <MapContext.Provider value={{
+      // Map data state
+      assets,
+      clusters,
+      center,
+      zoom,
+      bounds,
+      // Map data actions
+      loadMapData,
+      setCenter,
+      setZoom,
+      // Drawer state
       drawerState,
       selectedAssetId,
       selectedClusterId,
