@@ -899,7 +899,16 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
         type: 'asset' as const,
         asset: content.asset,
         attributes: content.attributes,
-        onZoomToAsset: zoomToAsset
+        onZoomToAsset: zoomToAsset,
+        onAssetUpdate: (updatedAsset: Asset) => {
+          // Update the drawer content with the updated asset
+          setDrawerState(prev => ({
+            ...prev,
+            content: prev.content?.type === 'asset'
+              ? { ...prev.content, asset: updatedAsset }
+              : prev.content
+          }))
+        }
       }
     }
 

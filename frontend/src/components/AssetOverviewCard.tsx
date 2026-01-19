@@ -1,10 +1,11 @@
 import { Box, Card, CardContent, Chip, Container, Typography } from '@mui/material'
 import { Place as PlaceIcon, Category as CategoryIcon, Public as PublicIcon, Edit as EditIcon, Share as ShareIcon, Download as DownloadIcon, FileCopy as CloneIcon, Info as InfoIcon, OpenInNew as OpenInNewIcon, MyLocation as ZoomIcon } from '@mui/icons-material'
-import type { Asset } from '@app/types'
+import type { Asset, AssetTypeAttribute } from '@app/types'
 import ActionButtons from '@app/components/ActionButtons'
 import CopyableText from '@app/components/CopyableText'
 import PvDrawer from '@app/components/PvDrawer'
 import SystemDetailsGrid, { type FieldConfig } from '@app/components/SystemDetailsGrid'
+import AssetEditDialog from '@app/components/AssetEditDialog'
 import { useState, useRef, useEffect, useMemo } from 'react'
 
 // Field configuration for Asset System Details
@@ -36,7 +37,6 @@ interface AssetOverviewCardProps {
   mode?: AssetOverviewMode
   globalValuesOnly?: boolean
   onGlobalValuesToggle?: () => void
-  onEdit?: (asset: Asset) => void
   /** URL to share this asset (copies to clipboard on click) */
   shareUrl?: string
   /** URL to view this asset on the map (page mode) */
@@ -46,6 +46,12 @@ interface AssetOverviewCardProps {
   onZoomToAsset?: (asset: Asset) => void
   onClone?: () => void
   onDownload?: () => void
+  /** Props for inline edit dialog */
+  organizationId?: string
+  workspaceId?: string
+  assetTypeId?: string
+  attributes?: AssetTypeAttribute[]
+  onEditSuccess?: (updatedAsset: Asset) => void
 }
 
 export default function AssetOverviewCard({
@@ -53,19 +59,27 @@ export default function AssetOverviewCard({
   mode = 'page',
   globalValuesOnly = false,
   onGlobalValuesToggle,
-  onEdit,
   shareUrl,
   viewOnMapUrl,
   viewDetailsUrl,
   onZoomToAsset,
   onClone,
-  onDownload
+  onDownload,
+  organizationId,
+  workspaceId,
+  assetTypeId,
+  attributes,
+  onEditSuccess,
 }: AssetOverviewCardProps) {
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const [systemDetailsOpen, setSystemDetailsOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
   const leftContentRef = useRef<HTMLDivElement>(null)
+
+  // Determine if edit is available (need org, assetType, and attributes)
+  const canEdit = Boolean(organizationId && assetTypeId && attributes && attributes.length >= 0)
 
   // Track container width for responsive buttons
   useEffect(() => {
@@ -98,11 +112,11 @@ export default function AssetOverviewCard({
     const actionsList = []
 
     // Edit (both modes) - show first, collapse last
-    if (onEdit) {
+    if (canEdit) {
       actionsList.push({
         label: 'Edit',
         icon: <EditIcon fontSize="small" />,
-        onClick: () => onEdit(asset),
+        onClick: () => setEditDialogOpen(true),
         color: 'inherit' as const,
         variant: 'outlined' as const,
         minWidth: mode === 'drawer' ? 500 : 700
@@ -208,7 +222,7 @@ export default function AssetOverviewCard({
     }
 
     return actionsList
-  }, [mode, globalValuesOnly, onGlobalValuesToggle, onEdit, shareUrl, viewOnMapUrl, viewDetailsUrl, onZoomToAsset, onClone, onDownload, asset])
+  }, [mode, globalValuesOnly, onGlobalValuesToggle, canEdit, shareUrl, viewOnMapUrl, viewDetailsUrl, onZoomToAsset, onClone, onDownload, asset])
 
   return (
     <Container maxWidth={false} sx={{ py: 2 }} ref={headerRef}>
@@ -284,6 +298,23 @@ export default function AssetOverviewCard({
           />
         </Box>
       </PvDrawer>
+
+      {/* Edit Dialog */}
+      {canEdit && (
+        <AssetEditDialog
+          open={editDialogOpen}
+          asset={asset}
+          attributes={attributes || []}
+          organizationId={organizationId || ''}
+          workspaceId={workspaceId || ''}
+          assetTypeId={assetTypeId || ''}
+          onClose={() => setEditDialogOpen(false)}
+          onSuccess={(updatedAsset) => {
+            setEditDialogOpen(false)
+            onEditSuccess?.(updatedAsset)
+          }}
+        />
+      )}
     </Container>
   )
 }

@@ -61,9 +61,9 @@ export interface AssetContentProps {
   workspaceId?: string
   asset: Asset
   attributes?: AssetTypeAttribute[]
-  onEdit?: (asset: Asset) => void
   onDelete?: (asset: Asset) => void
   onZoomToAsset?: (asset: Asset) => void
+  onAssetUpdate?: (asset: Asset) => void
 }
 
 export default function AssetContent({
@@ -71,9 +71,9 @@ export default function AssetContent({
   workspaceId,
   asset,
   attributes: propAttributes,
-  onEdit,
   onDelete,
   onZoomToAsset,
+  onAssetUpdate,
 }: AssetContentProps) {
   const { activeOrganization, isGlobalMode } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
@@ -355,12 +355,19 @@ export default function AssetContent({
               mode="drawer"
               globalValuesOnly={globalValuesOnly}
               onGlobalValuesToggle={isGlobalMode ? undefined : () => setGlobalValuesOnly(!globalValuesOnly)}
-              onEdit={onEdit}
               shareUrl={shareUrl}
               viewDetailsUrl={viewDetailsUrl}
               onZoomToAsset={onZoomToAsset}
               onClone={() => console.debug('Clone asset:', asset.id)}
               onDownload={() => console.debug('Download asset:', asset.id)}
+              organizationId={organizationId}
+              workspaceId={workspaceId}
+              assetTypeId={displayAsset.assetType}
+              attributes={Array.from(displayAttributesMap.values())}
+              onEditSuccess={(updatedAsset) => {
+                setFullAsset(updatedAsset)
+                onAssetUpdate?.(updatedAsset)
+              }}
             />
           )}
         </Box>

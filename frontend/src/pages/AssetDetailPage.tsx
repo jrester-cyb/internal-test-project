@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
 import { Box, Chip, Container, Grid, Typography } from '@mui/material'
 import { Public as PublicIcon } from '@mui/icons-material'
@@ -9,7 +9,6 @@ import AssetTreeCard from '@app/components/AssetTreeCard'
 import TasksCard from '@app/components/TasksCard'
 import FilesCard from '@app/components/FilesCard'
 import { AssetAuditLogSection } from '@app/components/AssetAuditLogSection'
-import AssetEditDialog from '@app/components/AssetEditDialog'
 import { fetchRelatedAssets, fetchAssetAttributeDefinitions, type RelatedAssetsResponse, type RelatedAsset } from '@app/api/assets'
 import type { AssetDetailLoaderData } from '@app/loaders/assetTypes'
 import { useOrganization } from '@app/contexts/OrganizationContext'
@@ -31,7 +30,6 @@ export default function AssetDetailPage() {
     )
   }
 
-  const headerRef = useRef<HTMLDivElement>(null)
   const [relatedAssets, setRelatedAssets] = useState<RelatedAssetsResponse | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedError, setRelatedError] = useState<string | null>(null)
@@ -39,7 +37,6 @@ export default function AssetDetailPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [excludedScopes, setExcludedScopes] = useState<string[]>([])
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [currentAsset, setCurrentAsset] = useState<Asset>(asset)
   const [globalValuesOnly, setGlobalValuesOnly] = useState(false)
   const [loadingGlobalValues, setLoadingGlobalValues] = useState(false)
@@ -142,17 +139,7 @@ export default function AssetDetailPage() {
     }
   }, [organizationId, workspaceId, asset.id])
 
-
-  const handleEdit = () => {
-    setEditDialogOpen(true)
-  }
-
-  const handleEditDialogClose = () => {
-    setEditDialogOpen(false)
-  }
-
   const handleEditSuccess = (updatedAsset: Asset) => {
-    setEditDialogOpen(false)
     setCurrentAsset(updatedAsset)
   }
 
@@ -213,7 +200,6 @@ export default function AssetDetailPage() {
         mode="page"
         globalValuesOnly={globalValuesOnly}
         onGlobalValuesToggle={isGlobalMode ? undefined : () => setGlobalValuesOnly(!globalValuesOnly)}
-        onEdit={handleEdit}
         shareUrl={shareUrl}
         viewOnMapUrl={viewOnMapUrl}
         onClone={() => {
@@ -221,6 +207,11 @@ export default function AssetDetailPage() {
           console.debug('Clone asset:', asset.id)
         }}
         onDownload={handleDownload}
+        organizationId={organizationId}
+        workspaceId={workspaceId}
+        assetTypeId={assetTypeId}
+        attributes={allLoadedAttributes}
+        onEditSuccess={handleEditSuccess}
       />
 
       {/* Scrollable Content */}
@@ -297,17 +288,6 @@ export default function AssetDetailPage() {
           </Grid>
         </Container>
       </Box>
-
-      <AssetEditDialog
-        open={editDialogOpen}
-        onClose={handleEditDialogClose}
-        asset={currentAsset}
-        attributes={allLoadedAttributes}
-        organizationId={organizationId || ''}
-        workspaceId={workspaceId || ''}
-        assetTypeId={assetTypeId || ''}
-        onSuccess={handleEditSuccess}
-      />
     </Box>
   )
 }
