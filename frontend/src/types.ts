@@ -280,3 +280,24 @@ export interface GroupUpdateInput {
   name?: string
   description?: string
 }
+
+// Organization types
+export interface OrganizationMember {
+  id: string
+  organization: string
+  user: string
+  username: string
+  email: string
+  role: 'owner' | 'admin' | 'member'
+  joined_at: string
+}
+
+export interface OrganizationCreateInput {
+  name: string
+  description?: string
+}
+
+export interface OrganizationUpdateInput {
+  name?: string
+  description?: string
+}

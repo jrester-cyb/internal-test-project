@@ -1,7 +1,8 @@
 from django.db import models
 from polymorphic.models import PolymorphicModel
+import pgtrigger
 import uuid
-from core.models.soft_delete import PolymorphicSoftDeleteMixin, SoftDeleteMixin
+from core.models.soft_delete import PolymorphicSoftDeleteMixin, SoftDeleteMixin, merge_triggers
 
 
 class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
@@ -29,6 +30,44 @@ class BaseAttributeValue(PolymorphicSoftDeleteMixin, PolymorphicModel):
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
+        triggers = merge_triggers(
+            [
+                pgtrigger.Trigger(
+                    name="update_cached_attributes",
+                    operation=pgtrigger.Insert | pgtrigger.Update | pgtrigger.Delete,
+                    when=pgtrigger.After,
+                    func="""
+                    DECLARE
+                        v_asset_id UUID;
+                    BEGIN
+                        IF TG_OP = 'DELETE' THEN
+                            v_asset_id := OLD.asset_id;
+                        ELSE
+                            v_asset_id := NEW.asset_id;
+                        END IF;
+
+                        -- Rebuild the asset's cached_attributes
+                        PERFORM rebuild_asset_cached_attributes(v_asset_id);
+
+                        -- Also check if this value is a workspace override and update that
+                        IF TG_OP = 'DELETE' THEN
+                            -- For deletes, check if the deleted value was an override
+                            PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, OLD.asset_id)
+                            FROM assets_workspaceattributevalueoverride wavo
+                            WHERE wavo.override_value_id = OLD.id;
+                            RETURN OLD;
+                        ELSE
+                            -- For inserts/updates, check if the new value is an override
+                            PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, NEW.asset_id)
+                            FROM assets_workspaceattributevalueoverride wavo
+                            WHERE wavo.override_value_id = NEW.id;
+                            RETURN NEW;
+                        END IF;
+                    END;
+                    """,
+                ),
+            ]
+        )
 
     def __str__(self):
         return f"{self.asset.name}.{self.asset_type_attribute}"
@@ -93,6 +132,44 @@ class WorkspaceAttributeValueOverride(SoftDeleteMixin, models.Model):
             models.Index(fields=["workspace", "asset_type_attribute"]),
             models.Index(fields=["base_value"]),
         ]
+        triggers = merge_triggers(
+            [
+                pgtrigger.Trigger(
+                    name="update_workspace_overrides",
+                    operation=pgtrigger.Insert | pgtrigger.Update | pgtrigger.Delete,
+                    when=pgtrigger.After,
+                    func="""
+                    DECLARE
+                        v_asset_id UUID;
+                    BEGIN
+                        IF TG_OP = 'DELETE' THEN
+                            -- Get the asset_id from the override_value
+                            SELECT asset_id INTO v_asset_id
+                            FROM assets_baseattributevalue
+                            WHERE id = OLD.override_value_id;
+
+                            -- Rebuild the workspace asset overrides
+                            PERFORM rebuild_workspace_asset_cached_attribute_overrides(OLD.workspace_id, v_asset_id);
+                            -- Also rebuild the asset's base cached_attributes (value might now be in base)
+                            PERFORM rebuild_asset_cached_attributes(v_asset_id);
+                            RETURN OLD;
+                        ELSE
+                            -- Get the asset_id from the override_value
+                            SELECT asset_id INTO v_asset_id
+                            FROM assets_baseattributevalue
+                            WHERE id = NEW.override_value_id;
+
+                            -- Rebuild the workspace asset overrides
+                            PERFORM rebuild_workspace_asset_cached_attribute_overrides(NEW.workspace_id, v_asset_id);
+                            -- Also rebuild the asset's base cached_attributes (value is now an override, not base)
+                            PERFORM rebuild_asset_cached_attributes(v_asset_id);
+                            RETURN NEW;
+                        END IF;
+                    END;
+                    """,
+                ),
+            ]
+        )
 
     def __str__(self):
         return (

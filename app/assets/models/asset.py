@@ -47,6 +47,11 @@ class Asset(SoftDeleteMixin):
         related_name="assets_with_default",
         help_text="Default folder for file uploads related to this asset",
     )
+    cached_attributes = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Denormalized JSON of global attribute values: {api_key: value}. Updated by database triggers.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -58,6 +63,12 @@ class Asset(SoftDeleteMixin):
             models.Index(
                 fields=["asset_type_id", "created_at"],
                 name="idx_asset_type_created",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            # Composite index for organization + h3_index filtering (common search pattern)
+            models.Index(
+                fields=["organization_id", "h3_index"],
+                name="idx_org_h3",
                 condition=models.Q(deleted_at__isnull=True),
             ),
         ]
@@ -286,6 +297,11 @@ class WorkspaceAsset(models.Model):
         blank=True,
         related_name="added_workspace_assets",
         help_text="User who added this asset to the workspace",
+    )
+    cached_attribute_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Denormalized JSON of workspace-specific attribute overrides: {api_key: value}. Updated by database triggers.",
     )
 
     class Meta:

@@ -2,6 +2,8 @@ from typing import Any
 from rest_framework import serializers
 import re
 from django.db.models import Q
+from django.db.models.functions import Cast
+from django.db.models import FloatField
 from django.contrib.gis.geos import GEOSGeometry
 from django.core.cache import cache
 import json
@@ -11,42 +13,55 @@ from assets.models import GlobalAssetTypeAttribute, WorkspaceLocalAssetTypeAttri
 from utils.units.helpers.unit_conversion import convert_value, validate_unit
 
 
-def get_attributes_by_api_key(api_key: str) -> list[dict]:
+def get_attribute_info_by_api_key(api_key: str) -> dict | None:
     """
-    Get attribute definitions by api_key, with caching.
-    Returns a list of dicts with id, attribute_type, unit, and has_choices.
+    Get attribute type and unit info by api_key, with caching.
+    Returns dict with attribute_type and unit, or None if not found.
     Cache TTL is 5 minutes.
     """
-    cache_key = f"attr_filter:{api_key}"
+    cache_key = f"attr_info:{api_key}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        return cached if cached != "NOT_FOUND" else None
 
     from itertools import chain
 
-    global_attrs = GlobalAssetTypeAttribute.objects.filter(api_key=api_key).prefetch_related(
-        "choices"
-    ).only("id", "attribute_type", "unit")
-    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(api_key=api_key).prefetch_related(
-        "choices"
-    ).only("id", "attribute_type", "unit")
+    global_attrs = GlobalAssetTypeAttribute.objects.filter(
+        api_key=api_key, deleted_at__isnull=True
+    ).only("attribute_type", "unit").first()
 
-    # Convert to list of dicts for caching (can't cache querysets)
-    attrs = [
-        {
-            "id": attr.id,
-            "attribute_type": attr.attribute_type,
-            "unit": attr.unit,
-            "has_choices": attr.choices.exists(),
+    if global_attrs:
+        result = {
+            "attribute_type": global_attrs.attribute_type,
+            "unit": global_attrs.unit,
         }
-        for attr in chain(global_attrs, local_attrs)
-    ]
+        cache.set(cache_key, result, timeout=300)
+        return result
 
-    cache.set(cache_key, attrs, timeout=300)  # 5 minutes
-    return attrs
+    local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
+        api_key=api_key, deleted_at__isnull=True
+    ).only("attribute_type", "unit").first()
+
+    if local_attrs:
+        result = {
+            "attribute_type": local_attrs.attribute_type,
+            "unit": local_attrs.unit,
+        }
+        cache.set(cache_key, result, timeout=300)
+        return result
+
+    cache.set(cache_key, "NOT_FOUND", timeout=300)
+    return None
 
 
 class FilterGroupSerializer(serializers.Serializer):
+    """
+    Builds filter queries for Asset filtering.
+
+    For attribute filters (field starts with "attributes."), queries use the
+    Asset.cached_attributes JSONB field directly for efficient filtering.
+    """
+
     ALLOWED_OPERATORS = {
         "text": [
             "exact",
@@ -79,26 +94,6 @@ class FilterGroupSerializer(serializers.Serializer):
         ],
         "geometry": ["within", "intersects", "contains", "exact"],
         "h3_index": ["exact", "startswith"],
-    }
-    # Lookup paths for direct attribute values (no choices)
-    LOOKUP_MAP = {
-        "text": "textattributevalue__value",
-        "number": "numberattributevalue__value",
-        "boolean": "booleanattributevalue__value",
-        "date": "dateattributevalue__value",
-        "datetime": "datetimeattributevalue__value",
-        "json": "jsonattributevalue__value",
-        "link": "linkattributevalue__url",
-    }
-    # Lookup paths for choice attribute values (via ChoiceAttributeValue -> polymorphic choice)
-    CHOICE_LOOKUP_MAP = {
-        "text": "choiceattributevalue__choice__textattributechoice__value",
-        "number": "choiceattributevalue__choice__numberattributechoice__value",
-        "date": "choiceattributevalue__choice__dateattributechoice__value",
-        "datetime": "choiceattributevalue__choice__datetimeattributechoice__value",
-        "json": "choiceattributevalue__choice__jsonattributechoice__value",
-        "link": "choiceattributevalue__choice__linkattributechoice__url",
-        # Boolean attributes cannot have choices (enforced by DB trigger)
     }
 
     inverse = serializers.BooleanField(default=False)
@@ -139,6 +134,12 @@ class FilterGroupSerializer(serializers.Serializer):
         return value
 
     def build_filter_query(self):
+        """
+        Build a Django Q object for filtering assets.
+
+        For attribute filters, uses the Asset.cached_attributes JSONB field
+        which is maintained by database triggers.
+        """
         self.is_valid(raise_exception=True)
         field = self.validated_data["field"]
         operator = self.validated_data["operator"]
@@ -146,264 +147,135 @@ class FilterGroupSerializer(serializers.Serializer):
         query_unit = self.validated_data.get("unit", "")
 
         if field.startswith("attributes.") or field.startswith("attributes__"):
-            attr_prefix = field.replace(".", "__")
-            parts = attr_prefix.split("__")
-            if len(parts) == 2:
-                api_key = parts[1]
-                # Get attribute definitions (cached)
-                attrs = get_attributes_by_api_key(api_key)
-
-                q = None
-                # Handle nin (not in) operator - convert to 'in' with negation
-                is_negated = operator == "nin"
-                actual_operator = "in" if is_negated else operator
-
-                for attr in attrs:
-                    attr_type = attr["attribute_type"]
-                    attr_id = attr["id"]
-                    attr_unit = attr["unit"]
-                    has_choices = attr.get("has_choices", False)
-                    filter_value = value
-
-                    # Select the correct lookup path based on whether the attribute has choices
-                    lookup_map = self.CHOICE_LOOKUP_MAP if has_choices else self.LOOKUP_MAP
-
-                    # For number types with units, convert the query value to the stored unit
-                    if attr_type == "number" and query_unit and attr_unit:
-                        if isinstance(filter_value, list):
-                            filter_value = [
-                                (
-                                    convert_value(v, query_unit, attr_unit)
-                                    if v is not None
-                                    else v
-                                )
-                                for v in filter_value
-                            ]
-                        else:
-                            filter_value = (
-                                convert_value(filter_value, query_unit, attr_unit)
-                                if filter_value is not None
-                                else filter_value
-                            )
-
-                    if isinstance(filter_value, list):
-                        has_null = None in filter_value
-                        non_null_values = [v for v in filter_value if v is not None]
-                    else:
-                        has_null = filter_value is None
-                        non_null_values = [] if has_null else [filter_value]
-
-                    # Link type searches both url and display_text fields
-                    if attr_type == "link":
-                        # Select the correct path prefix based on whether attribute has choices
-                        if has_choices:
-                            url_path = "choiceattributevalue__choice__linkattributechoice__url"
-                            text_path = "choiceattributevalue__choice__linkattributechoice__display_text"
-                        else:
-                            url_path = "linkattributevalue__url"
-                            text_path = "linkattributevalue__display_text"
-
-                        if actual_operator == "in":
-                            if has_null:
-                                new_q = (
-                                    Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id
-                                        }
-                                    )
-                                    & (
-                                        Q(
-                                            **{
-                                                f"attributes__{url_path}__in": non_null_values
-                                            }
-                                        )
-                                        | Q(
-                                            **{
-                                                f"attributes__{text_path}__in": non_null_values
-                                            }
-                                        )
-                                    )
-                                ) | Q(
-                                    **{
-                                        "attributes__asset_type_attribute_id": attr_id,
-                                        f"attributes__isnull": True,
-                                    }
-                                )
-                            else:
-                                new_q = Q(
-                                    **{"attributes__asset_type_attribute_id": attr_id}
-                                ) & (
-                                    Q(
-                                        **{
-                                            f"attributes__{url_path}__in": filter_value
-                                        }
-                                    )
-                                    | Q(
-                                        **{
-                                            f"attributes__{text_path}__in": filter_value
-                                        }
-                                    )
-                                )
-                        else:
-                            if has_null:
-                                new_q = Q(
-                                    **{
-                                        "attributes__asset_type_attribute_id": attr_id,
-                                        f"attributes__isnull": True,
-                                    }
-                                )
-                            else:
-                                new_q = Q(
-                                    **{"attributes__asset_type_attribute_id": attr_id}
-                                ) & (
-                                    Q(
-                                        **{
-                                            f"attributes__{url_path}__{actual_operator}": filter_value
-                                        }
-                                    )
-                                    | Q(
-                                        **{
-                                            f"attributes__{text_path}__{actual_operator}": filter_value
-                                        }
-                                    )
-                                )
-                    else:
-                        if actual_operator == "in":
-                            if is_negated:
-                                # Use Exists with a filtered subquery to ensure both
-                                # asset_type_attribute_id and value are checked together
-                                # in the same row (avoiding Django's separate subquery issue)
-                                from django.db.models import Exists, OuterRef
-                                from assets.models import BaseAttributeValue
-
-                                if has_null:
-                                    # nin [null] or nin [null, "foo", ...]:
-                                    # Exclude assets with null values (or specified non-null values)
-                                    # = Include assets that HAVE a non-null value not in the exclusion list
-                                    subquery = BaseAttributeValue.objects.filter(
-                                        asset_id=OuterRef("pk"),
-                                        asset_type_attribute_id=attr_id,
-                                        **{f"{lookup_map[attr_type]}__isnull": False},
-                                    )
-                                    if non_null_values:
-                                        # Also exclude specific values
-                                        subquery = subquery.exclude(
-                                            **{f"{lookup_map[attr_type]}__in": non_null_values}
-                                        )
-                                    new_q = Exists(subquery)
-                                else:
-                                    # nin ["foo", "bar"]: Exclude assets with these specific values
-                                    subquery = BaseAttributeValue.objects.filter(
-                                        asset_id=OuterRef("pk"),
-                                        asset_type_attribute_id=attr_id,
-                                        **{f"{lookup_map[attr_type]}__in": filter_value},
-                                    )
-                                    new_q = ~Exists(subquery)
-                            else:
-                                if has_null:
-                                    new_q = Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{lookup_map[attr_type]}__in": non_null_values,
-                                        }
-                                    ) | Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{lookup_map[attr_type]}__isnull": True,
-                                        }
-                                    )
-                                else:
-                                    new_q = Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{lookup_map[attr_type]}__in": filter_value,
-                                        }
-                                    )
-                        else:
-                            if is_negated:
-                                new_q = Q(
-                                    **{"attributes__asset_type_attribute_id": attr_id}
-                                ) & ~Q(
-                                    **{
-                                        f"attributes__{lookup_map[attr_type]}__{actual_operator}": filter_value
-                                    }
-                                )
-                            else:
-                                if has_null:
-                                    new_q = Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{lookup_map[attr_type]}__isnull": True,
-                                        }
-                                    )
-                                else:
-                                    new_q = Q(
-                                        **{
-                                            "attributes__asset_type_attribute_id": attr_id,
-                                            f"attributes__{lookup_map[attr_type]}__{actual_operator}": filter_value,
-                                        }
-                                    )
-
-                    if q is None:
-                        q = new_q
-                    else:
-                        # Logic for combining queries across multiple attributes with same api_key:
-                        #
-                        # For nin with specific values (e.g., nin ["foo", "bar"]):
-                        #   "Exclude assets where value is foo OR bar"
-                        #   = NOT(attr1 in values) AND NOT(attr2 in values)
-                        #   = AND logic
-                        #
-                        # For nin with only null (e.g., nin [null]):
-                        #   "Exclude assets where value is null" = "Include assets that HAVE a value"
-                        #   = (attr1 exists and not null) OR (attr2 exists and not null)
-                        #   = OR logic (asset is included if it has a value in ANY matching attribute)
-                        #
-                        # For positive filters (in, exact, etc.):
-                        #   "Include assets where value matches"
-                        #   = (attr1 matches) OR (attr2 matches)
-                        #   = OR logic
-                        if is_negated and non_null_values:
-                            # nin with specific values: AND logic
-                            q &= new_q
-                        else:
-                            # nin with only null, or positive filters: OR logic
-                            q |= new_q
-
-                if q is None:
-                    return Q()
-                if self.validated_data.get("inverse", False):
-                    q = ~q
-                return q
-            else:
-                # For deeper paths, only JSONField supports nested lookups
-                api_key = parts[1]
-                json_path = "__".join(parts[2:])
-                # Get attribute definitions (cached)
-                attrs = get_attributes_by_api_key(api_key)
-                attr_ids = [attr["id"] for attr in attrs]
-                if not attr_ids:
-                    return Q()
-
-                q = Q(
-                    **{
-                        "attributes__asset_type_attribute_id__in": attr_ids,
-                        f"attributes__jsonattributevalue__value__{json_path}__{operator}": value,
-                    }
-                )
-                if self.validated_data.get("inverse", False):
-                    q = ~q
-                return q
+            return self._build_cached_attributes_query(field, operator, value, query_unit)
 
         # Special handling for geometry_type filter
+        return self._build_regular_field_query(field, operator, value)
+
+    def _build_cached_attributes_query(self, field: str, operator: str, value: Any, query_unit: str) -> Q:
+        """
+        Build a Q object for filtering on Asset.cached_attributes JSONB field.
+
+        The cached_attributes field contains: {"api_key": value, ...}
+        """
+        attr_prefix = field.replace(".", "__")
+        parts = attr_prefix.split("__")
+
+        if len(parts) < 2:
+            return Q()
+
+        api_key = parts[1]
+
+        # Get attribute info for unit conversion (cached)
+        attr_info = get_attribute_info_by_api_key(api_key)
+
+        filter_value = value
+
+        # For number types with units, convert the query value to the stored unit
+        if attr_info and attr_info.get("attribute_type") == "number" and query_unit:
+            attr_unit = attr_info.get("unit", "")
+            if attr_unit:
+                if isinstance(filter_value, list):
+                    filter_value = [
+                        convert_value(v, query_unit, attr_unit) if v is not None else v
+                        for v in filter_value
+                    ]
+                elif filter_value is not None:
+                    filter_value = convert_value(filter_value, query_unit, attr_unit)
+
+        # Handle nested JSON paths (e.g., attributes.my_json_field.nested.key)
+        if len(parts) > 2:
+            # Build nested JSONB path: cached_attributes__api_key__nested__key
+            json_path = "__".join(parts[1:])
+            return self._build_jsonb_query(f"cached_attributes__{json_path}", operator, filter_value)
+
+        # Simple attribute lookup: cached_attributes__api_key
+        json_field = f"cached_attributes__{api_key}"
+        return self._build_jsonb_query(json_field, operator, filter_value)
+
+    def _build_jsonb_query(self, json_field: str, operator: str, value: Any) -> Q:
+        """
+        Build a Q object for JSONB field queries with various operators.
+        """
+        is_negated = operator == "nin"
+        actual_operator = "in" if is_negated else operator
+
+        # Handle null values
+        if isinstance(value, list):
+            has_null = None in value
+            non_null_values = [v for v in value if v is not None]
+        else:
+            has_null = value is None
+            non_null_values = [] if has_null else [value]
+
+        # Build the query based on operator
+        if actual_operator == "in":
+            if has_null and non_null_values:
+                # Match null OR any of the non-null values
+                q = Q(**{f"{json_field}__isnull": True}) | Q(**{f"{json_field}__in": non_null_values})
+            elif has_null:
+                # Match null only
+                q = Q(**{f"{json_field}__isnull": True})
+            else:
+                # Match any of the values
+                q = Q(**{f"{json_field}__in": value})
+        elif actual_operator == "exact":
+            if has_null:
+                q = Q(**{f"{json_field}__isnull": True})
+            else:
+                q = Q(**{json_field: value})
+        elif actual_operator == "contains":
+            # For text fields, use icontains for case-insensitive search
+            q = Q(**{f"{json_field}__icontains": value})
+        elif actual_operator == "icontains":
+            q = Q(**{f"{json_field}__icontains": value})
+        elif actual_operator == "startswith":
+            q = Q(**{f"{json_field}__startswith": value})
+        elif actual_operator == "istartswith":
+            q = Q(**{f"{json_field}__istartswith": value})
+        elif actual_operator == "endswith":
+            q = Q(**{f"{json_field}__endswith": value})
+        elif actual_operator == "iendswith":
+            q = Q(**{f"{json_field}__iendswith": value})
+        elif actual_operator == "iexact":
+            q = Q(**{f"{json_field}__iexact": value})
+        elif actual_operator in ("lt", "lte", "gt", "gte"):
+            # For numeric comparisons on JSONB, we need to ensure proper type handling
+            q = Q(**{f"{json_field}__{actual_operator}": value})
+        elif actual_operator == "range":
+            # Range expects a tuple/list of (start, end)
+            if isinstance(value, (list, tuple)) and len(value) == 2:
+                q = Q(**{f"{json_field}__gte": value[0]}) & Q(**{f"{json_field}__lte": value[1]})
+            else:
+                q = Q()
+        elif actual_operator == "ne":
+            # Not equal
+            if has_null:
+                q = Q(**{f"{json_field}__isnull": False})
+            else:
+                q = ~Q(**{json_field: value})
+        else:
+            # Fallback to generic lookup
+            q = Q(**{f"{json_field}__{actual_operator}": value})
+
+        # Apply negation for nin operator
+        if is_negated:
+            q = ~q
+
+        # Apply inverse if set
+        if self.validated_data.get("inverse", False):
+            q = ~q
+
+        return q
+
+    def _build_regular_field_query(self, field: str, operator: str, value: Any) -> Q:
+        """Build Q object for non-attribute fields."""
         if field == "geometry_type":
             # geometry_type filters on the geometry's type (Point, LineString, Polygon)
             # Use geometry__geom_type which returns the OGC geometry type name
             if operator == "nin":
-                # Exclude these geometry types
                 query_obj = ~Q(geometry__geom_type__in=value)
             elif operator == "in":
-                # Include only these geometry types
                 query_obj = Q(geometry__geom_type__in=value)
             elif operator == "exact":
                 query_obj = Q(geometry__geom_type=value)
@@ -416,6 +288,8 @@ class FilterGroupSerializer(serializers.Serializer):
         # Handle nin (not in) operator for regular fields
         if operator == "nin":
             query_obj = ~Q(**{f"{field}__in": value})
+        elif operator == "exact":
+            query_obj = Q(**{field: value})
         else:
             query_obj = Q(**{f"{field}__{operator}": value})
         if self.validated_data.get("inverse", False):

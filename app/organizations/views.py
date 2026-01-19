@@ -1,13 +1,22 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 from audit_log.mixins import AuditLogMixin
 from users_manager.permissions import permission_cache
+from users_manager.permissions.drf_permissions import make_instance_permission_class
 from .models import Organization, OrganizationMembership
 from workspaces.models import Workspace
+
+
+# Permission class for managing organizations
+CanManageOrganizations = make_instance_permission_class(
+    ["instance:manage", "organization:create", "organization:write", "organization:delete"],
+    message="You do not have permission to manage organizations.",
+)
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -92,9 +101,42 @@ class OrganizationViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Organization.objects.none()
 
+        # Instance admins can see all organizations
+        user_perms = permission_cache.get_instance_permissions(user)
+        if "instance:manage" in user_perms or "organization:read" in user_perms:
+            return Organization.objects.all()
+
         # Get cached organization IDs the user has access to
         accessible_org_ids = permission_cache.get_user_organization_ids(user)
         return Organization.objects.filter(id__in=accessible_org_ids)
+
+    def _check_manage_permission(self, permission_codename: str):
+        """Check if user has permission to manage organizations."""
+        user = self.request.user
+        user_perms = permission_cache.get_instance_permissions(user)
+
+        # instance:manage grants all permissions
+        if "instance:manage" in user_perms:
+            return
+
+        if permission_codename not in user_perms:
+            raise PermissionDenied(f"You do not have permission to {permission_codename.split(':')[1]} organizations.")
+
+    def create(self, request, *args, **kwargs):
+        self._check_manage_permission("organization:create")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        self._check_manage_permission("organization:write")
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._check_manage_permission("organization:write")
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        self._check_manage_permission("organization:delete")
+        return super().destroy(request, *args, **kwargs)
 
     @extend_schema(tags=["Organizations"])
     @action(detail=True, methods=["get"])

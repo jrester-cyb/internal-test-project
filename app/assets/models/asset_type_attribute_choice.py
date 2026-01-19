@@ -99,6 +99,30 @@ class TextAttributeChoice(AssetTypeAttributeChoice):
                     RETURN NEW;
                 """,
             ),
+            pgtrigger.Trigger(
+                name="update_cached_on_choice_change",
+                operation=pgtrigger.Update,
+                when=pgtrigger.After,
+                func="""
+                    -- Rebuild all assets that use this choice
+                    PERFORM rebuild_asset_cached_attributes(bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL;
+
+                    -- Also rebuild workspace overrides for assets using this choice
+                    PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    JOIN assets_workspaceattributevalueoverride wavo ON wavo.override_value_id = bav.id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL
+                    AND wavo.deleted_at IS NULL;
+
+                    RETURN NEW;
+                """,
+            ),
         ]
 
 
@@ -127,6 +151,30 @@ class NumberAttributeChoice(AssetTypeAttributeChoice):
                     ) THEN
                         RAISE EXCEPTION 'A choice with this value already exists for this attribute';
                     END IF;
+                    RETURN NEW;
+                """,
+            ),
+            pgtrigger.Trigger(
+                name="update_cached_on_choice_change",
+                operation=pgtrigger.Update,
+                when=pgtrigger.After,
+                func="""
+                    -- Rebuild all assets that use this choice
+                    PERFORM rebuild_asset_cached_attributes(bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL;
+
+                    -- Also rebuild workspace overrides for assets using this choice
+                    PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    JOIN assets_workspaceattributevalueoverride wavo ON wavo.override_value_id = bav.id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL
+                    AND wavo.deleted_at IS NULL;
+
                     RETURN NEW;
                 """,
             ),
@@ -161,6 +209,30 @@ class DateAttributeChoice(AssetTypeAttributeChoice):
                     RETURN NEW;
                 """,
             ),
+            pgtrigger.Trigger(
+                name="update_cached_on_choice_change",
+                operation=pgtrigger.Update,
+                when=pgtrigger.After,
+                func="""
+                    -- Rebuild all assets that use this choice
+                    PERFORM rebuild_asset_cached_attributes(bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL;
+
+                    -- Also rebuild workspace overrides for assets using this choice
+                    PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    JOIN assets_workspaceattributevalueoverride wavo ON wavo.override_value_id = bav.id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL
+                    AND wavo.deleted_at IS NULL;
+
+                    RETURN NEW;
+                """,
+            ),
         ]
 
 
@@ -189,6 +261,30 @@ class DateTimeAttributeChoice(AssetTypeAttributeChoice):
                     ) THEN
                         RAISE EXCEPTION 'A choice with this value already exists for this attribute';
                     END IF;
+                    RETURN NEW;
+                """,
+            ),
+            pgtrigger.Trigger(
+                name="update_cached_on_choice_change",
+                operation=pgtrigger.Update,
+                when=pgtrigger.After,
+                func="""
+                    -- Rebuild all assets that use this choice
+                    PERFORM rebuild_asset_cached_attributes(bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL;
+
+                    -- Also rebuild workspace overrides for assets using this choice
+                    PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    JOIN assets_workspaceattributevalueoverride wavo ON wavo.override_value_id = bav.id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL
+                    AND wavo.deleted_at IS NULL;
+
                     RETURN NEW;
                 """,
             ),
@@ -223,6 +319,30 @@ class JSONAttributeChoice(AssetTypeAttributeChoice):
                     RETURN NEW;
                 """,
             ),
+            pgtrigger.Trigger(
+                name="update_cached_on_choice_change",
+                operation=pgtrigger.Update,
+                when=pgtrigger.After,
+                func="""
+                    -- Rebuild all assets that use this choice
+                    PERFORM rebuild_asset_cached_attributes(bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL;
+
+                    -- Also rebuild workspace overrides for assets using this choice
+                    PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    JOIN assets_workspaceattributevalueoverride wavo ON wavo.override_value_id = bav.id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL
+                    AND wavo.deleted_at IS NULL;
+
+                    RETURN NEW;
+                """,
+            ),
         ]
 
 
@@ -252,6 +372,30 @@ class LinkAttributeChoice(AssetTypeAttributeChoice):
                     ) THEN
                         RAISE EXCEPTION 'A choice with this URL already exists for this attribute';
                     END IF;
+                    RETURN NEW;
+                """,
+            ),
+            pgtrigger.Trigger(
+                name="update_cached_on_choice_change",
+                operation=pgtrigger.Update,
+                when=pgtrigger.After,
+                func="""
+                    -- Rebuild all assets that use this choice
+                    PERFORM rebuild_asset_cached_attributes(bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL;
+
+                    -- Also rebuild workspace overrides for assets using this choice
+                    PERFORM rebuild_workspace_asset_cached_attribute_overrides(wavo.workspace_id, bav.asset_id)
+                    FROM assets_choiceattributevalue cav
+                    JOIN assets_baseattributevalue bav ON bav.id = cav.baseattributevalue_ptr_id
+                    JOIN assets_workspaceattributevalueoverride wavo ON wavo.override_value_id = bav.id
+                    WHERE cav.choice_id = NEW.assettypeattributechoice_ptr_id
+                    AND bav.deleted_at IS NULL
+                    AND wavo.deleted_at IS NULL;
+
                     RETURN NEW;
                 """,
             ),

@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination, CursorPagination
-from django.db.models import Q, Count, Prefetch
+from django.db.models import Q, Count
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Centroid
@@ -25,7 +25,7 @@ import json
 import hashlib
 import boto3
 import os
-from ..models import Asset, BaseAttributeValue
+from ..models import Asset
 from ..serializers import AssetSerializer
 
 
@@ -194,23 +194,10 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         # Select related for asset_type and organization to avoid N+1 queries
         queryset = queryset.select_related("asset_type", "organization")
 
-        # Prefetch attributes with typed_value annotation to avoid N+1 polymorphic queries
-        from django.db.models import Prefetch
-        from ..models import BaseAttributeValue
-
-        typed_value_sql = self._get_typed_value_annotation()
-        attr_queryset = BaseAttributeValue.objects.non_polymorphic().annotate(
-            typed_value=typed_value_sql
-        )
-
-        queryset = queryset.prefetch_related(
-            Prefetch("attributes", queryset=attr_queryset)
-        )
-
         return queryset.distinct()
 
     def get_serializer_context(self):
-        """Add workspace and api_key_map to serializer context"""
+        """Add workspace to serializer context"""
         context = super().get_serializer_context()
         workspace_pk = self.kwargs.get("workspace_pk")
         if workspace_pk:
@@ -221,175 +208,25 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             except Workspace.DoesNotExist:
                 pass
 
-        # Pre-load api_key map for all asset type attributes in this asset type
-        # This avoids N+1 queries when serializing attributes
-        # Priority: workspace override > global (keyed by global ID since values point to global)
-        assettype_pk = self.kwargs.get("assettype_pk")
-        if assettype_pk:
-            api_key_map = self._get_api_key_map(assettype_pk, workspace_pk)
-            context["_api_key_map"] = api_key_map
-
         return context
 
-    def _get_typed_value_annotation(self):
-        """Build the typed_value SQL annotation for attribute values.
+    def _build_workspace_asset_map(self, assets, workspace_pk):
+        """Build a map of asset_id -> WorkspaceAsset for efficient lookup in serializer.
 
-        Returns a RawSQL annotation that extracts the typed value from polymorphic
-        attribute value tables using a CASE WHEN based on content type.
+        The serializer uses this to get cached_attribute_overrides for each asset.
         """
-        from django.db.models.expressions import RawSQL
-        from django.db.models import JSONField
-        from django.contrib.contenttypes.models import ContentType
-        from ..models import (
-            TextAttributeValue,
-            NumberAttributeValue,
-            BooleanAttributeValue,
-            DateAttributeValue,
-            DateTimeAttributeValue,
-            JSONAttributeValue,
-            ChoiceAttributeValue,
-        )
+        if not workspace_pk or not assets:
+            return {}
 
-        # Get content type IDs dynamically - cached by Django's ContentType framework
-        ct_text = ContentType.objects.get_for_model(TextAttributeValue).id
-        ct_number = ContentType.objects.get_for_model(NumberAttributeValue).id
-        ct_boolean = ContentType.objects.get_for_model(BooleanAttributeValue).id
-        ct_date = ContentType.objects.get_for_model(DateAttributeValue).id
-        ct_datetime = ContentType.objects.get_for_model(DateTimeAttributeValue).id
-        ct_json = ContentType.objects.get_for_model(JSONAttributeValue).id
-        ct_choice = ContentType.objects.get_for_model(ChoiceAttributeValue).id
-
-        return RawSQL(
-            f"""
-            CASE assets_baseattributevalue.polymorphic_ctype_id
-                WHEN {ct_text} THEN (SELECT to_jsonb(tv.value) FROM assets_textattributevalue tv
-                              WHERE tv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_number} THEN (SELECT to_jsonb(nv.value) FROM assets_numberattributevalue nv
-                              WHERE nv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_boolean} THEN (SELECT to_jsonb(bv.value) FROM assets_booleanattributevalue bv
-                              WHERE bv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_date} THEN (SELECT to_jsonb(dv.value) FROM assets_dateattributevalue dv
-                              WHERE dv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_datetime} THEN (SELECT to_jsonb(dtv.value) FROM assets_datetimeattributevalue dtv
-                              WHERE dtv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_json} THEN (SELECT jv.value FROM assets_jsonattributevalue jv
-                              WHERE jv.baseattributevalue_ptr_id = assets_baseattributevalue.id)
-                WHEN {ct_choice} THEN (
-                    SELECT COALESCE(
-                        -- TextAttributeChoice
-                        (SELECT to_jsonb(tc.value) FROM assets_textattributechoice tc
-                         WHERE tc.assettypeattributechoice_ptr_id = cv.choice_id),
-                        -- NumberAttributeChoice
-                        (SELECT to_jsonb(nc.value) FROM assets_numberattributechoice nc
-                         WHERE nc.assettypeattributechoice_ptr_id = cv.choice_id),
-                        -- DateAttributeChoice
-                        (SELECT to_jsonb(dc.value) FROM assets_dateattributechoice dc
-                         WHERE dc.assettypeattributechoice_ptr_id = cv.choice_id),
-                        -- DateTimeAttributeChoice
-                        (SELECT to_jsonb(dtc.value) FROM assets_datetimeattributechoice dtc
-                         WHERE dtc.assettypeattributechoice_ptr_id = cv.choice_id),
-                        -- JSONAttributeChoice
-                        (SELECT jc.value FROM assets_jsonattributechoice jc
-                         WHERE jc.assettypeattributechoice_ptr_id = cv.choice_id),
-                        -- LinkAttributeChoice (return URL as value)
-                        (SELECT to_jsonb(lc.url) FROM assets_linkattributechoice lc
-                         WHERE lc.assettypeattributechoice_ptr_id = cv.choice_id)
-                    )
-                    FROM assets_choiceattributevalue cv
-                    WHERE cv.baseattributevalue_ptr_id = assets_baseattributevalue.id
-                )
-            END
-            """,
-            [],
-            output_field=JSONField(),
-        )
-
-    def _get_api_key_map(self, assettype_pk, workspace_pk=None):
-        """Get api_key map with Redis caching - cache key includes workspace for proper isolation"""
-        from django.core.cache import cache
-
-        cache_key = f"api_key_map:{assettype_pk}:{workspace_pk or 'global'}"
-        api_key_map = cache.get(cache_key)
-
-        if api_key_map is None:
-            from ..models import (
-                GlobalAssetTypeAttribute,
-                WorkspaceOverrideAssetTypeAttribute,
-                WorkspaceLocalAssetTypeAttribute,
-            )
-
-            api_key_map = {}
-
-            # Start with global attributes
-            global_attrs = GlobalAssetTypeAttribute.objects.filter(
-                asset_type_id=assettype_pk
-            ).values("id", "api_key")
-            for ga in global_attrs:
-                api_key_map[str(ga["id"])] = ga["api_key"]
-
-            # Overlay workspace overrides - these override the global's api_key
-            # Key by base_attribute_id since attribute values point to the global
-            if workspace_pk:
-                override_attrs = WorkspaceOverrideAssetTypeAttribute.objects.filter(
-                    asset_type_id=assettype_pk, workspace_id=workspace_pk
-                ).values("base_attribute_id", "api_key")
-                for oa in override_attrs:
-                    # Override the global's api_key with the workspace override's api_key
-                    api_key_map[str(oa["base_attribute_id"])] = oa["api_key"]
-
-                # Add workspace local attributes
-                local_attrs = WorkspaceLocalAssetTypeAttribute.objects.filter(
-                    asset_type_id=assettype_pk, workspace_id=workspace_pk
-                ).values("id", "api_key")
-                for la in local_attrs:
-                    api_key_map[str(la["id"])] = la["api_key"]
-
-            # Cache for 5 minutes - attribute definitions rarely change
-            cache.set(cache_key, api_key_map, timeout=300)
-
-        return api_key_map
-
-    def _batch_load_overrides(self, assets, workspace_pk):
-        """Batch-load override data for a list of assets to avoid N+1 queries.
-
-        Returns a tuple of (all_override_ids_by_asset, workspace_overrides_by_asset)
-        that can be passed to the serializer context.
-        """
-        from ..models import WorkspaceAttributeValueOverride
+        from ..models import WorkspaceAsset
 
         asset_ids = [a.id for a in assets]
-        if not asset_ids or not workspace_pk:
-            return None, None
-
-        # Load all override value IDs for these assets (any workspace)
-        all_overrides = WorkspaceAttributeValueOverride.objects.filter(
-            override_value__asset_id__in=asset_ids
-        ).values("override_value__asset_id", "override_value_id")
-
-        # Load overrides specific to this workspace
-        workspace_overrides = WorkspaceAttributeValueOverride.objects.filter(
-            override_value__asset_id__in=asset_ids,
+        workspace_assets = WorkspaceAsset.objects.filter(
             workspace_id=workspace_pk,
-        ).values(
-            "override_value__asset_id",
-            "asset_type_attribute_id",
-            "override_value_id",
-        )
+            asset_id__in=asset_ids,
+        ).only("asset_id", "cached_attribute_overrides")
 
-        # Build per-asset lookup dicts
-        all_override_ids_by_asset = {}
-        for o in all_overrides:
-            asset_id = o["override_value__asset_id"]
-            all_override_ids_by_asset.setdefault(asset_id, set()).add(
-                o["override_value_id"]
-            )
-
-        workspace_overrides_by_asset = {}
-        for o in workspace_overrides:
-            asset_id = o["override_value__asset_id"]
-            workspace_overrides_by_asset.setdefault(asset_id, []).append(o)
-
-        return all_override_ids_by_asset, workspace_overrides_by_asset
+        return {wa.asset_id: wa for wa in workspace_assets}
 
     def _get_cache_key(self, request):
         """Build cache key for asset list response.
@@ -432,14 +269,10 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if page is not None:
             context = self.get_serializer_context()
 
-            # Batch-load override data to avoid N+1 queries in serializer
+            # Build workspace asset map for serializer to get cached_attribute_overrides
             workspace_pk = self.kwargs.get("workspace_pk")
-            all_override_ids, workspace_overrides = self._batch_load_overrides(
-                page, workspace_pk
-            )
-            if all_override_ids is not None:
-                context["_all_override_ids_by_asset"] = all_override_ids
-                context["_workspace_overrides_by_asset"] = workspace_overrides
+            workspace_asset_map = self._build_workspace_asset_map(page, workspace_pk)
+            context["_workspace_asset_map"] = workspace_asset_map
 
             with silk_profile(name="3. serializer.data"):
                 serializer = self.get_serializer(page, many=True, context=context)
@@ -454,14 +287,10 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         assets = list(queryset)
         context = self.get_serializer_context()
 
-        # Batch-load override data to avoid N+1 queries in serializer
+        # Build workspace asset map for serializer to get cached_attribute_overrides
         workspace_pk = self.kwargs.get("workspace_pk")
-        all_override_ids, workspace_overrides = self._batch_load_overrides(
-            assets, workspace_pk
-        )
-        if all_override_ids is not None:
-            context["_all_override_ids_by_asset"] = all_override_ids
-            context["_workspace_overrides_by_asset"] = workspace_overrides
+        workspace_asset_map = self._build_workspace_asset_map(assets, workspace_pk)
+        context["_workspace_asset_map"] = workspace_asset_map
 
         serializer = self.get_serializer(assets, many=True, context=context)
         response_data = serializer.data
@@ -469,16 +298,15 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         return Response(response_data)
 
     def retrieve(self, request, *args, **kwargs):
-        """Override retrieve - values are annotated on prefetched attributes"""
+        """Override retrieve to add workspace asset to context"""
         instance = self.get_object()
 
-        # Build api_key_map for this asset's type if not already set
         context = self.get_serializer_context()
-        if "_api_key_map" not in context:
-            api_key_map = self._get_api_key_map(
-                instance.asset_type_id, self.kwargs.get("workspace_pk")
-            )
-            context["_api_key_map"] = api_key_map
+
+        # Build workspace asset map for this single asset
+        workspace_pk = self.kwargs.get("workspace_pk")
+        workspace_asset_map = self._build_workspace_asset_map([instance], workspace_pk)
+        context["_workspace_asset_map"] = workspace_asset_map
 
         serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
@@ -503,13 +331,12 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         # Re-fetch instance with proper prefetching and annotations
         instance = self.get_queryset().get(pk=instance.pk)
 
-        # Build api_key_map for this asset's type if not already set
         context = self.get_serializer_context()
-        if "_api_key_map" not in context:
-            api_key_map = self._get_api_key_map(
-                instance.asset_type_id, self.kwargs.get("workspace_pk")
-            )
-            context["_api_key_map"] = api_key_map
+
+        # Build workspace asset map for this single asset
+        workspace_pk = self.kwargs.get("workspace_pk")
+        workspace_asset_map = self._build_workspace_asset_map([instance], workspace_pk)
+        context["_workspace_asset_map"] = workspace_asset_map
 
         serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
@@ -759,8 +586,8 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 # Re-fetch asset with full prefetch/annotations (refresh_from_db doesn't include prefetch)
                 asset = self.get_queryset().get(pk=asset.pk)
                 context = self.get_serializer_context()
-                api_key_map = self._get_api_key_map(asset.asset_type_id, workspace_pk)
-                context["_api_key_map"] = api_key_map
+                workspace_asset_map = self._build_workspace_asset_map([asset], workspace_pk)
+                context["_workspace_asset_map"] = workspace_asset_map
                 serializer = self.get_serializer(asset, context=context)
 
                 return Response(
@@ -807,8 +634,8 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         # Serialize and return the updated asset
         context = self.get_serializer_context()
-        api_key_map = self._get_api_key_map(asset.asset_type_id, workspace_pk)
-        context["_api_key_map"] = api_key_map
+        workspace_asset_map = self._build_workspace_asset_map([asset], workspace_pk)
+        context["_workspace_asset_map"] = workspace_asset_map
         serializer = self.get_serializer(asset, context=context)
 
         return Response(
@@ -1019,8 +846,6 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=["post"])
     def search(self, request, workspace_pk=None, assettype_pk=None, organization_pk=None):
         """Search assets by multiple attribute and geographic conditions with AND/OR logic"""
-        from django.db.models import Prefetch
-
         filter_config = request.data
 
         # If accessed via nested route, filter by asset type
@@ -1042,21 +867,14 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 with silk_profile(name="search: apply_filter"):
                     queryset = queryset.filter(q_filter)
 
-        queryset = queryset.distinct()
+        # Only use distinct when joining workspace_memberships (which can create duplicates)
+        if workspace_pk:
+            queryset = queryset.distinct()
 
-        # Optimize prefetch with typed_value annotation to avoid N+1 polymorphic queries
-        typed_value_sql = self._get_typed_value_annotation()
-        attr_queryset = BaseAttributeValue.objects.non_polymorphic().annotate(
-            typed_value=typed_value_sql
-        )
+        # Select related for asset_type and organization
+        queryset = queryset.select_related("asset_type", "organization")
 
-        queryset = queryset.select_related(
-            "asset_type", "organization"
-        ).prefetch_related(
-            Prefetch("attributes", queryset=attr_queryset),
-        )
-
-        # Build serializer context with workspace and api_key_map
+        # Build serializer context with workspace
         context = self.get_serializer_context()
         if workspace_pk:
             from workspaces.models import Workspace
@@ -1066,21 +884,14 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             except Workspace.DoesNotExist:
                 pass
 
-        if assettype_pk:
-            context["_api_key_map"] = self._get_api_key_map(assettype_pk, workspace_pk)
-
         with silk_profile(name="search: paginate_queryset"):
             page = self.paginate_queryset(queryset)
         assets = page if page is not None else list(queryset)
 
-        # Batch-load override data to avoid N+1 queries in serializer
-        with silk_profile(name="search: batch_load_overrides"):
-            all_override_ids, workspace_overrides = self._batch_load_overrides(
-                assets, workspace_pk
-            )
-        if all_override_ids is not None:
-            context["_all_override_ids_by_asset"] = all_override_ids
-            context["_workspace_overrides_by_asset"] = workspace_overrides
+        # Build workspace asset map for serializer to get cached_attribute_overrides
+        with silk_profile(name="search: build_workspace_asset_map"):
+            workspace_asset_map = self._build_workspace_asset_map(assets, workspace_pk)
+        context["_workspace_asset_map"] = workspace_asset_map
 
         with silk_profile(name="search: serializer.data"):
             serializer = self.get_serializer(assets, many=True, context=context)
@@ -1272,7 +1083,10 @@ Format the output as follows:
             q_filter = FilterSerializer(data=filter_config).build_query()
             if q_filter:
                 queryset = queryset.filter(q_filter)
-                queryset = queryset.distinct()
+
+        # Only use distinct when joining workspace_memberships (which can create duplicates)
+        if workspace_pk:
+            queryset = queryset.distinct()
 
         # Apply bounding box filter and compute center for distance ordering
         bbox_param = request.query_params.get("bbox")
