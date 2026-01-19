@@ -18,7 +18,7 @@ const LibraryPage = lazy(() => import('./pages/LibraryPage.tsx'))
 const OrganizationIndexPage = lazy(() => import('./pages/OrganizationIndexPage.tsx'))
 const OrganizationLayout = lazy(() => import('./pages/OrganizationLayout.tsx'))
 const LandingPage = lazy(() => import('./pages/LandingPage.tsx'))
-const ProfilePage = lazy(() => import('./pages/ProfilePage.tsx'))
+const UserProfilePage = lazy(() => import('./pages/UserProfilePage.tsx'))
 const SecuritySettingsPage = lazy(() => import('./pages/SecuritySettingsPage.tsx'))
 const SessionsPage = lazy(() => import('./pages/security/SessionsPage.tsx'))
 const MFADevicesPage = lazy(() => import('./pages/security/MFADevicesPage.tsx'))
@@ -137,6 +137,43 @@ export const preloadAssetDetailLoader = assetDetailLoaderBundle.preload
 export const preloadSessionsLoader = sessionsLoaderBundle.preload
 export const preloadMfaDevicesLoader = mfaDevicesLoaderBundle.preload
 export const preloadPasswordLoader = passwordLoaderBundle.preload
+
+// Shared profile child routes (used by /profile and /settings/users/:userId)
+const profileChildRoutes = [
+  {
+    index: true,
+    element: <UserProfilePage />,
+  },
+  {
+    path: "security",
+    element: <SecuritySettingsPage />,
+    loader: securityLayoutLoaderBundle.loader,
+    handle: {
+      crumb: "Security",
+    },
+    children: [
+      {
+        index: true,
+        element: <Navigate to="sessions" replace />,
+      },
+      {
+        path: "sessions",
+        element: <SessionsPage />,
+        loader: sessionsLoaderBundle.loader,
+      },
+      {
+        path: "mfa",
+        element: <MFADevicesPage />,
+        loader: mfaDevicesLoaderBundle.loader,
+      },
+      {
+        path: "password",
+        element: <PasswordPage />,
+        loader: passwordLoaderBundle.loader,
+      },
+    ],
+  },
+]
 
 // Routes shared between org-level and workspace-level
 const sharedRoutes = [
@@ -260,42 +297,7 @@ export const router = createBrowserRouter([
           crumb: "Profile",
           hideSidebar: true,
         },
-        children: [
-          {
-            index: true,
-            element: <ProfilePage />,
-          },
-          {
-            path: "security",
-            id: "security",
-            element: <SecuritySettingsPage />,
-            loader: securityLayoutLoaderBundle.loader,
-            handle: {
-              crumb: "Security",
-            },
-            children: [
-              {
-                index: true,
-                element: <Navigate to="sessions" replace />,
-              },
-              {
-                path: "sessions",
-                element: <SessionsPage />,
-                loader: sessionsLoaderBundle.loader,
-              },
-              {
-                path: "mfa",
-                element: <MFADevicesPage />,
-                loader: mfaDevicesLoaderBundle.loader,
-              },
-              {
-                path: "password",
-                element: <PasswordPage />,
-                loader: passwordLoaderBundle.loader,
-              },
-            ],
-          },
-        ],
+        children: profileChildRoutes,
       },
       {
         path: "settings",
@@ -328,10 +330,22 @@ export const router = createBrowserRouter([
           },
           {
             path: "users",
-            element: <UsersPage />,
             handle: {
               crumb: "Users",
             },
+            children: [
+              {
+                index: true,
+                element: <UsersPage />,
+              },
+              {
+                path: ":userId",
+                handle: {
+                  crumb: "User Details",
+                },
+                children: profileChildRoutes,
+              },
+            ],
           },
           {
             path: "groups",

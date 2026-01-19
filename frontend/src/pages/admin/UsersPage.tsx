@@ -9,6 +9,7 @@ import {
   Avatar,
   TextField,
   InputAdornment,
+  Link,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -19,6 +20,7 @@ import {
   Cancel as InactiveIcon,
   Security as RolesIcon,
 } from '@mui/icons-material'
+import { Link as RouterLink } from 'react-router-dom'
 import type { User } from '../../types'
 import { fetchUsers, deleteUser } from '../../api/users'
 import UserEditDialog from './UserEditDialog'
@@ -72,14 +74,12 @@ export default function UsersPage() {
         limit: endIndex - startIndex + 1,
         search: debouncedSearch || undefined,
       })
-      console.log('fetchUsers response:', data)
       setTotalCount(data.count)
       setUsers(prev => {
         const next = new Map(prev)
         data.results.forEach((user, i) => {
           next.set(startIndex + i, user)
         })
-        console.log('Users map size:', next.size)
         return next
       })
     } catch (err) {
@@ -194,17 +194,19 @@ export default function UsersPage() {
           >
             {getInitials(user)}
           </Avatar>
-          <Typography
-            variant="body2"
-            fontWeight={500}
+          <Link
+            component={RouterLink}
+            to={`${user.id}`}
+            underline="hover"
             sx={{
+              fontWeight: 500,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
           >
             {user.fullName || user.email}
-          </Typography>
+          </Link>
         </Box>
       ),
     },
