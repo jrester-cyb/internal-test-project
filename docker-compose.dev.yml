@@ -46,6 +46,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
       localstack:
         condition: service_healthy
     environment:
@@ -55,6 +57,37 @@ services:
       - DJANGO_DB_USER=myuser
       - DJANGO_DB_PASSWORD=mypassword
       - REDIS_HOST=redis
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_KMS_ENDPOINT_URL=http://localstack:4566
+      - AWS_KMS_KEY_ID=alias/mfa-key
+      - AWS_S3_ENDPOINT_URL=http://localstack:4566
+  celery:
+    build:
+      context: .
+      args:
+        USER_ID: 1000
+        GROUP_ID: 1000
+    command: celery -A app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./app:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - DJANGO_SETTINGS_MODULE=app.settings
+      - DJANGO_DB_HOST=db
+      - DJANGO_DB_NAME=mydb
+      - DJANGO_DB_USER=myuser
+      - DJANGO_DB_PASSWORD=mypassword
+      - REDIS_HOST=redis
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1

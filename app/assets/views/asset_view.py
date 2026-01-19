@@ -9,8 +9,7 @@ from django.contrib.gis.db.models.functions import Centroid
 from django.db.models import FloatField
 from django.db.models.functions import Abs
 from django_filters.rest_framework import DjangoFilterBackend
-from django.core.cache import cache
-from core.utils.cache_utils.cache_utils import cache_data, get_cached_data
+from core.utils.cache_utils.cache_utils import cache_data, get_cached_data, invalidate_cache
 from silk.profiling.profiler import silk_profile
 from drf_spectacular.utils import (
     extend_schema,
@@ -35,27 +34,16 @@ def invalidate_asset_list_cache(asset):
     """Invalidate all cached asset list responses for this asset's workspaces.
 
     Called on asset create/update/delete via signals.
+    Uses core utils cache invalidation which bumps the namespace version.
     """
     # Get all workspaces this asset belongs to
     workspace_ids = list(
         asset.workspace_memberships.values_list("workspace_id", flat=True)
     )
 
-    # Invalidate cache for each workspace + asset_type combination
+    # Invalidate cache for each workspace (bumps version to invalidate all keys)
     for workspace_id in workspace_ids:
-        # Increment version key to invalidate all cached pages
-        version_key = f"asset_list_version:{workspace_id}:{asset.asset_type_id}"
-        try:
-            cache.incr(version_key)
-        except ValueError:
-            cache.set(version_key, 1, timeout=None)
-
-        # Also invalidate workspace-level list (without asset_type filter)
-        workspace_version_key = f"asset_list_version:{workspace_id}:all"
-        try:
-            cache.incr(workspace_version_key)
-        except ValueError:
-            cache.set(workspace_version_key, 1, timeout=None)
+        invalidate_cache(asset.organization_id, workspace_id, key=None)
 
 
 class AssetPageNumberPagination(PageNumberPagination):
@@ -316,37 +304,57 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         return {wa.asset_id: wa for wa in workspace_assets}
 
-    def _get_cache_key(self, request):
-        """Build cache key for asset list response.
+    def _get_org_and_workspace_ids(self):
+        """Get organization and workspace UUIDs for caching.
 
-        Includes workspace, asset_type, and all query params for uniqueness.
-        Uses a version key that gets incremented on asset changes.
+        Returns (org_id, workspace_id) tuple. org_id may be None if not determinable.
         """
-        workspace_pk = self.kwargs.get("workspace_pk", "")
+        from uuid import UUID
+
+        workspace_pk = self.kwargs.get("workspace_pk")
+        organization_pk = self.kwargs.get("organization_pk")
+
+        org_id = UUID(organization_pk) if organization_pk else None
+        ws_id = UUID(workspace_pk) if workspace_pk else None
+
+        # If we have workspace but not org, look up the org from workspace
+        if ws_id and not org_id:
+            from workspaces.models import Workspace
+
+            try:
+                org_id = Workspace.objects.values_list(
+                    "organization_id", flat=True
+                ).get(pk=ws_id)
+            except Workspace.DoesNotExist:
+                pass
+
+        return org_id, ws_id
+
+    def _get_list_cache_key(self, request):
+        """Build cache key suffix for asset list response.
+
+        Includes asset_type and all query params for uniqueness.
+        The core utils will add org/workspace versioning automatically.
+        """
         assettype_pk = self.kwargs.get("assettype_pk", "all")
-
-        # Get current version (incremented on asset changes)
-        version_key = f"asset_list_version:{workspace_pk}:{assettype_pk}"
-        version = cache.get(version_key, 0)
-
-        # Include all query params in cache key
         params = request.query_params.urlencode()
         params_hash = hashlib.md5(params.encode()).hexdigest()[:12]
-
-        return f"asset_list:{workspace_pk}:{assettype_pk}:v{version}:{params_hash}"
+        return f"asset_list:{assettype_pk}:{params_hash}"
 
     def list(self, request, *args, **kwargs):
         """Override list with response caching.
 
-        Caches the JSON response for 60 seconds. Cache is invalidated
-        when any asset in the workspace/asset_type is created, updated, or deleted.
+        Caches the JSON response. Cache is invalidated via namespace versioning
+        when any asset in the workspace is created, updated, or deleted.
         """
-        cache_key = self._get_cache_key(request)
+        org_id, ws_id = self._get_org_and_workspace_ids()
+        cache_key = self._get_list_cache_key(request)
 
-        # Try to get cached response
-        cached_response = cache.get(cache_key)
-        if cached_response is not None:
-            return Response(cached_response)
+        # Try to get cached response using core utils
+        if org_id:
+            cached_response = get_cached_data(org_id, ws_id, key=cache_key)
+            if cached_response is not None:
+                return Response(cached_response)
 
         with silk_profile(name="1. filter_queryset"):
             queryset = self.filter_queryset(self.get_queryset())
@@ -368,7 +376,8 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
             with silk_profile(name="4. get_paginated_response"):
                 response = self.get_paginated_response(data)
-                cache.set(cache_key, response.data)
+                if org_id:
+                    cache_data(org_id, ws_id, key=cache_key, data=response.data)
                 return response
 
         # Non-paginated response
@@ -382,7 +391,8 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
         serializer = self.get_serializer(assets, many=True, context=context)
         response_data = serializer.data
-        cache.set(cache_key, response_data)
+        if org_id:
+            cache_data(org_id, ws_id, key=cache_key, data=response_data)
         return Response(response_data)
 
     def retrieve(self, request, *args, **kwargs):
@@ -1225,27 +1235,126 @@ Format the output as follows:
     @action(detail=False, methods=["get", "post"])
     def tiles(self, request, workspace_pk=None, organization_pk=None):
         """Get assets as lightweight GeoJSON features for map rendering"""
-        # Start with base queryset
-        queryset = Asset.objects.all()
+        # Parse zoom early since we need it for filtering
+        zoom_param = request.query_params.get("zoom")
+        zoom_int = None
+        if zoom_param is not None:
+            try:
+                zoom_int = int(zoom_param)
+            except (ValueError, TypeError):
+                pass
 
-        # Filter by organization if provided (org-level endpoint)
-        if organization_pk:
-            queryset = queryset.filter(organization_id=organization_pk)
+        # Check if we have filters
+        filter_data = request.data if request.method == "POST" and request.data else {}
+        has_filters = bool(filter_data)
 
-        # Filter by workspace if provided (workspace-level endpoint)
-        if workspace_pk:
-            queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
+        # Only use cached IDs approach when there are filters
+        # Without filters, it's faster to query directly
+        if has_filters:
+            from uuid import UUID
 
-        # Apply search filters if provided (POST request)
-        if request.method == "POST" and request.data:
-            filter_config = request.data
-            q_filter = FilterSerializer(data=filter_config).build_query()
-            if q_filter:
-                queryset = queryset.filter(q_filter)
+            # Get org/workspace UUIDs for core utils caching
+            org_id = UUID(organization_pk) if organization_pk else None
+            ws_id = UUID(workspace_pk) if workspace_pk else None
 
-        # Only use distinct when joining workspace_memberships (which can create duplicates)
-        if workspace_pk:
-            queryset = queryset.distinct()
+            # If we have workspace but not org, look up the org from workspace
+            if ws_id and not org_id:
+                from workspaces.models import Workspace
+
+                try:
+                    org_id = Workspace.objects.values_list(
+                        "organization_id", flat=True
+                    ).get(pk=ws_id)
+                except Workspace.DoesNotExist:
+                    pass
+
+            # Build cache key from: filters and zoom
+            cache_components = {
+                "filters": filter_data,
+                "zoom": zoom_int,
+            }
+            filter_hash = hashlib.md5(
+                json.dumps(cache_components, sort_keys=True).encode()
+            ).hexdigest()
+            cache_key = f"tiles_ids:{filter_hash}"
+
+            cached_ids_str = get_cached_data(org_id, ws_id, key=cache_key) if org_id else None
+
+            if cached_ids_str is not None:
+                # Use cached IDs - filter queryset to just these IDs
+                cached_ids = cached_ids_str.split(",") if cached_ids_str else []
+                if not cached_ids:
+                    return Response({
+                        "type": "FeatureCollection",
+                        "features": [],
+                        "count": 0,
+                        "total": 0,
+                        "next": None,
+                    })
+                queryset = Asset.objects.filter(id__in=cached_ids)
+            else:
+                # Build and cache the base queryset IDs
+                queryset = Asset.objects.filter(geometry__isnull=False)
+
+                if organization_pk:
+                    queryset = queryset.filter(organization_id=organization_pk)
+                if workspace_pk:
+                    queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
+
+                # Apply zoom-based asset type render filtering
+                if zoom_int is not None:
+                    queryset = queryset.filter(
+                        asset_type__min_render_zoom__lte=zoom_int,
+                        asset_type__max_render_zoom__gte=zoom_int,
+                    )
+
+                # Apply search filters
+                q_filter = FilterSerializer(data=filter_data).build_query()
+                if q_filter:
+                    queryset = queryset.filter(q_filter)
+
+                if workspace_pk:
+                    queryset = queryset.distinct()
+
+                # Cache the IDs as strings (60 minute TTL)
+                from django.db.models.functions import Cast
+                from django.db.models import CharField
+                cached_ids = list(
+                    queryset.annotate(id_str=Cast("id", CharField()))
+                    .values_list("id_str", flat=True)
+                )
+                if org_id:
+                    cache_data(org_id, ws_id, key=cache_key, data=",".join(cached_ids), timeout=3600)
+
+                if not cached_ids:
+                    return Response({
+                        "type": "FeatureCollection",
+                        "features": [],
+                        "count": 0,
+                        "total": 0,
+                        "next": None,
+                    })
+
+                # Re-query with IDs for subsequent filtering
+                queryset = Asset.objects.filter(id__in=cached_ids)
+        else:
+            # No filters - query directly (faster than caching/passing all IDs)
+            queryset = Asset.objects.filter(geometry__isnull=False)
+
+            if organization_pk:
+                queryset = queryset.filter(organization_id=organization_pk)
+            if workspace_pk:
+                queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
+
+            # Apply zoom-based asset type render filtering
+            if zoom_int is not None:
+                queryset = queryset.filter(
+                    asset_type__min_render_zoom__lte=zoom_int,
+                    asset_type__max_render_zoom__gte=zoom_int,
+                )
+
+            if workspace_pk:
+                queryset = queryset.distinct()
 
         # Apply bounding box filter and compute center for distance ordering
         bbox_param = request.query_params.get("bbox")
@@ -1332,16 +1441,7 @@ Format the output as follows:
             except (ValueError, TypeError):
                 pass
 
-        # Filter by asset type render zoom levels
-        if zoom_param is not None:
-            try:
-                zoom = int(zoom_param)
-                queryset = queryset.filter(
-                    asset_type__min_render_zoom__lte=zoom,
-                    asset_type__max_render_zoom__gte=zoom,
-                )
-            except (ValueError, TypeError):
-                pass
+        # Note: asset type render zoom filtering is handled in the cache building above
 
         # Order by distance from center of viewport (closest first), with id as tiebreaker
         # Use simple Euclidean distance on coordinates to avoid spatial_ref_sys dependency
@@ -1523,83 +1623,153 @@ Format the output as follows:
             )
             params.append(workspace_pk)
 
-        # Apply search filters if provided (POST request)
-        if request.method == "POST" and request.data:
-            import hashlib
-            from django.core.cache import cache
+        # Parse zoom for render level filtering
+        zoom_int = None
+        if zoom:
+            try:
+                zoom_int = int(zoom)
+            except (ValueError, TypeError):
+                pass
 
-            # Cache filtered IDs based on filter config hash
-            filter_hash = hashlib.md5(
-                json.dumps(request.data, sort_keys=True).encode()
-            ).hexdigest()
-            cache_key = f"cluster_filter:{organization_pk or ''}:{workspace_pk or ''}:{filter_hash}"
-
-            with silk_profile(name="clusters: cache_get"):
-                cached_ids_str = cache.get(cache_key)
-            if cached_ids_str is not None:
-                # Cached as comma-separated string for faster serialization
-                with silk_profile(name="clusters: parse_cached_ids"):
-                    filtered_ids = cached_ids_str.split(",") if cached_ids_str else []
-            else:
-                with silk_profile(name="clusters: build_query"):
-                    q_filter = FilterSerializer(data=request.data).build_query()
-                if q_filter:
-                    base_qs = Asset.objects.all()
-                    if organization_pk:
-                        base_qs = base_qs.filter(organization_id=organization_pk)
-                    if workspace_pk:
-                        base_qs = base_qs.filter(
-                            workspace_memberships__workspace_id=workspace_pk
-                        )
-                    with silk_profile(name="clusters: filter_and_fetch_ids"):
-                        filtered_ids = [
-                            str(id)
-                            for id in base_qs.filter(q_filter).values_list(
-                                "id", flat=True
-                            )
-                        ]
-                    # Cache as comma-separated string for faster serialization
-                    cache.set(cache_key, ",".join(filtered_ids), timeout=60)
-                else:
-                    filtered_ids = []
-
-            if filtered_ids:
-                where_clauses.append("a.id = ANY(%s::uuid[])")
-                params.append(filtered_ids)
-            elif request.data:
-                # Filter was provided but no assets match, return empty result
-                return Response(
-                    {"clusters": [], "precision": precision, "totalClusters": 0}
-                )
-
-        # Apply bounding box filter if provided
+        # Parse bbox for filtering
+        bbox_bounds = None
         if bbox_param:
             try:
                 bounds = [float(x) for x in bbox_param.split(",")]
                 if len(bounds) == 4:
-                    where_clauses.append(
-                        "a.geometry && ST_MakeEnvelope(%s, %s, %s, %s, 4326)"
-                    )
-                    params.extend(bounds)
+                    bbox_bounds = bounds  # [min_lon, min_lat, max_lon, max_lat]
             except (ValueError, TypeError):
                 pass
 
-        # Filter by asset type render zoom levels using subquery
-        # This allows the planner to use the asset_type_id index more effectively
-        if zoom:
+        # Check if we have filters
+        filter_data = request.data if request.method == "POST" and request.data else {}
+
+        # Cache strategy: cache full cluster results (without bbox), then filter by bbox in Python
+        # This makes panning very fast since we don't need to re-query the database
+        from uuid import UUID
+
+        # Get org/workspace UUIDs for core utils caching
+        org_id = UUID(organization_pk) if organization_pk else None
+        ws_id = UUID(workspace_pk) if workspace_pk else None
+
+        # If we have workspace but not org, look up the org from workspace
+        if ws_id and not org_id:
+            from workspaces.models import Workspace
+
             try:
-                zoom_int = int(zoom)
-                where_clauses.append(
-                    "a.asset_type_id IN (SELECT id FROM assets_assettype WHERE min_render_zoom <= %s AND max_render_zoom >= %s)"
-                )
-                params.extend([zoom_int, zoom_int])
-            except (ValueError, TypeError):
+                org_id = Workspace.objects.values_list(
+                    "organization_id", flat=True
+                ).get(pk=ws_id)
+            except Workspace.DoesNotExist:
                 pass
 
+        # Build cache key from: filters, zoom, and precision
+        cache_components = {
+            "filters": filter_data,
+            "zoom": zoom_int,
+            "precision": precision,
+        }
+        cache_hash = hashlib.md5(
+            json.dumps(cache_components, sort_keys=True).encode()
+        ).hexdigest()
+        cache_key = f"cluster_results:{cache_hash}"
+
+        with silk_profile(name="clusters: cache_get"):
+            cached_results = get_cached_data(org_id, ws_id, key=cache_key) if org_id else None
+
+        if cached_results is not None:
+            # Use cached cluster results and filter by bbox in Python
+            with silk_profile(name="clusters: filter_cached_by_bbox"):
+                cluster_data = cached_results
+                if bbox_bounds:
+                    min_lon, min_lat, max_lon, max_lat = bbox_bounds
+                    filtered_data = []
+                    for item in cluster_data:
+                        # Check if cluster/feature is within bbox
+                        if "center" in item:
+                            lat, lon = item["center"]["lat"], item["center"]["lon"]
+                            if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+                                filtered_data.append(item)
+                        elif "geometry" in item:
+                            # For single-asset features, check centroid
+                            geom = item["geometry"]
+                            if geom["type"] == "Point":
+                                lon, lat = geom["coordinates"][0], geom["coordinates"][1]
+                            else:
+                                # For other geometries, use first coordinate as approximation
+                                coords = geom["coordinates"]
+                                while isinstance(coords[0], list):
+                                    coords = coords[0]
+                                lon, lat = coords[0], coords[1]
+                            if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+                                filtered_data.append(item)
+                    cluster_data = filtered_data
+
+            return Response(
+                {
+                    "clusters": cluster_data,
+                    "precision": precision,
+                    "totalClusters": len(cluster_data),
+                }
+            )
+
+        # Cache miss - need to query database
+        # Apply zoom-based asset type filter
+        if zoom_int is not None:
+            where_clauses.append(
+                "a.asset_type_id IN (SELECT id FROM assets_assettype WHERE min_render_zoom <= %s AND max_render_zoom >= %s)"
+            )
+            params.extend([zoom_int, zoom_int])
+
+        # Apply search filters if provided
+        if filter_data:
+            with silk_profile(name="clusters: build_query"):
+                q_filter = FilterSerializer(data=filter_data).build_query()
+            if q_filter:
+                # Build queryset to get filtered IDs
+                base_qs = Asset.objects.filter(
+                    h3_index__isnull=False,
+                    geometry__isnull=False,
+                ).exclude(h3_index="")
+
+                if organization_pk:
+                    base_qs = base_qs.filter(organization_id=organization_pk)
+                if workspace_pk:
+                    base_qs = base_qs.filter(
+                        workspace_memberships__workspace_id=workspace_pk
+                    )
+                if zoom_int is not None:
+                    base_qs = base_qs.filter(
+                        asset_type__min_render_zoom__lte=zoom_int,
+                        asset_type__max_render_zoom__gte=zoom_int,
+                    )
+
+                base_qs = base_qs.filter(q_filter)
+
+                # Fetch IDs
+                with silk_profile(name="clusters: filter_and_fetch_ids"):
+                    from django.db.models.functions import Cast
+                    from django.db.models import CharField
+                    filtered_ids = list(
+                        base_qs.annotate(id_str=Cast("id", CharField()))
+                        .values_list("id_str", flat=True)
+                    )
+
+                if not filtered_ids:
+                    # Cache empty result
+                    if org_id:
+                        cache_data(org_id, ws_id, key=cache_key, data=[], timeout=3600)
+                    return Response(
+                        {"clusters": [], "precision": precision, "totalClusters": 0}
+                    )
+
+                where_clauses.append("a.id = ANY(%s::uuid[])")
+                params.append(filtered_ids)
+
+        # Note: NO bbox filter here - we query all matching clusters and cache them
         where_sql = " AND ".join(where_clauses)
 
         # Two-pass approach: first get cluster counts efficiently, then fetch details only for single-asset clusters
-        # This avoids computing expensive ST_AsGeoJSON for large clusters that won't use it
         with silk_profile(name="clusters: raw_sql_query"):
             with connection.cursor() as cursor:
                 # First pass: quick aggregation to get cluster sizes and centroids
@@ -1625,7 +1795,6 @@ Format the output as follows:
                 # Second pass: only fetch geometry for single-asset clusters
                 single_asset_details = {}
                 if single_prefixes:
-                    # Params order: precision (for SELECT), then original where params, then precision again, then prefixes
                     prefix_placeholders = ",".join(["%s"] * len(single_prefixes))
                     detail_params = (
                         [precision] + params[1:] + [precision] + single_prefixes
@@ -1646,39 +1815,13 @@ Format the output as follows:
                         detail_params,
                     )
                     for row in cursor.fetchall():
-                        single_asset_details[row[0]] = row[
-                            1:
-                        ]  # prefix -> (id, name, type_id, h3, geojson)
+                        single_asset_details[row[0]] = row[1:]
 
-                # Combine results
-                rows = []
-                for prefix, count, lat, lon in cluster_rows:
-                    if count == 1 and prefix in single_asset_details:
-                        asset_id, name, type_id, h3, geojson = single_asset_details[
-                            prefix
-                        ]
-                        rows.append(
-                            (
-                                prefix,
-                                count,
-                                asset_id,
-                                name,
-                                type_id,
-                                h3,
-                                geojson,
-                                lat,
-                                lon,
-                            )
-                        )
-                    else:
-                        rows.append(
-                            (prefix, count, None, None, None, None, None, lat, lon)
-                        )
-
-        # Build response: indices are 0=prefix, 1=count, 2=id, 3=name, 4=type_id, 5=h3, 6=geojson, 7=lat, 8=lon
+        # Build cluster data
         cluster_data = []
-        for prefix, count, asset_id, name, type_id, h3, geojson, lat, lon in rows:
-            if count == 1 and geojson:
+        for prefix, count, lat, lon in cluster_rows:
+            if count == 1 and prefix in single_asset_details:
+                asset_id, name, type_id, h3, geojson = single_asset_details[prefix]
                 cluster_data.append(
                     {
                         "type": "Feature",
@@ -1699,6 +1842,44 @@ Format the output as follows:
                         "center": {"lat": float(lat), "lon": float(lon)},
                     }
                 )
+
+        # Cache the full results (without bbox filtering) for 60 minutes
+        with silk_profile(name="clusters: cache_set"):
+            if org_id:
+                cache_data(org_id, ws_id, key=cache_key, data=cluster_data, timeout=3600)
+
+        # Trigger async pre-calculation of adjacent zoom levels
+        if zoom_int is not None:
+            from assets.tasks import precalculate_adjacent_zooms
+
+            precalculate_adjacent_zooms.delay(
+                organization_pk=organization_pk,
+                workspace_pk=workspace_pk,
+                filter_data=filter_data,
+                current_zoom=zoom_int,
+            )
+
+        # Now filter by bbox if provided
+        if bbox_bounds:
+            min_lon, min_lat, max_lon, max_lat = bbox_bounds
+            filtered_data = []
+            for item in cluster_data:
+                if "center" in item:
+                    lat, lon = item["center"]["lat"], item["center"]["lon"]
+                    if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+                        filtered_data.append(item)
+                elif "geometry" in item:
+                    geom = item["geometry"]
+                    if geom["type"] == "Point":
+                        lon, lat = geom["coordinates"][0], geom["coordinates"][1]
+                    else:
+                        coords = geom["coordinates"]
+                        while isinstance(coords[0], list):
+                            coords = coords[0]
+                        lon, lat = coords[0], coords[1]
+                    if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+                        filtered_data.append(item)
+            cluster_data = filtered_data
 
         return Response(
             {

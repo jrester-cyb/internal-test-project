@@ -262,3 +262,15 @@ JWT_AUTH_SAMESITE = "Lax"
 # Auth Manager settings
 SHORT_TOKEN_EXPIRATION = 60 * 15  # 15 minutes for OneTimeToken
 MAGIC_LINK_TOKEN_EXPIRATION_TIME = 60 * 60  # 1 hour for magic links
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # For fair task distribution
+CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after completion
