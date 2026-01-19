@@ -1246,99 +1246,38 @@ Format the output as follows:
 
         # Check if we have filters
         filter_data = request.data if request.method == "POST" and request.data else {}
-        has_filters = bool(filter_data)
 
-        # Only use cached IDs approach when there are filters
-        # Without filters, it's faster to query directly
-        if has_filters:
-            from uuid import UUID
-
-            # Get org/workspace UUIDs for core utils caching
-            org_id = UUID(organization_pk) if organization_pk else None
-            ws_id = UUID(workspace_pk) if workspace_pk else None
-
-            # If we have workspace but not org, look up the org from workspace
-            if ws_id and not org_id:
-                from workspaces.models import Workspace
-
-                try:
-                    org_id = Workspace.objects.values_list(
-                        "organization_id", flat=True
-                    ).get(pk=ws_id)
-                except Workspace.DoesNotExist:
-                    pass
-
-            # Build cache key from: filters and zoom
-            cache_components = {
-                "filters": filter_data,
-                "zoom": zoom_int,
-            }
-            filter_hash = hashlib.md5(
-                json.dumps(cache_components, sort_keys=True).encode()
-            ).hexdigest()
-            cache_key = f"tiles_ids:{filter_hash}"
-
-            cached_ids_str = get_cached_data(org_id, ws_id, key=cache_key) if org_id else None
-
-            if cached_ids_str is not None:
-                # Use cached IDs - filter queryset to just these IDs
-                cached_ids = cached_ids_str.split(",") if cached_ids_str else []
-                if not cached_ids:
-                    return Response({
-                        "type": "FeatureCollection",
-                        "features": [],
-                        "count": 0,
-                        "total": 0,
-                        "next": None,
-                    })
-                queryset = Asset.objects.filter(id__in=cached_ids)
-            else:
-                # Build and cache the base queryset IDs
-                queryset = Asset.objects.filter(geometry__isnull=False)
-
-                if organization_pk:
-                    queryset = queryset.filter(organization_id=organization_pk)
-                if workspace_pk:
-                    queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
-
-                # Apply zoom-based asset type render filtering
-                if zoom_int is not None:
-                    queryset = queryset.filter(
-                        asset_type__min_render_zoom__lte=zoom_int,
-                        asset_type__max_render_zoom__gte=zoom_int,
+        # Parse bbox for filtering
+        bbox_param = request.query_params.get("bbox")
+        bbox_bounds = None
+        bbox_polygon = None
+        if bbox_param:
+            try:
+                bounds = [float(x) for x in bbox_param.split(",")]
+                if len(bounds) == 4:
+                    bbox_bounds = bounds  # [min_lon, min_lat, max_lon, max_lat]
+                    min_lon, min_lat, max_lon, max_lat = bounds
+                    bbox_polygon = GEOSGeometry(
+                        f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, {max_lon} {max_lat}, {min_lon} {max_lat}, {min_lon} {min_lat}))",
+                        srid=4326,
                     )
+            except (ValueError, TypeError):
+                pass
 
-                # Apply search filters
-                q_filter = FilterSerializer(data=filter_data).build_query()
-                if q_filter:
-                    queryset = queryset.filter(q_filter)
+        # Parse pagination parameters
+        try:
+            limit = int(request.query_params.get("limit", 1000))
+        except (ValueError, TypeError):
+            limit = 1000
 
-                if workspace_pk:
-                    queryset = queryset.distinct()
+        try:
+            offset = int(request.query_params.get("offset", 0))
+        except (ValueError, TypeError):
+            offset = 0
 
-                # Cache the IDs as strings (60 minute TTL)
-                from django.db.models.functions import Cast
-                from django.db.models import CharField
-                cached_ids = list(
-                    queryset.annotate(id_str=Cast("id", CharField()))
-                    .values_list("id_str", flat=True)
-                )
-                if org_id:
-                    cache_data(org_id, ws_id, key=cache_key, data=",".join(cached_ids), timeout=3600)
-
-                if not cached_ids:
-                    return Response({
-                        "type": "FeatureCollection",
-                        "features": [],
-                        "count": 0,
-                        "total": 0,
-                        "next": None,
-                    })
-
-                # Re-query with IDs for subsequent filtering
-                queryset = Asset.objects.filter(id__in=cached_ids)
-        else:
-            # No filters - query directly (faster than caching/passing all IDs)
+        # Query tiles directly - PostGIS spatial index is fast
+        # No caching of full features (too large, slow to deserialize from Redis)
+        with silk_profile(name="tiles: build_queryset"):
             queryset = Asset.objects.filter(geometry__isnull=False)
 
             if organization_pk:
@@ -1353,67 +1292,37 @@ Format the output as follows:
                     asset_type__max_render_zoom__gte=zoom_int,
                 )
 
+            # Apply search filters if provided
+            if filter_data:
+                q_filter = FilterSerializer(data=filter_data).build_query()
+                if q_filter:
+                    queryset = queryset.filter(q_filter)
+
+            # Apply bbox filter for fast first request (only query what's visible)
+            if bbox_polygon:
+                queryset = queryset.filter(geometry__intersects=bbox_polygon)
+
             if workspace_pk:
                 queryset = queryset.distinct()
 
-        # Apply bounding box filter and compute center for distance ordering
-        bbox_param = request.query_params.get("bbox")
-        center_point = None
-        bbox_width_degrees = None
-        if bbox_param:
-            try:
-                bounds = [float(x) for x in bbox_param.split(",")]
-                if len(bounds) == 4:
-                    bbox = GEOSGeometry(
-                        f"POLYGON(({bounds[0]} {bounds[1]}, {bounds[2]} {bounds[1]}, {bounds[2]} {bounds[3]}, {bounds[0]} {bounds[3]}, {bounds[0]} {bounds[1]}))",
-                        srid=4326,
-                    )
-                    queryset = queryset.filter(geometry__intersects=bbox)
-                    # Calculate center of bbox for distance ordering
-                    center_lon = (bounds[0] + bounds[2]) / 2
-                    center_lat = (bounds[1] + bounds[3]) / 2
-                    center_point = Point(center_lon, center_lat, srid=4326)
-                    # Store bbox width for size filtering
-                    bbox_width_degrees = bounds[2] - bounds[0]
-            except (ValueError, TypeError):
-                pass
+            # Check if user has applied any geometry type filter for size filtering
+            has_geometry_type_filter = False
+            if filter_data:
+                filters = filter_data.get("filters", [])
+                for f in filters:
+                    if f.get("field") == "geometry_type":
+                        has_geometry_type_filter = True
+                        break
 
-        # Filter out small geometries based on zoom level
-        # This reduces data transfer and improves client rendering performance
-        zoom_param = request.query_params.get("zoom")
-        min_pixel_size_param = request.query_params.get("min_pixel_size")
+            # Apply size-based filtering if we have a zoom level
+            if zoom_int is not None and not has_geometry_type_filter:
+                min_pixel_size_param = request.query_params.get("min_pixel_size")
+                min_pixel_size = int(min_pixel_size_param) if min_pixel_size_param else 50
 
-        # Check if user has applied any geometry type filter
-        # If so, skip size-based filtering - they explicitly want to see those geometry types
-        # regardless of size (e.g., showing only Lines or only Polygons should show all of them)
-        has_geometry_type_filter = False
-        if request.method == "POST" and request.data:
-            filters = request.data.get("filters", [])
-            for f in filters:
-                if f.get("field") == "geometry_type":
-                    has_geometry_type_filter = True
-                    break
-
-        if zoom_param is not None and not has_geometry_type_filter:
-            try:
-                zoom = int(zoom_param)
-                min_pixel_size = (
-                    int(min_pixel_size_param) if min_pixel_size_param else 50
-                )
-
-                # Calculate minimum size in degrees based on zoom level
-                # At zoom 0, world is 256 pixels = 360 degrees
-                # Each zoom level doubles the pixels (halves degrees per pixel)
-                # degrees_per_pixel = 360 / (256 * 2^zoom)
-                degrees_per_pixel = 360.0 / (256.0 * (2**zoom))
+                degrees_per_pixel = 360.0 / (256.0 * (2**zoom_int))
                 min_size_degrees = min_pixel_size * degrees_per_pixel
-                min_line_size_degrees = (
-                    min_size_degrees * 0.6
-                )  # Lower threshold for 1D lines
+                min_line_size_degrees = min_size_degrees * 0.6
 
-                # Use extra() with WHERE clause for efficient filtering
-                # This uses PostGIS functions directly and benefits from spatial indexes
-                # Points are always included, polygons/lines must meet size threshold
                 queryset = queryset.extra(
                     where=[
                         """
@@ -1438,76 +1347,49 @@ Format the output as follows:
                     ],
                     params=[min_size_degrees, min_line_size_degrees],
                 )
-            except (ValueError, TypeError):
-                pass
 
-        # Note: asset type render zoom filtering is handled in the cache building above
-
-        # Order by distance from center of viewport (closest first), with id as tiebreaker
-        # Use simple Euclidean distance on coordinates to avoid spatial_ref_sys dependency
-        if center_point:
-            from django.db.models.expressions import RawSQL
-
-            # Calculate approximate distance using ST_Distance on centroids
-            # This works without spatial_ref_sys because we're not converting units
-            queryset = queryset.annotate(
-                distance_from_center=RawSQL(
-                    "ST_Distance(ST_Centroid(geometry), ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
-                    (center_point.x, center_point.y),
-                )
-            ).order_by("distance_from_center", "id")
-        else:
             queryset = queryset.order_by("id")
 
-        # Get total count before pagination
-        total_count = queryset.count()
+        # Build features for current bbox only
+        # Skip count query - fetch limit+1 to determine if there are more results
+        # Use ST_AsGeoJSON annotation for fast geometry serialization (avoids Python GEOSGeometry overhead)
+        with silk_profile(name="tiles: fetch_and_build_features"):
+            from django.db.models import Func, CharField
 
-        # Parse pagination parameters
-        try:
-            limit = int(request.query_params.get("limit", 1000))
-        except (ValueError, TypeError):
-            limit = 1000
+            class AsGeoJSON(Func):
+                function = "ST_AsGeoJSON"
+                output_field = CharField()
 
-        try:
-            offset = int(request.query_params.get("offset", 0))
-        except (ValueError, TypeError):
-            offset = 0
-
-        # Apply pagination
-        queryset = queryset[offset : offset + limit]
-
-        # Optimize query - we only need basic fields for tiles
-        queryset = queryset.select_related("asset_type")
-
-        # Build GeoJSON-like response
-        features = []
-        for asset in queryset:
-            if asset.geometry:
-                features.append(
-                    {
-                        "type": "Feature",
-                        "id": str(asset.id),
-                        "geometry": {
-                            "type": asset.geometry.geom_type,
-                            "coordinates": (
-                                list(asset.geometry.coords)
-                                if hasattr(asset.geometry, "coords")
-                                else None
-                            ),
-                        },
-                        "properties": {
-                            "name": asset.name,
-                            "assetTypeId": str(asset.asset_type_id),
-                            "h3_index": asset.h3_index,
-                        },
-                    }
+            features = []
+            has_more = False
+            annotated_qs = queryset.annotate(geojson=AsGeoJSON("geometry"))
+            for i, asset in enumerate(
+                annotated_qs[offset:offset + limit + 1].only(
+                    "id", "name", "asset_type_id", "h3_index", "geometry"
                 )
+            ):
+                if i >= limit:
+                    has_more = True
+                    break
+                if asset.geojson:
+                    features.append(
+                        {
+                            "type": "Feature",
+                            "id": str(asset.id),
+                            "geometry": json.loads(asset.geojson),
+                            "properties": {
+                                "name": asset.name,
+                                "assetTypeId": str(asset.asset_type_id),
+                                "h3_index": asset.h3_index,
+                            },
+                        }
+                    )
+
 
         # Build next URL if there are more results
         next_url = None
-        next_offset = offset + limit
-        if next_offset < total_count:
-            # Build the next URL with updated offset
+        if has_more:
+            next_offset = offset + limit
             next_params = request.query_params.copy()
             next_params["offset"] = str(next_offset)
             next_params["limit"] = str(limit)
@@ -1520,7 +1402,6 @@ Format the output as follows:
                 "type": "FeatureCollection",
                 "features": features,
                 "count": len(features),
-                "total": total_count,
                 "next": next_url,
             }
         )
@@ -1644,76 +1525,17 @@ Format the output as follows:
         # Check if we have filters
         filter_data = request.data if request.method == "POST" and request.data else {}
 
-        # Cache strategy: cache full cluster results (without bbox), then filter by bbox in Python
-        # This makes panning very fast since we don't need to re-query the database
-        from uuid import UUID
+        # Query clusters directly - no caching (cache deserialize is too slow for large datasets)
+        # Apply bbox filter in SQL for fast queries
 
-        # Get org/workspace UUIDs for core utils caching
-        org_id = UUID(organization_pk) if organization_pk else None
-        ws_id = UUID(workspace_pk) if workspace_pk else None
-
-        # If we have workspace but not org, look up the org from workspace
-        if ws_id and not org_id:
-            from workspaces.models import Workspace
-
-            try:
-                org_id = Workspace.objects.values_list(
-                    "organization_id", flat=True
-                ).get(pk=ws_id)
-            except Workspace.DoesNotExist:
-                pass
-
-        # Build cache key from: filters, zoom, and precision
-        cache_components = {
-            "filters": filter_data,
-            "zoom": zoom_int,
-            "precision": precision,
-        }
-        cache_hash = hashlib.md5(
-            json.dumps(cache_components, sort_keys=True).encode()
-        ).hexdigest()
-        cache_key = f"cluster_results:{cache_hash}"
-
-        with silk_profile(name="clusters: cache_get"):
-            cached_results = get_cached_data(org_id, ws_id, key=cache_key) if org_id else None
-
-        if cached_results is not None:
-            # Use cached cluster results and filter by bbox in Python
-            with silk_profile(name="clusters: filter_cached_by_bbox"):
-                cluster_data = cached_results
-                if bbox_bounds:
-                    min_lon, min_lat, max_lon, max_lat = bbox_bounds
-                    filtered_data = []
-                    for item in cluster_data:
-                        # Check if cluster/feature is within bbox
-                        if "center" in item:
-                            lat, lon = item["center"]["lat"], item["center"]["lon"]
-                            if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
-                                filtered_data.append(item)
-                        elif "geometry" in item:
-                            # For single-asset features, check centroid
-                            geom = item["geometry"]
-                            if geom["type"] == "Point":
-                                lon, lat = geom["coordinates"][0], geom["coordinates"][1]
-                            else:
-                                # For other geometries, use first coordinate as approximation
-                                coords = geom["coordinates"]
-                                while isinstance(coords[0], list):
-                                    coords = coords[0]
-                                lon, lat = coords[0], coords[1]
-                            if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
-                                filtered_data.append(item)
-                    cluster_data = filtered_data
-
-            return Response(
-                {
-                    "clusters": cluster_data,
-                    "precision": precision,
-                    "totalClusters": len(cluster_data),
-                }
+        # Apply bbox filter if provided
+        if bbox_bounds:
+            min_lon, min_lat, max_lon, max_lat = bbox_bounds
+            where_clauses.append(
+                "a.location && ST_MakeEnvelope(%s, %s, %s, %s, 4326)"
             )
+            params.extend([min_lon, min_lat, max_lon, max_lat])
 
-        # Cache miss - need to query database
         # Apply zoom-based asset type filter
         if zoom_int is not None:
             where_clauses.append(
@@ -1722,11 +1544,12 @@ Format the output as follows:
             params.extend([zoom_int, zoom_int])
 
         # Apply search filters if provided
+        # Use subquery approach instead of fetching IDs to Python memory
         if filter_data:
             with silk_profile(name="clusters: build_query"):
                 q_filter = FilterSerializer(data=filter_data).build_query()
             if q_filter:
-                # Build queryset to get filtered IDs
+                # Build queryset with filters
                 base_qs = Asset.objects.filter(
                     h3_index__isnull=False,
                     geometry__isnull=False,
@@ -1744,97 +1567,80 @@ Format the output as follows:
                         asset_type__max_render_zoom__gte=zoom_int,
                     )
 
+                # Apply bbox filter to Django queryset too
+                if bbox_bounds:
+                    min_lon, min_lat, max_lon, max_lat = bbox_bounds
+                    bbox_polygon = GEOSGeometry(
+                        f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, {max_lon} {max_lat}, {min_lon} {max_lat}, {min_lon} {min_lat}))",
+                        srid=4326,
+                    )
+                    base_qs = base_qs.filter(location__within=bbox_polygon)
+
                 base_qs = base_qs.filter(q_filter)
 
-                # Fetch IDs
-                with silk_profile(name="clusters: filter_and_fetch_ids"):
-                    from django.db.models.functions import Cast
-                    from django.db.models import CharField
-                    filtered_ids = list(
-                        base_qs.annotate(id_str=Cast("id", CharField()))
-                        .values_list("id_str", flat=True)
-                    )
+                # Get the SQL from the queryset and use it as a subquery
+                # This keeps everything in PostgreSQL instead of fetching IDs to Python
+                with silk_profile(name="clusters: build_subquery"):
+                    subquery_sql, subquery_params = base_qs.values("id").query.sql_with_params()
 
-                if not filtered_ids:
-                    # Cache empty result
-                    if org_id:
-                        cache_data(org_id, ws_id, key=cache_key, data=[], timeout=3600)
-                    return Response(
-                        {"clusters": [], "precision": precision, "totalClusters": 0}
-                    )
-
-                where_clauses.append("a.id = ANY(%s::uuid[])")
-                params.append(filtered_ids)
-
-        # Note: NO bbox filter here - we query all matching clusters and cache them
+                where_clauses.append(f"a.id IN ({subquery_sql})")
+                params.extend(subquery_params)
         where_sql = " AND ".join(where_clauses)
 
-        # Two-pass approach: first get cluster counts efficiently, then fetch details only for single-asset clusters
+        # Single-pass approach: get all cluster data in one query
+        # For single-asset clusters, return them as point features with centroid
+        # (no need to fetch full geometry at cluster zoom levels)
+        # Limit results to avoid overwhelming the frontend
+        max_clusters = 2000
         with silk_profile(name="clusters: raw_sql_query"):
             with connection.cursor() as cursor:
-                # First pass: quick aggregation to get cluster sizes and centroids
                 cursor.execute(
                     f"""
                     SELECT
                         LEFT(a.h3_index, %s) as h3_prefix,
                         COUNT(*) as cluster_count,
                         AVG(ST_Y(a.location)) as lat,
-                        AVG(ST_X(a.location)) as lon
+                        AVG(ST_X(a.location)) as lon,
+                        CASE WHEN COUNT(*) = 1 THEN MIN(a.id::text) ELSE NULL END as single_asset_id,
+                        CASE WHEN COUNT(*) = 1 THEN MIN(a.name) ELSE NULL END as single_name,
+                        CASE WHEN COUNT(*) = 1 THEN MIN(a.asset_type_id::text) ELSE NULL END as single_type_id,
+                        CASE WHEN COUNT(*) = 1 THEN MIN(a.h3_index) ELSE NULL END as single_h3
                     FROM assets_asset a
                     WHERE {where_sql}
                     GROUP BY h3_prefix
                     ORDER BY cluster_count DESC
+                    LIMIT %s
                     """,
-                    params,
+                    params + [max_clusters],
                 )
                 cluster_rows = cursor.fetchall()
 
-                # Identify single-asset clusters (need full details)
-                single_prefixes = [row[0] for row in cluster_rows if row[1] == 1]
-
-                # Second pass: only fetch geometry for single-asset clusters
-                single_asset_details = {}
-                if single_prefixes:
-                    prefix_placeholders = ",".join(["%s"] * len(single_prefixes))
-                    detail_params = (
-                        [precision] + params[1:] + [precision] + single_prefixes
-                    )
-                    cursor.execute(
-                        f"""
-                        SELECT
-                            LEFT(a.h3_index, %s) as h3_prefix,
-                            a.id::text,
-                            a.name,
-                            a.asset_type_id::text,
-                            a.h3_index,
-                            ST_AsGeoJSON(a.geometry)
-                        FROM assets_asset a
-                        WHERE {where_sql}
-                          AND LEFT(a.h3_index, %s) IN ({prefix_placeholders})
-                        """,
-                        detail_params,
-                    )
-                    for row in cursor.fetchall():
-                        single_asset_details[row[0]] = row[1:]
-
         # Build cluster data
+        # Single-asset clusters are returned as point features using their location
+        # (full geometry is fetched when user zooms in further via tiles endpoint)
         cluster_data = []
-        for prefix, count, lat, lon in cluster_rows:
-            if count == 1 and prefix in single_asset_details:
-                asset_id, name, type_id, h3, geojson = single_asset_details[prefix]
+        for row in cluster_rows:
+            prefix, count, lat, lon, asset_id, name, type_id, full_h3 = row
+            if lat is None or lon is None:
+                continue
+            if count == 1 and asset_id:
+                # Single asset - return as point feature
                 cluster_data.append(
                     {
                         "type": "Feature",
                         "id": asset_id,
-                        "geometry": json.loads(geojson),
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [float(lon), float(lat)],
+                        },
                         "properties": {
                             "name": name,
                             "assetTypeId": type_id,
-                            "h3_index": h3,
+                            "h3_index": full_h3,
                         },
                     }
                 )
-            elif lat is not None and lon is not None:
+            else:
                 cluster_data.append(
                     {
                         "h3_index": prefix,
@@ -1842,44 +1648,6 @@ Format the output as follows:
                         "center": {"lat": float(lat), "lon": float(lon)},
                     }
                 )
-
-        # Cache the full results (without bbox filtering) for 60 minutes
-        with silk_profile(name="clusters: cache_set"):
-            if org_id:
-                cache_data(org_id, ws_id, key=cache_key, data=cluster_data, timeout=3600)
-
-        # Trigger async pre-calculation of adjacent zoom levels
-        if zoom_int is not None:
-            from assets.tasks import precalculate_adjacent_zooms
-
-            precalculate_adjacent_zooms.delay(
-                organization_pk=organization_pk,
-                workspace_pk=workspace_pk,
-                filter_data=filter_data,
-                current_zoom=zoom_int,
-            )
-
-        # Now filter by bbox if provided
-        if bbox_bounds:
-            min_lon, min_lat, max_lon, max_lat = bbox_bounds
-            filtered_data = []
-            for item in cluster_data:
-                if "center" in item:
-                    lat, lon = item["center"]["lat"], item["center"]["lon"]
-                    if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
-                        filtered_data.append(item)
-                elif "geometry" in item:
-                    geom = item["geometry"]
-                    if geom["type"] == "Point":
-                        lon, lat = geom["coordinates"][0], geom["coordinates"][1]
-                    else:
-                        coords = geom["coordinates"]
-                        while isinstance(coords[0], list):
-                            coords = coords[0]
-                        lon, lat = coords[0], coords[1]
-                    if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
-                        filtered_data.append(item)
-            cluster_data = filtered_data
 
         return Response(
             {

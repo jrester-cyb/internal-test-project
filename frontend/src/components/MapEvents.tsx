@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useMap, useMapEvents } from 'react-leaflet'
 
 interface MapEventsProps {
@@ -14,9 +14,34 @@ interface MapEventsProps {
   workspaceId?: string
 }
 
+// Debounce delay in ms - balances responsiveness with request reduction
+const DEBOUNCE_DELAY = 150
+
 export default function MapEvents({ onLoadData, onCenterChange, onZoomChange, hasInitialData = false }: MapEventsProps) {
   const map = useMap()
   const initialLoadDone = useRef(false)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounced data load - prevents flooding server during rapid pan/zoom
+  const debouncedLoadData = useCallback((bbox: number[], zoom: number) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      onLoadData(bbox, zoom)
+      debounceTimerRef.current = null
+    }, DEBOUNCE_DELAY)
+  }, [onLoadData])
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
 
   useMapEvents({
     moveend: () => {
@@ -30,14 +55,14 @@ export default function MapEvents({ onLoadData, onCenterChange, onZoomChange, ha
       const currentZoom = map.getZoom()
       const center = map.getCenter()
 
-      // Save position to localStorage
+      // Save position to localStorage (immediate, no debounce needed)
       localStorage.setItem('mapPosition', JSON.stringify({
         lat: center.lat,
         lng: center.lng,
         zoom: currentZoom
       }))
 
-      // Call callbacks to update parent state
+      // Call callbacks to update parent state (immediate)
       if (onCenterChange) {
         onCenterChange([center.lat, center.lng])
       }
@@ -45,8 +70,8 @@ export default function MapEvents({ onLoadData, onCenterChange, onZoomChange, ha
         onZoomChange(currentZoom)
       }
 
-      // Trigger data load via context
-      onLoadData(bbox, currentZoom)
+      // Trigger debounced data load
+      debouncedLoadData(bbox, currentZoom)
     }
   })
 

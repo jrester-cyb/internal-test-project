@@ -9,6 +9,17 @@ import MapDetailsDrawer from '@app/components/MapDetailsDrawer'
 import FilterBuilder from '@app/components/FilterBuilder'
 import type { AttributeFilter } from '@app/components/FilterBuilder'
 import { getCachedFetch, cacheKeys, hashFilters } from '@app/utils/prefetchCache'
+import {
+  getCachedData,
+  cacheRegion,
+  expandBbox,
+  invalidateMapCache,
+  hashFilters as hashMapFilters,
+  getZoomLevelsToPrefetch,
+  needsPrefetch,
+  markPrefetchStarted,
+  markPrefetchCompleted
+} from '@app/utils/mapCache'
 
 // Cache for asset type names: assetTypeId -> name
 type AssetTypeCache = Map<string, string>
@@ -350,14 +361,6 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
     }
     isFirstLoadRef.current = false
 
-    // Cancel any pending request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-
-    const abortController = new AbortController()
-    abortControllerRef.current = abortController
-
     // Store bounds for use in other parts of context
     setBounds(newBounds)
 
@@ -367,20 +370,58 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
 
     if (!currentOrgId) return
 
+    // Build filters from current filter state
+    const filterGroups = buildFilters()
+    let mergedFilters: any = null
+    if (filterGroups.length > 0) {
+      mergedFilters = {
+        filters: filterGroups,
+        logic: 'AND'
+      }
+    }
+
+    // Create filter hash for cache key
+    const filterHash = hashMapFilters(mergedFilters)
+    const requestedBbox: [number, number, number, number] = [
+      newBounds[0], newBounds[1], newBounds[2], newBounds[3]
+    ]
+
+    // Check if we have cached data that covers this region
+    const cachedData = getCachedData(requestedBbox, newZoom, filterHash)
+    if (cachedData) {
+      // Use cached data immediately - no network request needed (no loading state needed)
+      setAssets(cachedData.assets)
+      setClusters(cachedData.clusters)
+      return
+    }
+
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
+    // Expand bbox to overfetch surrounding area (prevents refetch on small pans)
+    const expandedBbox = expandBbox(requestedBbox)
+    const expandedBounds = [expandedBbox[0], expandedBbox[1], expandedBbox[2], expandedBbox[3]]
+
     try {
-      // Build filters from current filter state
-      const filterGroups = buildFilters()
-      let mergedFilters: any = null
-      if (filterGroups.length > 0) {
-        mergedFilters = {
-          filters: filterGroups,
-          logic: 'AND'
-        }
+      // Parse features helper
+      const parseFeatures = (features: any[]): Asset[] => {
+        return features.map(f => ({
+          id: f.id,
+          name: f.properties.name,
+          assetType: f.properties.assetTypeId,
+          h3Index: f.properties.h3Index,
+          geometry: f.geometry
+        }))
       }
 
       // When clustering is disabled, always fetch tiles regardless of zoom level
       if (!currentClusteringDisabled && newZoom < 12) {
-        const clusterData = await fetchClusters(currentOrgId, currentWorkspaceId, newZoom, newBounds, mergedFilters, abortController.signal)
+        const clusterData = await fetchClusters(currentOrgId, currentWorkspaceId, newZoom, expandedBounds, mergedFilters, abortController.signal)
 
         if (abortController.signal.aborted) return
 
@@ -399,41 +440,44 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
             realClusters.push(c)
           }
         }
-        setClusters(realClusters)
-        setAssets(geojsonAssets)
+
+        // Cache the expanded region
+        cacheRegion(expandedBbox, newZoom, filterHash, geojsonAssets, realClusters)
+
+        // Display only what's in the requested bbox
+        const visibleData = getCachedData(requestedBbox, newZoom, filterHash)
+        if (visibleData) {
+          setClusters(visibleData.clusters)
+          setAssets(visibleData.assets)
+        } else {
+          setClusters(realClusters)
+          setAssets(geojsonAssets)
+        }
+
+        // Prefetch adjacent zoom levels in background (don't await)
+        prefetchAdjacentZoomLevels(
+          currentOrgId, currentWorkspaceId, expandedBbox, newZoom,
+          filterHash, mergedFilters, currentClusteringDisabled
+        )
       } else {
         // Fetch tiles with pagination
-        setClusters([])
+        // Don't clear clusters yet - keep showing old data until new data arrives
 
         const serverZoom = currentClusteringDisabled ? newZoom : undefined
         const pageSize = 250
         const parallelRequests = 3
 
-        // Fetch first page to get total count
-        const firstPageData = await fetchTiles(currentOrgId, currentWorkspaceId, newBounds, pageSize, mergedFilters, abortController.signal, 0, serverZoom)
+        // Fetch first page to get total count (using expanded bounds)
+        const firstPageData = await fetchTiles(currentOrgId, currentWorkspaceId, expandedBounds, pageSize, mergedFilters, abortController.signal, 0, serverZoom)
 
         if (abortController.signal.aborted) return
-
-        // Parse features
-        const parseFeatures = (features: any[]): Asset[] => {
-          return features.map(f => ({
-            id: f.id,
-            name: f.properties.name,
-            assetType: f.properties.assetTypeId,
-            h3Index: f.properties.h3Index,
-            geometry: f.geometry
-          }))
-        }
 
         const firstBatch = parseFeatures(firstPageData.features)
         let allNewAssets = [...firstBatch]
 
-        // Update UI with first batch immediately
-        const newAssetIds = new Set(firstBatch.map(a => a.id))
-        setAssets(prev => {
-          const merged = [...prev.filter(a => !newAssetIds.has(a.id)), ...firstBatch]
-          return merged
-        })
+        // Now that we have new data, clear clusters and update assets
+        setClusters([])
+        setAssets(firstBatch)
 
         // Calculate remaining pages needed
         const total = firstPageData.total
@@ -450,7 +494,7 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
             const batchOffsets = offsets.slice(i, i + parallelRequests)
 
             const batchPromises = batchOffsets.map(offset =>
-              fetchTiles(currentOrgId, currentWorkspaceId, newBounds, pageSize, mergedFilters, abortController.signal, offset, serverZoom)
+              fetchTiles(currentOrgId, currentWorkspaceId, expandedBounds, pageSize, mergedFilters, abortController.signal, offset, serverZoom)
             )
 
             try {
@@ -464,12 +508,9 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
               }
 
               allNewAssets = [...allNewAssets, ...batchAssets]
-              const allNewIds = new Set(allNewAssets.map(a => a.id))
 
-              setAssets(prev => {
-                const merged = [...prev.filter(a => !allNewIds.has(a.id)), ...allNewAssets]
-                return merged
-              })
+              // Update UI progressively
+              setAssets([...allNewAssets])
             } catch (error) {
               if (error instanceof Error && error.name === 'AbortError') {
                 return
@@ -479,10 +520,21 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
           }
         }
 
-        // After all pages loaded: remove stale assets
+        // Cache the full expanded region
         if (!abortController.signal.aborted) {
-          const finalIds = new Set(allNewAssets.map(a => a.id))
-          setAssets(prev => prev.filter(a => finalIds.has(a.id)))
+          cacheRegion(expandedBbox, newZoom, filterHash, allNewAssets, [])
+
+          // Final update with only what's in the requested bbox
+          const visibleData = getCachedData(requestedBbox, newZoom, filterHash)
+          if (visibleData) {
+            setAssets(visibleData.assets)
+          }
+
+          // Prefetch adjacent zoom levels in background (don't await)
+          prefetchAdjacentZoomLevels(
+            currentOrgId, currentWorkspaceId, expandedBbox, newZoom,
+            filterHash, mergedFilters, currentClusteringDisabled
+          )
         }
       }
     } catch (error) {
@@ -493,12 +545,90 @@ export function MapProvider({ children, onZoomToAsset }: MapProviderProps) {
     }
   }, [buildFilters])
 
+  // Background prefetch for adjacent zoom levels
+  const prefetchAdjacentZoomLevels = useCallback(async (
+    orgId: string,
+    workspaceId: string | undefined,
+    bbox: [number, number, number, number],
+    currentZoom: number,
+    filterHash: string,
+    mergedFilters: any,
+    clusteringDisabled: boolean
+  ) => {
+    const zoomLevels = getZoomLevelsToPrefetch(currentZoom)
+
+    for (const zoom of zoomLevels) {
+      // For higher zoom levels (zooming in), we need a larger bbox because the same
+      // screen area covers less geographic area. Expand by 2^(zoomDelta).
+      // For lower zoom levels (zooming out), the current bbox is already sufficient.
+      let prefetchBbox = bbox
+      if (zoom > currentZoom) {
+        const zoomDelta = zoom - currentZoom
+        const expansionFactor = Math.pow(2, zoomDelta)
+        prefetchBbox = expandBbox(bbox, expansionFactor)
+      }
+
+      // Skip if already cached or being fetched
+      if (!needsPrefetch(prefetchBbox, zoom, filterHash)) continue
+
+      markPrefetchStarted(prefetchBbox, zoom, filterHash)
+
+      try {
+        // Determine if this zoom level uses clusters or tiles
+        const useClusters = !clusteringDisabled && zoom < 12
+        const bboxArray = [prefetchBbox[0], prefetchBbox[1], prefetchBbox[2], prefetchBbox[3]]
+
+        if (useClusters) {
+          const clusterData = await fetchClusters(orgId, workspaceId, zoom, bboxArray, mergedFilters)
+
+          const geojsonAssets: Asset[] = []
+          const realClusters: Cluster[] = []
+          for (const c of clusterData.clusters) {
+            if (c.type === 'Feature' && c.geometry && c.properties) {
+              geojsonAssets.push({
+                id: c.id,
+                name: c.properties.name,
+                assetType: c.properties.assetTypeId,
+                h3Index: c.properties.h3Index,
+                geometry: c.geometry
+              })
+            } else {
+              realClusters.push(c)
+            }
+          }
+          cacheRegion(prefetchBbox, zoom, filterHash, geojsonAssets, realClusters)
+        } else {
+          // For tiles, just fetch first page - full pagination would be too expensive for prefetch
+          const serverZoom = clusteringDisabled ? zoom : undefined
+          const tileData = await fetchTiles(orgId, workspaceId, bboxArray, 1000, mergedFilters, undefined, 0, serverZoom)
+
+          const assets: Asset[] = tileData.features.map((f: any) => ({
+            id: f.id,
+            name: f.properties.name,
+            assetType: f.properties.assetTypeId,
+            h3Index: f.properties.h3Index,
+            geometry: f.geometry
+          }))
+          cacheRegion(prefetchBbox, zoom, filterHash, assets, [])
+        }
+      } catch (error) {
+        // Silently ignore prefetch errors - they're not critical
+        console.debug('Prefetch failed for zoom', zoom, error)
+      } finally {
+        markPrefetchCompleted(prefetchBbox, zoom, filterHash)
+      }
+    }
+  }, [])
+
   // Keep ref updated
   loadMapDataRef.current = loadMapData
 
   // Re-fetch when filters change (using stored bounds/zoom)
   // Note: We use loadMapDataRef to avoid infinite loops - loadMapData is NOT in deps
   useEffect(() => {
+    // Invalidate map cache when filters change (cache keys include filter hash)
+    invalidateMapCache()
+
     // Skip on initial mount or if we don't have bounds yet
     const currentBounds = boundsRef.current
     if (!currentBounds || isNavigatingRef.current) return

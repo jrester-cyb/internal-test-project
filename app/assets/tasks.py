@@ -344,6 +344,244 @@ class PrecalculateAdjacentZooms:
 precalculate_adjacent_zooms = PrecalculateAdjacentZooms()
 
 
+def _calculate_tile_features_for_zoom(
+    organization_pk: Optional[str],
+    workspace_pk: Optional[str],
+    filter_data: dict,
+    zoom: int,
+) -> list:
+    """
+    Calculate and cache tile features for a specific zoom level.
+
+    Returns the list of GeoJSON features.
+    """
+    from uuid import UUID
+
+    from core.utils.cache_utils.cache_utils import cache_data, get_cached_data
+    from assets.models import Asset
+    from assets.filter_serializers import FilterSerializer
+
+    # Get org/workspace UUIDs for caching
+    org_id = UUID(organization_pk) if organization_pk else None
+    ws_id = UUID(workspace_pk) if workspace_pk else None
+
+    # If we have workspace but not org, look up the org from workspace
+    if ws_id and not org_id:
+        from workspaces.models import Workspace
+
+        try:
+            org_id = Workspace.objects.values_list(
+                "organization_id", flat=True
+            ).get(pk=ws_id)
+        except Workspace.DoesNotExist:
+            pass
+
+    # Build cache key
+    cache_components = {
+        "filters": filter_data,
+        "zoom": zoom,
+    }
+    filter_hash = hashlib.md5(
+        json.dumps(cache_components, sort_keys=True).encode()
+    ).hexdigest()
+    cache_key = f"tiles_features:{filter_hash}"
+
+    # Check if already cached
+    if org_id:
+        cached_features = get_cached_data(org_id, ws_id, key=cache_key)
+        if cached_features is not None:
+            logger.debug(f"Tile features for zoom {zoom} already cached")
+            return cached_features
+
+    # Build queryset
+    queryset = Asset.objects.filter(geometry__isnull=False)
+
+    if organization_pk:
+        queryset = queryset.filter(organization_id=organization_pk)
+    if workspace_pk:
+        queryset = queryset.filter(workspace_memberships__workspace_id=workspace_pk)
+
+    # Apply zoom-based asset type render filtering
+    queryset = queryset.filter(
+        asset_type__min_render_zoom__lte=zoom,
+        asset_type__max_render_zoom__gte=zoom,
+    )
+
+    # Apply search filters
+    if filter_data:
+        q_filter = FilterSerializer(data=filter_data).build_query()
+        if q_filter:
+            queryset = queryset.filter(q_filter)
+
+    if workspace_pk:
+        queryset = queryset.distinct()
+
+    # Check for geometry type filter to skip size filtering
+    has_geometry_type_filter = False
+    if filter_data:
+        filters = filter_data.get("filters", [])
+        for f in filters:
+            if f.get("field") == "geometry_type":
+                has_geometry_type_filter = True
+                break
+
+    # Apply size-based filtering
+    if not has_geometry_type_filter:
+        min_pixel_size = 50
+        degrees_per_pixel = 360.0 / (256.0 * (2**zoom))
+        min_size_degrees = min_pixel_size * degrees_per_pixel
+        min_line_size_degrees = min_size_degrees * 0.6
+
+        queryset = queryset.extra(
+            where=[
+                """
+                (
+                    ST_GeometryType(geometry) = 'ST_Point'
+                    OR (
+                        ST_GeometryType(geometry) = 'ST_Polygon'
+                        AND SQRT(
+                            POW(ST_XMax(geometry) - ST_XMin(geometry), 2) +
+                            POW(ST_YMax(geometry) - ST_YMin(geometry), 2)
+                        ) >= %s
+                    )
+                    OR (
+                        ST_GeometryType(geometry) = 'ST_LineString'
+                        AND SQRT(
+                            POW(ST_XMax(geometry) - ST_XMin(geometry), 2) +
+                            POW(ST_YMax(geometry) - ST_YMin(geometry), 2)
+                        ) >= %s
+                    )
+                )
+                """
+            ],
+            params=[min_size_degrees, min_line_size_degrees],
+        )
+
+    queryset = queryset.order_by("id")
+
+    # Build features using ST_AsGeoJSON for fast geometry serialization
+    from django.db.models import Func, CharField
+
+    class AsGeoJSON(Func):
+        function = "ST_AsGeoJSON"
+        output_field = CharField()
+
+    all_features = []
+    annotated_qs = queryset.annotate(geojson=AsGeoJSON("geometry"))
+    for asset in annotated_qs.only("id", "name", "asset_type_id", "h3_index", "geometry").iterator():
+        if asset.geojson:
+            all_features.append(
+                {
+                    "type": "Feature",
+                    "id": str(asset.id),
+                    "geometry": json.loads(asset.geojson),
+                    "properties": {
+                        "name": asset.name,
+                        "assetTypeId": str(asset.asset_type_id),
+                        "h3_index": asset.h3_index,
+                    },
+                }
+            )
+
+    # Cache the result (60 minute TTL)
+    if org_id:
+        cache_data(org_id, ws_id, key=cache_key, data=all_features, timeout=3600)
+
+    return all_features
+
+
+def _precalculate_tile_features_impl(
+    organization_pk: Optional[str],
+    workspace_pk: Optional[str],
+    filter_data: dict,
+    current_zoom: int,
+    zoom_range: int = 3,
+):
+    """
+    Pre-calculate tile features for the current zoom level and adjacent levels.
+
+    This is triggered on cache miss - the main request only queries the bbox,
+    so we need to cache the full feature set for fast panning/zooming.
+
+    Args:
+        organization_pk: Organization ID (optional)
+        workspace_pk: Workspace ID (optional)
+        filter_data: Filter configuration dict
+        current_zoom: The zoom level the user is currently at
+        zoom_range: How many zoom levels above and below to calculate (default 3)
+    """
+    min_zoom = max(0, current_zoom - zoom_range)
+    max_zoom = min(20, current_zoom + zoom_range)
+
+    calculated_count = 0
+    # Include current_zoom since on cache miss we only query bbox, not full set
+    for zoom in range(min_zoom, max_zoom + 1):
+        try:
+            logger.info(f"Pre-calculating tile features for zoom {zoom} (org={organization_pk}, ws={workspace_pk})")
+            _calculate_tile_features_for_zoom(
+                organization_pk=organization_pk,
+                workspace_pk=workspace_pk,
+                filter_data=filter_data,
+                zoom=zoom,
+            )
+            calculated_count += 1
+        except Exception as e:
+            logger.error(f"Failed to pre-calculate tile features for zoom {zoom}: {e}")
+
+    logger.info(f"Pre-calculated tile features for {calculated_count} zoom levels")
+    return calculated_count
+
+
+class PrecalculateTileFeatures:
+    """
+    Callable class that handles both sync and async processing for tile features.
+
+    Usage:
+        precalculate_tile_features(org, ws, filters, zoom)  # Sync call
+        precalculate_tile_features.delay(org, ws, filters, zoom)  # Async call
+    """
+
+    def __call__(
+        self,
+        organization_pk: Optional[str],
+        workspace_pk: Optional[str],
+        filter_data: dict,
+        current_zoom: int,
+        zoom_range: int = 3,
+    ) -> int:
+        """Process synchronously."""
+        try:
+            return _precalculate_tile_features_impl(
+                organization_pk, workspace_pk, filter_data, current_zoom, zoom_range
+            )
+        except Exception as e:
+            logger.error(f"Failed to pre-calculate tile features: {e}")
+            raise
+
+    def delay(
+        self,
+        organization_pk: Optional[str],
+        workspace_pk: Optional[str],
+        filter_data: dict,
+        current_zoom: int,
+        zoom_range: int = 3,
+    ):
+        """
+        Process asynchronously if Celery available, otherwise skip.
+        """
+        if CELERY_AVAILABLE:
+            return _precalculate_tile_features_celery.delay(
+                organization_pk, workspace_pk, filter_data, current_zoom, zoom_range
+            )
+        else:
+            logger.debug("Celery not available, skipping tile features pre-calculation")
+            return None
+
+
+# Create the callable instance
+precalculate_tile_features = PrecalculateTileFeatures()
+
+
 # Only define Celery task if available
 if CELERY_AVAILABLE:
 
@@ -363,7 +601,28 @@ if CELERY_AVAILABLE:
         current_zoom: int,
         zoom_range: int = 3,
     ):
-        """Celery task wrapper."""
+        """Celery task wrapper for cluster pre-calculation."""
         return _precalculate_adjacent_zooms_impl(
+            organization_pk, workspace_pk, filter_data, current_zoom, zoom_range
+        )
+
+    @celery_shared_task(
+        bind=True,
+        max_retries=1,
+        default_retry_delay=30,
+        autoretry_for=(Exception,),
+        retry_backoff=True,
+        ignore_result=True,  # We don't need to store the result
+    )
+    def _precalculate_tile_features_celery(
+        self,
+        organization_pk: Optional[str],
+        workspace_pk: Optional[str],
+        filter_data: dict,
+        current_zoom: int,
+        zoom_range: int = 3,
+    ):
+        """Celery task wrapper for tile features pre-calculation."""
+        return _precalculate_tile_features_impl(
             organization_pk, workspace_pk, filter_data, current_zoom, zoom_range
         )
