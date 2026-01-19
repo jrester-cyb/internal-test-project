@@ -298,6 +298,9 @@ export default function AssetEditDialog({
   const theme = useTheme()
   const isDarkMode = theme.palette.mode === 'dark'
   const [activeTab, setActiveTab] = useState(0)
+
+  // In workspace context, name and location are locked (global properties)
+  const isWorkspaceContext = Boolean(workspaceId)
   const [name, setName] = useState('')
   const [longitude, setLongitude] = useState<string>('')
   const [latitude, setLatitude] = useState<string>('')
@@ -347,9 +350,9 @@ export default function AssetEditDialog({
     setAttributeValues((prev) => ({ ...prev, [apiKey]: value }))
   }
 
-  // Check what has changed
-  const hasNameChanged = name !== originalName
-  const hasLocationChanged = (() => {
+  // Check what has changed (name and location can't change in workspace context)
+  const hasNameChanged = !isWorkspaceContext && name !== originalName
+  const hasLocationChanged = !isWorkspaceContext && (() => {
     const newLng = longitude ? parseFloat(longitude) : null
     const newLat = latitude ? parseFloat(latitude) : null
     if (originalCoords === null && (newLng === null || newLat === null)) return false
@@ -471,17 +474,25 @@ export default function AssetEditDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               fullWidth
-              disabled={loading}
+              disabled={loading || isWorkspaceContext}
               required
-              error={!name.trim()}
-              helperText={!name.trim() ? 'Name is required' : hasNameChanged ? 'Modified' : undefined}
+              error={!isWorkspaceContext && !name.trim()}
+              helperText={
+                isWorkspaceContext
+                  ? 'Name is a global property and cannot be edited in workspace context'
+                  : !name.trim()
+                    ? 'Name is required'
+                    : hasNameChanged
+                      ? 'Modified'
+                      : undefined
+              }
             />
 
             {/* Location */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 Location
-                {hasLocationChanged && (
+                {!isWorkspaceContext && hasLocationChanged && (
                   <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>
                     Modified
                   </Typography>
@@ -493,7 +504,7 @@ export default function AssetEditDialog({
                   value={longitude}
                   onChange={(e) => setLongitude(e.target.value)}
                   fullWidth
-                  disabled={loading}
+                  disabled={loading || isWorkspaceContext}
                   type="number"
                   inputProps={{ step: 'any' }}
                   placeholder="-180 to 180"
@@ -503,14 +514,16 @@ export default function AssetEditDialog({
                   value={latitude}
                   onChange={(e) => setLatitude(e.target.value)}
                   fullWidth
-                  disabled={loading}
+                  disabled={loading || isWorkspaceContext}
                   type="number"
                   inputProps={{ step: 'any' }}
                   placeholder="-90 to 90"
                 />
               </Stack>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                Enter coordinates in decimal degrees (e.g., -122.4194, 37.7749)
+                {isWorkspaceContext
+                  ? 'Location is a global property and cannot be edited in workspace context'
+                  : 'Enter coordinates in decimal degrees (e.g., -122.4194, 37.7749)'}
               </Typography>
             </Box>
           </Stack>
@@ -551,7 +564,7 @@ export default function AssetEditDialog({
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={loading || totalChanges === 0 || !name.trim()}
+            disabled={loading || totalChanges === 0 || (!isWorkspaceContext && !name.trim())}
             sx={{ ml: 1 }}
           >
             {loading ? <CircularProgress size={24} /> : 'Save Changes'}

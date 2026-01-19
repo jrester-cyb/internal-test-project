@@ -585,13 +585,14 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             base_value = None
 
             # First, try to find the base/global value for this asset+attribute
-            try:
-                base_value = ValueModel.objects.get(
-                    asset=asset, asset_type_attribute_id=attr_with_type.id
-                )
+            # Exclude values that are workspace overrides (they have an entry in overrides_base)
+            base_value = ValueModel.objects.filter(
+                asset=asset,
+                asset_type_attribute_id=attr_with_type.id,
+                overrides_base__isnull=True,  # Not a workspace override
+            ).first()
+            if base_value:
                 old_value = base_value.value if hasattr(base_value, "value") else None
-            except ValueModel.DoesNotExist:
-                pass
 
             if workspace_pk:
                 # Workspace context: check for existing override or create one
@@ -624,6 +625,10 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         attr_value.value if hasattr(attr_value, "value") else None
                     )
 
+                    # TextAttributeValue doesn't allow null, convert to empty string
+                    if ValueModel == TextAttributeValue and value is None:
+                        value = ""
+
                     # Update the value
                     attr_value.value = value
                     attr_value.save()
@@ -645,6 +650,9 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         asset=asset,
                         asset_type_attribute_id=attr_with_type.id,
                     )
+                    # TextAttributeValue doesn't allow null, convert to empty string
+                    if ValueModel == TextAttributeValue and value is None:
+                        value = ""
                     override_value.value = value
                     override_value.save()
 
@@ -695,6 +703,10 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     attr_value = ValueModel(
                         asset=asset, asset_type_attribute_id=attr_with_type.id
                     )
+
+            # TextAttributeValue doesn't allow null, convert to empty string
+            if ValueModel == TextAttributeValue and value is None:
+                value = ""
 
             # Update the value
             if attr_type == "link":

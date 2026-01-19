@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useLoaderData, useParams } from 'react-router-dom'
-import { Box, Container, Grid, Typography } from '@mui/material'
+import { Box, Chip, Container, Grid, Typography } from '@mui/material'
+import { Public as PublicIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
 import AssetOverviewCard from '@app/components/AssetOverviewCard'
 import AttributesCard from '@app/components/AttributesCard'
@@ -11,6 +12,7 @@ import { AssetAuditLogSection } from '@app/components/AssetAuditLogSection'
 import AssetEditDialog from '@app/components/AssetEditDialog'
 import { fetchRelatedAssets, fetchAssetAttributeDefinitions, type RelatedAssetsResponse, type RelatedAsset } from '@app/api/assets'
 import type { AssetDetailLoaderData } from '@app/loaders/assetTypes'
+import { useOrganization } from '@app/contexts/OrganizationContext'
 
 const ATTRIBUTES_PAGE_SIZE = 20
 
@@ -18,6 +20,7 @@ export default function AssetDetailPage() {
   const loaderData = useLoaderData() as AssetDetailLoaderData
   const { asset, initialAttributes, totalAttributeCount, assetTypeId: loaderAssetTypeId } = loaderData
   const { organizationId, workspaceId, assetTypeId } = useParams<{ organizationId: string; workspaceId: string; assetTypeId: string }>()
+  const { isGlobalMode } = useOrganization()
 
   // Early return if asset is not loaded yet
   if (!asset) {
@@ -109,12 +112,15 @@ export default function AssetDetailPage() {
 
   // Refetch asset when globalValuesOnly toggle changes
   useEffect(() => {
-    if (!organizationId || !workspaceId || !asset.id) return
+    if (!organizationId || !asset.id) return
+    // Only need to fetch when in a workspace context and global values is toggled
+    if (!workspaceId) return
 
     setLoadingGlobalValues(true)
     import('../api/assets').then(({ getAsset }) => {
-      const url = globalValuesOnly ? `${asset.id}/?global_values_only=true` : asset.id
-      getAsset(organizationId, workspaceId, url)
+      // When globalValuesOnly is true, fetch from org-level (no workspace) to get global values
+      const wsId = globalValuesOnly ? undefined : workspaceId
+      getAsset(organizationId, wsId, asset.id)
         .then(setCurrentAsset)
         .catch(err => console.error('Failed to fetch asset:', err))
         .finally(() => setLoadingGlobalValues(false))
@@ -206,7 +212,7 @@ export default function AssetDetailPage() {
         asset={currentAsset}
         mode="page"
         globalValuesOnly={globalValuesOnly}
-        onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
+        onGlobalValuesToggle={isGlobalMode ? undefined : () => setGlobalValuesOnly(!globalValuesOnly)}
         onEdit={handleEdit}
         shareUrl={shareUrl}
         viewOnMapUrl={viewOnMapUrl}
@@ -220,6 +226,18 @@ export default function AssetDetailPage() {
       {/* Scrollable Content */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <Container maxWidth={false} sx={{ py: 3 }}>
+          {/* Global Values Indicator */}
+          {globalValuesOnly && (
+            <Chip
+              icon={<PublicIcon />}
+              label="Showing Global Values"
+              color="info"
+              size="small"
+              onDelete={() => setGlobalValuesOnly(false)}
+              sx={{ mb: 2 }}
+            />
+          )}
+
           <Grid container spacing={3}>
             {/* First Row: Attributes, Asset Tree */}
             <Grid size={{ xs: 12, md: 6 }}>

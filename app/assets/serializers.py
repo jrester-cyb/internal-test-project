@@ -1050,6 +1050,10 @@ class AssetSerializer(serializers.ModelSerializer):
                             "link": LinkAttributeValue,
                         }.get(field_def.attribute_type, TextAttributeValue)
 
+                        # TextAttributeValue doesn't allow null, convert to empty string
+                        if model_class == TextAttributeValue and value is None:
+                            value = ""
+
                         model_class.objects.create(
                             asset=asset, asset_type_attribute=field_def, value=value
                         )
@@ -1152,13 +1156,12 @@ class AssetSerializer(serializers.ModelSerializer):
                 continue
 
             # Find existing base value for this asset+attribute
-            base_value = None
-            try:
-                base_value = ValueModel.objects.get(
-                    asset=instance, asset_type_attribute_id=attr_with_type.id
-                )
-            except ValueModel.DoesNotExist:
-                pass
+            # Exclude values that are workspace overrides (they have an entry in overrides_base)
+            base_value = ValueModel.objects.filter(
+                asset=instance,
+                asset_type_attribute_id=attr_with_type.id,
+                overrides_base__isnull=True,  # Not a workspace override
+            ).first()
 
             # Check for existing workspace override
             existing_override = WorkspaceAttributeValueOverride.objects.filter(
@@ -1166,6 +1169,10 @@ class AssetSerializer(serializers.ModelSerializer):
                 override_value__asset=instance,
                 workspace=workspace,
             ).select_related("override_value").first()
+
+            # TextAttributeValue doesn't allow null, convert to empty string
+            if ValueModel == TextAttributeValue and value is None:
+                value = ""
 
             if existing_override:
                 # Update existing override value

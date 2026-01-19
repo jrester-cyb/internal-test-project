@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { Box, Skeleton, Typography } from '@mui/material'
-import { DragHandle as DragHandleIcon } from '@mui/icons-material'
+import { Box, Chip, Skeleton, Typography } from '@mui/material'
+import { DragHandle as DragHandleIcon, Public as PublicIcon } from '@mui/icons-material'
 import type { Asset, AssetTypeAttribute } from '@app/types'
 import { getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '@app/api/assets'
 import AssetOverviewCard from '@app/components/AssetOverviewCard'
@@ -75,8 +75,10 @@ export default function AssetContent({
   onDelete,
   onZoomToAsset,
 }: AssetContentProps) {
-  const { activeOrganization } = useOrganization()
+  const { activeOrganization, isGlobalMode } = useOrganization()
   const [fullAsset, setFullAsset] = useState<Asset | null>(null)
+  const [globalAsset, setGlobalAsset] = useState<Asset | null>(null)
+  const [globalAssetLoading, setGlobalAssetLoading] = useState(false)
   const [attributesMap, setAttributesMap] = useState<Map<number, AssetTypeAttribute>>(() => {
     const map = new Map<number, AssetTypeAttribute>()
     if (Array.isArray(propAttributes)) {
@@ -84,6 +86,8 @@ export default function AssetContent({
     }
     return map
   })
+  const [globalAttributesMap, setGlobalAttributesMap] = useState<Map<number, AssetTypeAttribute>>(new Map())
+  const [globalTotalAttributeCount, setGlobalTotalAttributeCount] = useState(0)
   const [totalAttributeCount, setTotalAttributeCount] = useState(Array.isArray(propAttributes) ? propAttributes.length : 0)
   // Start loading if we don't have attributes provided
   const [loading, setLoading] = useState(!propAttributes || propAttributes.length === 0)
@@ -161,6 +165,10 @@ export default function AssetContent({
   useEffect(() => {
     // Reset state when asset changes - this ensures we show the new asset immediately
     setFullAsset(null)
+    setGlobalAsset(null)
+    setGlobalAttributesMap(new Map())
+    setGlobalTotalAttributeCount(0)
+    setGlobalValuesOnly(false)
     const newMap = new Map<number, AssetTypeAttribute>()
     if (Array.isArray(propAttributes)) {
       propAttributes.forEach((attr, index) => newMap.set(index, attr))
@@ -268,8 +276,52 @@ export default function AssetContent({
     }
   }, [organizationId, workspaceId, asset?.id])
 
+  // Fetch global asset data when globalValuesOnly is toggled on
+  useEffect(() => {
+    if (!globalValuesOnly || !organizationId || !asset?.id) return
+    // If we already have the global asset loaded for this asset, skip
+    if (globalAsset?.id === asset.id) return
+
+    async function loadGlobalAsset() {
+      setGlobalAssetLoading(true)
+      try {
+        // Fetch asset from org-level (no workspace) to get global values
+        const data = await getAsset(organizationId!, undefined, asset!.id)
+        setGlobalAsset(data)
+
+        // Fetch global attribute definitions
+        if (data.assetType) {
+          const attrsResponse = await fetchAssetAttributeDefinitions(
+            organizationId!,
+            undefined, // No workspace = global
+            data.assetType,
+            1,
+            ATTRIBUTES_PAGE_SIZE
+          )
+          const map = new Map<number, AssetTypeAttribute>()
+          const results = Array.isArray(attrsResponse.results) ? attrsResponse.results : []
+          results.forEach((attr: AssetTypeAttribute, index: number) => map.set(index, attr))
+          setGlobalAttributesMap(map)
+          setGlobalTotalAttributeCount(attrsResponse.count || results.length)
+        }
+      } catch (error) {
+        console.error('Error loading global asset:', error)
+      } finally {
+        setGlobalAssetLoading(false)
+      }
+    }
+
+    loadGlobalAsset()
+  }, [globalValuesOnly, organizationId, asset?.id, globalAsset?.id])
+
   // Always show what we have - use the passed asset immediately, update when full data loads
-  const displayAsset = fullAsset || asset
+  // When globalValuesOnly is true, use the global asset if available
+  const displayAsset = globalValuesOnly && globalAsset ? globalAsset : (fullAsset || asset)
+
+  // Select attributes based on globalValuesOnly mode
+  const displayAttributesMap = globalValuesOnly ? globalAttributesMap : attributesMap
+  const displayTotalAttributeCount = globalValuesOnly ? globalTotalAttributeCount : totalAttributeCount
+  const isLoadingAttributes = globalValuesOnly ? globalAssetLoading : loading
 
   // Build the share URL (current page URL)
   const shareUrl = useMemo(() => {
@@ -291,7 +343,7 @@ export default function AssetContent({
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Pinned Overview Card - show immediately with available data */}
         <Box sx={{ flexShrink: 0 }}>
-          {loading && !displayAsset.name ? (
+          {(loading || (globalValuesOnly && globalAssetLoading)) && !displayAsset.name ? (
             <Box sx={{ p: 2 }}>
               <Skeleton variant="text" width="60%" height={32} />
               <Skeleton variant="text" width="40%" height={20} sx={{ mt: 1 }} />
@@ -302,7 +354,7 @@ export default function AssetContent({
               asset={displayAsset}
               mode="drawer"
               globalValuesOnly={globalValuesOnly}
-              onGlobalValuesToggle={() => setGlobalValuesOnly(!globalValuesOnly)}
+              onGlobalValuesToggle={isGlobalMode ? undefined : () => setGlobalValuesOnly(!globalValuesOnly)}
               onEdit={onEdit}
               shareUrl={shareUrl}
               viewDetailsUrl={viewDetailsUrl}
@@ -315,6 +367,18 @@ export default function AssetContent({
 
         {/* Scrollable Cards Section */}
         <Box sx={{ flex: 1, overflow: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Global Values Indicator */}
+          {globalValuesOnly && (
+            <Chip
+              icon={<PublicIcon />}
+              label="Showing Global Values"
+              color="info"
+              size="small"
+              onDelete={() => setGlobalValuesOnly(false)}
+              sx={{ alignSelf: 'flex-start' }}
+            />
+          )}
+
           {/* Drag Indicator */}
           <Box sx={{
             display: 'flex',
@@ -341,9 +405,9 @@ export default function AssetContent({
                         {(dragHandleProps) => (
                           <AttributesCard
                             asset={displayAsset}
-                            attributesMap={attributesMap}
-                            totalAttributeCount={totalAttributeCount}
-                            onLoadRange={handleLoadAttributeRange}
+                            attributesMap={displayAttributesMap}
+                            totalAttributeCount={displayTotalAttributeCount}
+                            onLoadRange={globalValuesOnly ? undefined : handleLoadAttributeRange}
                             showHidden={showHidden}
                             onShowHiddenChange={setShowHidden}
                             selectedTags={selectedTags}
@@ -352,7 +416,7 @@ export default function AssetContent({
                             onSelectedTypesChange={setSelectedTypes}
                             excludedScopes={excludedScopes}
                             onExcludedScopesChange={setExcludedScopes}
-                            isLoading={loading || attributesLoading}
+                            isLoading={isLoadingAttributes || attributesLoading}
                             defaultOpen={cardOpenState.attributes}
                             onToggle={toggleAttributes}
                             headerAction={<DragHandle {...dragHandleProps} />}
