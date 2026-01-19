@@ -23,6 +23,13 @@ const SecuritySettingsPage = lazy(() => import('./pages/SecuritySettingsPage.tsx
 const SessionsPage = lazy(() => import('./pages/security/SessionsPage.tsx'))
 const MFADevicesPage = lazy(() => import('./pages/security/MFADevicesPage.tsx'))
 const PasswordPage = lazy(() => import('./pages/security/PasswordPage.tsx'))
+const RolesPage = lazy(() => import('./pages/admin/RolesPage.tsx'))
+const RolesList = lazy(() => import('./pages/admin/RolesList.tsx'))
+const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout.tsx'))
+const SettingsIndexPage = lazy(() => import('./pages/settings/SettingsIndexPage.tsx'))
+const UsersPage = lazy(() => import('./pages/admin/UsersPage.tsx'))
+const GroupsPage = lazy(() => import('./pages/admin/GroupsPage.tsx'))
+const AdminOrganizationsPage = lazy(() => import('./pages/admin/OrganizationsPage.tsx'))
 
 // Helper to create a lazy loader that caches the imported function after first load
 // First call: async import -> cache -> call loader
@@ -287,6 +294,58 @@ export const router = createBrowserRouter([
                 loader: passwordLoaderBundle.loader,
               },
             ],
+          },
+        ],
+      },
+      {
+        path: "settings",
+        element: <SettingsLayout />,
+        handle: {
+          crumb: "Settings",
+          hideSidebar: true,
+        },
+        children: [
+          {
+            index: true,
+            element: <SettingsIndexPage />,
+          },
+          {
+            path: "roles",
+            element: <RolesPage />,
+            handle: {
+              crumb: "Roles",
+            },
+            children: [
+              {
+                index: true,
+                element: <Navigate to="instance" replace />,
+              },
+              {
+                path: ":scope",
+                element: <RolesList />,
+              },
+            ],
+          },
+          {
+            path: "users",
+            element: <UsersPage />,
+            handle: {
+              crumb: "Users",
+            },
+          },
+          {
+            path: "groups",
+            element: <GroupsPage />,
+            handle: {
+              crumb: "Groups",
+            },
+          },
+          {
+            path: "organizations",
+            element: <AdminOrganizationsPage />,
+            handle: {
+              crumb: "Organizations",
+            },
           },
         ],
       },

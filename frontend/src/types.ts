@@ -151,3 +151,132 @@ export interface SearchResponse<T = Asset> {
   next: string | null
   previous: string | null
 }
+
+// Permission & Role types
+export type RoleScope = 'instance' | 'organization' | 'workspace'
+
+export interface Permission {
+  id: string
+  name: string
+  codename: string
+  description: string
+  resourceType: string
+  action: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Role {
+  id: string
+  name: string
+  description: string
+  scope: RoleScope
+  permissions: Permission[]
+  isSystemRole: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RoleCreateInput {
+  name: string
+  description?: string
+  scope: RoleScope
+  permissionIds?: string[]
+}
+
+export interface RoleUpdateInput {
+  name?: string
+  description?: string
+  permissionIds?: string[]
+}
+
+// User types
+export interface UserGroup {
+  id: string
+  name: string
+}
+
+export interface User {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  fullName: string
+  avatar?: string
+  phoneNumber?: string
+  isActive: boolean
+  isVerified: boolean
+  groups: UserGroup[]
+  dateJoined: string
+  lastLogin?: string
+  updatedAt: string
+}
+
+export interface UserCreateInput {
+  email: string
+  password: string
+  firstName?: string
+  lastName?: string
+  phoneNumber?: string
+  groupIds?: string[]
+}
+
+export interface UserUpdateInput {
+  email?: string
+  firstName?: string
+  lastName?: string
+  phoneNumber?: string
+  isActive?: boolean
+}
+
+// Instance membership types
+export interface InstanceMember {
+  id: string
+  user: string
+  userEmail: string
+  userName: string
+  role: string
+  roleName: string
+  grantedAt: string
+  grantedBy?: string
+}
+
+export interface InstanceGroupMember {
+  id: string
+  group: string
+  groupName: string
+  role: string
+  roleName: string
+  grantedAt: string
+  grantedBy?: string
+}
+
+// Group types
+export interface Group {
+  id: string
+  name: string
+  description: string
+  memberCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GroupMembership {
+  id: string
+  group: string
+  user: string
+  userEmail: string
+  userName: string
+  addedAt: string
+  addedBy?: string
+}
+
+export interface GroupCreateInput {
+  name: string
+  description?: string
+}
+
+export interface GroupUpdateInput {
+  name?: string
+  description?: string
+}

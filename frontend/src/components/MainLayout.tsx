@@ -92,17 +92,19 @@ function MainLayoutContent() {
           </Box>
         )}
         {/* Show skeleton when navigating between main sections (unless preloaded) */}
-        {isNavigatingToNewSection && targetPath && getSkeletonForPath(targetPath) ? (
-          getSkeletonForPath(targetPath)
-        ) : (
-          <Suspense fallback={
-            <Box display="flex" justifyContent="center" alignItems="center" height="100%" width="100%">
-              <CircularProgress />
-            </Box>
-          }>
-            <Outlet />
-          </Suspense>
-        )}
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {isNavigatingToNewSection && targetPath && getSkeletonForPath(targetPath) ? (
+            getSkeletonForPath(targetPath)
+          ) : (
+            <Suspense fallback={
+              <Box display="flex" justifyContent="center" alignItems="center" height="100%" width="100%">
+                <CircularProgress />
+              </Box>
+            }>
+              <Outlet />
+            </Suspense>
+          )}
+        </Box>
 
         {/* Footer - hidden on mobile */}
         {!isMobile && (

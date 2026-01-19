@@ -12,6 +12,38 @@ def register_default_permissions():
     """Register all default system permissions."""
 
     # ==========================================================================
+    # Instance-scoped resources (system-wide administration)
+    # ==========================================================================
+
+    register_resource(
+        "instance",
+        actions=["manage"],
+        scope="instance",
+        description="Instance-wide system settings",
+    )
+
+    register_resource(
+        "organization",
+        actions=["create", "read", "write", "delete"],
+        scope="instance",
+        description="Organization management at instance level",
+    )
+
+    register_resource(
+        "user",
+        actions=["create", "read", "write", "delete"],
+        scope="instance",
+        description="User management at instance level",
+    )
+
+    register_resource(
+        "role",
+        actions=["create", "read", "write", "delete"],
+        scope="instance",
+        description="Role management at instance level",
+    )
+
+    # ==========================================================================
     # Organization-scoped resources
     # ==========================================================================
 

@@ -102,6 +102,63 @@ class IsWorkspaceMember(BasePermission):
         return permission_cache.has_workspace_access(request.user, workspace_id)
 
 
+class HasInstancePermission(BasePermission):
+    """
+    Permission class that checks for instance-level permissions.
+
+    Subclass and set `required_permissions` to a list of permissions (any match grants access):
+
+        class CanManageRoles(HasInstancePermission):
+            required_permissions = ['instance:manage', 'role:read']
+
+    Or use the factory function `make_instance_permission_class()`.
+    """
+
+    required_permissions: list[str] = None
+    message = "You do not have permission to perform this action."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if not self.required_permissions:
+            return True
+
+        user_perms = permission_cache.get_instance_permissions(request.user)
+        return any(perm in user_perms for perm in self.required_permissions)
+
+
+def make_instance_permission_class(
+    permissions: list[str],
+    message: str = None,
+) -> type[BasePermission]:
+    """
+    Factory function to create an instance permission class.
+
+    Args:
+        permissions: List of permission codenames (any match grants access)
+        message: Custom error message
+
+    Returns:
+        A permission class that can be used in permission_classes
+
+    Example:
+        CanManageRoles = make_instance_permission_class(['instance:manage', 'role:write'])
+
+        class RoleViewSet(viewsets.ModelViewSet):
+            permission_classes = [CanManageRoles]
+    """
+
+    class DynamicPermission(HasInstancePermission):
+        required_permissions = permissions
+
+    if message:
+        DynamicPermission.message = message
+
+    DynamicPermission.__name__ = f"HasInstancePermission"
+    return DynamicPermission
+
+
 class HasPermission(BasePermission):
     """
     Base class for creating permission classes that check specific permissions.

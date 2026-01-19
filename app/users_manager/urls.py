@@ -6,6 +6,8 @@ from .views import (
     GroupMembershipViewSet,
     RoleViewSet,
     PermissionViewSet,
+    InstanceMemberViewSet,
+    InstanceGroupMemberViewSet,
     OrganizationMemberViewSet,
     OrganizationGroupMemberViewSet,
     WorkspaceMemberViewSet,
@@ -20,6 +22,14 @@ router.register(
 )
 router.register(r"roles", RoleViewSet, basename="role")
 router.register(r"permissions", PermissionViewSet, basename="permission")
+router.register(
+    r"instance-members", InstanceMemberViewSet, basename="instance-member"
+)
+router.register(
+    r"instance-group-members",
+    InstanceGroupMemberViewSet,
+    basename="instance-group-member",
+)
 router.register(
     r"organization-members", OrganizationMemberViewSet, basename="organization-member"
 )

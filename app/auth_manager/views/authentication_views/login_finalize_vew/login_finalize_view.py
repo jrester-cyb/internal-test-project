@@ -3,6 +3,7 @@ from urllib.parse import ParseResult, parse_qs, urlencode, urlparse, urlunparse
 
 # django
 from django.conf import settings
+from django.contrib.auth import update_last_login
 from django.http import HttpResponseRedirect as DefaultHttpResponseRedirect
 from django.shortcuts import redirect
 from django.views import View
@@ -81,6 +82,9 @@ class LoginFinalizeView(View):
             new_token = OneTimeToken.objects.generate_token(self.user)
             redirect_to_uri = add_token_to_url(redirect_to_uri, new_token)
             return HttpResponseRedirect(redirect_to_uri)
+
+        # Update last_login timestamp
+        update_last_login(None, self.user)
 
         # Create session record for tracking (before JWT so we can include session_id)
         session = UserSession.objects.create_from_request(self.user, request)

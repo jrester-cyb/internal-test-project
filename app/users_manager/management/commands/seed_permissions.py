@@ -61,6 +61,56 @@ class Command(BaseCommand):
                 query |= Q(codename__startswith=prefix)
             return list(Permission.objects.filter(query))
 
+        # Instance Roles (system-wide administration)
+        instance_roles = [
+            {
+                "name": "Instance Admin",
+                "description": "Full administrative access to the entire application instance",
+                "scope": Role.Scope.INSTANCE,
+                "is_system_role": True,
+                "permissions": lambda: get_perms(
+                    "instance:manage",
+                    "organization:create",
+                    "organization:read",
+                    "organization:write",
+                    "organization:delete",
+                    "user:create",
+                    "user:read",
+                    "user:write",
+                    "user:delete",
+                    "role:create",
+                    "role:read",
+                    "role:write",
+                    "role:delete",
+                ),
+            },
+            {
+                "name": "Organization Manager",
+                "description": "Manage organizations and their members",
+                "scope": Role.Scope.INSTANCE,
+                "is_system_role": True,
+                "permissions": lambda: get_perms(
+                    "organization:create",
+                    "organization:read",
+                    "organization:write",
+                    "organization:delete",
+                    "user:read",
+                ),
+            },
+            {
+                "name": "User Manager",
+                "description": "Manage user accounts across the instance",
+                "scope": Role.Scope.INSTANCE,
+                "is_system_role": True,
+                "permissions": lambda: get_perms(
+                    "user:create",
+                    "user:read",
+                    "user:write",
+                    "user:delete",
+                ),
+            },
+        ]
+
         # Organization Roles
         org_roles = [
             {
@@ -185,7 +235,7 @@ class Command(BaseCommand):
             },
         ]
 
-        for role_def in org_roles + workspace_roles:
+        for role_def in instance_roles + org_roles + workspace_roles:
             role, created = Role.objects.get_or_create(
                 name=role_def["name"],
                 scope=role_def["scope"],

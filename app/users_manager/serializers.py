@@ -5,6 +5,8 @@ from .models import (
     GroupMembership,
     Role,
     Permission,
+    InstanceMember,
+    InstanceGroupMember,
     OrganizationMember,
     OrganizationGroupMember,
     WorkspaceMember,
@@ -138,7 +140,6 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar",
             "phone_number",
             "is_active",
-            "is_staff",
             "is_verified",
             "groups",
             "date_joined",
@@ -208,6 +209,49 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Old password is incorrect.")
         return value
+
+
+# =============================================================================
+# Instance Membership Serializers
+# =============================================================================
+
+
+class InstanceMemberSerializer(serializers.ModelSerializer):
+    user_email = serializers.CharField(source="user.email", read_only=True)
+    user_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    role_name = serializers.CharField(source="role.name", read_only=True)
+
+    class Meta:
+        model = InstanceMember
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "user_name",
+            "role",
+            "role_name",
+            "granted_at",
+            "granted_by",
+        ]
+        read_only_fields = ["id", "granted_at", "granted_by"]
+
+
+class InstanceGroupMemberSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source="group.name", read_only=True)
+    role_name = serializers.CharField(source="role.name", read_only=True)
+
+    class Meta:
+        model = InstanceGroupMember
+        fields = [
+            "id",
+            "group",
+            "group_name",
+            "role",
+            "role_name",
+            "granted_at",
+            "granted_by",
+        ]
+        read_only_fields = ["id", "granted_at", "granted_by"]
 
 
 # =============================================================================

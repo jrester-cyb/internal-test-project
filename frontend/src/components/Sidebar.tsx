@@ -1,9 +1,10 @@
 import { useCallback } from 'react'
-import { Box, List, Drawer, IconButton, Typography, useTheme } from '@mui/material'
-import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
+import { Box, List, Drawer, IconButton, Typography, Divider, useTheme } from '@mui/material'
+import { Map as MapIcon, Inventory as AssetsIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, FolderCopy as LibraryIcon, Settings as SettingsIcon } from '@mui/icons-material'
 import SidebarNavItem from '@app/components/SidebarNavItem'
 import { useLayout } from '@app/contexts/LayoutContext'
 import { useOrganization } from '@app/contexts/OrganizationContext'
+import { useUser } from '@app/contexts/UserContext'
 import { prefetchMap, prefetchAssetTypes, prefetchLibrary } from '@app/utils/preload'
 import { buildMapUrlWithPosition } from '@app/utils/mapPosition'
 
@@ -11,6 +12,13 @@ export default function Sidebar() {
   const theme = useTheme()
   const { sidebarOpen, setSidebarOpen, isMobile, hideSidebar } = useLayout()
   const { activeOrganization, activeWorkspace, isGlobalMode } = useOrganization()
+  const { hasInstancePermission, hasOrganizationPermission, hasWorkspacePermission } = useUser()
+
+  // Show settings if user can manage at any level
+  const canManageInstance = hasInstancePermission('instance:manage')
+  const canManageOrganization = activeOrganization && hasOrganizationPermission(activeOrganization.id, 'organization:manage')
+  const canManageWorkspace = activeWorkspace && hasWorkspacePermission(activeWorkspace.id, 'workspace:manage')
+  const showSettings = canManageInstance || canManageOrganization || canManageWorkspace
 
   if (hideSidebar || isMobile) {
     return null
@@ -66,42 +74,59 @@ export default function Sidebar() {
         },
       }}
     >
-      <Box sx={{ overflow: 'auto', mt: 8 }}>
-        {variant !== 'temporary' && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
-            <IconButton
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              sx={{ color: 'white' }}
-            >
-              {sidebarOpen ? <ChevronLeftIcon /> : <MenuIcon />}
-            </IconButton>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', mt: 8 }}>
+        {/* Top section with main navigation */}
+        <Box sx={{ overflow: 'auto', flexGrow: 1 }}>
+          {variant !== 'temporary' && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+              <IconButton
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                sx={{ color: 'white' }}
+              >
+                {sidebarOpen ? <ChevronLeftIcon /> : <MenuIcon />}
+              </IconButton>
+            </Box>
+          )}
+          <List>
+            {(isMobile || sidebarOpen) && (
+              <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
+                {modeLabel}
+              </Typography>
+            )}
+            <SidebarNavItem
+              to={mapUrl}
+              icon={<MapIcon />}
+              label="Map"
+              onPreload={handlePrefetchMap}
+            />
+            <SidebarNavItem
+              to={`${basePath}/asset-types`}
+              icon={<AssetsIcon />}
+              label="Assets"
+              onPreload={handlePrefetchAssetTypes}
+            />
+            <SidebarNavItem
+              to={`${basePath}/library`}
+              icon={<LibraryIcon />}
+              label="Library"
+              onPreload={handlePrefetchLibrary}
+            />
+          </List>
+        </Box>
+
+        {/* Bottom section with Settings */}
+        {showSettings && (
+          <Box sx={{ pb: 2 }}>
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.2)', mb: 1 }} />
+            <List disablePadding>
+              <SidebarNavItem
+                to="/settings"
+                icon={<SettingsIcon />}
+                label="Settings"
+              />
+            </List>
           </Box>
         )}
-        <List>
-          {(isMobile || sidebarOpen) && (
-            <Typography variant="caption" sx={{ px: 2, py: 1, color: 'rgba(255,255,255,0.7)', display: 'block' }}>
-              {modeLabel}
-            </Typography>
-          )}
-          <SidebarNavItem
-            to={mapUrl}
-            icon={<MapIcon />}
-            label="Map"
-            onPreload={handlePrefetchMap}
-          />
-          <SidebarNavItem
-            to={`${basePath}/asset-types`}
-            icon={<AssetsIcon />}
-            label="Assets"
-            onPreload={handlePrefetchAssetTypes}
-          />
-          <SidebarNavItem
-            to={`${basePath}/library`}
-            icon={<LibraryIcon />}
-            label="Library"
-            onPreload={handlePrefetchLibrary}
-          />
-        </List>
       </Box>
     </Drawer>
   )

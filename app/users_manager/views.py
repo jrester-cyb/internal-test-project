@@ -3,12 +3,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
+from .permissions import make_instance_permission_class
+
 from .models import (
     User,
     Group,
     GroupMembership,
     Role,
     Permission,
+    InstanceMember,
+    InstanceGroupMember,
     OrganizationMember,
     OrganizationGroupMember,
     WorkspaceMember,
@@ -25,6 +29,8 @@ from .serializers import (
     RoleSerializer,
     PermissionSerializer,
     ChangePasswordSerializer,
+    InstanceMemberSerializer,
+    InstanceGroupMemberSerializer,
     OrganizationMemberSerializer,
     OrganizationGroupMemberSerializer,
     WorkspaceMemberSerializer,
@@ -32,21 +38,34 @@ from .serializers import (
 )
 
 
+# Permission classes for role/permission management
+CanReadRoles = make_instance_permission_class(
+    ["instance:manage", "role:read", "role:write", "role:create", "role:delete"]
+)
+CanWriteRoles = make_instance_permission_class(
+    ["instance:manage", "role:write", "role:create", "role:delete"]
+)
+
+
 class PermissionViewSet(viewsets.ModelViewSet):
-    """Manage permissions (admin only)."""
+    """Manage permissions."""
 
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [CanReadRoles]
 
 
 class RoleViewSet(viewsets.ModelViewSet):
-    """Manage roles (admin only)."""
+    """Manage roles."""
 
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
     filterset_fields = ["scope", "is_system_role"]
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve", "instance_roles", "organization_roles", "workspace_roles"]:
+            return [CanReadRoles()]
+        return [CanWriteRoles()]
 
     def destroy(self, request, *args, **kwargs):
         role = self.get_object()
@@ -56,6 +75,13 @@ class RoleViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=["get"])
+    def instance_roles(self, request):
+        """Get all roles scoped to instance level."""
+        roles = self.get_queryset().filter(scope=Role.Scope.INSTANCE)
+        serializer = self.get_serializer(roles, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=["get"])
     def organization_roles(self, request):
@@ -240,6 +266,36 @@ class UserViewSet(viewsets.ModelViewSet):
 
         permissions = get_user_workspace_permissions(user, workspace)
         return Response({"permissions": list(permissions)})
+
+
+# Permission classes for user/group management
+CanManageUsers = make_instance_permission_class(
+    ["instance:manage", "user:write", "user:create", "user:delete"]
+)
+
+
+class InstanceMemberViewSet(viewsets.ModelViewSet):
+    """Manage instance-level role assignments to users."""
+
+    queryset = InstanceMember.objects.all()
+    serializer_class = InstanceMemberSerializer
+    permission_classes = [CanManageUsers]
+    filterset_fields = ["user", "role"]
+
+    def perform_create(self, serializer):
+        serializer.save(granted_by=self.request.user)
+
+
+class InstanceGroupMemberViewSet(viewsets.ModelViewSet):
+    """Manage instance-level role assignments to groups."""
+
+    queryset = InstanceGroupMember.objects.all()
+    serializer_class = InstanceGroupMemberSerializer
+    permission_classes = [CanManageUsers]
+    filterset_fields = ["group", "role"]
+
+    def perform_create(self, serializer):
+        serializer.save(granted_by=self.request.user)
 
 
 class OrganizationMemberViewSet(viewsets.ModelViewSet):

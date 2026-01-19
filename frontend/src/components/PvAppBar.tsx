@@ -1,4 +1,4 @@
-import { useNavigate, useNavigation } from 'react-router-dom'
+import { useNavigate, useNavigation, Link } from 'react-router-dom'
 import { AppBar, Toolbar, Typography, LinearProgress, Button } from '@mui/material'
 import {
   Help as HelpIcon,
@@ -47,15 +47,6 @@ export default function PvAppBar() {
 
   const handleHelp = () => {
     window.open('/help', '_blank')
-  }
-
-  const handleProfile = () => {
-    navigate('/profile')
-  }
-
-  const handleLogout = () => {
-    // Redirect to the Django logout endpoint which clears JWT cookies
-    window.location.href = '/auth/logout/'
   }
 
   const workspaceSubmenu = [
@@ -117,7 +108,8 @@ export default function PvAppBar() {
     {
       label: 'Profile',
       icon: <PersonIcon fontSize="small" />,
-      onClick: handleProfile,
+      component: Link,
+      to: '/profile',
       color: 'inherit' as const,
       variant: 'text' as const,
       minWidth: Infinity,
@@ -142,7 +134,8 @@ export default function PvAppBar() {
     {
       label: 'Logout',
       icon: <LogoutIcon fontSize="small" />,
-      onClick: () => console.log('Logout clicked'),
+      component: 'a' as const,
+      href: '/auth/logout/',
       color: 'inherit' as const,
       variant: 'text' as const,
       minWidth: Infinity

@@ -33,6 +33,35 @@ def invalidate_cache_on_group_membership_delete(sender, instance, **kwargs):
 
 
 # =============================================================================
+# Instance Membership Changes
+# =============================================================================
+
+
+@receiver(post_save, sender="users_manager.InstanceMember")
+def invalidate_cache_on_instance_member_save(sender, instance, **kwargs):
+    """Invalidate user's cache when instance membership changes."""
+    _get_permission_cache().invalidate_user(instance.user_id)
+
+
+@receiver(post_delete, sender="users_manager.InstanceMember")
+def invalidate_cache_on_instance_member_delete(sender, instance, **kwargs):
+    """Invalidate user's cache when removed from instance."""
+    _get_permission_cache().invalidate_user(instance.user_id)
+
+
+@receiver(post_save, sender="users_manager.InstanceGroupMember")
+def invalidate_cache_on_instance_group_member_save(sender, instance, **kwargs):
+    """Invalidate all group members' cache when group granted instance role."""
+    _get_permission_cache().invalidate_group(instance.group_id)
+
+
+@receiver(post_delete, sender="users_manager.InstanceGroupMember")
+def invalidate_cache_on_instance_group_member_delete(sender, instance, **kwargs):
+    """Invalidate all group members' cache when group's instance role removed."""
+    _get_permission_cache().invalidate_group(instance.group_id)
+
+
+# =============================================================================
 # Organization Membership Changes
 # =============================================================================
 

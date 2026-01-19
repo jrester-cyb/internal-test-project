@@ -47,6 +47,10 @@ def _user_workspaces_key(user_id) -> str:
     return _cache_key("perms", "user", user_id, "workspaces")
 
 
+def _user_instance_perms_key(user_id) -> str:
+    return _cache_key("perms", "user", user_id, "instance")
+
+
 def _user_all_perms_pattern(user_id) -> str:
     """Pattern to match all permission keys for a user."""
     return _cache_key("perms", "user", user_id, "*")
@@ -205,6 +209,34 @@ class PermissionCache:
         """Check if user has any access to a workspace."""
         return str(workspace_id) in self.get_user_workspace_ids(user)
 
+    def get_instance_permissions(self, user: "User") -> set[str]:
+        """
+        Get instance-level permissions for a user.
+
+        Instance permissions are granted via:
+        - Superuser status (grants all permissions)
+        - InstanceMember model (direct instance role assignments)
+        - InstanceGroupMember model (group-based instance role assignments)
+        """
+        if user.is_superuser:
+            return self._get_all_permissions()
+
+        cache_key = _user_instance_perms_key(user.id)
+
+        # Try cache first
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return set(cached)
+
+        # Fetch from DB using the model function
+        from users_manager.models import get_user_instance_permissions
+        permissions = get_user_instance_permissions(user)
+
+        # Cache as list (sets aren't JSON serializable)
+        cache.set(cache_key, list(permissions), self.timeout)
+
+        return permissions
+
     # =========================================================================
     # Cache Invalidation
     # =========================================================================
@@ -218,6 +250,7 @@ class PermissionCache:
         keys_to_delete = [
             _user_orgs_key(user_id),
             _user_workspaces_key(user_id),
+            _user_instance_perms_key(user_id),
         ]
 
         # Add org permission keys
@@ -329,10 +362,18 @@ class PermissionCache:
             OrganizationGroupMember,
             WorkspaceMember,
             WorkspaceGroupMember,
+            InstanceMember,
+            InstanceGroupMember,
             GroupMembership,
         )
 
         user_ids = set()
+
+        # Find all instance members with this role
+        instance_members = InstanceMember.objects.filter(role_id=role_id).values_list(
+            "user_id", flat=True
+        )
+        user_ids.update(instance_members)
 
         # Find all org members with this role
         org_members = OrganizationMember.objects.filter(role_id=role_id).values_list(
@@ -346,7 +387,10 @@ class PermissionCache:
         )
         user_ids.update(ws_members)
 
-        # Find all group members where group has this role
+        # Find all group members where group has this role (at any level)
+        instance_groups = InstanceGroupMember.objects.filter(
+            role_id=role_id
+        ).values_list("group_id", flat=True)
         org_groups = OrganizationGroupMember.objects.filter(
             role_id=role_id
         ).values_list("group_id", flat=True)
@@ -354,7 +398,7 @@ class PermissionCache:
             "group_id", flat=True
         )
 
-        all_groups = set(org_groups) | set(ws_groups)
+        all_groups = set(instance_groups) | set(org_groups) | set(ws_groups)
         group_users = GroupMembership.objects.filter(
             group_id__in=all_groups
         ).values_list("user_id", flat=True)
@@ -399,6 +443,7 @@ def warmup_user_permissions(user: "User") -> None:
     Pre-calculate and cache all permissions for a user at login time.
 
     This eagerly fetches and caches:
+    - Instance-level permissions
     - List of accessible organization IDs
     - List of accessible workspace IDs
     - Permissions for each organization
@@ -415,6 +460,9 @@ def warmup_user_permissions(user: "User") -> None:
         # Just ensure the "all permissions" cache is warmed
         permission_cache._get_all_permissions()
         return
+
+    # Get and cache instance-level permissions
+    permission_cache.get_instance_permissions(user)
 
     # Get and cache organization IDs (this also caches the list)
     org_ids = permission_cache.get_user_organization_ids(user)

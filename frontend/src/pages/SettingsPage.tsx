@@ -1,0 +1,148 @@
+import { useMemo } from 'react'
+import { Container, Box, Typography, Paper, List, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
+import {
+  Business as OrganizationIcon,
+  Workspaces as WorkspaceIcon,
+  AdminPanelSettings as InstanceIcon,
+  Security as RolesIcon,
+  People as UsersIcon,
+} from '@mui/icons-material'
+import { useNavigate } from 'react-router-dom'
+import { useUser } from '@app/contexts/UserContext'
+import { useOrganization } from '@app/contexts/OrganizationContext'
+
+interface SettingsSection {
+  title: string
+  items: SettingsItem[]
+}
+
+interface SettingsItem {
+  label: string
+  description: string
+  icon: React.ReactNode
+  path: string
+  visible: boolean
+}
+
+export default function SettingsPage() {
+  const navigate = useNavigate()
+  const { hasInstancePermission, hasOrganizationPermission, hasWorkspacePermission, hasAnyInstancePermission } = useUser()
+  const { activeOrganization, activeWorkspace } = useOrganization()
+
+  const canManageInstance = hasInstancePermission('instance:manage')
+  const canManageOrganization = activeOrganization && hasOrganizationPermission(activeOrganization.id, 'organization:manage')
+  const canManageWorkspace = activeWorkspace && hasWorkspacePermission(activeWorkspace.id, 'workspace:manage')
+
+  const canManageRoles = hasAnyInstancePermission(['instance:manage', 'role:create', 'role:write', 'role:delete'])
+  const canManageUsers = hasAnyInstancePermission(['instance:manage', 'user:create', 'user:write', 'user:delete'])
+  const canManageOrganizations = hasAnyInstancePermission(['instance:manage', 'organization:create', 'organization:write', 'organization:delete'])
+
+  const sections: SettingsSection[] = useMemo(() => [
+    {
+      title: 'Instance',
+      items: [
+        {
+          label: 'Roles',
+          description: 'Manage roles and permissions across the system',
+          icon: <RolesIcon />,
+          path: '/admin/roles',
+          visible: canManageRoles,
+        },
+        {
+          label: 'Users',
+          description: 'Manage user accounts',
+          icon: <UsersIcon />,
+          path: '/admin/users',
+          visible: canManageUsers,
+        },
+        {
+          label: 'Organizations',
+          description: 'Manage all organizations',
+          icon: <OrganizationIcon />,
+          path: '/admin/organizations',
+          visible: canManageOrganizations,
+        },
+      ],
+    },
+    {
+      title: 'Organization',
+      items: [
+        {
+          label: activeOrganization?.name || 'Organization Settings',
+          description: 'Manage organization settings and members',
+          icon: <OrganizationIcon />,
+          path: `/organizations/${activeOrganization?.id}/settings`,
+          visible: !!canManageOrganization,
+        },
+      ],
+    },
+    {
+      title: 'Workspace',
+      items: [
+        {
+          label: activeWorkspace?.name || 'Workspace Settings',
+          description: 'Manage workspace settings and access',
+          icon: <WorkspaceIcon />,
+          path: `/organizations/${activeOrganization?.id}/workspaces/${activeWorkspace?.id}/settings`,
+          visible: !!canManageWorkspace,
+        },
+      ],
+    },
+  ], [activeOrganization, activeWorkspace, canManageRoles, canManageUsers, canManageOrganizations, canManageOrganization, canManageWorkspace])
+
+  // Filter sections to only show those with visible items
+  const visibleSections = sections.filter(section =>
+    section.items.some(item => item.visible)
+  )
+
+  return (
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" component="h1" fontWeight={600}>
+          Settings
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+          Manage your instance, organization, and workspace settings
+        </Typography>
+      </Box>
+
+      {visibleSections.map(section => {
+        const visibleItems = section.items.filter(item => item.visible)
+        if (visibleItems.length === 0) return null
+
+        return (
+          <Box key={section.title} sx={{ mb: 4 }}>
+            <Typography variant="overline" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              {section.title}
+            </Typography>
+            <Paper variant="outlined">
+              <List disablePadding>
+                {visibleItems.map((item, index) => (
+                  <ListItemButton
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    divider={index < visibleItems.length - 1}
+                  >
+                    <ListItemIcon>{item.icon}</ListItemIcon>
+                    <ListItemText
+                      primary={item.label}
+                      secondary={item.description}
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Paper>
+          </Box>
+        )
+      })}
+
+      {visibleSections.length === 0 && (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">
+            You don't have permission to access any settings.
+          </Typography>
+        </Paper>
+      )}
+    </Container>
+  )
+}

@@ -29,7 +29,9 @@ from .drf_permissions import (
     IsAuthenticatedWithAccess,
     IsOrganizationMember,
     IsWorkspaceMember,
+    HasInstancePermission,
     HasPermission,
+    make_instance_permission_class,
     make_permission_class,
 )
 
@@ -61,6 +63,8 @@ __all__ = [
     "IsAuthenticatedWithAccess",
     "IsOrganizationMember",
     "IsWorkspaceMember",
+    "HasInstancePermission",
     "HasPermission",
+    "make_instance_permission_class",
     "make_permission_class",
 ]

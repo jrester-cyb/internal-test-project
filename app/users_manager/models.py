@@ -68,12 +68,14 @@ class Role(models.Model):
     """
     Roles define a set of permissions that can be assigned to users or groups.
 
-    Roles are scoped to either Organization or Workspace level:
+    Roles are scoped to Instance, Organization, or Workspace level:
+    - Instance roles: Define what a user can do across the entire application instance
     - Organization roles: Define what a user can do across the organization
     - Workspace roles: Define what a user can do within a specific workspace
     """
 
     class Scope(models.TextChoices):
+        INSTANCE = "instance", "Instance"
         ORGANIZATION = "organization", "Organization"
         WORKSPACE = "workspace", "Workspace"
 
@@ -255,6 +257,85 @@ class GroupMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.email} in {self.group.name}"
+
+
+# =============================================================================
+# Instance Membership (system-wide roles)
+# =============================================================================
+
+
+class InstanceMember(models.Model):
+    """
+    Assigns an instance-level role to a user.
+    Instance roles grant system-wide permissions (e.g., manage all organizations).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="instance_roles"
+    )
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.PROTECT,
+        related_name="instance_members",
+        limit_choices_to={"scope": Role.Scope.INSTANCE},
+    )
+    granted_at = models.DateTimeField(auto_now_add=True)
+    granted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="granted_instance_roles",
+    )
+
+    class Meta:
+        ordering = ["-granted_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "role"], name="unique_instance_user_role"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.role.name}"
+
+
+class InstanceGroupMember(models.Model):
+    """
+    Assigns an instance-level role to a group.
+    All users in the group inherit this role at the instance level.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(
+        Group, on_delete=models.CASCADE, related_name="instance_roles"
+    )
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.PROTECT,
+        related_name="instance_group_members",
+        limit_choices_to={"scope": Role.Scope.INSTANCE},
+    )
+    granted_at = models.DateTimeField(auto_now_add=True)
+    granted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="granted_instance_group_roles",
+    )
+
+    class Meta:
+        ordering = ["-granted_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["group", "role"], name="unique_instance_group_role"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.group.name} - {self.role.name}"
 
 
 # =============================================================================
@@ -513,3 +594,36 @@ def user_has_organization_permission(user, organization, permission_codename):
 def user_has_workspace_permission(user, workspace, permission_codename):
     """Check if a user has a specific permission for a workspace."""
     return permission_codename in get_user_workspace_permissions(user, workspace)
+
+
+def get_user_instance_permissions(user):
+    """
+    Get all instance-level permissions a user has.
+    Combines direct instance roles + group instance roles.
+    """
+    permissions = set()
+
+    # Direct instance roles
+    direct_roles = InstanceMember.objects.filter(user=user).select_related("role").prefetch_related("role__permissions")
+    for im in direct_roles:
+        for perm in im.role.permissions.all():
+            permissions.add(perm.codename)
+
+    # Group instance roles
+    user_groups = Group.objects.filter(memberships__user=user)
+    group_roles = (
+        InstanceGroupMember.objects.filter(group__in=user_groups)
+        .select_related("role")
+        .prefetch_related("role__permissions")
+    )
+
+    for gm in group_roles:
+        for perm in gm.role.permissions.all():
+            permissions.add(perm.codename)
+
+    return permissions
+
+
+def user_has_instance_permission(user, permission_codename):
+    """Check if a user has a specific instance-level permission."""
+    return permission_codename in get_user_instance_permissions(user)
