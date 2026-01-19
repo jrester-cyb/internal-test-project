@@ -307,7 +307,7 @@ export default function UsersPage() {
   ], [getInitials])
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight={600}>
           Users

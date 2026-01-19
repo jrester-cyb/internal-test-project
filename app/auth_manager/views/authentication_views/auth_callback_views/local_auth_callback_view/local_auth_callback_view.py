@@ -10,6 +10,7 @@ from django.views.generic import TemplateView
 from auth_manager.constants import PROVIDED_EMAIL
 from auth_manager.exceptions.api_exceptions import (
     BadRequest,
+    InactiveAccount,
     IncorrectCredentials,
     LockedAccount,
     UserAlreadyLinked,
@@ -53,6 +54,7 @@ class LocalIdentityProviderAuthenticationCallbackView(TemplateView):
             BadRequest,
             IncorrectCredentials,
             LockedAccount,
+            InactiveAccount,
         ) as err:
             context = self.get_context_data()
             context["error_message"] = err.detail

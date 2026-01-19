@@ -64,10 +64,10 @@ class JWTCookieAuthentication(BaseAuthentication):
             validated_token = self.jwt_auth.get_validated_token(raw_token)
             user = self.jwt_auth.get_user(validated_token)
             return (user, validated_token)
-        except (InvalidToken, TokenError):
-            # Invalid cookie token - clear it and return None
-            # The middleware will handle clearing the cookie on response
-            return None
+        except (InvalidToken, TokenError) as e:
+            # Token is invalid or expired - raise exception to return 401
+            # This allows the frontend to attempt token refresh
+            raise AuthenticationFailed(str(e))
 
     def authenticate_header(self, request):
         """Return auth header type for WWW-Authenticate header."""

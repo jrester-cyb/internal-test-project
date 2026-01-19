@@ -3,8 +3,8 @@ import { Outlet } from 'react-router-dom'
 
 export default function SettingsLayout() {
   return (
-    <Container sx={{ py: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <Container maxWidth={false} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Outlet />
       </Box>
     </Container>

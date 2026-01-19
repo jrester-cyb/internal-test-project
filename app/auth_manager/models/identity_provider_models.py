@@ -19,12 +19,23 @@ from onelogin.saml2.settings import OneLogin_Saml2_Settings
 from polymorphic.models import PolymorphicModel
 from rest_framework import serializers
 
+from auth_manager.exceptions.api_exceptions import (
+    BadRequest as BadRequestException,
+    InactiveAccount,
+    IncorrectCredentials,
+    LockedAccount,
+    UserAlreadyLinked,
+)
 from core.models.soft_delete import PolymorphicSoftDeleteMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 
 User = get_user_model()
+
+
+# Keep old exception names as aliases for backwards compatibility
+BadRequest = BadRequestException
 
 logger = logging.getLogger(__name__)
 
@@ -34,28 +45,6 @@ PROVIDED_EMAIL = "provided_email"
 REDIRECT_URI = "redirect_uri"
 
 
-class BadRequest(Exception):
-    """Raised when a bad request is made."""
-
-    pass
-
-
-class IncorrectCredentials(Exception):
-    """Raised when credentials are incorrect."""
-
-    pass
-
-
-class LockedAccount(Exception):
-    """Raised when an account is locked."""
-
-    pass
-
-
-class UserAlreadyLinked(Exception):
-    """Raised when a user is already linked to an identity provider."""
-
-    pass
 
 
 def _prepare_django_request(request):
@@ -239,6 +228,10 @@ class LocalIdentityProvider(IdentityProvider):
             existing_user = User.objects.get(email=email)
         except User.DoesNotExist:
             raise IncorrectCredentials()
+
+        # Check if existing user is inactive
+        if not existing_user.is_active:
+            raise InactiveAccount()
 
         # Check if existing user is locked
         if (

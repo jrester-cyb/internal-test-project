@@ -2,7 +2,7 @@ import { Box, Typography, Paper } from '@mui/material'
 
 export default function OrganizationsPage() {
   return (
-    <Box>
+    <Box sx={{ p: 2 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight={600}>
           Organizations

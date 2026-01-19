@@ -33,7 +33,7 @@ export default function RolesPage() {
   )
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 2 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight={600}>
           Role Management

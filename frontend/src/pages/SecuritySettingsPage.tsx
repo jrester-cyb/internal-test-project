@@ -10,41 +10,50 @@ import {
 import NavTabBar, { type NavTab } from '../components/NavTabBar'
 
 // Map path to tab index
-const getTabFromPath = (pathname: string): number => {
+const getTabFromPath = (pathname: string, hasPasswordTab: boolean): number => {
   if (pathname.includes('/sessions')) return 0
   if (pathname.includes('/mfa')) return 1
-  if (pathname.includes('/password')) return 2
+  if (pathname.includes('/password') && hasPasswordTab) return 2
   return 0 // Default to sessions
 }
 
 export default function SecuritySettingsPage() {
   const location = useLocation()
-  const currentTab = getTabFromPath(location.pathname)
-  const { userId } = useLoaderData() as SecurityLayoutLoaderData
+  const { userId, isOwnProfile } = useLoaderData() as SecurityLayoutLoaderData
+
+  const currentTab = getTabFromPath(location.pathname, isOwnProfile)
 
   const handlePrefetchSessions = useCallback(() => {
     prefetchSessions(userId)
   }, [userId])
 
   const tabs: NavTab[] = useMemo(
-    () => [
-      {
-        label: 'Sessions',
-        to: '/profile/security/sessions',
-        onMouseEnter: handlePrefetchSessions,
-      },
-      {
-        label: 'MFA Devices',
-        to: '/profile/security/mfa',
-        onMouseEnter: prefetchMfaDevices,
-      },
-      {
-        label: 'Password',
-        to: '/profile/security/password',
-        onMouseEnter: prefetchPassword,
-      },
-    ],
-    [handlePrefetchSessions]
+    () => {
+      const baseTabs: NavTab[] = [
+        {
+          label: 'Sessions',
+          to: 'sessions',
+          onMouseEnter: handlePrefetchSessions,
+        },
+        {
+          label: 'MFA Devices',
+          to: 'mfa',
+          onMouseEnter: prefetchMfaDevices,
+        },
+      ]
+
+      // Only show password tab for own profile
+      if (isOwnProfile) {
+        baseTabs.push({
+          label: 'Password',
+          to: 'password',
+          onMouseEnter: prefetchPassword,
+        })
+      }
+
+      return baseTabs
+    },
+    [handlePrefetchSessions, isOwnProfile]
   )
 
   return (

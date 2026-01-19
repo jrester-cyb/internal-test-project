@@ -141,3 +141,24 @@ class UserSessionsViewSet(
 
         session.logout()
         return Response({"detail": "Session revoked."}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], url_path="revoke-all")
+    def revoke_all(self, request, user_id=None):
+        """
+        Revoke all sessions except the current one.
+        """
+        current_session_id = get_session_id_from_request(request)
+        queryset = self.get_queryset()
+
+        # Exclude the current session
+        if current_session_id:
+            queryset = queryset.exclude(id=current_session_id)
+
+        count = queryset.count()
+        for session in queryset:
+            session.logout()
+
+        return Response(
+            {"detail": f"Revoked {count} session(s).", "count": count},
+            status=status.HTTP_200_OK,
+        )

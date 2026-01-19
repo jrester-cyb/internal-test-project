@@ -2,7 +2,7 @@
 from django.conf import settings
 
 # local
-from auth_manager.jwt_utils import set_jwt_cookies
+from auth_manager.jwt_utils import create_tokens_for_user, set_jwt_cookies
 
 # thirdparty
 from rest_framework.permissions import AllowAny
@@ -38,8 +38,9 @@ class TokenRefreshView(APIView):
             )
 
         try:
-            # Validate and rotate the refresh token
+            # Validate the refresh token
             token = RefreshToken(refresh_token)
+
             # Blacklist the old token if rotation is enabled
             if settings.SIMPLE_JWT.get("ROTATE_REFRESH_TOKENS", False):
                 if settings.SIMPLE_JWT.get("BLACKLIST_AFTER_ROTATION", False):
@@ -49,20 +50,20 @@ class TokenRefreshView(APIView):
                         # Token blacklist not enabled
                         pass
 
-            # Generate new tokens
-            new_refresh = RefreshToken.for_user(token.payload.get("user_id"))
-            # We need to get the user to generate proper tokens
+            # Get user to generate proper tokens
             from django.contrib.auth import get_user_model
 
             User = get_user_model()
             try:
                 user = User.objects.get(id=token.payload.get("user_id"))
-                new_refresh = RefreshToken.for_user(user)
             except User.DoesNotExist:
                 return Response({"detail": "User not found."}, status=401)
 
-            new_access = str(new_refresh.access_token)
-            new_refresh_str = str(new_refresh)
+            # Preserve session_id from the original token
+            session_id = token.payload.get("session_id")
+
+            # Generate new tokens with the same session_id
+            new_access, new_refresh_str = create_tokens_for_user(user, session_id=session_id)
 
             response_data = {
                 "access": new_access,

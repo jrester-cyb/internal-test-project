@@ -8,6 +8,7 @@ import {
   Chip,
   Button,
   Skeleton,
+  Alert,
 } from '@mui/material'
 import {
   Computer as ComputerIcon,
@@ -106,6 +107,56 @@ export default function SessionsPage() {
     }
   }, [userId])
 
+  const [revokeAllLoading, setRevokeAllLoading] = useState(false)
+  const [revokeAllResult, setRevokeAllResult] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+
+  const handleRevokeAllSessions = useCallback(async () => {
+    setRevokeAllLoading(true)
+    setRevokeAllResult(null)
+    try {
+      const response = await authFetch(`/api/auth/v2/users/${userId}/sessions/revoke-all/`, {
+        method: 'POST',
+      })
+      if (!response.ok) throw new Error('Failed to revoke sessions')
+      const data = await response.json()
+
+      // Keep only the current session in the map
+      setSessions(prev => {
+        const newMap = new Map<number, Session>()
+        let newIndex = 0
+        for (const session of prev.values()) {
+          if (session.isCurrent) {
+            newMap.set(newIndex++, session)
+          }
+        }
+        return newMap
+      })
+      setSessionsTotalCount(prev => {
+        // Count how many sessions were current (should be 1)
+        let currentCount = 0
+        for (const session of sessions.values()) {
+          if (session.isCurrent) currentCount++
+        }
+        return currentCount
+      })
+
+      setRevokeAllResult({
+        type: 'success',
+        message: data.count > 0
+          ? `Successfully revoked ${data.count} session${data.count !== 1 ? 's' : ''}.`
+          : 'No other sessions to revoke.',
+      })
+    } catch (err) {
+      console.error('Failed to revoke all sessions', err)
+      setRevokeAllResult({
+        type: 'error',
+        message: 'Failed to revoke sessions. Please try again.',
+      })
+    } finally {
+      setRevokeAllLoading(false)
+    }
+  }, [userId, sessions])
+
   const getDeviceIcon = (deviceType: string) => {
     const type = deviceType?.toLowerCase()
     if (type?.includes('mobile') || type?.includes('phone')) return <PhoneIcon />
@@ -171,11 +222,39 @@ export default function SessionsPage() {
     </Box>
   )
 
+  // Check if there are other sessions besides the current one
+  const hasOtherSessions = sessionsTotalCount > 1 ||
+    (sessionsTotalCount === 1 && !Array.from(sessions.values()).some(s => s.isCurrent))
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        These are the devices currently logged into your account. You can revoke access to any session.
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, gap: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          These are the devices currently logged into your account. You can revoke access to any session.
+        </Typography>
+        {hasOtherSessions && (
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={handleRevokeAllSessions}
+            disabled={revokeAllLoading}
+            sx={{ flexShrink: 0 }}
+          >
+            {revokeAllLoading ? 'Revoking...' : 'Revoke All'}
+          </Button>
+        )}
+      </Box>
+
+      {revokeAllResult && (
+        <Alert
+          severity={revokeAllResult.type}
+          onClose={() => setRevokeAllResult(null)}
+          sx={{ mb: 2 }}
+        >
+          {revokeAllResult.message}
+        </Alert>
+      )}
 
       <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <InfiniteLoaderList<Session>

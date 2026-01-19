@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.views.generic import TemplateView
 
 # thirdparty
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
@@ -33,7 +34,9 @@ class LoginInitView(TemplateView):
             validated_token = jwt_auth.get_validated_token(raw_token)
             user = jwt_auth.get_user(validated_token)
             return user
-        except (InvalidToken, TokenError):
+        except (InvalidToken, TokenError, AuthenticationFailed):
+            # InvalidToken/TokenError: token is expired or invalid
+            # AuthenticationFailed: user is inactive or doesn't exist
             return None
 
     def dispatch(self, request, *args, **kwargs):

@@ -103,7 +103,7 @@ export default function SettingsIndexPage() {
   )
 
   return (
-    <Box>
+    <Box sx={{ p: 2 }}>
       <Box sx={{ mb: 4 }}>
         <Typography variant="body1" color="text.secondary">
           Manage your instance, organization, and workspace settings

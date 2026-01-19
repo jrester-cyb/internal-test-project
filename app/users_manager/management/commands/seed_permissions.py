@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from users_manager.models import Role
 from users_manager.permissions import permission_registry
+from users_manager.permissions.caching import permission_cache
 from users_manager.permissions.defaults import register_default_permissions
 
 
@@ -42,6 +43,12 @@ class Command(BaseCommand):
             self.stdout.write("\nCreating default roles...\n")
             if not dry_run:
                 self._create_default_roles()
+
+        # Clear all permission caches to ensure changes take effect
+        if not dry_run:
+            self.stdout.write("\nClearing permission caches...\n")
+            permission_cache.invalidate_all()
+            self.stdout.write(self.style.SUCCESS("  Permission caches cleared"))
 
         self.stdout.write(self.style.SUCCESS("\nDone!"))
 

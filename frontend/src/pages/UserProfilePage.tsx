@@ -29,10 +29,13 @@ import UserRolesDialog from './admin/UserRolesDialog'
 
 export default function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>()
-  const { user: currentUser, updateUser: updateCurrentUser } = useUser()
+  const { user: currentUser, updateUser: updateCurrentUser, hasAnyInstancePermission } = useUser()
 
   // If no userId in URL, we're viewing our own profile
   const isOwnProfile = !userId
+
+  // Check if user can manage user roles (for showing the Manage Roles button)
+  const canManageUserRoles = hasAnyInstancePermission(['instance:manage', 'role:read'])
 
   // State for fetched user (when viewing another user)
   const [fetchedUser, setFetchedUser] = useState<User | null>(null)
@@ -94,7 +97,7 @@ export default function UserProfilePage() {
   // Loading state
   if (loading) {
     return (
-      <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         <Box sx={{ display: 'flex', gap: 3, maxWidth: 1200, mx: 'auto' }}>
           <Skeleton variant="rectangular" width={300} height={300} sx={{ borderRadius: 1 }} />
           <Skeleton variant="rectangular" sx={{ flex: 1, borderRadius: 1 }} height={300} />
@@ -106,7 +109,7 @@ export default function UserProfilePage() {
   // Error state
   if (error || !user) {
     return (
-      <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         <Alert severity="error">{error || 'User not found'}</Alert>
       </Box>
     )
@@ -130,7 +133,7 @@ export default function UserProfilePage() {
     : fetchedUser
 
   return (
-    <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+    <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
       <Box sx={{ display: 'flex', gap: 3, maxWidth: 1200, mx: 'auto' }}>
         {/* Left Column - Profile Info */}
         <Paper sx={{ width: 300, flexShrink: 0, p: 3, alignSelf: 'flex-start' }}>
@@ -212,7 +215,7 @@ export default function UserProfilePage() {
               </ListItemIcon>
               <ListItemText primary="Security Settings" />
             </ListItem>
-            {!isOwnProfile && (
+            {canManageUserRoles && (
               <ListItem
                 component="button"
                 onClick={() => setRolesDialogOpen(true)}
@@ -309,11 +312,11 @@ export default function UserProfilePage() {
         />
       )}
 
-      {/* Roles dialog (only for admin viewing other users) */}
-      {!isOwnProfile && fetchedUser && (
+      {/* Roles dialog */}
+      {canManageUserRoles && userForDialog && (
         <UserRolesDialog
           open={rolesDialogOpen}
-          user={fetchedUser}
+          user={userForDialog}
           onClose={() => setRolesDialogOpen(false)}
         />
       )}

@@ -31,3 +31,9 @@ class LockedAccount(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "This account is locked. Please contact your administrator or try again in 5 minutes."
     default_code = "locked_account"
+
+
+class InactiveAccount(APIException):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "This account has been deactivated. Please contact your administrator."
+    default_code = "inactive_account"

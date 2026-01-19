@@ -1,3 +1,4 @@
+import { redirect } from 'react-router-dom'
 import { authFetch } from '../api/authFetch'
 import { getCachedFetch, cacheKeys } from '../utils/prefetchCache'
 import type { UserProfile } from '../contexts/UserContext'
@@ -51,6 +52,7 @@ export interface MFADevicesLoaderData {
 
 export interface SecurityLayoutLoaderData {
   userId: string
+  isOwnProfile: boolean
 }
 
 /**
@@ -61,11 +63,16 @@ export function getUserProfile(): UserProfile {
 }
 
 /**
- * Loader for the security layout - gets user ID from auth state
+ * Loader for the security layout - gets user ID from auth state or route params
  */
-export async function securityLayoutLoader(): Promise<SecurityLayoutLoaderData> {
-  const user = getAuthUser()
-  return { userId: user.id }
+export async function securityLayoutLoader({ params }: { params: { userId?: string } }): Promise<SecurityLayoutLoaderData> {
+  const currentUser = getAuthUser()
+
+  // If userId param exists, we're viewing another user's profile
+  const userId = params.userId || currentUser.id
+  const isOwnProfile = !params.userId || params.userId === currentUser.id
+
+  return { userId, isOwnProfile }
 }
 
 /**
@@ -127,8 +134,15 @@ export async function mfaDevicesLoader(): Promise<MFADevicesLoaderData> {
 }
 
 /**
- * Password page doesn't need a loader - it's just a form
+ * Password page loader - only accessible for own profile
  */
-export async function passwordLoader(): Promise<Record<string, never>> {
+export async function passwordLoader({ params }: { params: { userId?: string } }): Promise<Record<string, never>> {
+  const currentUser = getAuthUser()
+
+  // If viewing another user's profile, redirect to sessions
+  if (params.userId && params.userId !== currentUser.id) {
+    throw redirect('../sessions')
+  }
+
   return {}
 }
