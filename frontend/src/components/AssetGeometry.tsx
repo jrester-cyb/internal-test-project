@@ -1,7 +1,9 @@
-import { useMemo, memo } from 'react'
+import { useMemo, memo, useRef, useCallback, useEffect } from 'react'
 import { Marker, Polygon, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Asset } from '@app/types'
+
+const PREFETCH_DELAY_MS = 50
 
 interface AssetGeometryProps {
   asset: Asset
@@ -13,6 +15,8 @@ interface AssetGeometryProps {
   polygonStrokeColor: string
   polylineColor: string
   onAssetClick: (asset: Asset) => void
+  /** Called after hovering for 500ms - used for prefetching */
+  onAssetHover?: (asset: Asset) => void
   /** Minimum pixel size before collapsing to pin. Default 50 for area, 30 for length */
   minPixelSize?: number
   /** Current zoom level - passed from parent to avoid individual event listeners */
@@ -93,6 +97,7 @@ function AssetGeometryInner({
   polygonStrokeColor,
   polylineColor,
   onAssetClick,
+  onAssetHover,
   minPixelSize = 50,
   currentZoom,
   canvasRenderer,
@@ -100,6 +105,38 @@ function AssetGeometryInner({
   useMarkerFallbackForPolygons = false
 }: Readonly<AssetGeometryProps>) {
   const map = useMap()
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleMouseOver = useCallback(() => {
+    if (!onAssetHover) return
+
+    // Clear any existing timer
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+    }
+
+    // Start prefetch after delay
+    hoverTimerRef.current = setTimeout(() => {
+      onAssetHover(asset)
+    }, PREFETCH_DELAY_MS)
+  }, [onAssetHover, asset])
+
+  const handleMouseOut = useCallback(() => {
+    // Cancel prefetch if user moves away before delay
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+  }, [])
 
   // Use currentZoom prop if provided (from parent), otherwise fall back to map zoom
   const zoom = currentZoom ?? map.getZoom()
@@ -177,7 +214,11 @@ function AssetGeometryInner({
         position={renderInfo.position}
         icon={isSelected ? selectedMarkerIcon : markerIcon}
         zIndexOffset={isSelected ? 1000 : 0}
-        eventHandlers={{ click: handleClick }}
+        eventHandlers={{
+          click: handleClick,
+          mouseover: handleMouseOver,
+          mouseout: handleMouseOut
+        }}
       />
     )
   }
@@ -202,7 +243,11 @@ function AssetGeometryInner({
         )}
         <Polygon
           positions={renderInfo.positions}
-          eventHandlers={{ click: handleClick }}
+          eventHandlers={{
+            click: handleClick,
+            mouseover: handleMouseOver,
+            mouseout: handleMouseOut
+          }}
           pathOptions={{
             color: polygonStrokeColor,
             fillColor: polygonFillColor,
@@ -235,7 +280,11 @@ function AssetGeometryInner({
         )}
         <Polyline
           positions={renderInfo.positions}
-          eventHandlers={{ click: handleClick }}
+          eventHandlers={{
+            click: handleClick,
+            mouseover: handleMouseOver,
+            mouseout: handleMouseOut
+          }}
           pathOptions={{
             color: polylineColor,
             weight: 3,
@@ -264,7 +313,8 @@ const AssetGeometry = memo(AssetGeometryInner, (prevProps, nextProps) => {
     prevProps.polylineColor === nextProps.polylineColor &&
     prevProps.canvasRenderer === nextProps.canvasRenderer &&
     prevProps.disableClustering === nextProps.disableClustering &&
-    prevProps.useMarkerFallbackForPolygons === nextProps.useMarkerFallbackForPolygons
+    prevProps.useMarkerFallbackForPolygons === nextProps.useMarkerFallbackForPolygons &&
+    prevProps.onAssetHover === nextProps.onAssetHover
   )
 })
 

@@ -33,8 +33,8 @@ export async function organizationsLoader(): Promise<OrganizationsLoaderData> {
     }
   }
 
-  // Determine active workspace from localStorage
-  const savedWorkspaceId = localStorage.getItem('activeWorkspaceId')
+  // Determine active workspace from localStorage (org-scoped)
+  const savedWorkspaceId = activeOrg ? localStorage.getItem(`activeWorkspaceId_${activeOrg.id}`) : null
   const activeWorkspaceId = savedWorkspaceId && initialWorkspaces.some(ws => ws.id === savedWorkspaceId)
     ? savedWorkspaceId
     : null

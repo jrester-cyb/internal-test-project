@@ -139,7 +139,7 @@ export function prefetchMapTilesForPosition(
   if (position) {
     prefetchMapTiles(position.lat, position.lng, position.zoom, isDarkMode)
   } else {
-    // Prefetch default position (New Orleans)
-    prefetchMapTiles(29.9511, -90.0715, 10, isDarkMode)
+    // Prefetch default position (continental US center)
+    prefetchMapTiles(39.0, -98.0, 5, isDarkMode)
   }
 }

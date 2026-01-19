@@ -1,3 +1,4 @@
+import { useRef, useCallback } from 'react'
 import { Marker } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import type { Cluster } from '@app/types'
@@ -8,10 +9,37 @@ interface ClusterMarkersProps {
   clusters: Cluster[]
   selectedClusterId?: string | null
   onClusterClick: (cluster: Cluster) => void
+  onClusterHover?: (cluster: Cluster) => void
 }
 
-export default function ClusterMarkers({ clusters, selectedClusterId, onClusterClick }: ClusterMarkersProps) {
+const PREFETCH_DELAY_MS = 50
+
+export default function ClusterMarkers({ clusters, selectedClusterId, onClusterClick, onClusterHover }: ClusterMarkersProps) {
   const { isDarkMode } = useTheme()
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleMouseOver = useCallback((cluster: Cluster) => {
+    if (!onClusterHover) return
+
+    // Clear any existing timer
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+    }
+
+    // Start prefetch after delay
+    hoverTimerRef.current = setTimeout(() => {
+      onClusterHover(cluster)
+    }, PREFETCH_DELAY_MS)
+  }, [onClusterHover])
+
+  const handleMouseOut = useCallback(() => {
+    // Cancel prefetch if user moves away before delay
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+  }, [])
+
   // Use primary for background, secondary.light for text/outline in light mode, secondary.dark in dark mode
   const bgColor = lightTheme.palette.primary.main
   const textColor = isDarkMode ? darkTheme.palette.secondary.dark : lightTheme.palette.secondary.light
@@ -66,7 +94,9 @@ export default function ClusterMarkers({ clusters, selectedClusterId, onClusterC
               position={[lat, lon]}
               icon={icon}
               eventHandlers={{
-                click: () => onClusterClick(cluster)
+                click: () => onClusterClick(cluster),
+                mouseover: () => handleMouseOver(cluster),
+                mouseout: handleMouseOut
               }}
             />
           )

@@ -180,7 +180,11 @@ const profileChildRoutes = [
 const sharedRoutes = [
   {
     loader: mapLoaderBundle.loader,
-    shouldRevalidate: () => false,
+    shouldRevalidate: ({ currentParams, nextParams }: any) => {
+      // Revalidate when organization or workspace changes
+      return currentParams.organizationId !== nextParams.organizationId ||
+        currentParams.workspaceId !== nextParams.workspaceId
+    },
     path: "map",
     element: <MapPage />,
   },
@@ -397,7 +401,10 @@ export const router = createBrowserRouter([
             path: ":organizationId",
             id: "organization",
             loader: workspacesLoaderBundle.loader,
-            shouldRevalidate: () => false,
+            shouldRevalidate: ({ currentParams, nextParams }) => {
+              // Revalidate when organization changes
+              return currentParams.organizationId !== nextParams.organizationId
+            },
             element: <OrganizationLayout />,
             children: [
               {

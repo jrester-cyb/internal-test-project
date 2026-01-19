@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination, CursorPagination
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Exists, OuterRef
 from django.contrib.gis.geos import GEOSGeometry, Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Centroid
@@ -10,6 +10,7 @@ from django.db.models import FloatField
 from django.db.models.functions import Abs
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
+from core.utils.cache_utils.cache_utils import cache_data, get_cached_data
 from silk.profiling.profiler import silk_profile
 from drf_spectacular.utils import (
     extend_schema,
@@ -58,11 +59,97 @@ def invalidate_asset_list_cache(asset):
 
 
 class AssetPageNumberPagination(PageNumberPagination):
-    """Standard page-number pagination with count query (slower for large tables)"""
+    """Standard page-number pagination with cached count query.
+
+    Caches the count for 30 seconds per workspace + filter combination
+    to avoid slow COUNT queries on every request.
+    """
 
     page_size = 50  # Reduced for better performance with many attributes
     page_size_query_param = "page_size"
     max_page_size = 500  # Cap max to prevent memory issues with 100+ attrs
+
+    # Cache timeout in seconds
+    count_cache_timeout = 30
+
+    def paginate_queryset(self, queryset, request, view=None):
+        """Override to cache the count query."""
+        self.request = request
+        self.view = view
+
+        # Get workspace/org context from view kwargs
+        workspace_pk = getattr(view, "kwargs", {}).get("workspace_pk")
+        organization_pk = getattr(view, "kwargs", {}).get("organization_pk")
+
+        # Build cache key from query SQL (captures all filters)
+        query_sql = str(queryset.query)
+        query_hash = hashlib.md5(query_sql.encode()).hexdigest()[:16]
+        cache_key = f"asset_count:{query_hash}"
+
+        # Try to get cached count
+        cached_count = None
+        org_id = None
+        ws_id = None
+
+        if workspace_pk or organization_pk:
+            from uuid import UUID
+
+            org_id = UUID(organization_pk) if organization_pk else None
+            ws_id = UUID(workspace_pk) if workspace_pk else None
+
+            # For workspace queries, we need org_id - get it from workspace
+            if ws_id and not org_id:
+                from workspaces.models import Workspace
+
+                try:
+                    org_id = Workspace.objects.values_list(
+                        "organization_id", flat=True
+                    ).get(pk=ws_id)
+                except Workspace.DoesNotExist:
+                    pass
+
+            if org_id:
+                cached_count = get_cached_data(org_id, ws_id, key=cache_key)
+
+        if cached_count is not None:
+            self.count = cached_count
+        else:
+            # Execute the count query
+            self.count = queryset.count()
+
+            # Cache the result
+            if org_id:
+                cache_data(
+                    org_id,
+                    ws_id,
+                    key=cache_key,
+                    data=self.count,
+                    timeout=self.count_cache_timeout,
+                )
+
+        # Standard pagination logic (copied from parent, but using self.count)
+        page_size = self.get_page_size(request)
+        if not page_size:
+            return None
+
+        from django.core.paginator import Paginator
+
+        paginator = Paginator(queryset, page_size)
+        # Override the paginator's count to use our cached value
+        paginator.count = self.count
+
+        page_number = request.query_params.get(self.page_query_param, 1)
+        try:
+            self.page = paginator.page(page_number)
+        except Exception:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Invalid page.")
+
+        if paginator.num_pages > 1 and self.template is not None:
+            self.display_page_controls = True
+
+        return list(self.page)
 
 
 class AssetCursorPagination(CursorPagination):
@@ -862,9 +949,14 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if assettype_pk:
             queryset = Asset.objects.filter(asset_type_id=assettype_pk)
         elif workspace_pk:
-            queryset = Asset.objects.filter(
-                workspace_memberships__workspace_id=workspace_pk
+            # Use Exists subquery instead of join to avoid duplicates and expensive DISTINCT
+            from ..models import WorkspaceAsset
+
+            workspace_filter = WorkspaceAsset.objects.filter(
+                workspace_id=workspace_pk,
+                asset_id=OuterRef("pk"),
             )
+            queryset = Asset.objects.filter(Exists(workspace_filter))
         elif organization_pk:
             queryset = Asset.objects.filter(organization_id=organization_pk)
         else:
@@ -907,10 +999,6 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
             if q_filter:
                 with silk_profile(name="search: apply_filter"):
                     queryset = queryset.filter(q_filter)
-
-        # Only use distinct when joining workspace_memberships (which can create duplicates)
-        if workspace_pk:
-            queryset = queryset.distinct()
 
         # Select related for asset_type and organization
         queryset = queryset.select_related("asset_type", "organization")

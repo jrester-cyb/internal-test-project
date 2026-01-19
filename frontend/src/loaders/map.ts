@@ -1,8 +1,9 @@
 import { fetchClusters, fetchTiles, fetchAsset } from '@app/api/assets'
 import type { LoaderFunctionArgs } from 'react-router-dom'
 
-const DEFAULT_CENTER: [number, number] = [29.9511, -90.0715]
-const DEFAULT_ZOOM = 10
+// Default to continental US center (approximately Kansas)
+const DEFAULT_CENTER: [number, number] = [39.0, -98.0]
+const DEFAULT_ZOOM = 5
 
 export async function initialMapLoader({ params, request }: LoaderFunctionArgs) {
   const { organizationId, workspaceId } = params

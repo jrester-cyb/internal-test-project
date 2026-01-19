@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   Box,
   Typography,
@@ -16,7 +16,6 @@ import { FilterList as FilterListIcon } from '@mui/icons-material'
 import { ChevronRight as ChevronRightIcon } from '@mui/icons-material'
 import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues, type AttributeValuesResponse } from '@app/api/assets'
 import InfiniteLoaderList from '@app/components/InfiniteLoaderList'
-import SearchableVirtualList from '@app/components/SearchableVirtualList'
 import CopyableText from '@app/components/CopyableText'
 import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
 import AttributeValueRenderer from '@app/components/AttributeValueRenderer'
@@ -93,13 +92,76 @@ export default function FilterBuilder({
   const [attrFilterSelectedTypes, setAttrFilterSelectedTypes] = useState<string[]>([])
   const [attrFilterExcludedScopes, setAttrFilterExcludedScopes] = useState<string[]>([])
 
+  // Search state for asset types column
+  const [assetTypeSearch, setAssetTypeSearch] = useState('')
+  const [assetTypeSearchResults, setAssetTypeSearchResults] = useState<AssetType[] | null>(null)
+  const [assetTypeSearchLoading, setAssetTypeSearchLoading] = useState(false)
+
   // Search state for attribute column
   const [attributeSearch, setAttributeSearch] = useState('')
-  // Search state for value column (needs to persist across renders for filtering)
+  const [attributeSearchResults, setAttributeSearchResults] = useState<AssetTypeAttribute[] | null>(null)
+  const [attributeSearchLoading, setAttributeSearchLoading] = useState(false)
+
+  // Search state for value column
   const [valueSearch, setValueSearch] = useState('')
+  const [valueSearchResults, setValueSearchResults] = useState<{ map: Map<number, any>; count: number } | null>(null)
+  const [valueSearchLoading, setValueSearchLoading] = useState(false)
 
   const open = externalOpen !== undefined ? externalOpen : internalOpen
   const handleClose = externalOnClose || (() => setInternalOpen(false))
+
+  // Convert arrays to Maps for InfiniteLoaderList
+  // Use search results if available, otherwise use full list
+  const { assetTypesMap, assetTypesTotalCount } = useMemo(() => {
+    const sourceTypes = assetTypeSearchResults !== null ? assetTypeSearchResults : assetTypes
+    const map = new Map<number, AssetType>()
+    sourceTypes.forEach((type, index) => map.set(index, type))
+    return { assetTypesMap: map, assetTypesTotalCount: sourceTypes.length }
+  }, [assetTypes, assetTypeSearchResults])
+
+  // Pre-filter and convert attributes to Map for InfiniteLoaderList
+  // Use search results if available, otherwise use full list with client-side filtering
+  const { attributesMap, attributesTotalCount, allAttrs, preFilteredAttrs, hiddenCount, availableTags, hiddenWithFiltersCount } = useMemo(() => {
+    const allAttrs = selectedTypeForAttributes ? (attributeDefinitions[selectedTypeForAttributes] || []) : []
+    const hiddenCount = allAttrs.filter(a => a.isHidden).length
+    const availableTags = [...new Set(allAttrs.flatMap(a => a.tags || []))]
+
+    // Count hidden attributes that have active filters
+    const hiddenWithFiltersCount = allAttrs.filter(attr => {
+      if (!attr.isHidden) return false
+      const hasFilter = attributeFilters.some(
+        f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === attr.apiKey
+      )
+      return hasFilter
+    }).length
+
+    // If we have search results, use those directly (server already filtered)
+    if (attributeSearchResults !== null) {
+      const map = new Map<number, AssetTypeAttribute>()
+      attributeSearchResults.forEach((attr, index) => map.set(index, attr))
+      return { attributesMap: map, attributesTotalCount: attributeSearchResults.length, allAttrs, preFilteredAttrs: attributeSearchResults, hiddenCount, availableTags, hiddenWithFiltersCount }
+    }
+
+    // Pre-filter attributes based on popover settings (client-side)
+    const preFilteredAttrs = allAttrs.filter(attr => {
+      // Hide hidden attributes unless showHidden is true
+      if (attr.isHidden && !attrFilterShowHidden) return false
+      // Filter by selected types
+      if (attrFilterSelectedTypes.length > 0 && !attrFilterSelectedTypes.includes(attr.attributeType)) return false
+      // Filter by selected tags
+      if (attrFilterSelectedTags.length > 0) {
+        const attrTags = attr.tags || []
+        if (!attrFilterSelectedTags.some(tag => attrTags.includes(tag))) return false
+      }
+      // Filter by excluded scopes
+      if (attrFilterExcludedScopes.length > 0 && attr.scope && attrFilterExcludedScopes.includes(attr.scope)) return false
+      return true
+    })
+
+    const map = new Map<number, AssetTypeAttribute>()
+    preFilteredAttrs.forEach((attr, index) => map.set(index, attr))
+    return { attributesMap: map, attributesTotalCount: preFilteredAttrs.length, allAttrs, preFilteredAttrs, hiddenCount, availableTags, hiddenWithFiltersCount }
+  }, [selectedTypeForAttributes, attributeDefinitions, attributeFilters, attrFilterShowHidden, attrFilterSelectedTypes, attrFilterSelectedTags, attrFilterExcludedScopes, attributeSearchResults])
 
   useEffect(() => {
     loadAssetTypes()
@@ -115,11 +177,13 @@ export default function FilterBuilder({
   // Clear attribute search when selected type changes
   useEffect(() => {
     setAttributeSearch('')
+    setAttributeSearchResults(null)
   }, [selectedTypeForAttributes])
 
   // Clear value search when attribute changes
   useEffect(() => {
     setValueSearch('')
+    setValueSearchResults(null)
   }, [selectedAttribute])
 
   // Deselect attribute if it's no longer visible after filter changes
@@ -154,6 +218,101 @@ export default function FilterBuilder({
       setLoading(false)
     }
   }
+
+  // Server-side search handlers
+  const handleAssetTypeServerSearch = useCallback(async (searchValue: string) => {
+    if (!organizationId) return
+
+    if (!searchValue.trim()) {
+      // Clear search results to show full list
+      setAssetTypeSearchResults(null)
+      setAssetTypeSearchLoading(false)
+      return
+    }
+
+    setAssetTypeSearchLoading(true)
+    try {
+      const response = await fetchAssetTypes(organizationId, workspaceId, { search: searchValue })
+      const results = Array.isArray(response) ? response : response.results || []
+      setAssetTypeSearchResults(results)
+    } catch (error) {
+      console.error('Failed to search asset types:', error)
+      setAssetTypeSearchResults([])
+    } finally {
+      setAssetTypeSearchLoading(false)
+    }
+  }, [organizationId, workspaceId])
+
+  const handleAttributeServerSearch = useCallback(async (searchValue: string) => {
+    if (!organizationId || !selectedTypeForAttributes) return
+
+    if (!searchValue.trim()) {
+      // Clear search results to show full list
+      setAttributeSearchResults(null)
+      setAttributeSearchLoading(false)
+      return
+    }
+
+    setAttributeSearchLoading(true)
+    try {
+      const response = await fetchAssetAttributeDefinitions(
+        organizationId,
+        workspaceId,
+        selectedTypeForAttributes,
+        1,
+        1000,
+        {
+          search: searchValue,
+          includeHidden: attrFilterShowHidden,
+          excludeScopes: attrFilterExcludedScopes.length > 0 ? attrFilterExcludedScopes : undefined,
+          tags: attrFilterSelectedTags.length > 0 ? attrFilterSelectedTags : undefined,
+        }
+      )
+      let results = Array.isArray(response) ? response : response.results || []
+      // Apply type filter client-side since API may not support it
+      if (attrFilterSelectedTypes.length > 0) {
+        results = results.filter(attr => attrFilterSelectedTypes.includes(attr.attributeType))
+      }
+      setAttributeSearchResults(results)
+    } catch (error) {
+      console.error('Failed to search attributes:', error)
+      setAttributeSearchResults([])
+    } finally {
+      setAttributeSearchLoading(false)
+    }
+  }, [organizationId, workspaceId, selectedTypeForAttributes, attrFilterShowHidden, attrFilterExcludedScopes, attrFilterSelectedTags, attrFilterSelectedTypes])
+
+  const handleValueServerSearch = useCallback(async (searchValue: string) => {
+    if (!organizationId || !selectedTypeForAttributes || !selectedAttribute) return
+
+    if (!searchValue.trim()) {
+      // Clear search results to show full list
+      setValueSearchResults(null)
+      setValueSearchLoading(false)
+      return
+    }
+
+    setValueSearchLoading(true)
+    try {
+      const response = await fetchAttributeValues(
+        organizationId,
+        workspaceId,
+        selectedTypeForAttributes,
+        selectedAttribute.id,
+        { limit: 50, offset: 0, search: searchValue }
+      )
+      const newMap = new Map<number, any>()
+      response.results.forEach((value, index) => {
+        newMap.set(index, value)
+      })
+      setValueSearchResults({ map: newMap, count: response.count })
+    } catch (error) {
+      console.error('Failed to search attribute values:', error)
+      setValueSearchResults({ map: new Map(), count: 0 })
+    } finally {
+      setValueSearchLoading(false)
+    }
+  }, [organizationId, workspaceId, selectedTypeForAttributes, selectedAttribute])
 
   async function loadAttributeDefinitions(assetTypeId: string) {
     if (!organizationId) return
@@ -712,14 +871,20 @@ export default function FilterBuilder({
         <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
           {/* Left side: Asset Types */}
           <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <SearchableVirtualList
-              items={assetTypes}
-              getSearchableText={(t) => `${t.name} ${t.description || ''}`}
+            <InfiniteLoaderList
+              items={assetTypesMap}
+              totalCount={assetTypesTotalCount}
               getItemKey={(t) => t.id}
-              itemHeight={52}
+              getSearchableText={(t) => `${t.name} ${t.description || ''}`}
+              estimatedItemHeight={52}
+              showSearch
               searchPlaceholder="Search types..."
               emptyMessage="No asset types"
               emptySearchMessage="No matching types"
+              searchValue={assetTypeSearch}
+              onSearchChange={setAssetTypeSearch}
+              onServerSearch={handleAssetTypeServerSearch}
+              isLoading={assetTypeSearchLoading}
               header={
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', flexShrink: 0 }}>
                   Asset Types
@@ -730,43 +895,41 @@ export default function FilterBuilder({
                 const isActive = selectedTypeForAttributes === assetType.id
 
                 return (
-                  <div style={style}>
-                    <Box
-                      onClick={() => handleTypeClick(assetType.id)}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        px: 1,
-                        py: 0.5,
-                        borderRadius: 1,
-                        bgcolor: isActive ? 'action.selected' : 'transparent',
-                        opacity: isIncluded ? 1 : 0.5,
-                        cursor: 'pointer',
-                        '&:hover': {
-                          bgcolor: isActive ? 'action.selected' : 'action.hover'
-                        }
-                      }}
-                    >
-                      <span onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isIncluded}
-                          onChange={() => handleToggle(assetType.id)}
-                          size="small"
-                          sx={{ p: 0, flexShrink: 0 }}
-                        />
-                      </span>
-                      <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                        <CopyableText variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
-                          {assetType.name}
-                        </CopyableText>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                          {assetType.description || 'No description'}
-                        </Typography>
-                      </Box>
-                      <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                  <Box
+                    onClick={() => handleTypeClick(assetType.id)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      bgcolor: isActive ? 'action.selected' : 'transparent',
+                      opacity: isIncluded ? 1 : 0.5,
+                      cursor: 'pointer',
+                      '&:hover': {
+                        bgcolor: isActive ? 'action.selected' : 'action.hover'
+                      }
+                    }}
+                  >
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isIncluded}
+                        onChange={() => handleToggle(assetType.id)}
+                        size="small"
+                        sx={{ p: 0, flexShrink: 0 }}
+                      />
+                    </span>
+                    <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                      <CopyableText variant="body2" sx={{ fontWeight: isActive ? 'bold' : 'normal' }}>
+                        {assetType.name}
+                      </CopyableText>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
+                        {assetType.description || 'No description'}
+                      </Typography>
                     </Box>
-                  </div>
+                    <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                  </Box>
                 )
               }}
             />
@@ -783,127 +946,97 @@ export default function FilterBuilder({
                 </Typography>
               </Box>
             ) : selectedTypeForAttributes ? (
-              (() => {
-                const allAttrs = attributeDefinitions[selectedTypeForAttributes] || []
-                const hiddenCount = allAttrs.filter(a => a.isHidden).length
-                const availableTags = [...new Set(allAttrs.flatMap(a => a.tags || []))]
-                // Count hidden attributes that have active filters
-                const hiddenWithFiltersCount = allAttrs.filter(attr => {
-                  if (!attr.isHidden) return false
-                  const hasFilter = attributeFilters.some(
-                    f => f.assetTypeId === selectedTypeForAttributes && f.attributeKey === attr.apiKey
-                  )
-                  return hasFilter
-                }).length
+              <InfiniteLoaderList
+                items={attributesMap}
+                totalCount={attributesTotalCount}
+                getItemKey={(attr) => attr.id}
+                getSearchableText={(attr) => `${attr.name} ${attr.description || ''} ${attr.apiKey}`}
+                estimatedItemHeight={52}
+                showSearch
+                searchPlaceholder="Search attributes..."
+                emptyMessage={allAttrs.length === 0 ? "No attributes defined" : "No attributes match filters"}
+                emptySearchMessage="No matching attributes"
+                searchValue={attributeSearch}
+                onSearchChange={setAttributeSearch}
+                onServerSearch={handleAttributeServerSearch}
+                isLoading={attributeSearchLoading}
+                header={
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexShrink: 0 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                      Attributes
+                    </Typography>
+                    <AttributeFilterPopover
+                      showHidden={attrFilterShowHidden}
+                      onShowHiddenChange={setAttrFilterShowHidden}
+                      selectedTags={attrFilterSelectedTags}
+                      onSelectedTagsChange={setAttrFilterSelectedTags}
+                      selectedTypes={attrFilterSelectedTypes}
+                      onSelectedTypesChange={setAttrFilterSelectedTypes}
+                      excludedScopes={attrFilterExcludedScopes}
+                      onExcludedScopesChange={setAttrFilterExcludedScopes}
+                      showScopeFilter
+                      hiddenCount={hiddenCount}
+                      availableTags={availableTags}
+                      showTypeFilter
+                      hiddenWithFiltersCount={hiddenWithFiltersCount}
+                    />
+                  </Box>
+                }
+                renderItem={(attr, index, style) => {
+                  const isSelected = selectedAttribute?.id === attr.id
+                  const totalCount = attributeTotalCounts[`${selectedTypeForAttributes}-${attr.apiKey}`]
+                  const activeCount = selectedTypeForAttributes
+                    ? getActiveCount(selectedTypeForAttributes, attr.apiKey)
+                    : null
 
-                // Pre-filter attributes based on popover settings
-                const preFilteredAttrs = allAttrs.filter(attr => {
-                  // Hide hidden attributes unless showHidden is true
-                  if (attr.isHidden && !attrFilterShowHidden) return false
-                  // Filter by selected types
-                  if (attrFilterSelectedTypes.length > 0 && !attrFilterSelectedTypes.includes(attr.attributeType)) return false
-                  // Filter by selected tags
-                  if (attrFilterSelectedTags.length > 0) {
-                    const attrTags = attr.tags || []
-                    if (!attrFilterSelectedTags.some(tag => attrTags.includes(tag))) return false
-                  }
-                  // Filter by excluded scopes
-                  if (attrFilterExcludedScopes.length > 0 && attr.scope && attrFilterExcludedScopes.includes(attr.scope)) return false
-                  return true
-                })
-
-                return (
-                  <SearchableVirtualList
-                    items={preFilteredAttrs}
-                    getSearchableText={(attr) => `${attr.name} ${attr.description || ''} ${attr.apiKey}`}
-                    getItemKey={(attr) => attr.id}
-                    itemHeight={52}
-                    searchPlaceholder="Search attributes..."
-                    emptyMessage={allAttrs.length === 0 ? "No attributes defined" : "No attributes match filters"}
-                    emptySearchMessage="No matching attributes"
-                    searchValue={attributeSearch}
-                    onSearchChange={setAttributeSearch}
-                    header={
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexShrink: 0 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                          Attributes
+                  return (
+                    <Box
+                      onClick={() => handleAttributeSelect(attr)}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        bgcolor: isSelected ? 'action.selected' : 'transparent',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: isSelected ? 'action.selected' : 'action.hover'
+                        }
+                      }}
+                    >
+                      <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CopyableText variant="body2" sx={{ fontWeight: isSelected ? 'bold' : 'normal' }}>
+                            {attr.name}
+                          </CopyableText>
+                          {activeCount !== null && totalCount !== undefined && activeCount !== totalCount && (
+                            <Chip
+                              label={activeCount}
+                              size="small"
+                              color="primary"
+                              sx={{ height: 18, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.75 } }}
+                            />
+                          )}
+                          {attr.isHidden && (
+                            <Chip
+                              label="hidden"
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.5 }, opacity: 0.7 }}
+                            />
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
+                          {attr.description || 'No description'}
                         </Typography>
-                        <AttributeFilterPopover
-                          showHidden={attrFilterShowHidden}
-                          onShowHiddenChange={setAttrFilterShowHidden}
-                          selectedTags={attrFilterSelectedTags}
-                          onSelectedTagsChange={setAttrFilterSelectedTags}
-                          selectedTypes={attrFilterSelectedTypes}
-                          onSelectedTypesChange={setAttrFilterSelectedTypes}
-                          excludedScopes={attrFilterExcludedScopes}
-                          onExcludedScopesChange={setAttrFilterExcludedScopes}
-                          showScopeFilter
-                          hiddenCount={hiddenCount}
-                          availableTags={availableTags}
-                          showTypeFilter
-                          hiddenWithFiltersCount={hiddenWithFiltersCount}
-                        />
                       </Box>
-                    }
-                    renderItem={(attr, index, style) => {
-                      const isSelected = selectedAttribute?.id === attr.id
-                      const totalCount = attributeTotalCounts[`${selectedTypeForAttributes}-${attr.apiKey}`]
-                      const activeCount = selectedTypeForAttributes
-                        ? getActiveCount(selectedTypeForAttributes, attr.apiKey)
-                        : null
-
-                      return (
-                        <div style={style}>
-                          <Box
-                            onClick={() => handleAttributeSelect(attr)}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              px: 1,
-                              py: 0.5,
-                              borderRadius: 1,
-                              bgcolor: isSelected ? 'action.selected' : 'transparent',
-                              cursor: 'pointer',
-                              '&:hover': {
-                                bgcolor: isSelected ? 'action.selected' : 'action.hover'
-                              }
-                            }}
-                          >
-                            <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CopyableText variant="body2" sx={{ fontWeight: isSelected ? 'bold' : 'normal' }}>
-                                  {attr.name}
-                                </CopyableText>
-                                {activeCount !== null && totalCount !== undefined && activeCount !== totalCount && (
-                                  <Chip
-                                    label={activeCount}
-                                    size="small"
-                                    color="primary"
-                                    sx={{ height: 18, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.75 } }}
-                                  />
-                                )}
-                                {attr.isHidden && (
-                                  <Chip
-                                    label="hidden"
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.5 }, opacity: 0.7 }}
-                                  />
-                                )}
-                              </Box>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
-                                {attr.description || 'No description'}
-                              </Typography>
-                            </Box>
-                            <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
-                          </Box>
-                        </div>
-                      )
-                    }}
-                  />
-                )
-              })()
+                      <ChevronRightIcon sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                    </Box>
+                  )
+                }}
+              />
             ) : (
               <>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', flexShrink: 0 }}>
@@ -924,91 +1057,65 @@ export default function FilterBuilder({
             </Typography>
             {selectedAttribute && selectedTypeForAttributes ? (
               <>
-                <TextField
-                  size="small"
-                  placeholder="Search values..."
-                  value={valueSearch}
-                  onChange={(e) => setValueSearch(e.target.value)}
-                  sx={{ mb: 1, flexShrink: 0 }}
-                />
                 {selectedAttribute.description && (
                   <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', flexShrink: 0 }}>
                     {selectedAttribute.description}
                   </Typography>
                 )}
-                {(() => {
-                  // Filter loaded values by search term
-                  const searchLower = valueSearch.trim().toLowerCase()
-                  let filteredItems: Map<number, any>
-                  let filteredTotalCount: number
-
-                  if (searchLower) {
-                    // Create a new map with filtered values, preserving indices for selection logic
-                    filteredItems = new Map()
-                    let matchCount = 0
-                    attributeValuesMap.forEach((value, index) => {
-                      const valueStr = value === null ? 'blank' : String(value).toLowerCase()
-                      if (valueStr.includes(searchLower)) {
-                        filteredItems.set(matchCount, value)
-                        matchCount++
-                      }
-                    })
-                    filteredTotalCount = filteredItems.size
-                  } else {
-                    filteredItems = attributeValuesMap
-                    filteredTotalCount = attributeValuesTotalCount
-                  }
-
-                  return (
-                    <InfiniteLoaderList
-                      items={filteredItems}
-                      totalCount={filteredTotalCount}
-                      getItemKey={(value, index) => `value-${index}-${String(value)}`}
-                      onLoadRange={searchLower ? undefined : loadAttributeValuesRange}
-                      isLoading={loadingValues}
-                      estimatedItemHeight={36}
-                      emptyMessage={searchLower ? "No matching values" : "No values found"}
-                      renderItem={(value, index, style) => {
-                        const isSelected = isValueSelected(value)
-                        return (
-                          <Box
-                            onClick={() => handleValueClick(value)}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              px: 1,
-                              py: 0.5,
-                              borderRadius: 1,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                bgcolor: 'action.hover'
-                              }
-                            }}
-                          >
-                            <Checkbox
-                              checked={isSelected}
-                              size="small"
-                              sx={{ p: 0, flexShrink: 0 }}
-                              onChange={() => handleValueClick(value)}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                              <AttributeValueRenderer
-                                attribute={selectedAttribute}
-                                value={value}
-                                compact
-                                maxLines={1}
-                                showCopyButton={false}
-                                showUnit={false}
-                              />
-                            </Box>
-                          </Box>
-                        )
-                      }}
-                    />
-                  )
-                })()}
+                <InfiniteLoaderList
+                  items={valueSearchResults !== null ? valueSearchResults.map : attributeValuesMap}
+                  totalCount={valueSearchResults !== null ? valueSearchResults.count : attributeValuesTotalCount}
+                  getItemKey={(value, index) => `value-${index}-${String(value)}`}
+                  getSearchableText={(value) => value === null ? 'blank' : String(value)}
+                  onLoadRange={valueSearch.trim() ? undefined : loadAttributeValuesRange}
+                  isLoading={loadingValues || valueSearchLoading}
+                  estimatedItemHeight={36}
+                  emptyMessage="No values found"
+                  emptySearchMessage="No matching values"
+                  showSearch
+                  searchPlaceholder="Search values..."
+                  searchValue={valueSearch}
+                  onSearchChange={setValueSearch}
+                  onServerSearch={handleValueServerSearch}
+                  renderItem={(value, index, style) => {
+                    const isSelected = isValueSelected(value)
+                    return (
+                      <Box
+                        onClick={() => handleValueClick(value)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            bgcolor: 'action.hover'
+                          }
+                        }}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          size="small"
+                          sx={{ p: 0, flexShrink: 0 }}
+                          onChange={() => handleValueClick(value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                          <AttributeValueRenderer
+                            attribute={selectedAttribute}
+                            value={value}
+                            compact
+                            maxLines={1}
+                            showCopyButton={false}
+                            showUnit={false}
+                          />
+                        </Box>
+                      </Box>
+                    )
+                  }}
+                />
               </>
             ) : (
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>

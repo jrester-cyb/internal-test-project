@@ -3,11 +3,12 @@ import type { ReactNode } from 'react'
 import { useSearchParams, useLoaderData, useParams } from 'react-router-dom'
 import { Box } from '@mui/material'
 import type { Asset, AssetTypeAttribute, Cluster } from '@app/types'
-import { searchAssets, fetchAssetTypes } from '@app/api/assets'
+import { searchAssets, fetchAssetTypes, getAsset, fetchAssetAttributeDefinitions, fetchRelatedAssets } from '@app/api/assets'
 import { useLayout } from '@app/contexts/LayoutContext'
 import MapDetailsDrawer from '@app/components/MapDetailsDrawer'
 import FilterBuilder from '@app/components/FilterBuilder'
 import type { AttributeFilter } from '@app/components/FilterBuilder'
+import { getCachedFetch, cacheKeys, hashFilters } from '@app/utils/prefetchCache'
 
 // Cache for asset type names: assetTypeId -> name
 type AssetTypeCache = Map<string, string>
@@ -84,6 +85,10 @@ interface MapContextType {
   closeDrawer: () => void
   zoomToAsset: (asset: Asset) => void
   loadClusterAssetsRange: (startIndex: number, endIndex: number) => void
+
+  // Prefetch actions (for hover prefetching)
+  prefetchAsset: (asset: Asset) => void
+  prefetchCluster: (cluster: Cluster) => void
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined)
@@ -384,12 +389,16 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
     const attributeFilterGroups = buildFilters()
     filters.push(...attributeFilterGroups)
 
-    // Fetch initial count and first batch
-    searchAssets(organizationId, workspaceId, {
-      filters,
-      limit: 20,
-      offset: 0
-    })
+    // Fetch initial count and first batch - use cached fetch for prefetch benefit
+    const filterHash = hashFilters(filters)
+    getCachedFetch(
+      cacheKeys.clusterPrefetch(organizationId, workspaceId, cluster.h3Index, filterHash),
+      () => searchAssets(organizationId, workspaceId, {
+        filters,
+        limit: 20,
+        offset: 0
+      })
+    )
       .then(results => {
         setDrawerState(prev => {
           if (prev.content?.type === 'cluster' && prev.content.cluster.h3Index === cluster.h3Index) {
@@ -550,6 +559,89 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
       })
   }, [buildFilters])
 
+  // Prefetch asset data when hovering over a marker
+  const prefetchAsset = useCallback((asset: Asset) => {
+    const currentOrganizationId = organizationIdRef.current
+    const currentWorkspaceId = workspaceIdRef.current
+
+    if (!currentOrganizationId || !asset?.id) return
+
+    // Prefetch the full asset details
+    getCachedFetch(
+      cacheKeys.assetPrefetch(currentOrganizationId, currentWorkspaceId, asset.id),
+      () => getAsset(currentOrganizationId, currentWorkspaceId, asset.id)
+    )
+
+    // Prefetch attribute definitions if we have an asset type
+    if (asset.assetType) {
+      getCachedFetch(
+        cacheKeys.assetAttributeDefinitions(currentOrganizationId, currentWorkspaceId, asset.assetType),
+        () => fetchAssetAttributeDefinitions(currentOrganizationId, currentWorkspaceId, asset.assetType, 1, 20)
+      )
+    }
+
+    // Prefetch related assets
+    getCachedFetch(
+      cacheKeys.relatedAssetsPrefetch(currentOrganizationId, currentWorkspaceId, asset.id),
+      () => fetchRelatedAssets(currentOrganizationId, currentWorkspaceId, asset.id)
+    )
+  }, [])
+
+  // Prefetch cluster data when hovering over a cluster marker
+  const prefetchCluster = useCallback((cluster: Cluster) => {
+    const currentOrganizationId = organizationIdRef.current
+    const currentWorkspaceId = workspaceIdRef.current
+
+    if (!currentOrganizationId) return
+
+    // Build filters based on whether cluster has a specific bbox (client-side cluster)
+    // or needs to use h3 prefix (server-side cluster)
+    const filters: any[] = []
+
+    if (cluster.bbox) {
+      // Client-side cluster with precise bbox - use geometry intersects only
+      const [minLon, minLat, maxLon, maxLat] = cluster.bbox
+      const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
+      filters.push({
+        field: 'geometry',
+        value: bboxWkt,
+        operator: 'intersects'
+      })
+    } else {
+      // Server-side cluster - use h3 prefix + optional map bounds
+      filters.push({
+        field: 'h3_index',
+        value: cluster.h3Index,
+        operator: 'startswith'
+      })
+      const bounds = currentBoundsRef.current
+      if (bounds?.length === 4) {
+        const [minLon, minLat, maxLon, maxLat] = bounds
+        const bboxWkt = `POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`
+        filters.push({
+          field: 'geometry',
+          value: bboxWkt,
+          operator: 'intersects'
+        })
+      }
+    }
+
+    // Add attribute filters
+    const attributeFilterGroups = buildFilters()
+    filters.push(...attributeFilterGroups)
+
+    // Prefetch the cluster assets - include filter hash in cache key
+    const filterHash = hashFilters(filters)
+    getCachedFetch(
+      cacheKeys.clusterPrefetch(currentOrganizationId, currentWorkspaceId, cluster.h3Index, filterHash),
+      () => searchAssets(currentOrganizationId, currentWorkspaceId, {
+        filters,
+        limit: 20,
+        offset: 0
+      })
+    )
+  }, [buildFilters])
+
   // Sync drawer state to URL
   useEffect(() => {
     const newParams = new URLSearchParams(searchParams)
@@ -639,7 +731,9 @@ export function MapProvider({ children, onZoomToAsset, currentBounds }: MapProvi
       openClusterDrawer,
       closeDrawer,
       zoomToAsset,
-      loadClusterAssetsRange
+      loadClusterAssetsRange,
+      prefetchAsset,
+      prefetchCluster
     }}>
       {children}
       <Box

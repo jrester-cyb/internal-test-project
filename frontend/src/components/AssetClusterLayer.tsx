@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useRef } from 'react'
 import { useMap, useMapEvents, Marker } from 'react-leaflet'
 import L from 'leaflet'
 import Supercluster from 'supercluster'
@@ -7,6 +7,8 @@ import AssetGeometry from '@app/components/AssetGeometry'
 import { useTheme } from '@app/contexts/ThemeContext'
 import { useMapContext } from '@app/contexts/MapContext'
 import { lightTheme, darkTheme } from '@app/theme'
+
+const PREFETCH_DELAY_MS = 50
 
 interface AssetClusterLayerProps {
   assets: Asset[]
@@ -18,7 +20,11 @@ interface AssetClusterLayerProps {
   polygonStrokeColor: string
   polylineColor: string
   onAssetClick: (asset: Asset) => void
+  /** Called after hovering for 500ms - used for prefetching */
+  onAssetHover?: (asset: Asset) => void
   onClusterClick?: (cluster: Cluster) => void
+  /** Called after hovering for 500ms - used for prefetching */
+  onClusterHover?: (cluster: Cluster) => void
   /** Cluster radius in pixels */
   clusterRadius?: number
   /** Maximum zoom at which clustering occurs */
@@ -142,8 +148,10 @@ export default function AssetClusterLayer({
   polygonStrokeColor,
   polylineColor,
   onAssetClick,
+  onAssetHover,
   onClusterClick,
-  clusterRadius = 60,
+  onClusterHover,
+  clusterRadius = 120,
   maxClusterZoom = 18,
   disableClustering = false,
   canvasRenderer
@@ -151,6 +159,30 @@ export default function AssetClusterLayer({
   const map = useMap()
   const { isDarkMode } = useTheme()
   const { geometryTypeFilter } = useMapContext()
+  const clusterHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Handler to prefetch cluster data after hover delay
+  const handleClusterMouseOver = useCallback((cluster: Cluster) => {
+    if (!onClusterHover) return
+
+    // Clear any existing timer
+    if (clusterHoverTimerRef.current) {
+      clearTimeout(clusterHoverTimerRef.current)
+    }
+
+    // Start prefetch after delay
+    clusterHoverTimerRef.current = setTimeout(() => {
+      onClusterHover(cluster)
+    }, PREFETCH_DELAY_MS)
+  }, [onClusterHover])
+
+  const handleClusterMouseOut = useCallback(() => {
+    // Cancel prefetch if user moves away before delay
+    if (clusterHoverTimerRef.current) {
+      clearTimeout(clusterHoverTimerRef.current)
+      clusterHoverTimerRef.current = null
+    }
+  }, [])
 
   // Filter out excluded geometry types immediately on the UI
   // This provides instant visual feedback when geometry type filter changes,
@@ -353,6 +385,7 @@ export default function AssetClusterLayer({
             polygonStrokeColor={polygonStrokeColor}
             polylineColor={polylineColor}
             onAssetClick={onAssetClick}
+            onAssetHover={onAssetHover}
             currentZoom={mapState.zoom}
             canvasRenderer={canvasRenderer}
             disableClustering={true}
@@ -372,13 +405,44 @@ export default function AssetClusterLayer({
           // Render cluster marker
           const { cluster_id, point_count } = feature.properties
 
+          // Build cluster object for hover prefetch (same logic as handleClusterClick)
+          const buildClusterForPrefetch = () => {
+            const leaves = supercluster.getLeaves(cluster_id, Infinity) as PointFeature[]
+            const clusterAssets = leaves.map(leaf => leaf.properties.asset)
+            const h3Index = getMostCommonH3Index(clusterAssets)
+
+            // Compute bounding box
+            let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity
+            for (const leaf of leaves) {
+              const [leafLng, leafLat] = leaf.geometry.coordinates
+              minLon = Math.min(minLon, leafLng)
+              minLat = Math.min(minLat, leafLat)
+              maxLon = Math.max(maxLon, leafLng)
+              maxLat = Math.max(maxLat, leafLat)
+            }
+            const buffer = 0.00001
+            minLon -= buffer
+            minLat -= buffer
+            maxLon += buffer
+            maxLat += buffer
+
+            return {
+              h3Index: h3Index || `client-cluster-${cluster_id}`,
+              count: clusterAssets.length,
+              center: { lat, lon: lng },
+              bbox: [minLon, minLat, maxLon, maxLat] as [number, number, number, number]
+            }
+          }
+
           return (
             <Marker
               key={`cluster-${cluster_id}`}
               position={[lat, lng]}
               icon={createClusterIcon(point_count)}
               eventHandlers={{
-                click: () => handleClusterClick(cluster_id, [lng, lat])
+                click: () => handleClusterClick(cluster_id, [lng, lat]),
+                mouseover: () => handleClusterMouseOver(buildClusterForPrefetch()),
+                mouseout: handleClusterMouseOut
               }}
             />
           )
@@ -398,6 +462,7 @@ export default function AssetClusterLayer({
               polygonStrokeColor={polygonStrokeColor}
               polylineColor={polylineColor}
               onAssetClick={onAssetClick}
+              onAssetHover={onAssetHover}
               currentZoom={mapState.zoom}
               canvasRenderer={canvasRenderer}
             />

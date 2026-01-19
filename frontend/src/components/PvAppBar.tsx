@@ -19,17 +19,14 @@ export default function PvAppBar() {
   const navigate = useNavigate()
   const navigation = useNavigation()
   const { isDarkMode, toggleTheme } = useTheme()
-  const { organizations, activeOrganization, setActiveOrganization, workspaces, activeWorkspace, setActiveWorkspace, isGlobalMode } = useOrganization()
+  const { organizations, activeOrganization, workspaces, activeWorkspace, setActiveWorkspace, isGlobalMode } = useOrganization()
   const { windowWidth } = useLayout()
 
   const isNavigating = Boolean(navigation.location)
 
   const handleOrganizationSelect = (orgId: string) => {
-    const org = organizations.find(o => o.id === orgId)
-    if (org) {
-      setActiveOrganization(org)
-      navigate(`/organizations/${orgId}`)
-    }
+    // Just navigate - OrganizationLayout will sync the context from the route
+    navigate(`/organizations/${orgId}`)
   }
 
   const handleWorkspaceSelect = (workspaceId: string | null) => {

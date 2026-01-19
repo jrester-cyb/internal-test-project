@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useSearchParams, useLoaderData } from 'react-router-dom'
+import { useParams, useSearchParams, useLoaderData, useNavigation, useLocation } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { fetchClusters, fetchTiles } from '@app/api/assets'
@@ -34,10 +34,24 @@ function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation
   onBoundsChange: (bounds: number[] | null) => void
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigation = useNavigation()
+  const location = useLocation()
   const { selectedAssetTypes, attributeFilters, geometryTypeFilter, clusteringDisabled, buildFilters } = useMapContext()
 
-  const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [29.9511, -90.0715])
-  const [zoom, setZoom] = useState(loaderData?.initialZoom || 10)
+  // Track current location path in a ref to verify requests match current route
+  const locationPathRef = useRef(location.pathname)
+  locationPathRef.current = location.pathname
+
+  // Track if we're navigating away to prevent stale requests - use ref for stable access in callbacks
+  const isNavigatingAway = navigation.state === 'loading' && navigation.location?.pathname !== undefined
+  const isNavigatingAwayRef = useRef(isNavigatingAway)
+  isNavigatingAwayRef.current = isNavigatingAway
+
+  // Track if component is still active (not unmounted or navigating away)
+  const isActiveRef = useRef(true)
+
+  const [center, setCenter] = useState<[number, number]>(loaderData?.initialCenter || [39.0, -98.0])
+  const [zoom, setZoom] = useState(loaderData?.initialZoom || 5)
   const [assets, setAssets] = useState<any[]>(loaderData?.initialAssets || [])
   const [clusters, setClusters] = useState<any[]>(loaderData?.initialClusters || [])
   const [activeFilters] = useState<any>(null)
@@ -46,7 +60,17 @@ function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const loadMapData = useCallback(async (bounds: number[], zoom: number, filters?: any) => {
-    if (!organizationId) return
+    // Skip fetching if we're navigating away or component is deactivated
+    if (!organizationId || isNavigatingAwayRef.current || !isActiveRef.current) return
+
+    // Verify current URL still matches this component's org/workspace to prevent stale requests
+    const currentPath = locationPathRef.current
+    const expectedPathPrefix = workspaceId
+      ? `/organizations/${organizationId}/workspaces/${workspaceId}`
+      : `/organizations/${organizationId}`
+    if (!currentPath.startsWith(expectedPathPrefix)) {
+      return
+    }
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -200,6 +224,17 @@ function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation
     }
   }, [organizationId, workspaceId, selectedAssetTypes, attributeFilters, geometryTypeFilter, clusteringDisabled, buildFilters, onBoundsChange])
 
+  // Cleanup pending requests when org/workspace changes or component unmounts
+  useEffect(() => {
+    isActiveRef.current = true
+    return () => {
+      isActiveRef.current = false
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [organizationId, workspaceId])
+
   useEffect(() => {
     const newSearchParams = new URLSearchParams(searchParams)
     newSearchParams.set('lat', center[0].toFixed(6))
@@ -211,6 +246,9 @@ function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation
     // Save position to localStorage for sidebar link
     saveMapPosition(organizationId, workspaceId, { lat: center[0], lng: center[1], zoom })
   }, [center, zoom, setSearchParams, searchParams, organizationId, workspaceId])
+
+  // Key for forcing MapContainer remount on org/workspace change
+  const mapKey = `${organizationId}-${workspaceId || 'org'}`
 
   return (
     <MapView
@@ -227,6 +265,9 @@ function MapPageContent({ organizationId, workspaceId, loaderData, flyToLocation
       onZoomChange={setZoom}
       MapEvents={MapEvents}
       flyToLocation={flyToLocation}
+      mapKey={mapKey}
+      organizationId={organizationId}
+      workspaceId={workspaceId}
     />
   )
 }
@@ -271,8 +312,12 @@ function MapPage() {
     }
   }, [])
 
+  // Key forces complete remount when org/workspace changes, ensuring clean state
+  const mapKey = `${organizationId}-${workspaceId || 'org'}`
+
   return (
     <MapProvider
+      key={mapKey}
       onZoomToAsset={handleZoomToAsset}
       currentBounds={currentBounds}
     >

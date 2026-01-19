@@ -100,4 +100,30 @@ export const cacheKeys = {
   sessions: (userId: string) => `sessions:${userId}`,
   mfaDevices: () => `mfaDevices`,
   whoami: () => `whoami`,
+
+  // Map prefetch
+  assetPrefetch: (orgId: string, workspaceId: string | undefined, assetId: string) =>
+    `assetPrefetch:${orgId}:${workspaceId || 'global'}:${assetId}`,
+
+  clusterPrefetch: (orgId: string, workspaceId: string | undefined, clusterId: string, filterHash: string) =>
+    `clusterPrefetch:${orgId}:${workspaceId || 'global'}:${clusterId}:${filterHash}`,
+
+  relatedAssetsPrefetch: (orgId: string, workspaceId: string | undefined, assetId: string) =>
+    `relatedAssetsPrefetch:${orgId}:${workspaceId || 'global'}:${assetId}`,
+}
+
+/**
+ * Simple hash function for creating cache keys from filter objects.
+ * Uses a fast string hashing algorithm (djb2).
+ */
+export function hashFilters(filters: any[]): string {
+  if (!filters || filters.length === 0) return 'nofilters'
+
+  const str = JSON.stringify(filters)
+  let hash = 5381
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i)
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36)
 }

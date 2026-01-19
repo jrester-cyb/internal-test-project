@@ -11,6 +11,7 @@ import FilesCard from '@app/components/FilesCard'
 import DragHandle from '@app/components/DragHandle'
 import { useOrganization } from '@app/contexts/OrganizationContext'
 import type { RelatedAssetsResponse } from '@app/api/assets'
+import { getCachedFetch, cacheKeys } from '@app/utils/prefetchCache'
 
 const ATTRIBUTES_PAGE_SIZE = 20
 import {
@@ -185,12 +186,20 @@ export default function AssetContent({
 
       setLoading(true)
       try {
-        const data = await getAsset(organizationId, workspaceId, asset.id)
+        // Use cached fetch - will return prefetched data if available, otherwise fetch fresh
+        const data = await getCachedFetch(
+          cacheKeys.assetPrefetch(organizationId, workspaceId, asset.id),
+          () => getAsset(organizationId, workspaceId, asset.id)
+        )
         setFullAsset(data)
 
         // Fetch attributes if not provided (or empty) and we have an asset type
         if ((!propAttributes || propAttributes.length === 0) && data.assetType) {
-          const attrsResponse = await fetchAssetAttributeDefinitions(organizationId, workspaceId, data.assetType, 1, ATTRIBUTES_PAGE_SIZE)
+          // Use cached fetch for attributes too
+          const attrsResponse = await getCachedFetch(
+            cacheKeys.assetAttributeDefinitions(organizationId, workspaceId, data.assetType),
+            () => fetchAssetAttributeDefinitions(organizationId, workspaceId, data.assetType, 1, ATTRIBUTES_PAGE_SIZE)
+          )
           const map = new Map<number, AssetTypeAttribute>()
           const results = Array.isArray(attrsResponse.results) ? attrsResponse.results : []
           results.forEach((attr: AssetTypeAttribute, index: number) => map.set(index, attr))
@@ -241,12 +250,15 @@ export default function AssetContent({
     }
   }, [organizationId, workspaceId, fullAsset, asset, attributesLoading])
 
-  // Fetch related assets
+  // Fetch related assets - use cached fetch for prefetch benefit
   useEffect(() => {
     if (organizationId && asset?.id) {
       setRelatedLoading(true)
       setRelatedError(null)
-      fetchRelatedAssets(organizationId, workspaceId, asset.id)
+      getCachedFetch(
+        cacheKeys.relatedAssetsPrefetch(organizationId, workspaceId, asset.id),
+        () => fetchRelatedAssets(organizationId, workspaceId, asset.id)
+      )
         .then(setRelatedAssets)
         .catch((err) => {
           console.error('Failed to fetch related assets:', err)

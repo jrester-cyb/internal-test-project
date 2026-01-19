@@ -12,14 +12,11 @@ interface LoaderData {
 export default function OrganizationIndexPage() {
   const { workspaces, organizationId } = useRouteLoaderData('organization') as LoaderData
   const navigate = useNavigate()
-  const { setWorkspaces, setActiveWorkspace } = useOrganization()
+  const { setActiveWorkspace } = useOrganization()
 
   useEffect(() => {
-    // Store workspaces in context
-    setWorkspaces(workspaces)
-
-    // Try to restore active workspace from localStorage, or use first one
-    const savedWorkspaceId = localStorage.getItem('activeWorkspaceId')
+    // Try to restore active workspace from localStorage (org-scoped), or use first one
+    const savedWorkspaceId = localStorage.getItem(`activeWorkspaceId_${organizationId}`)
     const savedWorkspace = savedWorkspaceId
       ? workspaces.find(w => w.id === savedWorkspaceId)
       : null
@@ -34,7 +31,7 @@ export default function OrganizationIndexPage() {
       // No workspaces, go to organization-level map
       navigate(`/organizations/${organizationId}/map`, { replace: true })
     }
-  }, [workspaces, organizationId, setWorkspaces, setActiveWorkspace, navigate])
+  }, [workspaces, organizationId, setActiveWorkspace, navigate])
 
   return (
     <Box display="flex" justifyContent="center" alignItems="center" height="100%" width="100%">

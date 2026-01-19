@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useRouteLoaderData } from 'react-router-dom'
+import { Outlet, useRouteLoaderData, useNavigation } from 'react-router-dom'
 import { useOrganization } from '@app/contexts/OrganizationContext'
 import type { Workspace } from '@app/types'
 
@@ -11,8 +11,15 @@ interface LoaderData {
 export default function OrganizationLayout() {
   const { workspaces, organizationId } = useRouteLoaderData('organization') as LoaderData
   const { setWorkspaces, organizations, setActiveOrganization } = useOrganization()
+  const navigation = useNavigation()
+
+  // Skip syncing during navigation to prevent race conditions where old layout
+  // overwrites the new org selection
+  const isNavigating = navigation.state === 'loading'
 
   useEffect(() => {
+    if (isNavigating) return
+
     // Set workspaces in context
     setWorkspaces(workspaces)
 
@@ -21,7 +28,7 @@ export default function OrganizationLayout() {
     if (org) {
       setActiveOrganization(org)
     }
-  }, [workspaces, organizationId, setWorkspaces, organizations, setActiveOrganization])
+  }, [workspaces, organizationId, setWorkspaces, organizations, setActiveOrganization, isNavigating])
 
   return <Outlet />
 }

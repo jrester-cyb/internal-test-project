@@ -424,7 +424,7 @@ export async function fetchAttributeValues(
   workspaceId: string | undefined,
   assetTypeId: string,
   attributeDefinitionId: string,
-  options?: { limit?: number; offset?: number }
+  options?: { limit?: number; offset?: number; search?: string }
 ): Promise<AttributeValuesResponse> {
   const params = new URLSearchParams()
   if (options?.limit) {
@@ -435,6 +435,9 @@ export async function fetchAttributeValues(
     const pageSize = options.limit || 20
     const page = Math.floor(options.offset / pageSize) + 1
     params.append('page', String(page))
+  }
+  if (options?.search) {
+    params.append('search', options.search)
   }
   const queryString = params.toString() ? `?${params.toString()}` : ''
   const response = await authFetch(buildUrl(organizationId, workspaceId, `asset-types/${assetTypeId}/attributes/${attributeDefinitionId}/values/${queryString}`))

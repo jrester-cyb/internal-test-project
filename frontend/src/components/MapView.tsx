@@ -29,6 +29,9 @@ interface MapViewProps {
   onZoomChange?: (zoom: number) => void
   MapEvents: React.ComponentType<any>
   flyToLocation?: { coords: [number, number]; zoom: number } | null
+  mapKey?: string
+  organizationId: string
+  workspaceId?: string
 }
 
 // Component to handle flyTo animation
@@ -59,11 +62,14 @@ export default function MapView({
   onCenterChange,
   onZoomChange,
   MapEvents,
-  flyToLocation
+  flyToLocation,
+  mapKey,
+  organizationId,
+  workspaceId
 }: MapViewProps) {
   const { isDarkMode } = useTheme()
   const theme = useMuiTheme()
-  const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId, clusteringDisabled, setClusteringDisabled, geometryTypeFilter } = useMapContext()
+  const { openAssetDrawer, openClusterDrawer, selectedAssetId, selectedClusterId, clusteringDisabled, setClusteringDisabled, geometryTypeFilter, prefetchAsset, prefetchCluster } = useMapContext()
 
   const fillColor = isDarkMode ? theme.palette.secondary.main : theme.palette.primary.main
   const strokeColor = isDarkMode ? theme.palette.secondary.main : "black"
@@ -154,6 +160,7 @@ export default function MapView({
       className={isDarkMode ? 'dark-mode' : ''}
     >
       <MapContainer
+        key={mapKey}
         center={center}
         zoom={zoom}
         style={{ height: '100%', width: '100%' }}
@@ -169,7 +176,7 @@ export default function MapView({
             : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           }
         />
-        <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} geometryTypeFilter={geometryTypeFilter} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} />
+        <MapEvents onLoadData={loadMapData} filters={activeFilters} selectedAssetTypes={selectedAssetTypes} attributeFilters={attributeFilters} geometryTypeFilter={geometryTypeFilter} onCenterChange={onCenterChange} onZoomChange={onZoomChange} hasInitialData={hasInitialData} organizationId={organizationId} workspaceId={workspaceId} />
         <FlyToHandler flyToLocation={flyToLocation ?? null} />
 
         {/* Custom pane for glow effects - z-index 399 is below overlayPane (400) */}
@@ -181,6 +188,7 @@ export default function MapView({
             clusters={clusters}
             selectedClusterId={selectedClusterId}
             onClusterClick={openClusterDrawer}
+            onClusterHover={prefetchCluster}
           />
         )}
 
@@ -196,7 +204,9 @@ export default function MapView({
           polygonStrokeColor={polygonStrokeColor}
           polylineColor={polylineColor}
           onAssetClick={openAssetDrawer}
+          onAssetHover={prefetchAsset}
           onClusterClick={openClusterDrawer}
+          onClusterHover={prefetchCluster}
           disableClustering={clusteringDisabled}
           canvasRenderer={canvasRenderer}
         />

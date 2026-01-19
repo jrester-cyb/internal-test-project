@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import type { Organization, Workspace } from '@app/types'
 import { fetchWorkspaces } from '@app/api/assets'
 
@@ -61,6 +61,9 @@ export function OrganizationProvider({
       return
     }
 
+    // Clear workspace immediately when org changes to prevent stale workspace being used
+    setActiveWorkspaceState(null)
+
     let cancelled = false
     setCurrentOrgId(activeOrganization.id)
 
@@ -71,7 +74,6 @@ export function OrganizationProvider({
 
         const workspaceList: Workspace[] = Array.isArray(data) ? data : data.results || []
         setWorkspacesState(workspaceList)
-        setActiveWorkspaceState(null) // Reset workspace when org changes
       } catch (error) {
         console.error('Failed to fetch workspaces:', error)
         if (!cancelled) {
@@ -87,10 +89,18 @@ export function OrganizationProvider({
     }
   }, [activeOrganization, currentOrgId])
 
-  const setActiveOrganization = (org: Organization) => {
+  // Use ref to track active org ID for stable callback
+  const activeOrgIdRef = useRef(activeOrganization?.id)
+  activeOrgIdRef.current = activeOrganization?.id
+
+  const setActiveOrganization = useCallback((org: Organization) => {
+    // Skip if already the active org to prevent race conditions during navigation
+    if (activeOrgIdRef.current === org.id) {
+      return
+    }
     setActiveOrganizationState(org)
     localStorage.setItem('activeOrganizationId', org.id)
-  }
+  }, [])
 
   const setWorkspaces = (newWorkspaces: Workspace[]) => {
     setWorkspacesState(newWorkspaces)
@@ -98,10 +108,12 @@ export function OrganizationProvider({
 
   const setActiveWorkspace = (workspace: Workspace | null) => {
     setActiveWorkspaceState(workspace)
-    if (workspace) {
-      localStorage.setItem('activeWorkspaceId', workspace.id)
-    } else {
-      localStorage.removeItem('activeWorkspaceId')
+    // Store workspace ID scoped to the current organization
+    const orgId = activeOrganization?.id
+    if (workspace && orgId) {
+      localStorage.setItem(`activeWorkspaceId_${orgId}`, workspace.id)
+    } else if (orgId) {
+      localStorage.removeItem(`activeWorkspaceId_${orgId}`)
     }
   }
 
