@@ -820,56 +820,68 @@ export default function FilterBuilder({
           />
         </Box> */}
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexShrink: 0 }}>
-        <Button
-          size="small"
-          onClick={handleSelectAll}
-          disabled={loading || excludedAssetTypes.length === 0}
-        >
-          Select All Types
-        </Button>
-        <Button
-          size="small"
-          onClick={handleClearAll}
-          disabled={loading || totalFilters === 0}
-        >
-          Clear Filters
-        </Button>
-      </Box>
-
-      {/* Geometry Type Filter */}
-      {onGeometryTypeFilterChange && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-            Geometry:
-          </Typography>
-          {GEOMETRY_TYPES.map((geoType) => {
-            const isIncluded = geometryTypeFilter.indexOf(geoType.value) === -1
-            return (
-              <Chip
-                key={geoType.value}
-                label={geoType.label}
-                size="small"
-                variant={isIncluded ? 'filled' : 'outlined'}
-                color={isIncluded ? 'primary' : 'default'}
-                onClick={() => handleGeometryTypeToggle(geoType.value)}
-                sx={{
-                  opacity: isIncluded ? 1 : 0.5,
-                  cursor: 'pointer',
-                }}
-              />
-            )
-          })}
-        </Box>
-      )}
-
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
       ) : (
         <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
-          {/* Left side: Asset Types */}
+          {/* First column: Geometry Type Filter and Actions */}
+          <Box sx={{ flex: '0 0 auto', minWidth: 120, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {/* Geometry Type Filter */}
+            {onGeometryTypeFilterChange && (
+              <Box sx={{ mb: 2, flexShrink: 0 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                  Geometry
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  {GEOMETRY_TYPES.map((geoType) => {
+                    const isIncluded = geometryTypeFilter.indexOf(geoType.value) === -1
+                    return (
+                      <Chip
+                        key={geoType.value}
+                        label={geoType.label}
+                        size="small"
+                        variant={isIncluded ? 'filled' : 'outlined'}
+                        color={isIncluded ? 'primary' : 'default'}
+                        onClick={() => handleGeometryTypeToggle(geoType.value)}
+                        sx={{
+                          opacity: isIncluded ? 1 : 0.5,
+                          cursor: 'pointer',
+                          height: 24,
+                        }}
+                      />
+                    )
+                  })}
+                </Box>
+              </Box>
+            )}
+
+            {/* Action buttons */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleSelectAll}
+                disabled={loading || excludedAssetTypes.length === 0}
+                sx={{ fontSize: '0.75rem', py: 0.25 }}
+              >
+                Select All
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleClearAll}
+                disabled={loading || totalFilters === 0}
+                sx={{ fontSize: '0.75rem', py: 0.25 }}
+              >
+                Clear Filters
+              </Button>
+            </Box>
+          </Box>
+
+          {/* Asset Types column */}
+          <Divider orientation="vertical" flexItem />
           <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <InfiniteLoaderList
               items={assetTypesMap}
@@ -1145,7 +1157,7 @@ export default function FilterBuilder({
         sx={{
           display: 'flex',
           flexDirection: 'column',
-          transform: open ? 'translateY(0)' : 'translateY(calc(-100% + 36px))',
+          transform: open ? 'translateY(0)' : 'translateY(calc(-100% + 24px))',
           transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
@@ -1166,14 +1178,20 @@ export default function FilterBuilder({
         <Button
           onClick={onToggle || (() => setInternalOpen(!internalOpen))}
           variant="contained"
+          color="inherit"
           startIcon={<FilterListIcon />}
           fullWidth
+          size="small"
           sx={{
             pointerEvents: 'auto',
             borderRadius: 0,
-            py: 0.75,
+            py: 0.25,
             justifyContent: 'center',
             boxShadow: 1,
+            bgcolor: 'grey.500',
+            '&:hover': {
+              bgcolor: 'grey.600',
+            },
           }}
         >
           Filters {totalFilters > 0 && `(${totalFilters})`}

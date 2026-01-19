@@ -23,6 +23,8 @@ export interface AssetType {
   organizationName?: string
   workspace?: string | null
   workspaceName?: string | null
+  minRenderZoom?: number
+  maxRenderZoom?: number
   createdAt?: string
   updatedAt?: string
   apiUrl: string
@@ -320,4 +322,117 @@ export interface WorkspaceMemberCreateInput {
   workspace: string
   user: string
   role: string
+}
+
+// ============================================================================
+// Theme Types
+// ============================================================================
+
+export interface ThemeColorSet {
+  main: string
+  light?: string
+  dark?: string
+}
+
+export interface ThemeCustomizations {
+  primary?: ThemeColorSet
+  secondary?: ThemeColorSet
+  background?: {
+    default?: string
+    paper?: string
+  }
+  text?: {
+    primary?: string
+    secondary?: string
+  }
+  error?: ThemeColorSet
+  warning?: ThemeColorSet
+  info?: ThemeColorSet
+  success?: ThemeColorSet
+  appBar?: {
+    background?: string
+    text?: string
+  }
+}
+
+export type ThemePreset = 'light' | 'dark' | 'blue' | 'high-contrast' | 'custom'
+export type ThemeType = 'preset' | 'custom'
+
+// A theme record from the backend
+export interface Theme {
+  id: string
+  name: string
+  themeType: ThemeType
+  lightCustomizations: ThemeCustomizations
+  darkCustomizations: ThemeCustomizations
+  organization?: string | null
+  createdAt?: string
+  updatedAt?: string
+  createdBy?: string
+}
+
+// Lightweight theme summary for lists
+export interface ThemeSummary {
+  id: string
+  name: string
+  themeType: ThemeType
+}
+
+// Effective theme returned by settings endpoints
+export interface EffectiveTheme {
+  id: string | null
+  name: string
+  themeType: ThemeType
+  lightCustomizations: ThemeCustomizations
+  darkCustomizations: ThemeCustomizations
+  source?: 'workspace' | 'organization' | 'default'
+}
+
+// Legacy ThemeConfig for backwards compatibility with existing components
+export interface ThemeConfig {
+  preset: ThemePreset
+  name?: string
+  customizations: ThemeCustomizations
+  source?: 'workspace' | 'organization' | 'default'
+  savedThemeId?: string
+}
+
+// Legacy types for backwards compatibility
+export interface SavedTheme {
+  id: string
+  name: string
+  customizations: ThemeCustomizations
+  organization?: string
+  createdAt?: string
+  updatedAt?: string
+  createdBy?: string
+}
+
+export interface SavedThemeSummary {
+  id: string
+  name: string
+}
+
+export interface OrganizationSettings {
+  id: string
+  organization: string
+  theme: string | null  // FK to Theme
+  effectiveTheme: EffectiveTheme
+  themes: ThemeSummary[]  // Available themes (presets + custom)
+  createdAt: string
+  updatedAt: string
+  updatedBy?: string
+}
+
+export interface WorkspaceSettings {
+  id: string
+  workspace: string
+  theme: string | null  // FK to Theme
+  inheritTheme: boolean
+  effectiveTheme: EffectiveTheme
+  inheritedFromOrg: EffectiveTheme | null
+  themes: ThemeSummary[]  // Available themes (presets + custom)
+  createdAt: string
+  updatedAt: string
+  updatedBy?: string
 }

@@ -678,6 +678,8 @@ class AssetAttributeSerializer(serializers.ModelSerializer):
 
     def get_polymorphic_ctype(self, obj):
         """Return the polymorphic content type"""
+        if obj.polymorphic_ctype is None:
+            return None
         return obj.polymorphic_ctype.model
 
 
@@ -704,6 +706,8 @@ class AssetTypeSerializer(serializers.ModelSerializer):
             "api_url",
             "description",
             "attributes",
+            "min_render_zoom",
+            "max_render_zoom",
             "created_at",
             "updated_at",
             "workspace_count",
@@ -805,6 +809,8 @@ class AssetTypeSummarySerializer(serializers.ModelSerializer):
             "organization_name",
             "name",
             "description",
+            "min_render_zoom",
+            "max_render_zoom",
             "created_at",
             "updated_at",
             "workspace_count",

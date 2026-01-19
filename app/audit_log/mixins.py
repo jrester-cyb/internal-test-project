@@ -54,7 +54,9 @@ class AuditLogMixin:
 
         # Default messages
         model_name = (
-            self.queryset.model.__name__ if hasattr(self, "queryset") else "object"
+            self.queryset.model.__name__
+            if hasattr(self, "queryset") and self.queryset is not None
+            else "object"
         )
 
         default_messages = {

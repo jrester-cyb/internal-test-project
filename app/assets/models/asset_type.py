@@ -14,6 +14,14 @@ class AssetType(SoftDeleteMixin):
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    min_render_zoom = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Minimum zoom level at which assets of this type are visible (0-22)",
+    )
+    max_render_zoom = models.PositiveSmallIntegerField(
+        default=22,
+        help_text="Maximum zoom level at which assets of this type are visible (0-22)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

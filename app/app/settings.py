@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "audit_log",
     "actions",
     "auth_manager",
+    "settings",
     "django_rest_passwordreset",
     "qr_code",
 ]

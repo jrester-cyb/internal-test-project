@@ -1,9 +1,10 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Outlet, useLoaderData, useNavigation, useLocation, useNavigate } from 'react-router-dom'
 import { Box, CircularProgress, BottomNavigation, BottomNavigationAction } from '@mui/material'
 import { Map as MapIcon, Inventory as AssetsIcon, FolderCopy as LibraryIcon } from '@mui/icons-material'
 import { OrganizationProvider, useOrganization } from '@app/contexts/OrganizationContext'
 import { LayoutProvider, useLayout } from '@app/contexts/LayoutContext'
+import { useTheme } from '@app/contexts/ThemeContext'
 import PvAppBar from '@app/components/PvAppBar'
 import Sidebar from '@app/components/Sidebar'
 import { AssetTypesPageSkeleton, LibraryPageSkeleton, MapPageSkeleton, GenericPageSkeleton } from '@app/components/PageSkeletons'
@@ -41,6 +42,14 @@ function MainLayoutContent() {
   const location = useLocation()
   const navigate = useNavigate()
   const { activeOrganization, activeWorkspace, isGlobalMode } = useOrganization()
+  const { syncWithOrganization } = useTheme()
+
+  // Sync theme when organization/workspace changes
+  useEffect(() => {
+    if (activeOrganization?.id) {
+      syncWithOrganization(activeOrganization.id, activeWorkspace?.id)
+    }
+  }, [activeOrganization?.id, activeWorkspace?.id, syncWithOrganization])
 
   // Calculate sidebar width for main content offset
   const sidebarWidth = hideSidebar ? 0 : (isMobile ? 0 : (sidebarOpen ? 240 : 64))

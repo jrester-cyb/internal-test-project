@@ -1321,6 +1321,17 @@ Format the output as follows:
             except (ValueError, TypeError):
                 pass
 
+        # Filter by asset type render zoom levels
+        if zoom_param is not None:
+            try:
+                zoom = int(zoom_param)
+                queryset = queryset.filter(
+                    asset_type__min_render_zoom__lte=zoom,
+                    asset_type__max_render_zoom__gte=zoom,
+                )
+            except (ValueError, TypeError):
+                pass
+
         # Order by distance from center of viewport (closest first), with id as tiebreaker
         # Use simple Euclidean distance on coordinates to avoid spatial_ref_sys dependency
         if center_point:
@@ -1562,6 +1573,18 @@ Format the output as follows:
             except (ValueError, TypeError):
                 pass
 
+        # Filter by asset type render zoom levels
+        join_asset_type = ""
+        if zoom:
+            try:
+                zoom_int = int(zoom)
+                join_asset_type = "JOIN assets_assettype at ON a.asset_type_id = at.id"
+                where_clauses.append("at.min_render_zoom <= %s")
+                where_clauses.append("at.max_render_zoom >= %s")
+                params.extend([zoom_int, zoom_int])
+            except (ValueError, TypeError):
+                pass
+
         where_sql = " AND ".join(where_clauses)
 
         # Two-pass approach: first get cluster counts efficiently, then fetch details only for single-asset clusters
@@ -1577,6 +1600,7 @@ Format the output as follows:
                         AVG(ST_Y(a.location)) as lat,
                         AVG(ST_X(a.location)) as lon
                     FROM assets_asset a
+                    {join_asset_type}
                     WHERE {where_sql}
                     GROUP BY h3_prefix
                     ORDER BY cluster_count DESC
@@ -1606,6 +1630,7 @@ Format the output as follows:
                             a.h3_index,
                             ST_AsGeoJSON(a.geometry)
                         FROM assets_asset a
+                        {join_asset_type}
                         WHERE {where_sql}
                           AND LEFT(a.h3_index, %s) IN ({prefix_placeholders})
                         """,

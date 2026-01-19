@@ -1,5 +1,14 @@
 import { createTheme, type Components, type Theme } from '@mui/material/styles'
 
+// Re-export from the new theme module for backwards compatibility
+export {
+  buildMuiTheme,
+  buildMuiThemeFromEffective,
+  DEFAULT_THEME_CONFIG,
+  DEFAULT_EFFECTIVE_THEME,
+} from './theme/builder'
+export { PRESET_THEMES, PRESET_NAMES, getPresetTheme, mergeThemeCustomizations } from './theme/presets'
+
 // Shared component overrides that are the same for both themes
 const sharedComponents: Components<Theme> = {
   MuiAppBar: {

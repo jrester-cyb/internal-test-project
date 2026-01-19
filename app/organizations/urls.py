@@ -9,6 +9,7 @@ from assets.views import (
     AssetViewSet,
 )
 from files_manager.views import FileNodeViewSet
+from settings.views import OrganizationSettingsViewSet, WorkspaceSettingsViewSet, ThemeViewSet
 
 router = DefaultRouter()
 router.register(r"organizations", OrganizationViewSet, basename="organization")
@@ -149,6 +150,36 @@ org_files_router.register(
     basename="organization-file",
 )
 
+# Nested router for settings under organizations
+org_settings_router = NestedDefaultRouter(
+    router, r"organizations", lookup="organization"
+)
+org_settings_router.register(
+    r"settings",
+    OrganizationSettingsViewSet,
+    basename="organization-settings",
+)
+
+# Nested router for settings under workspaces
+workspace_settings_router = NestedDefaultRouter(
+    workspaces_router, r"workspaces", lookup="workspace"
+)
+workspace_settings_router.register(
+    r"settings",
+    WorkspaceSettingsViewSet,
+    basename="organization-workspace-settings",
+)
+
+# Nested router for themes under organizations
+themes_router = NestedDefaultRouter(
+    router, r"organizations", lookup="organization"
+)
+themes_router.register(
+    r"themes",
+    ThemeViewSet,
+    basename="organization-themes",
+)
+
 urlpatterns = (
     router.urls
     + members_router.urls
@@ -165,4 +196,7 @@ urlpatterns = (
     + choices_router.urls
     + org_assets_router.urls
     + org_files_router.urls
+    + org_settings_router.urls
+    + workspace_settings_router.urls
+    + themes_router.urls
 )
