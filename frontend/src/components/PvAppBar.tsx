@@ -142,7 +142,7 @@ export default function PvAppBar() {
     {
       label: 'Logout',
       icon: <LogoutIcon fontSize="small" />,
-      onClick: handleLogout,
+      onClick: () => console.log('Logout clicked'),
       color: 'inherit' as const,
       variant: 'text' as const,
       minWidth: Infinity

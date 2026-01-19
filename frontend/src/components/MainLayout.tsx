@@ -8,7 +8,7 @@ import PvAppBar from '@app/components/PvAppBar'
 import Sidebar from '@app/components/Sidebar'
 import { AssetTypesPageSkeleton, LibraryPageSkeleton, MapPageSkeleton, GenericPageSkeleton } from '@app/components/PageSkeletons'
 import { isMapPreloaded } from '@app/utils/preload'
-import type { Organization } from '@app/types'
+import type { OrganizationsLoaderData } from '@app/loaders/organizations'
 import AppBreadcrumbs from './AppBreadcrumbs'
 
 /**
@@ -173,10 +173,20 @@ function MainLayoutContent() {
 }
 
 export default function MainLayout() {
-  const { organizations } = useLoaderData() as { organizations: Organization[] }
+  const {
+    organizations,
+    initialWorkspaces,
+    activeOrganizationId,
+    activeWorkspaceId,
+  } = useLoaderData() as OrganizationsLoaderData
 
   return (
-    <OrganizationProvider organizations={organizations}>
+    <OrganizationProvider
+      organizations={organizations}
+      initialWorkspaces={initialWorkspaces}
+      initialActiveOrganizationId={activeOrganizationId}
+      initialActiveWorkspaceId={activeWorkspaceId}
+    >
       <LayoutProvider>
         <MainLayoutContent />
       </LayoutProvider>

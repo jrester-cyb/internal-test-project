@@ -2,18 +2,43 @@
 
 import type { UserProfile } from './contexts/UserContext'
 
+function redirectToLogin(): void {
+  window.location.href = '/auth/login/?redirect_uri=' + encodeURIComponent(window.location.pathname)
+}
+
+async function refreshToken(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/auth/v2/token/refresh/', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 async function checkAuth(): Promise<UserProfile | null> {
   try {
-    const res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
+    let res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
+
+    // If access token expired, try refreshing it
+    if (res.status === 401) {
+      const refreshed = await refreshToken()
+      if (refreshed) {
+        res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
+      }
+    }
+
     if (!res.ok) {
-      // Not authenticated, redirect to login page
-      window.location.href = '/auth/login/?redirect_uri=' + encodeURIComponent(window.location.pathname)
+      redirectToLogin()
       return null
     }
     return res.json()
   } catch {
     // Network error, redirect to login page
-    window.location.href = '/auth/login/'
+    redirectToLogin()
     return null
   }
 }

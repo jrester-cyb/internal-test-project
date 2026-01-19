@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 
 export interface UserProfile {
@@ -16,6 +16,7 @@ export interface UserProfile {
 
 interface UserContextType {
   user: UserProfile
+  updateUser: (updates: Partial<UserProfile>) => void
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -33,9 +34,21 @@ interface UserProviderProps {
   children: ReactNode
 }
 
-export function UserProvider({ user, children }: UserProviderProps) {
+export function UserProvider({ user: initialUser, children }: UserProviderProps) {
+  const [user, setUser] = useState<UserProfile>(initialUser)
+
+  const updateUser = useCallback((updates: Partial<UserProfile>) => {
+    setUser(prev => {
+      const updated = { ...prev, ...updates }
+      if (updates.firstName !== undefined || updates.lastName !== undefined) {
+        updated.fullName = `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || updated.email
+      }
+      return updated
+    })
+  }, [])
+
   return (
-    <UserContext.Provider value={{ user }}>
+    <UserContext.Provider value={{ user, updateUser }}>
       {children}
     </UserContext.Provider>
   )

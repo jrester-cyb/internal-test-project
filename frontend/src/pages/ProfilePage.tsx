@@ -36,11 +36,11 @@ interface ActivityItem {
 }
 
 export default function ProfilePage() {
-  const { user } = useUser()
+  const { user, updateUser } = useUser()
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editFormData, setEditFormData] = useState({ first_name: '', last_name: '' })
+  const [editFormData, setEditFormData] = useState({ firstName: '', lastName: '' })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -55,8 +55,8 @@ export default function ProfilePage() {
 
   const handleOpenEditDialog = () => {
     setEditFormData({
-      first_name: user.firstName || '',
-      last_name: user.lastName || '',
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
     })
     setEditError(null)
     setEditDialogOpen(true)
@@ -67,7 +67,7 @@ export default function ProfilePage() {
     setEditError(null)
   }
 
-  const handleEditFormChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditFormChange = (field: 'firstName' | 'lastName') => (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditFormData(prev => ({ ...prev, [field]: e.target.value }))
   }
 
@@ -76,13 +76,13 @@ export default function ProfilePage() {
     setEditError(null)
 
     try {
-      const response = await authFetch('/api/auth/v2/profile/', {
+      const response = await authFetch(`/api/users/${user.id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editFormData),
       })
       if (!response.ok) throw new Error('Failed to update profile')
-      // TODO: Update user context with new profile data
+      updateUser(editFormData)
       setEditDialogOpen(false)
     } catch (err) {
       setEditError('Failed to update profile')
@@ -250,14 +250,14 @@ export default function ProfilePage() {
             />
             <TextField
               label="First Name"
-              value={editFormData.first_name}
-              onChange={handleEditFormChange('first_name')}
+              value={editFormData.firstName}
+              onChange={handleEditFormChange('firstName')}
               fullWidth
             />
             <TextField
               label="Last Name"
-              value={editFormData.last_name}
-              onChange={handleEditFormChange('last_name')}
+              value={editFormData.lastName}
+              onChange={handleEditFormChange('lastName')}
               fullWidth
             />
           </Stack>

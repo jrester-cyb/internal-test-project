@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import type { Organization, Workspace } from '@app/types'
+import { fetchWorkspaces } from '@app/api/assets'
 
 interface OrganizationContextType {
   organizations: Organization[]
@@ -17,20 +18,74 @@ const OrganizationContext = createContext<OrganizationContextType | undefined>(u
 interface OrganizationProviderProps {
   children: ReactNode
   organizations: Organization[]
+  initialWorkspaces: Workspace[]
+  initialActiveOrganizationId: string | null
+  initialActiveWorkspaceId: string | null
 }
 
-export function OrganizationProvider({ children, organizations }: OrganizationProviderProps) {
+export function OrganizationProvider({
+  children,
+  organizations,
+  initialWorkspaces,
+  initialActiveOrganizationId,
+  initialActiveWorkspaceId,
+}: OrganizationProviderProps) {
   const [activeOrganization, setActiveOrganizationState] = useState<Organization | null>(() => {
-    const savedOrgId = localStorage.getItem('activeOrganizationId')
-    if (savedOrgId) {
-      const savedOrg = organizations.find(org => org.id === savedOrgId)
-      if (savedOrg) return savedOrg
+    if (initialActiveOrganizationId) {
+      return organizations.find(org => org.id === initialActiveOrganizationId) || organizations[0] || null
     }
     return organizations[0] || null
   })
 
-  const [workspaces, setWorkspacesState] = useState<Workspace[]>([])
-  const [activeWorkspace, setActiveWorkspaceState] = useState<Workspace | null>(null)
+  const [workspaces, setWorkspacesState] = useState<Workspace[]>(initialWorkspaces)
+  const [activeWorkspace, setActiveWorkspaceState] = useState<Workspace | null>(() => {
+    if (initialActiveWorkspaceId) {
+      return initialWorkspaces.find(ws => ws.id === initialActiveWorkspaceId) || null
+    }
+    return null
+  })
+
+  // Fetch workspaces when active organization changes (after initial load)
+  const [currentOrgId, setCurrentOrgId] = useState(activeOrganization?.id)
+
+  useEffect(() => {
+    // Skip if this is the initial org (already loaded by loader)
+    if (activeOrganization?.id === currentOrgId) {
+      return
+    }
+
+    if (!activeOrganization) {
+      setWorkspacesState([])
+      setActiveWorkspaceState(null)
+      setCurrentOrgId(null)
+      return
+    }
+
+    let cancelled = false
+    setCurrentOrgId(activeOrganization.id)
+
+    async function loadWorkspaces() {
+      try {
+        const data = await fetchWorkspaces(activeOrganization!.id)
+        if (cancelled) return
+
+        const workspaceList: Workspace[] = Array.isArray(data) ? data : data.results || []
+        setWorkspacesState(workspaceList)
+        setActiveWorkspaceState(null) // Reset workspace when org changes
+      } catch (error) {
+        console.error('Failed to fetch workspaces:', error)
+        if (!cancelled) {
+          setWorkspacesState([])
+        }
+      }
+    }
+
+    loadWorkspaces()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeOrganization, currentOrgId])
 
   const setActiveOrganization = (org: Organization) => {
     setActiveOrganizationState(org)

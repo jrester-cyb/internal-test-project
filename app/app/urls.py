@@ -32,7 +32,7 @@ urlpatterns = [
     # API routes
     path("api/", include("todos.urls")),
     path("api/", include("organizations.urls")),
-    # path("api/", include("users_manager.urls")),
+    path("api/", include("users_manager.urls")),
     path("api/utils/", include("utils.urls")),
     path("api/attribute-types/", get_attribute_types, name="attribute-types"),
     path("api/audit/", include("audit_log.urls")),

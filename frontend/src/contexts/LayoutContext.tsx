@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { useMatches } from 'react-router-dom'
+import { useOrganization } from './OrganizationContext'
 
 interface LayoutContextType {
   // Sidebar state
@@ -23,6 +24,7 @@ interface LayoutProviderProps {
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
   const matches = useMatches()
+  const { workspaces } = useOrganization()
 
   const [sidebarOpen, setSidebarOpenState] = useState(() => {
     const stored = localStorage.getItem('sidebarOpen')
@@ -36,7 +38,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   // Check the most specific (last) matched route for layout flags
   const lastMatch = matches[matches.length - 1]
   const hideBreadcrumbs = (lastMatch?.handle as any)?.hideBreadcrumbs ?? false
-  const hideSidebar = (lastMatch?.handle as any)?.hideSidebar ?? false
+  const routeHideSidebar = (lastMatch?.handle as any)?.hideSidebar ?? false
+
+  // Hide sidebar if route requests it OR if no workspaces are loaded yet
+  const hideSidebar = routeHideSidebar || workspaces?.length === 0
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth)
