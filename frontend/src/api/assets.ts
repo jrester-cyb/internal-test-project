@@ -214,6 +214,29 @@ export async function searchAssets(organizationId: string, workspaceId: string |
   return response.json()
 }
 
+// Get just the count of assets matching the given filters (lightweight - no data serialization)
+export async function getAssetCount(
+  organizationId: string,
+  workspaceId: string | undefined,
+  filters: any[] = [],
+  logic: 'AND' | 'OR' = 'AND'
+): Promise<{ count: number }> {
+  const params = new URLSearchParams({
+    count_only: 'true'
+  })
+
+  const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/search/?${params}`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ filters, logic })
+  })
+
+  if (!response.ok) throw new Error('Failed to get asset count')
+  return response.json()
+}
+
 export async function getAsset(organizationId: string, workspaceId: string | undefined, id: string) {
   const response = await authFetch(buildUrl(organizationId, workspaceId, `assets/${id}/`))
   if (!response.ok) throw new Error('Failed to fetch asset')

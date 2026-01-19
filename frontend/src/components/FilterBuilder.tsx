@@ -14,7 +14,7 @@ import {
 } from '@mui/material'
 import { FilterList as FilterListIcon } from '@mui/icons-material'
 import { ChevronRight as ChevronRightIcon } from '@mui/icons-material'
-import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues, type AttributeValuesResponse } from '@app/api/assets'
+import { fetchAssetTypes, fetchAssetAttributeDefinitions, fetchAttributeValues, getAssetCount, type AttributeValuesResponse } from '@app/api/assets'
 import InfiniteLoaderList from '@app/components/InfiniteLoaderList'
 import CopyableText from '@app/components/CopyableText'
 import AttributeFilterPopover from '@app/components/AttributeFilterPopover'
@@ -71,7 +71,9 @@ export default function FilterBuilder({
   onClose: externalOnClose,
   onToggle
 }: FilterBuilderProps) {
-  const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
+  // Sparse map for asset types (index -> asset type) for infinite loading
+  const [assetTypesMap, setAssetTypesMap] = useState<Map<number, AssetType>>(new Map())
+  const [assetTypesTotalCount, setAssetTypesTotalCount] = useState(0)
   const [attributeDefinitions, setAttributeDefinitions] = useState<Record<string, AssetTypeAttribute[]>>({})
   const [loading, setLoading] = useState(true)
   const [internalOpen, setInternalOpen] = useState(false)
@@ -107,17 +109,24 @@ export default function FilterBuilder({
   const [valueSearchResults, setValueSearchResults] = useState<{ map: Map<number, any>; count: number } | null>(null)
   const [valueSearchLoading, setValueSearchLoading] = useState(false)
 
+  // Asset count state (for showing X / Total matching filter)
+  const [totalAssetCount, setTotalAssetCount] = useState<number | null>(null)
+  const [filteredAssetCount, setFilteredAssetCount] = useState<number | null>(null)
+  const [countLoading, setCountLoading] = useState(false)
+
   const open = externalOpen !== undefined ? externalOpen : internalOpen
   const handleClose = externalOnClose || (() => setInternalOpen(false))
 
-  // Convert arrays to Maps for InfiniteLoaderList
-  // Use search results if available, otherwise use full list
-  const { assetTypesMap, assetTypesTotalCount } = useMemo(() => {
-    const sourceTypes = assetTypeSearchResults !== null ? assetTypeSearchResults : assetTypes
-    const map = new Map<number, AssetType>()
-    sourceTypes.forEach((type, index) => map.set(index, type))
-    return { assetTypesMap: map, assetTypesTotalCount: sourceTypes.length }
-  }, [assetTypes, assetTypeSearchResults])
+  // Get asset types map for InfiniteLoaderList
+  // Use search results if available (converted to map), otherwise use sparse map from pagination
+  const { displayAssetTypesMap, displayAssetTypesTotalCount } = useMemo(() => {
+    if (assetTypeSearchResults !== null) {
+      const map = new Map<number, AssetType>()
+      assetTypeSearchResults.forEach((type, index) => map.set(index, type))
+      return { displayAssetTypesMap: map, displayAssetTypesTotalCount: assetTypeSearchResults.length }
+    }
+    return { displayAssetTypesMap: assetTypesMap, displayAssetTypesTotalCount: assetTypesTotalCount }
+  }, [assetTypesMap, assetTypesTotalCount, assetTypeSearchResults])
 
   // Pre-filter and convert attributes to Map for InfiniteLoaderList
   // Use search results if available, otherwise use full list with client-side filtering
@@ -206,18 +215,140 @@ export default function FilterBuilder({
     }
   }, [selectedAttribute, selectedTypeForAttributes, attributeDefinitions, attrFilterShowHidden, attrFilterSelectedTypes, attrFilterSelectedTags, attrFilterExcludedScopes])
 
+  // Build API filters from the current filter state
+  const buildApiFilters = useCallback(() => {
+    const filters: any[] = []
+
+    // Add excluded asset types filter (nin = not in)
+    if (selectedAssetTypes.length > 0) {
+      filters.push({
+        field: 'asset_type',
+        operator: 'nin',
+        value: selectedAssetTypes
+      })
+    }
+
+    // Add name filter
+    if (nameFilter.trim()) {
+      filters.push({
+        field: 'name',
+        operator: 'icontains',
+        value: nameFilter.trim()
+      })
+    }
+
+    // Add geometry type filter (exclude specified types)
+    if (geometryTypeFilter.length > 0) {
+      filters.push({
+        field: 'geometry_type',
+        operator: 'nin',
+        value: geometryTypeFilter
+      })
+    }
+
+    // Add attribute filters
+    for (const attrFilter of attributeFilters) {
+      filters.push({
+        field: `attributes.${attrFilter.attributeKey}`,
+        operator: attrFilter.operator,
+        value: attrFilter.value,
+        ...(attrFilter.unit && { unit: attrFilter.unit })
+      })
+    }
+
+    return filters
+  }, [selectedAssetTypes, nameFilter, geometryTypeFilter, attributeFilters])
+
+  // Fetch total asset count once on mount (no filters)
+  useEffect(() => {
+    if (!organizationId) return
+
+    let cancelled = false
+    const fetchTotalCount = async () => {
+      try {
+        const response = await getAssetCount(organizationId, workspaceId, [])
+        if (!cancelled) {
+          setTotalAssetCount(response.count)
+        }
+      } catch (error) {
+        console.error('Failed to fetch total asset count:', error)
+      }
+    }
+
+    fetchTotalCount()
+    return () => { cancelled = true }
+  }, [organizationId, workspaceId])
+
+  // Fetch filtered count when filters change
+  useEffect(() => {
+    if (!organizationId) return
+
+    let cancelled = false
+    const fetchFilteredCount = async () => {
+      setCountLoading(true)
+      try {
+        const filters = buildApiFilters()
+        const response = await getAssetCount(organizationId, workspaceId, filters)
+        if (!cancelled) {
+          setFilteredAssetCount(response.count)
+        }
+      } catch (error) {
+        console.error('Failed to fetch filtered asset count:', error)
+      } finally {
+        if (!cancelled) {
+          setCountLoading(false)
+        }
+      }
+    }
+
+    // Debounce the fetch to avoid too many requests
+    const timeoutId = setTimeout(fetchFilteredCount, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [organizationId, workspaceId, buildApiFilters])
+
   async function loadAssetTypes() {
     if (!organizationId) return
     try {
-      const types = await fetchAssetTypes(organizationId, workspaceId, {})
-      setAssetTypes(Array.isArray(types) ? types : types.results || [])
+      // Load initial page of asset types with pagination
+      const response = await fetchAssetTypes(organizationId, workspaceId, { limit: 50, offset: 0 })
+      const results = Array.isArray(response) ? response : response.results || []
+      const totalCount = Array.isArray(response) ? response.length : response.count || results.length
+
+      const newMap = new Map<number, AssetType>()
+      results.forEach((type, index) => newMap.set(index, type))
+      setAssetTypesMap(newMap)
+      setAssetTypesTotalCount(totalCount)
     } catch (error) {
       console.error('Failed to load asset types:', error)
-      setAssetTypes([])
+      setAssetTypesMap(new Map())
+      setAssetTypesTotalCount(0)
     } finally {
       setLoading(false)
     }
   }
+
+  // Load more asset types for pagination
+  const loadAssetTypesRange = useCallback(async (startIndex: number, endIndex: number) => {
+    if (!organizationId) return
+
+    try {
+      const limit = endIndex - startIndex + 1
+      const response = await fetchAssetTypes(organizationId, workspaceId, { limit, offset: startIndex })
+      const results = Array.isArray(response) ? response : response.results || []
+      setAssetTypesMap(prev => {
+        const newMap = new Map(prev)
+        results.forEach((type, index) => {
+          newMap.set(startIndex + index, type)
+        })
+        return newMap
+      })
+    } catch (error) {
+      console.error('Failed to load more asset types:', error)
+    }
+  }, [organizationId, workspaceId])
 
   // Server-side search handlers
   const handleAssetTypeServerSearch = useCallback(async (searchValue: string) => {
@@ -518,7 +649,7 @@ export default function FilterBuilder({
       onAttributeFiltersChange(attributeFilters.filter(f => f.assetTypeId !== assetTypeId))
       // If this was the selected type for attributes, select another one
       if (selectedTypeForAttributes === assetTypeId) {
-        const remainingTypes = assetTypes.filter(t => !newExcluded.includes(t.id))
+        const remainingTypes = Array.from(assetTypesMap.values()).filter(t => !newExcluded.includes(t.id))
         setSelectedTypeForAttributes(remainingTypes[0]?.id || null)
       }
     }
@@ -826,11 +957,57 @@ export default function FilterBuilder({
         </Box>
       ) : (
         <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
-          {/* First column: Geometry Type Filter and Actions */}
+          {/* First column: Matching Assets, Actions, and Geometry Type Filter */}
           <Box sx={{ flex: '0 0 auto', minWidth: 120, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {/* Asset count display */}
+            <Box sx={{ mb: 2, flexShrink: 0 }}>
+              <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
+                Matching Assets
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {countLoading ? (
+                  <>
+                    <Box component="span" sx={{ fontStyle: 'italic' }}>Loading</Box>
+                    {totalAssetCount !== null && ` / ${totalAssetCount.toLocaleString()}`}
+                  </>
+                ) : filteredAssetCount !== null ? (
+                  <>
+                    <Box component="span" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                      {filteredAssetCount.toLocaleString()}
+                    </Box>
+                    {totalAssetCount !== null && ` / ${totalAssetCount.toLocaleString()}`}
+                  </>
+                ) : (
+                  '—'
+                )}
+              </Typography>
+            </Box>
+
+            {/* Action buttons */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2, flexShrink: 0 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleSelectAll}
+                disabled={loading || excludedAssetTypes.length === 0}
+                sx={{ fontSize: '0.75rem', py: 0.25 }}
+              >
+                Select All
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleClearAll}
+                disabled={loading || totalFilters === 0}
+                sx={{ fontSize: '0.75rem', py: 0.25 }}
+              >
+                Clear Filters
+              </Button>
+            </Box>
+
             {/* Geometry Type Filter */}
             {onGeometryTypeFilterChange && (
-              <Box sx={{ mb: 2, flexShrink: 0 }}>
+              <Box sx={{ flexShrink: 0 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   Geometry
                 </Typography>
@@ -856,36 +1033,14 @@ export default function FilterBuilder({
                 </Box>
               </Box>
             )}
-
-            {/* Action buttons */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={handleSelectAll}
-                disabled={loading || excludedAssetTypes.length === 0}
-                sx={{ fontSize: '0.75rem', py: 0.25 }}
-              >
-                Select All
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={handleClearAll}
-                disabled={loading || totalFilters === 0}
-                sx={{ fontSize: '0.75rem', py: 0.25 }}
-              >
-                Clear Filters
-              </Button>
-            </Box>
           </Box>
 
           {/* Asset Types column */}
           <Divider orientation="vertical" flexItem />
           <Box sx={{ flex: '0 0 300px', minWidth: 250, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <InfiniteLoaderList
-              items={assetTypesMap}
-              totalCount={assetTypesTotalCount}
+              items={displayAssetTypesMap}
+              totalCount={displayAssetTypesTotalCount}
               getItemKey={(t) => t.id}
               getSearchableText={(t) => `${t.name} ${t.description || ''}`}
               estimatedItemHeight={52}
@@ -896,6 +1051,7 @@ export default function FilterBuilder({
               searchValue={assetTypeSearch}
               onSearchChange={setAssetTypeSearch}
               onServerSearch={handleAssetTypeServerSearch}
+              onLoadRange={assetTypeSearch.trim() ? undefined : loadAssetTypesRange}
               isLoading={assetTypeSearchLoading}
               header={
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', flexShrink: 0 }}>

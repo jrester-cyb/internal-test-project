@@ -1032,6 +1032,17 @@ class AssetViewSet(AuditLogMixin, viewsets.ModelViewSet):
         except Exception:
             pass
 
+        # Check for count_only parameter - return just the count without serializing results
+        count_only = request.query_params.get("count_only", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        if count_only:
+            with silk_profile(name="search: count_only"):
+                count = queryset.count()
+            return Response({"count": count})
+
         with silk_profile(name="search: paginate_queryset"):
             page = self.paginate_queryset(queryset)
         assets = page if page is not None else list(queryset)
@@ -1573,14 +1584,14 @@ Format the output as follows:
             except (ValueError, TypeError):
                 pass
 
-        # Filter by asset type render zoom levels
-        join_asset_type = ""
+        # Filter by asset type render zoom levels using subquery
+        # This allows the planner to use the asset_type_id index more effectively
         if zoom:
             try:
                 zoom_int = int(zoom)
-                join_asset_type = "JOIN assets_assettype at ON a.asset_type_id = at.id"
-                where_clauses.append("at.min_render_zoom <= %s")
-                where_clauses.append("at.max_render_zoom >= %s")
+                where_clauses.append(
+                    "a.asset_type_id IN (SELECT id FROM assets_assettype WHERE min_render_zoom <= %s AND max_render_zoom >= %s)"
+                )
                 params.extend([zoom_int, zoom_int])
             except (ValueError, TypeError):
                 pass
@@ -1600,7 +1611,6 @@ Format the output as follows:
                         AVG(ST_Y(a.location)) as lat,
                         AVG(ST_X(a.location)) as lon
                     FROM assets_asset a
-                    {join_asset_type}
                     WHERE {where_sql}
                     GROUP BY h3_prefix
                     ORDER BY cluster_count DESC
@@ -1630,7 +1640,6 @@ Format the output as follows:
                             a.h3_index,
                             ST_AsGeoJSON(a.geometry)
                         FROM assets_asset a
-                        {join_asset_type}
                         WHERE {where_sql}
                           AND LEFT(a.h3_index, %s) IN ({prefix_placeholders})
                         """,

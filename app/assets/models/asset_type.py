@@ -62,6 +62,12 @@ class AssetType(SoftDeleteMixin):
     class Meta(SoftDeleteMixin.Meta):
         # No unique constraint on name - duplicates allowed, handled via UI prompt
         ordering = ["organization", "name"]
+        indexes = [
+            models.Index(
+                fields=["min_render_zoom", "max_render_zoom"],
+                name="idx_assettype_render_zoom",
+            ),
+        ]
 
     def __str__(self):
         return self.name
