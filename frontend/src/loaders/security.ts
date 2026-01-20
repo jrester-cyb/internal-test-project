@@ -91,7 +91,7 @@ export async function sessionsLoader({ params }: { params: { userId?: string } }
   const key = cacheKeys.sessions(userId)
   const data = await getCachedFetch(key, async () => {
     const response = await authFetch(
-      `/api/auth/v2/users/${userId}/sessions/?limit=${PAGE_SIZE}&offset=0`
+      `/api/v3/auth/users/${userId}/sessions/?limit=${PAGE_SIZE}&offset=0`
     )
 
     if (!response.ok) {
@@ -121,7 +121,7 @@ export async function mfaDevicesLoader(): Promise<MFADevicesLoaderData> {
   // Use cache to avoid duplicate fetches (prefetch may have already started this)
   const key = cacheKeys.mfaDevices()
   const devices = await getCachedFetch(key, async () => {
-    const response = await authFetch('/api/auth/v2/mfa-devices/')
+    const response = await authFetch('/api/v3/auth/mfa-devices/')
 
     if (!response.ok) {
       throw new Response('Failed to fetch MFA devices', { status: response.status })

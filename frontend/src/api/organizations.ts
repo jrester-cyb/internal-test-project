@@ -6,7 +6,7 @@ import type {
   OrganizationUpdateInput,
 } from '../types'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api/v3'
 
 interface PaginatedResponse<T> {
   count: number

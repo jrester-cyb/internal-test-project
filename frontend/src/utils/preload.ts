@@ -134,7 +134,7 @@ export function prefetchSessions(userId: string) {
   // Start fetching data
   const key = cacheKeys.sessions(userId)
   getCachedFetch(key, () =>
-    authFetch(`/api/auth/v2/users/${userId}/sessions/?limit=20&offset=0`).then((res) => res.json())
+    authFetch(`/api/v3/auth/users/${userId}/sessions/?limit=20&offset=0`).then((res) => res.json())
   )
 }
 
@@ -145,7 +145,7 @@ export function prefetchMfaDevices() {
 
   // Start fetching data
   const key = cacheKeys.mfaDevices()
-  getCachedFetch(key, () => authFetch('/api/auth/v2/mfa-devices/').then((res) => res.json()))
+  getCachedFetch(key, () => authFetch('/api/v3/auth/mfa-devices/').then((res) => res.json()))
 }
 
 export function prefetchPassword() {

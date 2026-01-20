@@ -9,7 +9,7 @@
  * This uses HTTP-only cookies for token storage, managed by the backend.
  */
 
-const AUTH_REFRESH_ENDPOINT = '/api/auth/v2/token/refresh/'
+const AUTH_REFRESH_ENDPOINT = '/api/v3/auth/token/refresh/'
 const LOGIN_URL = '/auth/login/'
 
 // Track if we're currently refreshing to prevent multiple simultaneous refresh attempts

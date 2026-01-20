@@ -28,25 +28,25 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # Auth manager
     path("auth/", include("auth_manager.auth_urls")),
-    path("api/auth/v2/", include("auth_manager.urls")),
+    path("api/v3/auth/", include("auth_manager.urls")),
     # API routes
-    path("api/", include("todos.urls")),
-    path("api/", include("organizations.urls")),
-    path("api/", include("users_manager.urls")),
-    path("api/utils/", include("utils.urls")),
-    path("api/attribute-types/", get_attribute_types, name="attribute-types"),
-    path("api/audit/", include("audit_log.urls")),
-    path("api/actions/", include("actions.urls")),
+    path("api/v3/", include("todos.urls")),
+    path("api/v3/", include("organizations.urls")),
+    path("api/v3/", include("users_manager.urls")),
+    path("api/v3/utils/", include("utils.urls")),
+    path("api/v3/attribute-types/", get_attribute_types, name="attribute-types"),
+    path("api/v3/audit/", include("audit_log.urls")),
+    path("api/v3/actions/", include("actions.urls")),
     # Silk profiling dashboard
     path("silk/", include("silk.urls", namespace="silk")),
     # OpenAPI schema
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/v3/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Swagger UI
     path(
-        "api/docs/",
+        "api/v3/docs/",
         SpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
     ),
     # ReDoc UI (alternative documentation)
-    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    path("api/v3/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 ]

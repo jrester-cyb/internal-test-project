@@ -1,7 +1,7 @@
 import type { SearchRequest, UnitCategory } from '@app/types'
 import { authFetch } from './authFetch'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:80/api/v3'
 
 // Helper to build URLs - workspace-scoped if workspaceId provided, otherwise org-level
 function buildUrl(organizationId: string, workspaceId: string | undefined, path: string) {

@@ -8,7 +8,7 @@ function redirectToLogin(): void {
 
 async function refreshToken(): Promise<boolean> {
   try {
-    const res = await fetch('/api/auth/v2/token/refresh/', {
+    const res = await fetch('/api/v3/auth/token/refresh/', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -21,13 +21,13 @@ async function refreshToken(): Promise<boolean> {
 
 async function checkAuth(): Promise<UserProfile | null> {
   try {
-    let res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
+    let res = await fetch('/api/v3/auth/whoami/', { credentials: 'include' })
 
     // If access token expired, try refreshing it
     if (res.status === 401) {
       const refreshed = await refreshToken()
       if (refreshed) {
-        res = await fetch('/api/auth/v2/whoami/', { credentials: 'include' })
+        res = await fetch('/api/v3/auth/whoami/', { credentials: 'include' })
       }
     }
 
